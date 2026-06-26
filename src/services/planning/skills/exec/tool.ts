@@ -167,6 +167,8 @@ interface ExecResult {
     terminated?: boolean;
     durationMs?: number;
     timeoutSecs?: number;
+    stdoutTruncatedBytes?: number;
+    stderrTruncatedBytes?: number;
 }
 
 interface NetworkDirectTargetInspection {
@@ -1995,6 +1997,18 @@ class ExecToolImpl implements Tool {
             const rawStderr = result.stderr;
             let stdout = redactSensitiveObservation(result.stdout);
             let stderr = redactSensitiveObservation(result.stderr);
+            const stdoutBackendTruncatedBytes = result.stdoutTruncatedBytes ?? 0;
+            const stderrBackendTruncatedBytes = result.stderrTruncatedBytes ?? 0;
+            if (stdoutBackendTruncatedBytes > 0) {
+                stdout = translate('tools.exec.stdoutBackendTruncated', {
+                    bytes: stdoutBackendTruncatedBytes,
+                }) + stdout;
+            }
+            if (stderrBackendTruncatedBytes > 0) {
+                stderr = translate('tools.exec.stderrBackendTruncated', {
+                    bytes: stderrBackendTruncatedBytes,
+                }) + stderr;
+            }
 
             if (stdout.length > MAX_OUTPUT_LENGTH) {
                 stdout = stdout.substring(0, MAX_OUTPUT_LENGTH) + translate('tools.exec.stdoutTruncated');

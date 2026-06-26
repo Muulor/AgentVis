@@ -84,6 +84,7 @@ tree-sitter-md = "0.3"               # Markdown 语法
 tauri-plugin-notification = "2"
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "0.38.2"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",

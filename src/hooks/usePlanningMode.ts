@@ -37,6 +37,21 @@ import { getQuoteContextContent, serializeQuotesForMessage } from '@utils/quoteC
 import { modelSupportsVision } from '@/config/modelRegistry';
 
 const logger = getLogger('usePlanningMode');
+const PLANNING_CHECKPOINT_FLUSH_INTERVAL_MS = 2000;
+const PLANNING_CHECKPOINT_OBSERVATION_LIMIT = 80;
+const PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT = 12;
+const PLANNING_CHECKPOINT_PERSIST_MAX_CHARS = 4200;
+
+type PlanningCheckpointStatus = 'running' | 'failed' | 'abandoned';
+
+interface PersistedMessageResult {
+    id: string;
+    agentId: string;
+    role: string;
+    content: string;
+    metadata: string | null;
+    createdAt: number;
+}
 
 export function isMessagePresentInList(
     messages: Array<{ id: string }>,
@@ -62,6 +77,64 @@ export function getPlanningHistoryEffectiveContent(
     }
 
     return effectiveContent;
+}
+
+export function trimPlanningCheckpointTextFromTail(
+    content: string,
+    maxChars = PLANNING_CHECKPOINT_PERSIST_MAX_CHARS,
+    omittedNotice = ''
+): string {
+    const normalized = content.trim();
+    if (normalized.length <= maxChars) return normalized;
+
+    const notice = omittedNotice.trim();
+    const separator = notice ? '\n' : '';
+    const suffixBudget = Math.max(1, maxChars - notice.length - separator.length);
+    let suffix = normalized.slice(-suffixBudget);
+    const firstNewline = suffix.indexOf('\n');
+    if (firstNewline > 0 && firstNewline < suffix.length - 1) {
+        suffix = suffix.slice(firstNewline + 1);
+    }
+
+    return [notice, suffix.trimStart()].filter(Boolean).join('\n');
+}
+
+export function isPlanningCheckpointMessage(
+    message: Pick<Message, 'role' | 'metadata'>
+): boolean {
+    const metadata = message.metadata as Record<string, unknown> | undefined;
+    if (message.role !== 'assistant' || metadata?.mode !== 'planning') return false;
+
+    return metadata.responseType === 'agent_loop_checkpoint'
+        || metadata.responseType === 'agent_loop_checkpoint_abandoned'
+        || metadata.agentLoopStatus === 'running'
+        || metadata.agentLoopStatus === 'failed'
+        || metadata.agentLoopStatus === 'abandoned';
+}
+
+export function isRecoverablePlanningCheckpointMessage(
+    message: Pick<Message, 'role' | 'metadata'>,
+    siblingMessages?: Array<Pick<Message, 'id'>>
+): boolean {
+    const metadata = message.metadata as Record<string, unknown> | undefined;
+    if (!isPlanningCheckpointMessage(message)) return false;
+    if (!metadata) return false;
+    if (metadata.recoverable === false || metadata.agentLoopStatus === 'abandoned') return false;
+
+    const hasCheckpointShape =
+        metadata.responseType === 'agent_loop_checkpoint'
+        || metadata.agentLoopStatus === 'running'
+        || metadata.agentLoopStatus === 'failed';
+    if (!hasCheckpointShape) return false;
+
+    const sourceUserMessageId = typeof metadata.createdUserMessageId === 'string'
+        ? metadata.createdUserMessageId
+        : undefined;
+    if (siblingMessages && sourceUserMessageId) {
+        return siblingMessages.some(message => message.id === sourceUserMessageId);
+    }
+
+    return true;
 }
 
 // ============================================================================
@@ -470,11 +543,192 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         // 关键：消息持久化后需要更新为真实 ID
         let tempMessageIdForDiff: string | undefined;
         let createdUserMessageId: string | null = null;
+        let planningCheckpointMessage: PersistedMessageResult | null = null;
+        const checkpointFlushTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+        let checkpointFlushPromise: Promise<void> | null = null;
+        let checkpointDirty = false;
+        let checkpointFinalized = false;
+
+        // 收集思维链数据用于持久化
+        const thinkingChainData: {
+            analyzing: string;
+            planning: string;
+            decided: string;
+        } = { analyzing: '', planning: '', decided: '' };
+
+        // 收集 Sub-Agent 观测数据用于持久化（与 thinkingChainData 同理）
+        const subAgentObservationsData: import('@/services/planning/agent-loop/types').SubAgentObservationEvent[] = [];
+
         const isCreatedUserMessageStillPresent = () => {
             const messages = contextType === 'agent'
                 ? useChatStore.getState().messagesByAgent.get(contextId) ?? []
                 : useChatStore.getState().messagesByHub.get(contextId) ?? [];
             return isMessagePresentInList(messages, createdUserMessageId);
+        };
+
+        const buildPlanningCheckpointObservationText = (): string => {
+            const observations = subAgentObservationsData
+                .filter(event => !event.transient)
+                .slice(-PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT)
+                .map(event => {
+                    const stepLabel = event.step ? `step ${event.step}` : 'step ?';
+                    const action = event.toolAction
+                        ? `${event.toolAction.tool}(${event.toolAction.target})${event.toolAction.success === undefined
+                            ? ''
+                            : event.toolAction.success ? ' success' : ' failed'}`
+                        : event.thinking;
+                    const result = event.result ? `\n${event.result}` : '';
+                    return `- ${stepLabel}: ${action}${result}`.slice(0, 1200);
+                })
+                .join('\n');
+
+            if (observations.trim()) {
+                return trimPlanningCheckpointTextFromTail(
+                    observations,
+                    PLANNING_CHECKPOINT_PERSIST_MAX_CHARS,
+                    t('chat.planningCheckpointOmittedOlderObservations')
+                );
+            }
+
+            const phases = [
+                thinkingChainData.analyzing && `ANALYZING: ${thinkingChainData.analyzing}`,
+                thinkingChainData.planning && `PLANNING: ${thinkingChainData.planning}`,
+                thinkingChainData.decided && `DECIDED: ${thinkingChainData.decided}`,
+            ].filter(Boolean).join('\n\n');
+
+            return phases.trim() || t('chat.planningCheckpointNoObservations');
+        };
+
+        const buildPlanningCheckpointMetadata = (
+            status: PlanningCheckpointStatus,
+            errorMessage?: string
+        ): Record<string, unknown> => ({
+            responseType: status === 'running'
+                ? 'agent_loop_checkpoint'
+                : status === 'failed'
+                    ? 'error'
+                    : 'agent_loop_checkpoint_abandoned',
+            mode: 'planning' as const,
+            agentLoopStatus: status,
+            recoverable: status !== 'abandoned',
+            createdUserMessageId,
+            error: errorMessage,
+            thinkingChain: thinkingChainData,
+            thinkingSteps: fsmVisualizationActions.getContextState(contextId).thinkingSteps
+                .map(step => ({
+                    stepNumber: step.stepNumber,
+                    analyzing: step.analyzing,
+                    planning: step.planning,
+                    decided: step.decided,
+                })),
+            subAgentObservations: subAgentObservationsData.length > 0
+                ? subAgentObservationsData.slice(-PLANNING_CHECKPOINT_OBSERVATION_LIMIT)
+                : undefined,
+            persistContent: status === 'abandoned'
+                ? ''
+                : t('chat.planningCheckpointPersistContent', {
+                    observations: buildPlanningCheckpointObservationText(),
+                }),
+            ...(contextType === 'hub' ? {
+                sourceType: 'hub' as const,
+                hubId: contextId,
+                agentName: effectiveAgentConfig.name,
+            } : {}),
+        });
+
+        const updatePlanningCheckpoint = async (
+            status: PlanningCheckpointStatus,
+            errorMessage?: string
+        ): Promise<PersistedMessageResult | null> => {
+            if (!planningCheckpointMessage || checkpointFinalized) return null;
+            const contentForStatus = status === 'failed'
+                ? `**${t('chat.planningExecutionFailed')}**\n\n${errorMessage ?? t('chat.processingFailed')}`
+                : status === 'abandoned'
+                    ? ''
+                    : t('chat.planningCheckpointRunningContent');
+            const updated = await invoke<PersistedMessageResult>('message_update', {
+                request: {
+                    id: planningCheckpointMessage.id,
+                    content: contentForStatus,
+                    metadata: JSON.stringify(buildPlanningCheckpointMetadata(status, errorMessage)),
+                },
+            });
+            planningCheckpointMessage = updated;
+            return updated;
+        };
+
+        const flushPlanningCheckpointNow = (): Promise<void> => {
+            if (!planningCheckpointMessage || checkpointFinalized) {
+                return Promise.resolve();
+            }
+            if (checkpointFlushPromise) return checkpointFlushPromise;
+
+            checkpointDirty = false;
+            const promise = updatePlanningCheckpoint('running')
+                .catch((error: unknown) => {
+                    logger.warn('[usePlanningMode] Planning checkpoint 更新失败:', error);
+                })
+                .then(() => undefined)
+                .finally(() => {
+                    if (checkpointFlushPromise === promise) {
+                        checkpointFlushPromise = null;
+                    }
+                    if (checkpointDirty && !checkpointFinalized && !checkpointFlushTimerRef.current) {
+                        schedulePlanningCheckpointFlush();
+                    }
+                });
+            checkpointFlushPromise = promise;
+            return promise;
+        };
+
+        const schedulePlanningCheckpointFlush = (): void => {
+            if (!planningCheckpointMessage || checkpointFinalized) return;
+            checkpointDirty = true;
+            if (checkpointFlushTimerRef.current) return;
+            checkpointFlushTimerRef.current = setTimeout(() => {
+                checkpointFlushTimerRef.current = null;
+                if (!checkpointDirty || checkpointFinalized) return;
+                void flushPlanningCheckpointNow();
+            }, PLANNING_CHECKPOINT_FLUSH_INTERVAL_MS);
+        };
+
+        const stopPlanningCheckpointFlushes = async (): Promise<void> => {
+            if (checkpointFlushTimerRef.current) {
+                clearTimeout(checkpointFlushTimerRef.current);
+                checkpointFlushTimerRef.current = null;
+            }
+            checkpointDirty = false;
+            if (checkpointFlushPromise) {
+                await checkpointFlushPromise;
+            }
+        };
+
+        const deletePlanningCheckpoint = async (reason: string): Promise<void> => {
+            await stopPlanningCheckpointFlushes();
+            if (!planningCheckpointMessage || checkpointFinalized) return;
+
+            const checkpointId = planningCheckpointMessage.id;
+            checkpointFinalized = true;
+            try {
+                await invoke('message_delete', { id: checkpointId });
+                logger.debug('[usePlanningMode] Planning checkpoint 已删除:', reason);
+            } catch (error) {
+                logger.debug('[usePlanningMode] Planning checkpoint 删除跳过或失败:', reason, error);
+                try {
+                    await invoke('message_update', {
+                        request: {
+                            id: checkpointId,
+                            content: '',
+                            metadata: JSON.stringify(buildPlanningCheckpointMetadata('abandoned', reason)),
+                        },
+                    });
+                    logger.debug('[usePlanningMode] Planning checkpoint 已标记为 abandoned:', reason);
+                } catch (abandonError) {
+                    logger.debug('[usePlanningMode] Planning checkpoint abandoned 标记跳过或失败:', abandonError);
+                }
+            } finally {
+                planningCheckpointMessage = null;
+            }
         };
 
         try {
@@ -544,6 +798,20 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
             // ====== 步骤 2: 显示加载状态 ======
             startStreaming(contextId, effectiveAgentConfig.name);
+
+            try {
+                planningCheckpointMessage = await invoke<PersistedMessageResult>('message_create', {
+                    request: {
+                        agentId: messageAgentId,
+                        role: 'assistant',
+                        content: t('chat.planningCheckpointRunningContent'),
+                        metadata: JSON.stringify(buildPlanningCheckpointMetadata('running')),
+                    },
+                });
+                logger.debug('[usePlanningMode] Planning checkpoint 已创建:', planningCheckpointMessage.id);
+            } catch (checkpointError) {
+                logger.warn('[usePlanningMode] Planning checkpoint 创建失败，任务将继续执行:', checkpointError);
+            }
 
             // ====== 步骤 3: 获取或创建 AgentService ======
             const { getOrCreateAgentService } = await import('@services/planning/AgentService');
@@ -705,11 +973,27 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             const storedMessages = contextType === 'agent'
                 ? useChatStore.getState().messagesByAgent.get(contextId) ?? []
                 : useChatStore.getState().messagesByHub.get(contextId) ?? [];
+            const checkpointMessageIdsForHistory = new Set<string>();
+            storedMessages.forEach((message, index) => {
+                if (!isRecoverablePlanningCheckpointMessage(message, storedMessages)) return;
+                const hasLaterNonCurrentMessage = storedMessages
+                    .slice(index + 1)
+                    .some(candidate => candidate.id !== userMessageResult.id && candidate.role !== 'system');
+                if (!hasLaterNonCurrentMessage) {
+                    checkpointMessageIdsForHistory.add(message.id);
+                }
+            });
 
             const historyMessages = storedMessages
                 .filter(m => {
                     // 排除系统消息和当前刚创建的用户消息
                     if (m.role === 'system' || m.id === userMessageResult.id) return false;
+                    // 中断 checkpoint 只注入紧随其后的下一次请求。后续轮次保留 UI 气泡，
+                    // 但不再进入 LLM 历史，避免恢复提示长期污染上下文。
+                    if (isPlanningCheckpointMessage(m)) {
+                        return isRecoverablePlanningCheckpointMessage(m, storedMessages)
+                            && checkpointMessageIdsForHistory.has(m.id);
+                    }
                     // 排除定时任务触发的 user 消息，避免重复 prompt 污染上下文窗口
                     // IM 消息保留在上下文中，方便 Agent 连续对话时有完整记忆
                     if (m.role === 'user' && m.metadata) {
@@ -839,16 +1123,6 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             }
 
             // ====== 步骤 4: 执行 AgentLoop ======
-            // 收集思维链数据用于持久化
-            const thinkingChainData: {
-                analyzing: string;
-                planning: string;
-                decided: string;
-            } = { analyzing: '', planning: '', decided: '' };
-
-            // 收集 Sub-Agent 观测数据用于持久化（与 thinkingChainData 同理）
-            const subAgentObservationsData: import('@/services/planning/agent-loop/types').SubAgentObservationEvent[] = [];
-
             // 构建引用上下文字符串，注入到 LLM 消息内容前（与 Chat 模式保持一致）
             // 动态配额：根据用户消息长度自动计算每条引用可用字符，
             // 确保用户原始消息在 formatConversationHistory 字符单条上限中始终可见。
@@ -906,6 +1180,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                         } else if (event.phase === 'DECIDED') {
                             thinkingChainData.decided = event.content;
                         }
+                        schedulePlanningCheckpointFlush();
                     }
                     // IM 追踪器转发：将思维链事件推送到飞书卡片（以 imBotId 精确路由）
                     const imTracker = getActiveImTracker(imBotId);
@@ -943,6 +1218,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     }
                     // 同时收集到持久化数组中
                     upsertSubAgentObservationEvent(subAgentObservationsData, event);
+                    schedulePlanningCheckpointFlush();
                 },
                 onSubAgentSpawn: () => {
                     // Sub-Agent 创建时标记运行中；观测记录保留全轮次历史，由 runId 隔离分组。
@@ -952,6 +1228,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     if (imTracker) {
                         imTracker.handleSubAgentSpawn('Sub-Agent');
                     }
+                    schedulePlanningCheckpointFlush();
                 },
                 onSubAgentComplete: () => {
                     fsmVisualizationActions.setSubAgentRunning(false, contextId);
@@ -960,6 +1237,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     if (imTracker) {
                         imTracker.handleSubAgentComplete();
                     }
+                    schedulePlanningCheckpointFlush();
                 },
                 onSubAgentFail: () => {
                     fsmVisualizationActions.setSubAgentRunning(false, contextId);
@@ -968,6 +1246,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     if (imTracker) {
                         imTracker.handleSubAgentFail('Sub-Agent execution failed');
                     }
+                    schedulePlanningCheckpointFlush();
                 },
 
                 // Embedding 警告回调：语义检索降级时向用户弹出非阻塞性提示
@@ -1125,35 +1404,49 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             // cancelled 时的持久化是"尽力而为"的优化，失败不应阻塞整个流程。
             if (!isCreatedUserMessageStillPresent()) {
                 logger.debug('[usePlanningMode] 用户消息已撤回，跳过迟到的 Planning assistant 持久化:', createdUserMessageId);
+                await deletePlanningCheckpoint('source user message disappeared before final assistant persistence');
                 return;
             }
 
-            let assistantMessageResult: {
-                id: string;
-                agentId: string;
-                role: string;
-                content: string;
-                metadata: string | null;
-                createdAt: number;
-            };
+            let assistantMessageResult: PersistedMessageResult;
             try {
-                assistantMessageResult = await invoke<{
-                    id: string;
-                    agentId: string;
-                    role: string;
-                    content: string;
-                    metadata: string | null;
-                    createdAt: number;
-                }>('message_create', {
-                    request: {
-                        agentId: messageAgentId,
-                        role: 'assistant',
-                        // DB 存储可视化增强后的版本，确保重启后 UI 显示一致
-                        // 跨请求上下文恢复所需的 persistContent 已冗余存储在 metadata 中
-                        content: finalContent,
-                        metadata: JSON.stringify(messageMetadata),
-                    },
-                });
+                await stopPlanningCheckpointFlushes();
+
+                if (planningCheckpointMessage) {
+                    try {
+                        assistantMessageResult = await invoke<PersistedMessageResult>('message_update', {
+                            request: {
+                                id: planningCheckpointMessage.id,
+                                // DB 存储可视化增强后的版本，确保重启后 UI 显示一致
+                                // 跨请求上下文恢复所需的 persistContent 已冗余存储在 metadata 中
+                                content: finalContent,
+                                metadata: JSON.stringify(messageMetadata),
+                                createdAt: Date.now(),
+                            },
+                        });
+                        checkpointFinalized = true;
+                    } catch (checkpointUpdateError) {
+                        logger.warn('[usePlanningMode] Planning checkpoint 最终更新失败，回退创建 assistant 消息:', checkpointUpdateError);
+                        assistantMessageResult = await invoke<PersistedMessageResult>('message_create', {
+                            request: {
+                                agentId: messageAgentId,
+                                role: 'assistant',
+                                content: finalContent,
+                                metadata: JSON.stringify(messageMetadata),
+                            },
+                        });
+                        await deletePlanningCheckpoint('stale checkpoint after final assistant fallback');
+                    }
+                } else {
+                    assistantMessageResult = await invoke<PersistedMessageResult>('message_create', {
+                        request: {
+                            agentId: messageAgentId,
+                            role: 'assistant',
+                            content: finalContent,
+                            metadata: JSON.stringify(messageMetadata),
+                        },
+                    });
+                }
             } catch (dbError: unknown) {
                 const dbErrorMsg = dbError instanceof Error ? dbError.message : String(dbError);
                 // FOREIGN KEY 失败 = agent 已从 DB 中删除（不论是用户删除还是其他原因）
@@ -1303,6 +1596,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             // 携带 botId 确保事件路由到正确的 Bot
             if (!isCreatedUserMessageStillPresent()) {
                 logger.debug('[usePlanningMode] 用户消息已撤回，跳过迟到的 Planning 错误消息:', createdUserMessageId);
+                await deletePlanningCheckpoint('source user message disappeared before error assistant persistence');
                 return;
             }
 
@@ -1317,8 +1611,37 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 });
             }
 
+            let errorMessage: Message | null = null;
+            await stopPlanningCheckpointFlushes();
+
+            if (planningCheckpointMessage && !checkpointFinalized) {
+                try {
+                    const failedMetadata = buildPlanningCheckpointMetadata('failed', errorMsg);
+                    const updatedCheckpoint = await invoke<PersistedMessageResult>('message_update', {
+                        request: {
+                            id: planningCheckpointMessage.id,
+                            content: `**${t('chat.planningExecutionFailed')}**\n\n${errorMsg}`,
+                            metadata: JSON.stringify(failedMetadata),
+                            createdAt: Date.now(),
+                        },
+                    });
+                    checkpointFinalized = true;
+                    errorMessage = {
+                        id: updatedCheckpoint.id,
+                        content: updatedCheckpoint.content,
+                        role: 'assistant',
+                        agentId: updatedCheckpoint.agentId,
+                        createdAt: updatedCheckpoint.createdAt,
+                        metadata: failedMetadata,
+                    };
+                } catch (checkpointError) {
+                    logger.warn('[usePlanningMode] Planning checkpoint 失败状态更新失败:', checkpointError);
+                    await deletePlanningCheckpoint('failed checkpoint status update failed');
+                }
+            }
+
             // 添加错误消息到聊天历史（避免前端显示缓存的旧回复）
-            const errorMessage: Message = {
+            errorMessage ??= {
                 id: `error_${Date.now()}`,
                 content: `**${t('chat.planningExecutionFailed')}**\n\n${error instanceof Error ? error.message : String(error)}`,
                 role: 'assistant',
@@ -1345,6 +1668,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             // 设置状态栏为红灯
             useStatusStore.getState().setModelStatus('error');
         } finally {
+            await stopPlanningCheckpointFlushes();
             sendingContextsRef.current.delete(contextId);
             cancelRequestedContextsRef.current.delete(contextId);
             finishSending(contextId);

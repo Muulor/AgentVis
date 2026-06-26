@@ -59,6 +59,16 @@ pub struct CreateMessageRequest {
     pub metadata: Option<String>,  // JSON 字符串
 }
 
+/// 更新消息请求
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateMessageRequest {
+    pub id: String,
+    pub content: String,
+    pub metadata: Option<String>,  // JSON 字符串
+    pub created_at: Option<i64>,
+}
+
 /// 将字符串转换为 MessageRole
 fn parse_role(role: &str) -> MessageRole {
     match role.to_lowercase().as_str() {
@@ -84,6 +94,33 @@ pub async fn message_create(
         request.metadata,
     ).await?;
     
+    Ok(MessageItem {
+        id: message.id,
+        agent_id: message.agent_id,
+        role: message.role,
+        content: message.content,
+        metadata: message.metadata,
+        created_at: message.created_at,
+    })
+}
+
+/// 更新已有消息内容和 metadata
+#[tauri::command]
+pub async fn message_update(
+    state: State<'_, AppState>,
+    request: UpdateMessageRequest,
+) -> CommandResult<MessageItem> {
+    let db = state.db.lock().await;
+    let message = db
+        .message_repo()
+        .update_content_metadata(
+            &request.id,
+            &request.content,
+            request.metadata,
+            request.created_at,
+        )
+        .await?;
+
     Ok(MessageItem {
         id: message.id,
         agent_id: message.agent_id,

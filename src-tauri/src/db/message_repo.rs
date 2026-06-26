@@ -58,6 +58,41 @@ impl MessageRepository {
         Ok(message)
     }
 
+    /// 更新消息内容和元数据。
+    ///
+    /// 用于长任务运行中的 checkpoint 草稿消息：任务开始时先创建 assistant
+    /// 占位记录，过程中持续更新 metadata，完成时覆盖为最终 assistant 回复。
+    pub async fn update_content_metadata(
+        &self,
+        id: &str,
+        content: &str,
+        metadata: Option<String>,
+        created_at: Option<i64>,
+    ) -> AppResult<Message> {
+        let result = sqlx::query(
+            r#"
+            UPDATE messages
+            SET content = ?, metadata = ?, created_at = COALESCE(?, created_at)
+            WHERE id = ? AND deleted_at IS NULL
+            "#,
+        )
+        .bind(content)
+        .bind(metadata)
+        .bind(created_at)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound(format!("message {}", id)));
+        }
+
+        self.get(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("message {}", id)))
+    }
+
     /// 根据 ID 获取消息
     pub async fn get(&self, id: &str) -> AppResult<Option<Message>> {
         let message: Option<Message> = sqlx::query_as(

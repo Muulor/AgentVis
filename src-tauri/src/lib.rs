@@ -8,6 +8,8 @@ pub mod db;
 pub mod error;
 pub mod llm;
 pub(crate) mod text_utils;
+#[cfg(windows)]
+mod webview_diagnostics;
 
 use std::sync::Arc;
 use std::path::Path;
@@ -57,7 +59,7 @@ use commands::{
     // Snapshot commands
     snapshot_create, snapshot_get, snapshot_list, snapshot_get_latest, snapshot_rollback, snapshot_delete, snapshot_cleanup, snapshot_count,
     // Message commands
-    message_create, message_list_by_agent, message_list_by_hub, message_get_recent, message_get_batch, message_get_after, message_get_before, message_count_by_agent, message_get_recent_hub, message_get_before_hub, message_count_by_hub, message_delete, message_retract_from, message_clear_by_agent,
+    message_create, message_update, message_list_by_agent, message_list_by_hub, message_get_recent, message_get_batch, message_get_after, message_get_before, message_count_by_agent, message_get_recent_hub, message_get_before_hub, message_count_by_hub, message_delete, message_retract_from, message_clear_by_agent,
     // File commands
     file_write_deliverable, file_read_content, file_list_deliverables, file_delete, save_clipboard_image, save_dropped_file,
     file_write_to_path, file_write_staged_tool_arg_to_path, file_create_backup, file_read_as_base64, file_read_image_downscaled_as_base64, file_copy_to_attachments, file_get_size, file_open_system,
@@ -221,6 +223,9 @@ pub fn run() {
             //   大屏（逻辑宽≥1600 且 逻辑高≥900）→ 以 1600×900 居中启动
             //   小屏（任意一边不足）→ 最大化启动，保留任务栏和标题栏，确保小屏最佳呈现
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(windows)]
+                webview_diagnostics::install_process_failed_logger(&window);
+
                 match window.primary_monitor() {
                     Ok(Some(monitor)) => {
                         let physical_size = monitor.size();
@@ -373,6 +378,7 @@ pub fn run() {
             snapshot_count,
             // Message 命令
             message_create,
+            message_update,
             message_list_by_agent,
             message_list_by_hub,
             message_get_recent,

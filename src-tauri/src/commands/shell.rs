@@ -68,10 +68,15 @@ pub struct ShellExecResult {
     pub timeout_secs: Option<u64>,
     /// 后台进程 PID（仅后台模式有值）
     pub pid: Option<u32>,
+    /// stdout 前缀被后端丢弃的字节数（为避免长命令输出撑爆内存/IPC）
+    pub stdout_truncated_bytes: u64,
+    /// stderr 前缀被后端丢弃的字节数（为避免长命令输出撑爆内存/IPC）
+    pub stderr_truncated_bytes: u64,
 }
 
 const DEFAULT_SHELL_TIMEOUT_SECONDS: u64 = 300;
 const MAX_SHELL_TIMEOUT_SECONDS: u64 = 1800;
+const MAX_PIPE_CAPTURE_BYTES: usize = 1024 * 1024;
 
 fn duration_millis_u64(started_at: Instant) -> u64 {
     let millis = started_at.elapsed().as_millis();
@@ -108,7 +113,59 @@ fn shell_exec_result(
         duration_ms: Some(duration_millis_u64(started_at)),
         timeout_secs: timeout_duration.map(|duration| duration.as_secs()),
         pid,
+        stdout_truncated_bytes: 0,
+        stderr_truncated_bytes: 0,
     }
+}
+
+#[derive(Default)]
+struct CapturedPipeOutput {
+    bytes: Vec<u8>,
+    dropped_prefix_bytes: u64,
+}
+
+async fn read_limited_pipe_output<R>(reader: Option<R>) -> CapturedPipeOutput
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let mut output = CapturedPipeOutput::default();
+    let Some(mut reader) = reader else {
+        return output;
+    };
+
+    let mut chunk = [0_u8; 8192];
+    loop {
+        let read = match tokio::io::AsyncReadExt::read(&mut reader, &mut chunk).await {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) => {
+                log::warn!("[Shell] pipe 读取失败: {}", error);
+                break;
+            }
+        };
+
+        if output.bytes.len() + read <= MAX_PIPE_CAPTURE_BYTES {
+            output.bytes.extend_from_slice(&chunk[..read]);
+            continue;
+        }
+
+        let old_len = output.bytes.len();
+        let overflow = old_len + read - MAX_PIPE_CAPTURE_BYTES;
+        if overflow >= old_len {
+            output.dropped_prefix_bytes += old_len as u64;
+            output.bytes.clear();
+            let chunk_prefix_to_drop = overflow - old_len;
+            let start = chunk_prefix_to_drop.min(read);
+            output.dropped_prefix_bytes += start as u64;
+            output.bytes.extend_from_slice(&chunk[start..read]);
+        } else {
+            output.bytes.drain(..overflow);
+            output.dropped_prefix_bytes += overflow as u64;
+            output.bytes.extend_from_slice(&chunk[..read]);
+        }
+    }
+
+    output
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -5330,20 +5387,8 @@ pub async fn shell_execute(
 
     // 使用 spawn 创建独立 IO 读取任务——与 child.wait() 并发运行
     // 必须并发：避免进程写满管道缓冲区时 child.wait() 死锁
-    let stdout_task = tokio::spawn(async move {
-        let mut buf = Vec::new();
-        if let Some(mut r) = child_stdout {
-            let _ = tokio::io::AsyncReadExt::read_to_end(&mut r, &mut buf).await;
-        }
-        buf
-    });
-    let stderr_task = tokio::spawn(async move {
-        let mut buf = Vec::new();
-        if let Some(mut r) = child_stderr {
-            let _ = tokio::io::AsyncReadExt::read_to_end(&mut r, &mut buf).await;
-        }
-        buf
-    });
+    let stdout_task = tokio::spawn(read_limited_pipe_output(child_stdout));
+    let stderr_task = tokio::spawn(read_limited_pipe_output(child_stderr));
 
     enum ForegroundOutcome {
         Exited(std::io::Result<std::process::ExitStatus>),
@@ -5385,36 +5430,36 @@ pub async fn shell_execute(
             // 导致 read_to_end 即使在父进程退出后仍不返回。
             // 设置 3 秒宽限期：正常命令不受影响，launcher 类脚本安全退出。
             let pipe_grace = Duration::from_secs(3);
-            let stdout_bytes = match tokio::time::timeout(pipe_grace, stdout_task).await {
-                Ok(Ok(bytes)) => bytes,
+            let stdout_capture = match tokio::time::timeout(pipe_grace, stdout_task).await {
+                Ok(Ok(output)) => output,
                 Ok(Err(e)) => {
                     log::warn!("[Shell] stdout 读取任务异常: {}", e);
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
                 Err(_) => {
                     log::debug!(
                         "[Shell] ⚠️ stdout 管道宽限期到达（孙子进程持有句柄），返回已收集的数据"
                     );
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
             };
-            let stderr_bytes = match tokio::time::timeout(pipe_grace, stderr_task).await {
-                Ok(Ok(bytes)) => bytes,
+            let stderr_capture = match tokio::time::timeout(pipe_grace, stderr_task).await {
+                Ok(Ok(output)) => output,
                 Ok(Err(e)) => {
                     log::warn!("[Shell] stderr 读取任务异常: {}", e);
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
                 Err(_) => {
                     log::debug!(
                         "[Shell] ⚠️ stderr 管道宽限期到达（孙子进程持有句柄），返回已收集的数据"
                     );
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
             };
 
             let exit_code = status.code().unwrap_or(-1);
-            let stdout = decode_output(&stdout_bytes);
-            let stderr = decode_output(&stderr_bytes);
+            let stdout = decode_output(&stdout_capture.bytes);
+            let stderr = decode_output(&stderr_capture.bytes);
 
             log::debug!("[Shell] 退出码: {}", exit_code);
             if !stdout.is_empty() {
@@ -5512,7 +5557,7 @@ pub async fn shell_execute(
                 record_sandbox_audit_event(&app_handle, event);
             }
 
-            Ok(shell_exec_result(
+            let mut result = shell_exec_result(
                 exit_code,
                 stdout,
                 stderr,
@@ -5521,7 +5566,10 @@ pub async fn shell_execute(
                 Some(timeout_duration),
                 false,
                 false,
-            ))
+            );
+            result.stdout_truncated_bytes = stdout_capture.dropped_prefix_bytes;
+            result.stderr_truncated_bytes = stderr_capture.dropped_prefix_bytes;
+            Ok(result)
         }
         ForegroundOutcome::Exited(Err(e)) => {
             stdout_task.abort();
@@ -5553,30 +5601,30 @@ pub async fn shell_execute(
         }
         ForegroundOutcome::TimedOut => {
             let pipe_grace = Duration::from_secs(3);
-            let stdout_bytes = match tokio::time::timeout(pipe_grace, stdout_task).await {
-                Ok(Ok(bytes)) => bytes,
+            let stdout_capture = match tokio::time::timeout(pipe_grace, stdout_task).await {
+                Ok(Ok(output)) => output,
                 Ok(Err(e)) => {
                     log::warn!("[Shell] stdout 读取任务异常: {}", e);
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
                 Err(_) => {
                     log::debug!(
                         "[Shell] ⚠️ timeout 后 stdout 管道宽限期到达，返回已收集的数据"
                     );
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
             };
-            let stderr_bytes = match tokio::time::timeout(pipe_grace, stderr_task).await {
-                Ok(Ok(bytes)) => bytes,
+            let stderr_capture = match tokio::time::timeout(pipe_grace, stderr_task).await {
+                Ok(Ok(output)) => output,
                 Ok(Err(e)) => {
                     log::warn!("[Shell] stderr 读取任务异常: {}", e);
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
                 Err(_) => {
                     log::debug!(
                         "[Shell] ⚠️ timeout 后 stderr 管道宽限期到达，返回已收集的数据"
                     );
-                    Vec::new()
+                    CapturedPipeOutput::default()
                 }
             };
             stop_wfp_managed_guard_session(
@@ -5609,14 +5657,14 @@ pub async fn shell_execute(
                 timeout_duration.as_secs(),
                 command
             );
-            let stdout = decode_output(&stdout_bytes);
-            let raw_stderr = decode_output(&stderr_bytes);
+            let stdout = decode_output(&stdout_capture.bytes);
+            let raw_stderr = decode_output(&stderr_capture.bytes);
             let stderr = if raw_stderr.trim().is_empty() {
                 timeout_message
             } else {
                 format!("{}\n{}", raw_stderr, timeout_message)
             };
-            Ok(shell_exec_result(
+            let mut result = shell_exec_result(
                 -1,
                 stdout,
                 stderr,
@@ -5625,7 +5673,10 @@ pub async fn shell_execute(
                 Some(timeout_duration),
                 true,
                 true,
-            ))
+            );
+            result.stdout_truncated_bytes = stdout_capture.dropped_prefix_bytes;
+            result.stderr_truncated_bytes = stderr_capture.dropped_prefix_bytes;
+            Ok(result)
         }
         ForegroundOutcome::Cancelled => {
             stdout_task.abort();
