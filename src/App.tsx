@@ -19,6 +19,24 @@ import { useI18n } from '@/i18n';
 import type { AttachmentInfo } from '@/types/message';
 
 const logger = getLogger('App');
+const RELOAD_SHORTCUT_TEST_STORAGE_KEY = 'agentvis:allowReloadShortcutTest';
+
+function isTruthyFeatureFlag(value: string | undefined): boolean {
+    return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+}
+
+function isReloadShortcutTestEnabled(): boolean {
+    if (isTruthyFeatureFlag(import.meta.env.VITE_AGENTVIS_ALLOW_RELOAD_SHORTCUT_TEST)) {
+        return true;
+    }
+
+    try {
+        const stored = window.localStorage.getItem(RELOAD_SHORTCUT_TEST_STORAGE_KEY);
+        return isTruthyFeatureFlag(stored ?? undefined);
+    } catch {
+        return false;
+    }
+}
 
 /**
  * AgentVis 应用根组件
@@ -276,6 +294,7 @@ function App() {
     //
     // 在 Tauri 打包后的 WebView2 环境中，这些按键会触发整页重载（类似 location.reload()），
     // 导致所有 Zustand 内存状态（对话消息、Planning 进度、FSM 可视化等）全部丢失。
+    // 手工验证 checkpoint 恢复链路时，可通过隐藏测试开关临时放行刷新快捷键。
     // 使用 capture:true 在事件到达 DOM 树之前拦截，防止 WebView 原生处理刷新。
     useEffect(() => {
         const handleRefreshKey = (e: KeyboardEvent) => {
@@ -285,6 +304,10 @@ function App() {
                 (e.ctrlKey && e.key === 'F5');
 
             if (isRefreshShortcut) {
+                if (isReloadShortcutTestEnabled()) {
+                    return;
+                }
+
                 e.preventDefault();
                 e.stopPropagation();
             }

@@ -282,7 +282,7 @@ export function StatusBar() {
 
             {/* 版本号 */}
             <div className={styles.section}>
-                <span className={styles.version}>v0.3.2</span>
+                <span className={styles.version}>v0.3.3</span>
             </div>
         </footer>
     );

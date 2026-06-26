@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildPlanningCheckpointProgressText,
     getPlanningHistoryEffectiveContent,
     isPlanningCheckpointMessage,
     isRecoverablePlanningCheckpointMessage,
@@ -66,6 +67,60 @@ describe('usePlanningMode helpers', () => {
         expect(trimmed).toContain('latest reliable step');
         expect(trimmed).not.toContain('old step should be dropped');
         expect(trimmed.length).toBeLessThanOrEqual(48);
+    });
+
+    it('keeps MB progress and SA thinking when checkpoint observations exist', () => {
+        const translate = (
+            key: string,
+            params?: Record<string, string | number | boolean | null | undefined>
+        ) => {
+            const values: Record<string, string> = {
+                'chat.planningCheckpointOmittedOlderObservations': '[older omitted]',
+                'chat.planningCheckpointMbProgressHeader': 'MB progress',
+                'chat.planningCheckpointSaProgressHeader': 'SA progress',
+                'chat.planningCheckpointUnknownStepLabel': '[Step ?]',
+                'chat.planningCheckpointSaThinkingLabel': 'SA thinking:',
+                'chat.planningCheckpointSaToolLabel': 'Tool:',
+                'chat.planningCheckpointSaResultLabel': 'Result:',
+                'chat.planningCheckpointToolStatusPending': 'pending',
+                'chat.planningCheckpointToolStatusSuccess': 'success',
+                'chat.planningCheckpointToolStatusFailed': 'failed',
+                'chat.planningCheckpointEmptyObservation': 'empty observation',
+                'chat.planningCheckpointNoObservations': 'no observations',
+            };
+
+            if (key === 'chat.subAgentStepLabel') {
+                return `[Step ${String(params?.step ?? '?')}]`;
+            }
+
+            return values[key] ?? key;
+        };
+
+        const progressText = buildPlanningCheckpointProgressText(
+            {
+                analyzing: 'MB chose the paper summary path.',
+                planning: 'Risk is low; continue with existing files.',
+                decided: 'Write FRAME.md and render the explainer video.',
+            },
+            [{
+                thinking: 'SA read the video workflow references and is checking bootstrap status.',
+                toolAction: {
+                    tool: 'exec',
+                    target: 'node scripts/hf-workflow.mjs moss-bootstrap --in-place ...',
+                    success: undefined,
+                },
+                step: 12,
+            }],
+            translate,
+            { maxChars: 2000 }
+        );
+
+        expect(progressText).toContain('MB chose the paper summary path.');
+        expect(progressText).toContain('Write FRAME.md and render the explainer video.');
+        expect(progressText).toContain('SA read the video workflow references');
+        expect(progressText).toContain('exec(node scripts/hf-workflow.mjs moss-bootstrap --in-place ...) pending');
+        expect(progressText).not.toContain('MB rationale');
+        expect(progressText).not.toContain('MB next step');
     });
 
     it('recognizes recoverable checkpoint messages only when their source user still exists', () => {

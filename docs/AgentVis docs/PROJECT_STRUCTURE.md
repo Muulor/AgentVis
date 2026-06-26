@@ -938,6 +938,7 @@ src-tauri/
     ├── lib.rs                    # 库入口（命令注册）
     ├── error.rs                  # 错误类型定义
     ├── text_utils.rs             # UTF-8 文本处理工具
+    ├── webview_diagnostics.rs    # WebView2 进程级诊断
     │
     ├── 📁 bin/                   # 二进制入口
     ├── 📁 tests/                 # 测试文件

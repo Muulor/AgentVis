@@ -4,6 +4,7 @@ interface ImportMetaEnv {
     readonly VITE_AGENTVIS_RELEASE_MANIFEST_URL?: string;
     readonly VITE_AGENTVIS_RELEASE_CHANNEL?: string;
     readonly VITE_AGENTVIS_LOG_LEVEL?: string;
+    readonly VITE_AGENTVIS_ALLOW_RELOAD_SHORTCUT_TEST?: string;
 }
 
 interface ImportMeta {

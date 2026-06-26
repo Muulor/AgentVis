@@ -32,7 +32,7 @@ import { upsertSubAgentObservationEvent } from '@services/planning/utils/SubAgen
 import type { Message } from '@/types';
 import type { AttachmentInfo } from '@/types/message';
 import { getLogger } from '@services/logger';
-import { useI18n } from '@/i18n';
+import { useI18n, type TranslationKey, type TranslationParams } from '@/i18n';
 import { getQuoteContextContent, serializeQuotesForMessage } from '@utils/quoteContent';
 import { modelSupportsVision } from '@/config/modelRegistry';
 
@@ -41,8 +41,23 @@ const PLANNING_CHECKPOINT_FLUSH_INTERVAL_MS = 2000;
 const PLANNING_CHECKPOINT_OBSERVATION_LIMIT = 80;
 const PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT = 12;
 const PLANNING_CHECKPOINT_PERSIST_MAX_CHARS = 4200;
+const PLANNING_CHECKPOINT_MB_MAX_CHARS = 1800;
+const PLANNING_CHECKPOINT_EVENT_MAX_CHARS = 1200;
 
 type PlanningCheckpointStatus = 'running' | 'failed' | 'abandoned';
+type PlanningCheckpointTranslate = (key: TranslationKey, params?: TranslationParams) => string;
+type PlanningCheckpointThinkingData = Partial<Record<'analyzing' | 'planning' | 'decided', string>>;
+interface PlanningCheckpointObservationData {
+    thinking?: string;
+    transient?: boolean;
+    toolAction?: {
+        tool: string;
+        target: string;
+        success?: boolean;
+    };
+    result?: string;
+    step?: number;
+}
 
 interface PersistedMessageResult {
     id: string;
@@ -97,6 +112,147 @@ export function trimPlanningCheckpointTextFromTail(
     }
 
     return [notice, suffix.trimStart()].filter(Boolean).join('\n');
+}
+
+function buildPlanningCheckpointMbSection(
+    thinkingChainData: PlanningCheckpointThinkingData,
+    translateText: PlanningCheckpointTranslate,
+    maxChars: number,
+    omittedNotice: string
+): string {
+    const header = translateText('chat.planningCheckpointMbProgressHeader');
+    const phases = [
+        thinkingChainData.analyzing,
+        thinkingChainData.planning,
+        thinkingChainData.decided,
+    ]
+        .map(content => content?.trim())
+        .filter((content): content is string => Boolean(content));
+
+    if (phases.length === 0) return '';
+
+    const buildSection = (items: string[]): string => [
+        header,
+        items.join('\n\n'),
+    ].join('\n');
+
+    const rawSection = buildSection(phases);
+    if (rawSection.length <= maxChars) return rawSection;
+
+    const overhead = header.length
+        + 1
+        + Math.max(0, phases.length - 1) * 2;
+    const perPhaseBudget = Math.max(1, Math.floor((maxChars - overhead) / phases.length));
+    const trimmedPhases = phases.map(content => (
+        trimPlanningCheckpointTextFromTail(content, perPhaseBudget, omittedNotice)
+    ));
+    const trimmedSection = buildSection(trimmedPhases);
+
+    return trimmedSection.length <= maxChars
+        ? trimmedSection
+        : trimPlanningCheckpointTextFromTail(trimmedSection, maxChars, omittedNotice);
+}
+
+function formatPlanningCheckpointObservationEvent(
+    event: PlanningCheckpointObservationData,
+    translateText: PlanningCheckpointTranslate
+): string {
+    const stepLabel = event.step === undefined
+        ? translateText('chat.planningCheckpointUnknownStepLabel')
+        : translateText('chat.subAgentStepLabel', { step: event.step });
+    const details: string[] = [];
+    const thinking = event.thinking?.trim();
+
+    if (thinking) {
+        details.push(`${translateText('chat.planningCheckpointSaThinkingLabel')} ${thinking}`);
+    }
+
+    if (event.toolAction) {
+        const status = event.toolAction.success === undefined
+            ? translateText('chat.planningCheckpointToolStatusPending')
+            : event.toolAction.success
+                ? translateText('chat.planningCheckpointToolStatusSuccess')
+                : translateText('chat.planningCheckpointToolStatusFailed');
+        details.push(
+            `${translateText('chat.planningCheckpointSaToolLabel')} `
+            + `${event.toolAction.tool}(${event.toolAction.target}) ${status}`
+        );
+    }
+
+    const result = event.result?.trim();
+    if (result) {
+        details.push(`${translateText('chat.planningCheckpointSaResultLabel')}\n${result}`);
+    }
+
+    const body = details.length > 0
+        ? details.join('\n  ')
+        : translateText('chat.planningCheckpointEmptyObservation');
+
+    return `- ${stepLabel}: ${body}`.slice(0, PLANNING_CHECKPOINT_EVENT_MAX_CHARS);
+}
+
+function buildPlanningCheckpointSaSection(
+    observations: PlanningCheckpointObservationData[],
+    translateText: PlanningCheckpointTranslate,
+    observationLimit: number
+): string {
+    const observationLines = observations
+        .filter(event => !event.transient)
+        .slice(-observationLimit)
+        .map(event => formatPlanningCheckpointObservationEvent(event, translateText))
+        .join('\n');
+
+    if (!observationLines.trim()) return '';
+
+    return [
+        translateText('chat.planningCheckpointSaProgressHeader'),
+        observationLines,
+    ].join('\n');
+}
+
+export function buildPlanningCheckpointProgressText(
+    thinkingChainData: PlanningCheckpointThinkingData,
+    subAgentObservationsData: PlanningCheckpointObservationData[],
+    translateText: PlanningCheckpointTranslate,
+    options: {
+        maxChars?: number;
+        observationLimit?: number;
+    } = {}
+): string {
+    const maxChars = options.maxChars ?? PLANNING_CHECKPOINT_PERSIST_MAX_CHARS;
+    const observationLimit = options.observationLimit ?? PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT;
+    const omittedNotice = translateText('chat.planningCheckpointOmittedOlderObservations');
+    const saSection = buildPlanningCheckpointSaSection(
+        subAgentObservationsData,
+        translateText,
+        observationLimit
+    );
+    const mbBudget = saSection
+        ? Math.min(PLANNING_CHECKPOINT_MB_MAX_CHARS, Math.max(1, Math.floor(maxChars * 0.45)))
+        : maxChars;
+    const mbSection = buildPlanningCheckpointMbSection(
+        thinkingChainData,
+        translateText,
+        mbBudget,
+        omittedNotice
+    );
+
+    if (!mbSection && !saSection) {
+        return translateText('chat.planningCheckpointNoObservations');
+    }
+
+    if (!mbSection) {
+        return trimPlanningCheckpointTextFromTail(saSection, maxChars, omittedNotice);
+    }
+
+    if (!saSection) {
+        return trimPlanningCheckpointTextFromTail(mbSection, maxChars, omittedNotice);
+    }
+
+    const saBudget = Math.max(1, maxChars - mbSection.length - 2);
+    const trimmedSaSection = trimPlanningCheckpointTextFromTail(saSection, saBudget, omittedNotice);
+
+    return [mbSection, trimmedSaSection].filter(Boolean).join('\n\n');
 }
 
 export function isPlanningCheckpointMessage(
@@ -567,36 +723,11 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         };
 
         const buildPlanningCheckpointObservationText = (): string => {
-            const observations = subAgentObservationsData
-                .filter(event => !event.transient)
-                .slice(-PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT)
-                .map(event => {
-                    const stepLabel = event.step ? `step ${event.step}` : 'step ?';
-                    const action = event.toolAction
-                        ? `${event.toolAction.tool}(${event.toolAction.target})${event.toolAction.success === undefined
-                            ? ''
-                            : event.toolAction.success ? ' success' : ' failed'}`
-                        : event.thinking;
-                    const result = event.result ? `\n${event.result}` : '';
-                    return `- ${stepLabel}: ${action}${result}`.slice(0, 1200);
-                })
-                .join('\n');
-
-            if (observations.trim()) {
-                return trimPlanningCheckpointTextFromTail(
-                    observations,
-                    PLANNING_CHECKPOINT_PERSIST_MAX_CHARS,
-                    t('chat.planningCheckpointOmittedOlderObservations')
-                );
-            }
-
-            const phases = [
-                thinkingChainData.analyzing && `ANALYZING: ${thinkingChainData.analyzing}`,
-                thinkingChainData.planning && `PLANNING: ${thinkingChainData.planning}`,
-                thinkingChainData.decided && `DECIDED: ${thinkingChainData.decided}`,
-            ].filter(Boolean).join('\n\n');
-
-            return phases.trim() || t('chat.planningCheckpointNoObservations');
+            return buildPlanningCheckpointProgressText(
+                thinkingChainData,
+                subAgentObservationsData,
+                t
+            );
         };
 
         const buildPlanningCheckpointMetadata = (

@@ -1,6 +1,6 @@
 [package]
 name = "agentvis"
-version = "0.3.2"
+version = "0.3.3"
 description = "AgentVis - Visual Agent Workspace"
 authors = ["AgentVis Team"]
 edition = "2021"
