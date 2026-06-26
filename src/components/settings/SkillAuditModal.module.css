@@ -1,0 +1,406 @@
+/* SkillAuditModal - 技能包安全审查结果 Modal */
+
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.modal {
+    background: var(--bg-secondary, #1e1e2e);
+    border: 1px solid var(--border-primary, #313244);
+    border-radius: 16px;
+    width: 520px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 顶部状态栏 */
+.header {
+    padding: 24px 24px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.statusIcon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.statusIcon.auditing {
+    background: rgba(137, 180, 250, 0.15);
+    color: #89b4fa;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.statusIcon.approved {
+    background: rgba(166, 227, 161, 0.15);
+    color: #a6e3a1;
+}
+
+.statusIcon.rejected {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f38ba8;
+}
+
+.statusIcon.manualReview {
+    background: rgba(249, 226, 175, 0.15);
+    color: #f9e2af;
+}
+
+.statusIcon.error {
+    background: rgba(249, 226, 175, 0.15);
+    color: #f9e2af;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.headerText {
+    flex: 1;
+    min-width: 0;
+}
+
+.minimizeButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #a6adc8);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.minimizeButton:hover {
+    background: var(--bg-tertiary, #181825);
+    color: var(--text-primary, #cdd6f4);
+}
+
+.title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #cdd6f4);
+    margin: 0 0 4px;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: var(--text-secondary, #a6adc8);
+    margin: 0;
+}
+
+/* 进度条 */
+.progressBar {
+    height: 3px;
+    background: var(--border-primary, #313244);
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #89b4fa, #b4befe);
+    animation: progressIndeterminate 1.5s ease-in-out infinite;
+    width: 40%;
+}
+
+@keyframes progressIndeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(350%);
+    }
+}
+
+/* 内容区 */
+.body {
+    padding: 0 24px 24px;
+}
+
+/* 风险评分 */
+.riskScoreBar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary, #181825);
+    border-radius: 10px;
+}
+
+.riskLabel {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary, #a6adc8);
+    white-space: nowrap;
+}
+
+.riskScoreTrack {
+    flex: 1;
+    height: 6px;
+    background: var(--border-primary, #313244);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.riskScoreFill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease-out;
+}
+
+.riskScoreFill.low {
+    background: linear-gradient(90deg, #a6e3a1, #94e2d5);
+}
+
+.riskScoreFill.medium {
+    background: linear-gradient(90deg, #f9e2af, #fab387);
+}
+
+.riskScoreFill.high {
+    background: linear-gradient(90deg, #fab387, #f38ba8);
+}
+
+.riskScoreFill.critical {
+    background: linear-gradient(90deg, #f38ba8, #eb6f92);
+}
+
+.riskValue {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary, #cdd6f4);
+    min-width: 40px;
+    text-align: right;
+}
+
+/* 摘要 */
+.summary {
+    font-size: 13px;
+    color: var(--text-secondary, #a6adc8);
+    line-height: 1.6;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary, #181825);
+    border-radius: 10px;
+}
+
+/* Findings 列表 */
+.findingsHeader {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary, #a6adc8);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.findingsList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.findingItem {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border-left: 3px solid transparent;
+    background: var(--bg-tertiary, #181825);
+}
+
+.findingItem.critical {
+    border-left-color: #f38ba8;
+}
+
+.findingItem.high {
+    border-left-color: #fab387;
+}
+
+.findingItem.medium {
+    border-left-color: #f9e2af;
+}
+
+.findingItem.low {
+    border-left-color: #a6e3a1;
+}
+
+.findingMeta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.findingBadge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+}
+
+.findingBadge.critical {
+    background: rgba(243, 139, 168, 0.2);
+    color: #f38ba8;
+}
+
+.findingBadge.high {
+    background: rgba(250, 179, 135, 0.2);
+    color: #fab387;
+}
+
+.findingBadge.medium {
+    background: rgba(249, 226, 175, 0.2);
+    color: #f9e2af;
+}
+
+.findingBadge.low {
+    background: rgba(166, 227, 161, 0.2);
+    color: #a6e3a1;
+}
+
+.findingType {
+    font-size: 11px;
+    color: var(--text-secondary, #a6adc8);
+}
+
+.findingFile {
+    font-size: 11px;
+    color: var(--text-tertiary, #6c7086);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.findingDesc {
+    font-size: 12px;
+    color: var(--text-secondary, #a6adc8);
+    line-height: 1.5;
+}
+
+/* 底部操作栏 */
+.footer {
+    padding: 16px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid var(--border-primary, #313244);
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+}
+
+.btn:hover {
+    filter: brightness(1.1);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btnPrimary {
+    background: linear-gradient(135deg, #89b4fa, #b4befe);
+    color: #1e1e2e;
+}
+
+.btnDanger {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f38ba8;
+    border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.btnSecondary {
+    background: var(--bg-tertiary, #181825);
+    color: var(--text-secondary, #a6adc8);
+    border: 1px solid var(--border-primary, #313244);
+}
+
+.btnWarning {
+    background: rgba(249, 226, 175, 0.1);
+    color: #f9e2af;
+    border: 1px solid rgba(249, 226, 175, 0.3);
+}
+
+.btnSuccess {
+    background: linear-gradient(135deg, #a6e3a1, #94e2d5);
+    color: #1e1e2e;
+}
+
+/* 检测到的能力标签 */
+.capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.capabilityTag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(137, 180, 250, 0.1);
+    color: #89b4fa;
+    border: 1px solid rgba(137, 180, 250, 0.2);
+}

@@ -1,0 +1,509 @@
+/**
+ * ImChannelSettings 样式 - 多 Bot 版本
+ *
+ * 新增 Bot 列表、可折叠配置表单、per-Bot 状态徽章等样式。
+ * 保留所有原有样式以维持与其他设置 Tab 一致的卡片式布局。
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 卡片式分组（与 CloudServiceSettings.serviceSection 对齐）     */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.serviceSection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-md, 6px);
+    border: 1px solid var(--color-border-primary);
+}
+
+.serviceHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.serviceName {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.serviceTitleRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.externalLinkButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    border-radius: var(--radius-sm, 4px);
+    transition: color 0.15s, background 0.15s;
+}
+
+.externalLinkButton:hover {
+    color: var(--color-accent-primary);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.serviceDesc {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 顶部操作栏（标题 + 添加按钮）                                  */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.headerRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.addBotButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px dashed var(--color-accent-primary, #3b82f6);
+    background: transparent;
+    color: var(--color-accent-primary, #3b82f6);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.addBotButton:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.addBotButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: var(--color-text-tertiary);
+    color: var(--color-text-tertiary);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* Bot 列表                                                        */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.botList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.emptyState {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm, 13px);
+    line-height: 1.6;
+    border: 1px dashed var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 单个 Bot 卡片                                                   */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.botCard {
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    overflow: hidden;
+    background: var(--color-bg-primary);
+    transition: border-color 0.15s;
+}
+
+.botCard.botCardConnected {
+    border-color: rgba(22, 163, 74, 0.4);
+}
+
+.botCardHeader {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s;
+}
+
+.botCardHeader:hover {
+    background: var(--color-bg-secondary);
+}
+
+/* 展开/折叠指示箭头 */
+.expandIcon {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.expandIconOpen {
+    transform: rotate(90deg);
+}
+
+/* Bot 名称区块 */
+.botInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.botName {
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.botMeta {
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 连接状态徽章 */
+.statusBadge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: var(--font-size-xs, 11px);
+    font-weight: var(--font-weight-medium, 500);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.statusBadge.online {
+    background: rgba(22, 163, 74, 0.12);
+    color: #16a34a;
+}
+
+.statusBadge.offline {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-tertiary);
+}
+
+.statusBadge.connecting {
+    background: rgba(234, 179, 8, 0.12);
+    color: #ca8a04;
+}
+
+.statusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* 头部右侧动作按钮组 */
+.botHeaderActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.connectButton {
+    padding: 5px 10px;
+    border: none;
+    background: var(--color-action-primary, #2563eb);
+    color: #fff;
+    border-radius: var(--radius-sm, 4px);
+    font-size: var(--font-size-xs, 11px);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.connectButton:hover:not(:disabled) {
+    background: #1d4ed8;
+    background: color-mix(in srgb, var(--color-action-primary, #2563eb) 84%, #000);
+    color: #fff;
+}
+
+.connectButton:disabled {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+.disconnectButton {
+    padding: 5px 10px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs, 11px);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.disconnectButton:hover {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.deleteBotButton {
+    padding: 5px 8px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs, 11px);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.deleteBotButton:hover {
+    border-color: #dc2626;
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 可折叠配置表单                                                  */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.botConfigPanel {
+    border-top: 1px solid var(--color-border-primary);
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--color-bg-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 表单元素（复用原有样式）                                        */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.fieldGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.label {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary);
+}
+
+.inputRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    transition: border-color 0.15s;
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+}
+
+.input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+}
+
+.select:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+}
+
+.select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.hint {
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary);
+    margin: 0;
+}
+
+/* 双列表单行（App ID 左，App Secret 右） */
+.twoColRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+/* 保存按钮行（位于配置面板底部） */
+.saveActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+.saveButton {
+    padding: 6px 16px;
+    border: none;
+    background: var(--color-action-primary, #2563eb);
+    color: #fff;
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.saveButton:hover:not(:disabled) {
+    background: #1d4ed8;
+    background: color-mix(in srgb, var(--color-action-primary, #2563eb) 84%, #000);
+    color: #fff;
+}
+
+.saveButton:disabled {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* Checkbox / Toggle 行                                           */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.toggleRow {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.toggleLabel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggleInput {
+    display: none;
+}
+
+.toggleSwitch {
+    position: relative;
+    width: 32px;
+    height: 16px;
+    background: var(--color-bg-tertiary, #3f3f46);
+    border-radius: 8px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggleSwitch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+}
+
+.toggleInput:checked+.toggleSwitch {
+    background: var(--color-accent-primary, #3b82f6);
+}
+
+.toggleInput:checked+.toggleSwitch::after {
+    transform: translateX(16px);
+}
+
+.toggleText {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 错误提示                                                        */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.errorMessage {
+    font-size: var(--font-size-xs, 11px);
+    color: #dc2626;
+    padding: 6px 10px;
+    background: rgba(220, 38, 38, 0.08);
+    border-radius: var(--radius-sm, 4px);
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 已处理任务统计                                                  */
+/* ═══════════════════════════════════════════════════════════════ */
+
+.statsRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary);
+}
+
+.statsCount {
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-secondary);
+}

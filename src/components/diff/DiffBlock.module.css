@@ -1,0 +1,52 @@
+/**
+ * DiffBlock 样式
+ * 
+ * 修改区块，嵌入在全文视图中
+ * 按钮使用绝对定位覆盖在最后一行右侧，不打断行号连续性
+ */
+
+.container {
+    position: relative;
+    overflow: visible;
+    margin: 2px 0;
+}
+
+/* 状态样式 */
+.statusApplied {
+    opacity: 0.7;
+}
+
+.statusRejected {
+    opacity: 0.5;
+}
+
+.statusFailed {
+    opacity: 1;
+}
+
+/* 内容区域 */
+.content {
+    position: relative;
+}
+
+/* 操作按钮区域 - 绝对定位覆盖在最后一行右侧 */
+.actions {
+    position: absolute;
+    bottom: 2px;
+    right: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 4px;
+}
+
+/* 状态标签 - 绝对定位在右下角 */
+.statusLabel {
+    position: absolute;
+    bottom: 2px;
+    right: 8px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-tertiary);
+}

@@ -1,0 +1,39 @@
+/**
+ * SelectCheckbox 样式
+ */
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    border: 2px solid var(--color-border-default);
+    background: transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: all 150ms ease;
+    /* 保持垂直居中于消息气泡 */
+    align-self: center;
+}
+
+.checkbox:hover {
+    border-color: var(--color-action-primary);
+}
+
+/* 选中状态 */
+.checked {
+    background-color: var(--color-action-primary);
+    border-color: var(--color-action-primary);
+}
+
+.checked:hover {
+    background-color: var(--color-action-primary-hover);
+    border-color: var(--color-action-primary-hover);
+}
+
+.checkIcon {
+    color: #ffffff;
+}

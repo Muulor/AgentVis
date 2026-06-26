@@ -1,0 +1,18 @@
+{
+  "project": "Example narrated HyperFrames video",
+  "language": "zh",
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "sceneName": "Hook",
+      "estimatedDuration": "6s",
+      "script": "先用一句短解说说清楚观众为什么要继续看。"
+    },
+    {
+      "sceneNumber": 2,
+      "sceneName": "Core Idea",
+      "estimatedDuration": "7s",
+      "script": "再解释核心概念，并让画面跟着这句话展开。"
+    }
+  ]
+}

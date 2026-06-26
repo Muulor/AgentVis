@@ -1,0 +1,62 @@
+.navItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.navItem:hover {
+    background-color: var(--color-bg-secondary);
+}
+
+.navItem[data-active="true"] {
+    background-color: var(--color-bg-tertiary);
+    position: relative;
+}
+
+.navItem[data-active="true"]::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background-color: var(--color-action-primary);
+    border-radius: 1px;
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-secondary);
+}
+
+.navItem[data-active="true"] .icon {
+    color: var(--color-action-primary);
+}
+
+.label {
+    flex: 1;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 折叠状态 */
+.navItem[data-collapsed="true"] {
+    justify-content: center;
+    padding: 10px;
+}
+
+.navItem[data-collapsed="true"] .label {
+    display: none;
+}

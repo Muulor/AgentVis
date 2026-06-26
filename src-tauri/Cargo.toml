@@ -1,0 +1,117 @@
+[package]
+name = "agentvis"
+version = "0.3.2"
+description = "AgentVis - Visual Agent Workspace"
+authors = ["AgentVis Team"]
+edition = "2021"
+default-run = "agentvis"
+
+[lib]
+name = "agentvis_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+# 测试二进制文件
+[[bin]]
+name = "test_llm"
+path = "src/bin/test_llm.rs"
+
+[[bin]]
+name = "agentvis-broker-fetch"
+path = "src/bin/agentvis_broker_fetch.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+
+# 数据库层依赖
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+
+# 加密存储依赖 (Windows Credential Manager)
+keyring = { version = "3", features = ["windows-native"] }
+
+# LLM Gateway 依赖
+reqwest = { version = "0.12", features = ["json", "stream", "gzip", "multipart"] }
+
+once_cell = "1.19"  # 全局 HTTP Client 惰性初始化
+futures = "0.3"
+eventsource-stream = "0.2"
+log = "0.4"  # 日志框架
+encoding_rs = "0.8"  # Windows GBK 编码兼容
+fs2 = "0.4"          # 文件锁（Trash Bin manifest 并发保护）
+glob = "0.3"          # 通配符路径展开（Trash Bin Phase 2）
+tauri-plugin-fs = "2.4.5"
+
+# 文档解析依赖
+docx-rs = "0.4"                 # Word (.docx) 解析
+calamine = "0.26"               # Excel (.xlsx/.xls) 解析
+pdf-extract = "0.7"             # PDF 文本提取
+pptx-to-md = "0.4"              # PowerPoint (.pptx) 解析
+
+# 图片格式转换依赖
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }  # HEIF→WebP 转换
+
+# 附件功能依赖
+base64 = "0.22"                 # Base64 编码/解码
+
+# 数据管理依赖
+zip = "2.2"                     # ZIP 压缩/解压
+tauri-plugin-log = "2.8.0"
+
+# 代码搜索依赖
+walkdir = "2"                         # 递归目录遍历
+regex = "1"                           # 正则搜索
+
+# AST 解析引擎（local_search 的 outline/symbol 模式）
+tree-sitter = "0.24"
+tree-sitter-typescript = "0.23"       # TS/TSX 语法
+tree-sitter-javascript = "0.23"       # JS/JSX 语法
+tree-sitter-python = "0.23"           # Python 语法
+tree-sitter-rust = "0.23"             # Rust 语法
+tree-sitter-css = "0.23"              # CSS 语法
+tree-sitter-json = "0.23"             # JSON 语法
+tree-sitter-md = "0.3"               # Markdown 语法
+tauri-plugin-notification = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Isolation",
+    "Win32_NetworkManagement_WindowsFilteringPlatform",
+    "Win32_Storage_FileSystem",
+    "Win32_System_JobObjects",
+    "Win32_System_Com",
+    "Win32_System_Pipes",
+    "Win32_System_Rpc",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+] }
+windows = { version = "0.61.3", features = [
+    "Data_Pdf",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage",
+    "Storage_Streams",
+    "Win32_System_WinRT",
+] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,328 @@
+/* ChartWidget - 图表/图示交互组件样式 */
+
+.container {
+    border-radius: var(--radius-xl, 12px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px solid var(--color-border-default, #E5E5E5);
+    overflow: hidden;
+}
+
+/* 标题区 */
+.header {
+    padding: 14px 16px 4px;
+}
+
+.title {
+    margin: 0;
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+.description {
+    margin: 4px 0 0;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* 图表内容区域 */
+.chartBody {
+    padding: 10px 16px;
+}
+
+/* ========================================
+ * 流程图 (flow)
+ * ======================================== */
+
+.flowContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.flowStep {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+/* 连接器 */
+.flowConnector {
+    display: flex;
+    justify-content: center;
+    padding: 2px 0;
+}
+
+.flowArrow {
+    font-size: 14px;
+    color: var(--color-text-tertiary, #999999);
+    opacity: 0.6;
+    line-height: 1;
+}
+
+/* 流程节点 */
+.flowNode {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-primary, #FFFFFF);
+    border-left: 3px solid #3B82F6;
+    transition: transform var(--transition-fast, 150ms ease);
+}
+
+.flowNode:hover {
+    transform: translateX(2px);
+}
+
+.flowNodeIcon {
+    font-size: 18px;
+    flex-shrink: 0;
+    line-height: 1.2;
+}
+
+.flowNodeText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.flowNodeLabel {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+.flowNodeDesc {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* ========================================
+ * 柱状图 (bar)
+ * ======================================== */
+
+.barContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.barRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.barLabelWrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.barIcon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.barLabel {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-primary, #1A1A1A);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.barTrack {
+    flex: 1;
+    height: 16px;
+    background: var(--color-bg-tertiary, #EBEBEB);
+    border-radius: var(--radius-full, 9999px);
+    overflow: hidden;
+}
+
+.barFill {
+    height: 100%;
+    border-radius: var(--radius-full, 9999px);
+    min-width: 4px;
+    transition: width 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.barValue {
+    font-size: var(--font-size-xs, 11px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-secondary, #666666);
+    min-width: 28px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ========================================
+ * 信息卡片列表 (info)
+ * ======================================== */
+
+.infoContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.infoCard {
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-primary, #FFFFFF);
+    transition: transform var(--transition-fast, 150ms ease);
+}
+
+.infoCard:hover {
+    transform: translateY(-1px);
+}
+
+.infoHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.infoIcon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.infoLabel {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary, #1A1A1A);
+    flex: 0 1 auto;
+    max-width: 45%;
+    overflow-wrap: anywhere;
+}
+
+.infoValue {
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-action-primary, #2563EB);
+    flex: 1 1 0;
+    min-width: 0;
+    line-height: var(--line-height-normal, 1.5);
+    text-align: right;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.infoDesc {
+    margin: 4px 0 0;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* ========================================
+ * 底部注脚
+ * ======================================== */
+
+.footnote {
+    margin: 0;
+    padding: 8px 16px 12px;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary, #999999);
+    font-style: italic;
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* ========================================
+ * 底部交互按钮栏
+ * ======================================== */
+
+.actionsBar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 12px 12px;
+    border-top: 1px solid var(--color-border-default, #E5E5E5);
+}
+
+.actionBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md, 6px);
+    border: 1px solid var(--color-border-default, #E5E5E5);
+    background: var(--color-bg-primary, #FFFFFF);
+    font-size: var(--font-size-sm, 12px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary, #1A1A1A);
+    cursor: pointer;
+    transition:
+        background var(--transition-fast, 150ms ease),
+        border-color var(--transition-fast, 150ms ease),
+        transform var(--transition-fast, 150ms ease);
+    font-family: inherit;
+}
+
+.actionBtn:hover:not(:disabled) {
+    background: var(--color-bg-tertiary, #EBEBEB);
+    border-color: var(--color-action-primary, #2563EB);
+    transform: translateY(-1px);
+}
+
+.actionBtn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.actionClicked {
+    background: rgba(37, 99, 235, 0.08) !important;
+    border-color: var(--color-action-primary, #2563EB) !important;
+    color: var(--color-action-primary, #2563EB) !important;
+}
+
+.actionDisabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+.actionIcon {
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* 重选按钮 */
+.reselectBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 6px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary, #999999);
+    transition: color var(--transition-fast, 150ms ease);
+}
+
+.reselectBtn:hover {
+    color: var(--color-action-primary, #2563EB);
+}
+
+/* 错误降级 */
+.errorFallback {
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px dashed var(--color-border-default, #E5E5E5);
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-tertiary, #999999);
+}

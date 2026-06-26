@@ -1,0 +1,215 @@
+/* TreeWidget - 渐进式决策树样式 */
+
+.container {
+    border-radius: var(--radius-xl, 12px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px solid var(--color-border-default, #E5E5E5);
+    overflow: hidden;
+}
+
+/* 标题区 */
+.header {
+    padding: 14px 16px 6px;
+}
+
+.title {
+    margin: 0;
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+.description {
+    margin: 4px 0 0;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* ========== 面包屑导航 ========== */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px 16px 0;
+}
+
+.breadcrumbItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary, #999999);
+    font-weight: var(--font-weight-medium, 500);
+}
+
+.breadcrumbItemActive {
+    color: var(--color-action-primary, #2563EB);
+}
+
+.breadcrumbSep {
+    font-size: 10px;
+    color: var(--color-text-tertiary, #999999);
+    opacity: 0.5;
+}
+
+/* ========== 层级区域 ========== */
+.levelContainer {
+    padding: 8px;
+}
+
+.levelQuestion {
+    margin: 0;
+    padding: 4px 8px 6px;
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+/* ========== 选项列表 ========== */
+.optionsList {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* 选项按钮 */
+.optionCard {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    border: 1px solid transparent;
+    background: var(--color-bg-primary, #FFFFFF);
+    cursor: pointer;
+    transition:
+        background var(--transition-fast, 150ms ease),
+        border-color var(--transition-fast, 150ms ease),
+        transform var(--transition-fast, 150ms ease),
+        opacity var(--transition-fast, 150ms ease),
+        max-height 300ms ease;
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+}
+
+.optionCard:hover:not(:disabled) {
+    background: var(--color-bg-tertiary, #EBEBEB);
+    border-color: var(--color-action-primary, #2563EB);
+    transform: translateY(-1px);
+}
+
+.optionCard:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+/* 选中状态 */
+.optionSelected {
+    background: rgba(37, 99, 235, 0.08) !important;
+    border-color: var(--color-action-primary, #2563EB) !important;
+}
+
+/* 非选中项淡出 */
+.optionFaded {
+    opacity: 0;
+    max-height: 0;
+    padding: 0 14px;
+    margin: 0;
+    border: none;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* 选项图标 */
+.optionIcon {
+    font-size: 20px;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+    line-height: 1;
+}
+
+/* 选项文字 */
+.optionTextWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.optionLabel {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+.optionDesc {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* 箭头指示器 */
+.optionArrow {
+    flex-shrink: 0;
+    color: var(--color-text-tertiary, #999999);
+    transition: color var(--transition-fast, 150ms ease);
+}
+
+.optionCard:hover .optionArrow {
+    color: var(--color-action-primary, #2563EB);
+}
+
+/* ========== 新层级滑入动画 ========== */
+.levelEnter {
+    animation: levelSlideIn 300ms ease-out;
+}
+
+@keyframes levelSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========== 重选按钮 ========== */
+.reselectBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 6px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary, #999999);
+    transition: color var(--transition-fast, 150ms ease);
+}
+
+.reselectBtn:hover {
+    color: var(--color-action-primary, #2563EB);
+}
+
+/* 错误降级 */
+.errorFallback {
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px dashed var(--color-border-default, #E5E5E5);
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-tertiary, #999999);
+}

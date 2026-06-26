@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 3,
+  "composition": {
+    "fps": 30,
+    "width": 1080,
+    "height": 1920,
+    "durationSeconds": 0,
+    "layout": "portrait",
+    "themeId": "custom",
+    "seed": 42
+  },
+  "videoTrack": {
+    "sourcePath": "input.mp4",
+    "startSec": 0,
+    "endSec": 0,
+    "bounds": { "x": 0, "y": 0, "width": 1080, "height": 1920 }
+  },
+  "subtitles": {
+    "enabled": false
+  },
+  "cards": [
+    {
+      "id": "card-01",
+      "intent": "Describe what this overlay accomplishes.",
+      "startSec": 0,
+      "endSec": 3,
+      "accentIndex": 0,
+      "zone": "lower-third",
+      "contentHints": {
+        "kicker": "OPTIONAL",
+        "title": "Short readable title",
+        "detail": "Optional supporting detail"
+      },
+      "transition": "fade"
+    }
+  ]
+}

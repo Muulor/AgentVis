@@ -1,0 +1,375 @@
+/**
+ * MessageBubble 样式
+ * 
+ * 基于 UI-Spec 规范：
+ * - 消息间距：16px
+ * - 消息内边距：12px 16px
+ * - 消息圆角：8px
+ */
+
+/* ==================== 基础气泡样式 ==================== */
+
+.bubble {
+    display: flex;
+    gap: var(--spacing-sm);
+    max-width: 85%;
+    position: relative;
+}
+
+.userBubble {
+    flex-direction: row-reverse;
+    align-self: flex-end;
+    max-width: min(85%, 820px);
+}
+
+.agentBubble {
+    flex-direction: row;
+    align-self: flex-start;
+}
+
+/* ==================== 头像 ==================== */
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: white;
+    flex-shrink: 0;
+}
+
+/* ==================== 内容区域 ==================== */
+
+.contentWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    position: relative;
+    /* 关键：允许 flex 子元素收缩，解决代码块不自适应的问题 */
+    min-width: 0;
+    /* 注意：保持 overflow 为 visible 以允许 MessageActions 正常显示在外部 */
+    overflow: visible;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.senderName {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+}
+
+.timestamp {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+.content {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    line-height: var(--line-height-normal);
+    word-break: break-word;
+}
+
+/* 用户消息样式 */
+.userBubble .content {
+    background-color: var(--color-action-primary);
+    color: white;
+    border-bottom-right-radius: var(--radius-sm);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
+    /* 用户消息是纯文本，保留换行符 */
+    white-space: pre-wrap;
+}
+
+/* 用户消息选中样式 - 使用高对比度颜色以区分背景 */
+.userBubble .content::selection {
+    background-color: rgba(255, 255, 255, 0.4);
+    color: white;
+}
+
+.userBubble .content *::selection {
+    background-color: rgba(255, 255, 255, 0.4);
+    color: white;
+}
+
+/* Agent 消息样式 */
+.inlineMessageContent {
+    white-space: pre-wrap;
+}
+
+.inlineTokenChip {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 4px;
+    max-width: min(100%, 640px);
+    margin: 0 1px;
+    padding: 0 2px;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.96);
+    font: inherit;
+    font-weight: var(--font-weight-semibold);
+    line-height: inherit;
+    vertical-align: baseline;
+    cursor: pointer;
+}
+
+.inlineTokenChip:hover:not(:disabled),
+.inlineTokenChip:focus-visible:not(:disabled) {
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.55);
+    text-underline-offset: 2px;
+    outline: none;
+}
+
+.inlineTokenChip:disabled {
+    cursor: default;
+}
+
+.inlineTokenChip span {
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    white-space: normal;
+}
+
+.inlineTokenChip svg {
+    flex-shrink: 0;
+    margin-top: 0.2em;
+}
+
+.agentBubble .content {
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+    border-bottom-left-radius: var(--radius-sm);
+    /* Agent 消息使用 Markdown 渲染，由 react-markdown 控制排版 */
+    white-space: normal;
+}
+
+/* 包含富内容（mermaid/echarts/widget/表格）的 Agent 消息，
+   确保气泡有足够最小宽度以正确渲染图表和可视化元素 */
+.richContent {
+    min-width: min(560px, 85vw);
+}
+
+/* ==================== 系统消息 ==================== */
+
+.systemMessage {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-md) 0;
+}
+
+.systemContent {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    background-color: transparent;
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--radius-md);
+}
+
+/* ==================== 悬停效果已在 MessageActions 中处理 ==================== */
+
+/* ==================== 消息状态 ==================== */
+
+.pending {
+    opacity: 0.7;
+}
+
+.failed {
+    border-left: 3px solid var(--color-status-error);
+}
+
+/* ==================== 思考过程展开 ==================== */
+
+.reasoningBlock {
+    margin-bottom: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.reasoningBlock[open] {
+    background-color: var(--color-bg-secondary);
+}
+
+.reasoningSummary {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    user-select: none;
+    list-style: none;
+    /* 移除默认三角形 */
+}
+
+.reasoningSummary::-webkit-details-marker {
+    display: none;
+    /* Chrome/Safari 移除默认标记 */
+}
+
+.reasoningSummary:hover {
+    color: var(--color-text-secondary);
+    background-color: var(--color-bg-tertiary);
+}
+
+.reasoningContent {
+    background-color: var(--color-bg-secondary);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    margin-top: var(--spacing-xs);
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    line-height: var(--line-height-relaxed);
+    color: var(--color-text-secondary);
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* ==================== 引用溯源卡片 ==================== */
+
+.quotedFromBlock {
+    margin-bottom: var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.quotedFromItem {
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    /* 使用语义化 token，同时支持浅色和深色主题 */
+    background-color: var(--color-bg-secondary);
+    border-radius: var(--radius-sm);
+    border-left: 2px solid var(--color-action-primary);
+    font-size: var(--font-size-xs);
+}
+
+.quotedFromHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.quotedFromLabel {
+    color: var(--color-action-primary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* 展开/收起方向指示器 */
+.expandIndicator {
+    font-size: 8px;
+    color: var(--color-text-tertiary);
+    user-select: none;
+    flex-shrink: 0;
+}
+
+/* 收起态：单行截断（默认） */
+.quotedFromContent {
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: var(--line-height-tight);
+}
+
+/* 展开态：完整内容 + 滚动条 */
+.quotedFromContentExpanded {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: hidden;
+    text-overflow: unset;
+    max-height: 200px;
+    overflow-y: auto;
+    /* 精简滚动条 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-hover) transparent;
+}
+
+.quotedFromContentExpanded::-webkit-scrollbar {
+    width: 4px;
+}
+
+.quotedFromContentExpanded::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.quotedFromContentExpanded::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-hover);
+    border-radius: var(--radius-full);
+}
+
+/* ==================== 多选模式 ==================== */
+
+.multiSelectBubble {
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xs);
+    margin: calc(-1 * var(--spacing-xs));
+    /* 关键：多选模式下统一 flex-direction: row，确保 SelectCheckbox 始终在左侧 */
+    flex-direction: row !important;
+    /* 多选模式下统一左对齐，避免用户消息右对齐导致圆圈跟着跑到右侧 */
+    align-self: flex-start !important;
+    /* 多选模式下放宽 max-width，保持内容完整显示 */
+    max-width: 90%;
+}
+
+.multiSelectBubble:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.selectedBubble {
+    background-color: rgba(37, 99, 235, 0.08);
+}
+
+.selectedBubble:hover {
+    background-color: rgba(37, 99, 235, 0.12);
+}
+
+/* ==================== 多文件预览按钮 ==================== */
+
+.multiFilePreviewBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 6px 14px;
+    margin-top: var(--spacing-xs);
+    background: rgba(166, 227, 161, 0.12);
+    border: 1px solid rgba(166, 227, 161, 0.25);
+    border-radius: var(--radius-full);
+    color: #a6e3a1;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.multiFilePreviewBtn:hover {
+    background: rgba(166, 227, 161, 0.2);
+    border-color: rgba(166, 227, 161, 0.4);
+    transform: translateY(-1px);
+}
+
+.multiFilePreviewBtn:active {
+    transform: translateY(0);
+}

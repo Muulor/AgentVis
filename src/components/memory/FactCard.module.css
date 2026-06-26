@@ -1,0 +1,87 @@
+/**
+ * FactCard 组件样式
+ */
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 16px;
+    background-color: var(--color-bg-tertiary);
+    border-radius: 6px;
+    border: 1px solid var(--color-border-primary);
+    transition: border-color 150ms ease;
+}
+
+.card:hover {
+    border-color: var(--color-border-hover);
+}
+
+/* 头部 */
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* 类别标签 */
+.categoryTag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+/* 来源信息 */
+.source {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* 内容 */
+.content {
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    line-height: 1.5;
+    /* 最多显示 3 行 */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* 操作按钮区 */
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+/* 操作按钮 */
+.actionBtn {
+    padding: 4px 12px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: 1px solid var(--color-border-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 150ms ease;
+}
+
+.actionBtn:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-border-hover);
+    background-color: var(--color-bg-secondary);
+}
+
+/* 危险操作按钮 */
+.actionBtn.danger:hover {
+    color: var(--color-status-error);
+    border-color: var(--color-status-error);
+    background-color: rgba(239, 68, 68, 0.1);
+}

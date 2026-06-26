@@ -1,0 +1,107 @@
+/**
+ * WatermarkIndicator 组件样式
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--font-size-sm);
+}
+
+.label {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+}
+
+.threshold {
+    color: var(--color-text-secondary);
+}
+
+/* 进度条轨道 */
+.track {
+    position: relative;
+    height: 8px;
+    background-color: var(--color-bg-tertiary);
+    border-radius: 4px;
+    overflow: visible;
+}
+
+/* 进度条填充 - Figma 风格柔和蓝 */
+.fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #5B8DEF;
+    border-radius: 4px;
+    transition: width 300ms ease-out;
+}
+
+/* 超过水位线时 - 柔和琥珀色 */
+.fill[data-above-threshold="true"] {
+    background-color: #E8A855;
+}
+
+/* 整理中时的动画效果 */
+.fill[data-organizing="true"] {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* 水位线标记 */
+.thresholdMarker {
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 12px;
+    background-color: #E8A855;
+    border-radius: 1px;
+    transform: translateX(-50%);
+}
+
+/* 整理中提示 */
+.organizingHint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--color-status-info);
+}
+
+/* 加载动画 */
+.spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--color-status-info);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

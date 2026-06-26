@@ -1,0 +1,446 @@
+/**
+ * ModelSettings 样式
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.description {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sectionTitle {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+/* Provider 选择器 */
+.providerSelector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.providerOption {
+    padding: 8px 16px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.providerOption:hover {
+    border-color: var(--color-border-secondary);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.providerOptionActive {
+    border-color: var(--color-accent-primary);
+    background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.1);
+    color: var(--color-accent-primary);
+}
+
+.providerOptionActive:hover {
+    border-color: var(--color-accent-primary);
+    background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.15);
+}
+
+/* 下拉选择器 */
+.select {
+    width: 100%;
+    max-width: 320px;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 14px);
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.select:hover {
+    border-color: var(--color-border-secondary);
+}
+
+.select:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+}
+
+/* 信息区块 */
+.infoSection {
+    margin-top: 8px;
+}
+
+.infoCard {
+    padding: 16px;
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-md, 6px);
+    border: 1px solid var(--color-border-primary);
+}
+
+.infoTitle {
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    margin: 0 0 8px 0;
+}
+
+.infoList {
+    margin: 0;
+    padding-left: 20px;
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.infoList li {
+    margin-bottom: 4px;
+}
+
+.infoList strong {
+    color: var(--color-text-primary);
+}
+
+/* 配置操作按钮组 */
+.configActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.actionButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.actionButton:hover:not(:disabled) {
+    border-color: var(--color-border-secondary);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.actionButtonPrimary {
+    border-color: var(--color-accent-primary);
+    background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.12);
+    color: var(--color-accent-primary);
+}
+
+.actionButtonPrimary:hover:not(:disabled) {
+    border-color: var(--color-accent-primary);
+    background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.18);
+    color: var(--color-accent-primary);
+}
+
+.actionButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.actionButtonDanger:hover:not(:disabled) {
+    border-color: var(--color-error, #ef4444);
+    color: var(--color-error, #ef4444);
+    background: rgba(239, 68, 68, 0.06);
+}
+
+/* 自定义模型表单 */
+.modelForm {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    background: var(--color-bg-secondary);
+}
+
+.modelFormHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+}
+
+.modelFormGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.fieldLabel {
+    color: var(--color-text-secondary);
+    font-size: 12px;
+}
+
+.formControl {
+    width: 100%;
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm, 13px);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.formControl:hover {
+    border-color: var(--color-border-secondary);
+}
+
+.formControl:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+}
+
+.formControl::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.formControl[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.formControl[type="number"]::-webkit-outer-spin-button,
+.formControl[type="number"]::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+
+.modelFormFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.toggleLabel {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggleInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.toggleSwitch {
+    position: relative;
+    width: 32px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--color-bg-tertiary, #3f3f46);
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggleSwitch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.2s;
+}
+
+.toggleInput:checked+.toggleSwitch {
+    background: var(--color-accent-primary, #3b82f6);
+}
+
+.toggleInput:checked+.toggleSwitch::after {
+    transform: translateX(16px);
+}
+
+.toggleInput:focus-visible+.toggleSwitch {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
+}
+
+.toggleText {
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm, 13px);
+    line-height: 1.4;
+}
+
+.formActions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* 用户自定义模型列表（可折叠） */
+.userModelList {
+    margin-top: 4px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    overflow: hidden;
+}
+
+.userModelListToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.userModelListToggle:hover {
+    background: var(--color-bg-tertiary);
+}
+
+.toggleChevron {
+    transition: transform 0.2s ease;
+}
+
+.toggleChevronOpen {
+    transform: rotate(180deg);
+}
+
+.userModelItems {
+    max-height: 180px;
+    overflow-y: auto;
+    border-top: 1px solid var(--color-border-primary);
+}
+
+.userModelItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--color-border-primary);
+    transition: background 0.1s;
+}
+
+.userModelItem:last-child {
+    border-bottom: none;
+}
+
+.userModelItem:hover {
+    background: var(--color-bg-secondary);
+}
+
+.userModelInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.userModelName {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium, 500);
+}
+
+.userModelMeta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+}
+
+.userModelActions {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.userModelIconButton {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.15s;
+}
+
+.userModelItem:hover .userModelIconButton {
+    opacity: 1;
+}
+
+.userModelIconButton:hover {
+    background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.1);
+    color: var(--color-accent-primary);
+}
+
+.userModelDangerButton:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error, #ef4444);
+}
+
+@media (max-width: 720px) {
+    .modelFormGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .modelFormFooter {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

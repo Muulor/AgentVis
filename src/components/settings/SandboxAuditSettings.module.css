@@ -1,0 +1,391 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.title {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-lg, 18px);
+    font-weight: var(--font-weight-semibold, 600);
+}
+
+.description {
+    margin: 6px 0 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm, 14px);
+    line-height: 1.5;
+}
+
+.refreshButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.refreshButton:hover:not(:disabled) {
+    border-color: var(--color-border-secondary);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.refreshButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.summaryGrid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.summaryItem {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    background: var(--color-bg-secondary);
+}
+
+.summaryValue {
+    display: block;
+    color: var(--color-text-primary);
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.1;
+}
+
+.summaryLabel {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+.signalStrip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.signalChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 4px 9px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+}
+
+.signalChip strong {
+    color: var(--color-text-primary);
+    font-size: 13px;
+}
+
+.filterPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 12px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    background: var(--color-bg-secondary);
+}
+
+.filterPrimaryRow,
+.filterSecondaryRow,
+.filterTertiaryRow {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    align-items: end;
+}
+
+.filterPrimaryRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.filterSecondaryRow {
+    grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr);
+}
+
+.filterTertiaryRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 32px;
+}
+
+.filterField {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 5px;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+.filterField select,
+.filterField input {
+    width: 100%;
+    min-width: 0;
+    height: 32px;
+    padding: 0 9px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-size: 13px;
+    outline: none;
+}
+
+.filterField select:focus,
+.filterField input:focus {
+    border-color: var(--color-accent-primary, #2563eb);
+}
+
+.clearButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.clearButton:hover:not(:disabled) {
+    border-color: var(--color-border-secondary);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.clearButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.eventList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.eventItem {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 12px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    background: var(--color-bg-primary);
+}
+
+.eventMeta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.decisionBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.decisionAllow {
+    background: rgba(34, 197, 94, 0.12);
+    color: #16a34a;
+}
+
+.decisionAudit {
+    background: rgba(59, 130, 246, 0.12);
+    color: #2563eb;
+}
+
+.decisionBlock {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+}
+
+.decisionDiagnostic {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+}
+
+.time {
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.eventBody {
+    min-width: 0;
+}
+
+.eventTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.eventTarget {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.eventReason {
+    margin-top: 6px;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.eventSignals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.eventSignal {
+    max-width: 100%;
+    padding: 3px 7px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.detailGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    margin-top: 10px;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+.detailValue {
+    color: var(--color-text-secondary);
+}
+
+.detailWide {
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.emptyState,
+.errorState {
+    padding: 24px 16px;
+    border: 1px dashed var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    text-align: center;
+}
+
+.errorState {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #dc2626;
+}
+
+.loadMoreRow {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0 0;
+}
+
+.loadMoreButton {
+    min-width: 120px;
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.loadMoreButton:hover:not(:disabled) {
+    border-color: var(--color-border-secondary);
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.loadMoreButton:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.endHint {
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+}
+
+@media (max-width: 720px) {
+    .summaryGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filterPrimaryRow,
+    .filterSecondaryRow,
+    .filterTertiaryRow {
+        grid-template-columns: 1fr;
+    }
+
+    .clearButton {
+        width: 100%;
+    }
+
+    .eventItem {
+        grid-template-columns: 1fr;
+    }
+
+    .detailGrid {
+        grid-template-columns: 1fr;
+    }
+}

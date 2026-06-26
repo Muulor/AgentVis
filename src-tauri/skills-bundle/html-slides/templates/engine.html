@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Title</title>
+
+    <!--
+    ============================================================
+    Engine file notes (for reference only; do not reuse any colors or styles in your design)
+    ============================================================
+    This file only contains the minimal HTML skeleton + page-turning engine JS required to run a presentation.
+    All CSS styles (colors/fonts/layout) are designed independently by you according to the presentation theme.
+
+    Required structure:
+      <div class="progress-bar" id="progressBar">
+      <div class="slide-deck" id="slideDeck">
+        <section class="slide [YOUR-CLASS] active">  ← the first slide must have active
+        <section class="slide [YOUR-CLASS]">          ← do not add it to the remaining slides
+      <div class="nav-bar">
+        <button id="btnPrev"> / <span id="navCounter"> / <button id="btnNext">
+
+    Required CSS:
+      Required for page turning: .slide { position:absolute; opacity:0; visibility:hidden }
+      .slide.active { opacity:1; visibility:visible }
+      These are prerequisites for the page-turning engine to work; everything else is completely free.
+
+    !! FATAL — The first slide must hardcode class="... active" in HTML !!
+       The engine JS does not automatically activate any slide on initialization; it only handles "switching".
+       If active is omitted, all slides are opacity:0 when the page opens -> completely black.
+       Content will only become visible after manually turning pages (JS only dynamically adds active during page turns).
+       ✗ Wrong: <section class="slide slide-cover">
+       ✓ Correct: <section class="slide slide-cover active">
+
+    ⚠️ Notes:
+
+    1. Do not declare position:relative in custom slide classes
+       Wrong: .my-slide { position: relative; display: flex; }
+       Correct: .my-slide { display: flex; }  ← only add layout properties
+       Reason: .slide relies on position:absolute + inset:0 to stack all pages.
+               Later class declarations will override it, causing slides to stack vertically in the document flow,
+               and with overflow:hidden, page 2 and onward all disappear (black screen).
+
+    2. Child element entrance animations must not use opacity:0 + autoplaying animation
+       Wrong: .item { opacity:0; animation: fadeIn 0.5s forwards; }
+       Correct: .item { opacity:0; animation: fadeIn 0.5s forwards;
+                     animation-play-state: paused; }
+             Then in goToSlide, execute the following on .item elements in the current slide:
+               el.style.animation = 'none'; el.offsetHeight;
+               el.style.animation = ''; el.style.animationPlayState = 'running';
+       Reason: animation timers start when the page loads and animations do not rerun after page turns,
+               which conflicts with the page-turning engine's opacity transition and leaves elements permanently at opacity:0.
+
+    3. Autoplay configuration
+       Controlled through data attributes on <div id="slideDeck">:
+         data-autoplay-interval="5000"   ← milliseconds each slide stays (default 5000)
+       The navigation bar adds <button id="btnAutoplay"> as a ▶/⏸ toggle.
+       Autoplay pauses automatically when the mouse hovers over slide-deck; it resumes automatically after leaving.
+       After reaching the last slide, it loops back to the first slide. Press F to toggle play/pause.
+
+    4. Navigation bar auto-hide
+       Any of the following interactions will show the navigation bar again and reset the timer:
+         - Mouse movement anywhere on the page
+         - Keyboard key press
+         - Touch start (touchstart)
+         - Mouse hover over the navigation bar itself (it will not disappear while hovered)
+       Customize the delay (milliseconds) through data-hide-delay="1500" on <div class="nav-bar">.
+
+  -->
+
+
+    <!-- Optional: Plotly.js (if charts are needed) -->
+    <!-- <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script> -->
+
+    <!-- Optional: Google Fonts (choose according to your theme) -->
+    <!-- <link href="https://fonts.googleapis.com/css2?family=YOUR_FONT&display=swap" rel="stylesheet"> -->
+
+    <style>
+        /*
+      !! The following styles are the minimum required conditions for the page-turning engine to run !!
+      All other styles (colors/fonts/padding/background/layout) are designed completely by you according to the theme.
+    */
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* Slide switching: must preserve position + opacity + visibility logic */
+        .slide-deck {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .slide {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(40px);
+            transition: opacity 600ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 600ms cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s 600ms;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+            transition: opacity 600ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 600ms cubic-bezier(0.22, 1, 0.36, 1),
+                visibility 0s 0s;
+        }
+
+        .slide.exit-left {
+            opacity: 0;
+            transform: translateX(-40px);
+        }
+
+        .slide.exit-right {
+            opacity: 0;
+            transform: translateX(40px);
+        }
+
+        /* Progress bar: fixed position; adjust color/height yourself */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            transition: width 400ms ease;
+            z-index: 100;
+            /* background: YOUR_ACCENT_COLOR; */
+        }
+
+        /* Navigation bar: fixed position; design the styling yourself */
+        .nav-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            z-index: 100;
+            /* Auto-hide: use opacity+pointer-events instead of display:none to preserve transition animation */
+            opacity: 1;
+            pointer-events: auto;
+            transition: opacity 500ms ease;
+        }
+
+        /* Hidden state: fade out and disable clicks to avoid users accidentally touching invisible buttons */
+        .nav-bar.nav-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .nav-btn {
+            cursor: pointer;
+            background: transparent;
+            border: none;
+        }
+
+        .nav-counter {
+            font-variant-numeric: tabular-nums;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* Autoplay button: inherits theme styles like prev/next; only transition animation is provided here */
+        #btnAutoplay {
+            transition: opacity 200ms ease;
+        }
+
+        #btnAutoplay:hover {
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Progress bar (fixed at top) -->
+    <div class="progress-bar" id="progressBar"></div>
+
+    <!-- ====== Slide Container ====== -->
+    <div class="slide-deck" id="slideDeck">
+
+        <!-- The first slide must add class="active" -->
+        <section class="slide active">
+            <!-- Your content -->
+        </section>
+
+        <section class="slide">
+            <!-- Your content -->
+        </section>
+
+        <!-- Add more slides as needed... -->
+
+    </div>
+
+    <!-- Bottom navigation bar -->
+    <div class="nav-bar">
+        <button class="nav-btn" id="btnPrev" aria-label="Previous page">←</button>
+        <span class="nav-counter" id="navCounter">1 / 1</span>
+        <button class="nav-btn" id="btnNext" aria-label="Next page">→</button>
+        <button class="nav-btn" id="btnAutoplay" aria-label="Autoplay">▶</button>
+    </div>
+
+    <!-- ====== Page-Turning Engine (copy completely; no modification needed) ====== -->
+    <script>
+        (function () {
+            const slides = document.querySelectorAll('.slide');
+            const counter = document.getElementById('navCounter');
+            const progressBar = document.getElementById('progressBar');
+            const btnAutoplay = document.getElementById('btnAutoplay');
+            const slideDeck = document.getElementById('slideDeck');
+            const totalSlides = slides.length;
+
+            // Read autoplay interval configuration, default 5000ms
+            const AUTOPLAY_INTERVAL = parseInt(slideDeck.dataset.autoplayInterval, 10) || 5000;
+
+            // Under file:// security restrictions, assigning location.hash triggers navigation and interrupts JS; use sessionStorage instead
+            let currentIndex = 0;
+            try {
+                const savedIdx = parseInt(sessionStorage.getItem('slideIndex'), 10);
+                if (!isNaN(savedIdx) && savedIdx > 0 && savedIdx < totalSlides) {
+                    slides[0].classList.remove('active');
+                    slides[savedIdx].classList.add('active');
+                    currentIndex = savedIdx;
+                }
+            } catch (e) { }
+
+            // classList.add defense: filter empty strings to avoid DOM errors
+            function addClasses(el, ...names) {
+                names.filter(Boolean).forEach(n => el.classList.add(n));
+            }
+
+            function goToSlide(targetIndex) {
+                if (targetIndex < 0 || targetIndex >= totalSlides || targetIndex === currentIndex) return;
+                const isForward = targetIndex > currentIndex;
+
+                slides[currentIndex].classList.remove('active');
+                addClasses(slides[currentIndex], isForward ? 'exit-left' : 'exit-right');
+
+                slides[targetIndex].style.transform = isForward ? 'translateX(40px)' : 'translateX(-40px)';
+                slides[targetIndex].offsetHeight; // force reflow
+                addClasses(slides[targetIndex], 'active');
+                slides[targetIndex].style.transform = '';
+
+                const prevIndex = currentIndex;
+                setTimeout(() => { slides[prevIndex].classList.remove('exit-left', 'exit-right'); }, 600);
+
+                currentIndex = targetIndex;
+                try { sessionStorage.setItem('slideIndex', currentIndex); } catch (e) { }
+                updateUI();
+
+                const notes = slides[currentIndex].dataset.notes;
+                if (notes) console.log(`[Speaker Notes] Slide ${currentIndex + 1}: ${notes}`);
+            }
+
+            function updateUI() {
+                counter.textContent = `${currentIndex + 1} / ${totalSlides}`;
+                progressBar.style.width = `${((currentIndex + 1) / totalSlides) * 100}%`;
+            }
+
+            // ====== Autoplay ======
+            let autoplayTimer = null;
+            let isPlaying = false;
+            // Pause autoplay on mouse hover without changing isPlaying state; resume automatically after leaving
+            let isHoverPaused = false;
+
+            function advanceSlide() {
+                // Loop back to the first slide when reaching the last slide
+                const nextIndex = (currentIndex + 1) % totalSlides;
+                goToSlide(nextIndex);
+            }
+
+            function startAutoplayTimer() {
+                clearInterval(autoplayTimer);
+                autoplayTimer = setInterval(advanceSlide, AUTOPLAY_INTERVAL);
+            }
+
+            function stopAutoplayTimer() {
+                clearInterval(autoplayTimer);
+                autoplayTimer = null;
+            }
+
+            function setPlaying(playing) {
+                isPlaying = playing;
+                btnAutoplay.textContent = isPlaying ? '⏸' : '▶';
+                btnAutoplay.setAttribute('aria-label', isPlaying ? 'Pause autoplay' : 'Start autoplay');
+                // When actively starting, start the timer unconditionally; isHoverPaused is only used to temporarily pause an already running timer
+                // Note: slide-deck is a full-screen element, and mouseenter triggers when the page loads,
+                // if !isHoverPaused is checked here, autoplay will never be able to start
+                if (isPlaying) {
+                    startAutoplayTimer();
+                } else {
+                    stopAutoplayTimer();
+                }
+            }
+
+            function toggleAutoplay() {
+                setPlaying(!isPlaying);
+            }
+
+            // Pause when the mouse hovers over the slide area, resume after leaving
+            slideDeck.addEventListener('mouseenter', () => {
+                isHoverPaused = true;
+                if (isPlaying) stopAutoplayTimer();
+            });
+            slideDeck.addEventListener('mouseleave', () => {
+                isHoverPaused = false;
+                if (isPlaying) startAutoplayTimer();
+            });
+
+            // Reset the timer after manual page turning to avoid auto-jumping to the next slide immediately after turning
+            function manualGoToSlide(index) {
+                goToSlide(index);
+                if (isPlaying && !isHoverPaused) startAutoplayTimer();
+            }
+
+            // Keyboard controls
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); manualGoToSlide(currentIndex + 1); }
+                else if (e.key === 'ArrowLeft') { e.preventDefault(); manualGoToSlide(currentIndex - 1); }
+                else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleAutoplay(); }
+            });
+
+            // Button controls
+            document.getElementById('btnPrev').addEventListener('click', () => manualGoToSlide(currentIndex - 1));
+            document.getElementById('btnNext').addEventListener('click', () => manualGoToSlide(currentIndex + 1));
+            btnAutoplay.addEventListener('click', toggleAutoplay);
+
+            // Touch swipe
+            let touchStartX = 0;
+            document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+            document.addEventListener('touchend', (e) => {
+                const deltaX = e.changedTouches[0].screenX - touchStartX;
+                if (Math.abs(deltaX) > 60) { deltaX < 0 ? manualGoToSlide(currentIndex + 1) : manualGoToSlide(currentIndex - 1); }
+            });
+
+            updateUI();
+
+            // ====== Navigation Bar Auto-Hide ======
+            // Read delay from nav-bar data-hide-delay, default 3000ms
+            const navBar = document.querySelector('.nav-bar');
+            const NAV_HIDE_DELAY = parseInt(navBar.dataset.hideDelay, 10) || 1500;
+            let navHideTimer = null;
+            // Do not trigger hiding while the mouse hovers over the navigation bar (avoid disappearing while the user is operating it)
+            let isNavHovered = false;
+
+            function showNav() {
+                navBar.classList.remove('nav-hidden');
+            }
+
+            function scheduleNavHide() {
+                clearTimeout(navHideTimer);
+                // Do not start timing while the mouse stays on the navigation bar
+                if (isNavHovered) return;
+                navHideTimer = setTimeout(() => {
+                    navBar.classList.add('nav-hidden');
+                }, NAV_HIDE_DELAY);
+            }
+
+            function onUserActivity() {
+                showNav();
+                scheduleNavHide();
+            }
+
+            document.addEventListener('mousemove', onUserActivity);
+            document.addEventListener('click', onUserActivity);
+            document.addEventListener('keydown', onUserActivity);
+            document.addEventListener('touchstart', onUserActivity);
+
+            // When the mouse hovers over the navigation bar: show it and stop timing (the user is operating it)
+            navBar.addEventListener('mouseenter', () => {
+                isNavHovered = true;
+                showNav();
+                clearTimeout(navHideTimer);
+            });
+            // Restart timing after the mouse leaves the navigation bar
+            navBar.addEventListener('mouseleave', () => {
+                isNavHovered = false;
+                scheduleNavHide();
+            });
+
+            // Start the first hide timer when the page initializes
+            scheduleNavHide();
+        })();
+    </script>
+
+    <!--
+    ====== Optional: Pretext Advanced Typography ======
+    Introduce only when irregular text wrapping, multi-column magazine typography, or adaptive font sizing is needed.
+    Refer to references/advanced-layouts.md for complete API documentation and example code.
+
+    <script type="module">
+      import { prepare, layout, prepareWithSegments, layoutNextLine }
+        from 'https://cdn.jsdelivr.net/npm/@chenglou/pretext/+esm'
+      // Must wait until fonts finish loading: await document.fonts.ready
+      // See references/advanced-layouts.md for detailed usage
+    </script>
+  -->
+
+</body>
+
+</html>

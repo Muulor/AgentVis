@@ -1,0 +1,92 @@
+/**
+ * ThinkingChainDisplay 样式
+ * 
+ * @version 2.1 - 与 ThinkingChainSection 样式统一
+ */
+
+.container {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 8px;
+    background-color: var(--color-bg-secondary, #1E1E2E);
+    overflow: hidden;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    text-align: left;
+    transition: background-color 0.15s ease;
+}
+
+.header:hover {
+    background: var(--color-bg-hover);
+}
+
+.headerIcon {
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.headerTitle {
+    font-weight: 500;
+    flex-grow: 1;
+}
+
+.toggle {
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+}
+
+/* 步骤容器 - 与 ThinkingChainSection 一致 */
+.stepsContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 12px 12px;
+}
+
+/* 单个步骤项 - 与 ThinkingChainSection 一致 */
+.stepItem {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    border-left: 2px solid var(--color-success);
+    opacity: 0.85;
+}
+
+/* 步骤指示器（左侧勾选图标） */
+.stepIndicator {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--color-success);
+}
+
+.checkIcon {
+    color: white;
+}
+
+/* 步骤内容区域 */
+.stepContent {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}

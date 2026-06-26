@@ -1,0 +1,224 @@
+/**
+ * ApiKeySettings 样式
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.description {
+    font-size: var(--font-size-sm, 13px);
+    color: var(--color-text-secondary);
+    margin: 0 0 4px 0;
+    line-height: 1.5;
+}
+
+.providerSection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-md, 6px);
+    border: 1px solid var(--color-border-primary);
+}
+
+.providerHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.providerName {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.configuredBadge {
+    font-size: var(--font-size-xs, 11px);
+    padding: 2px 6px;
+    background: rgba(22, 163, 74, 0.15);
+    color: #16a34a;
+    border-radius: var(--radius-sm, 4px);
+}
+
+.externalLinkButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.externalLinkButton:hover {
+    color: var(--color-accent-primary);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.inputRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inputWrapper {
+    flex: 1;
+    position: relative;
+}
+
+.input {
+    width: 100%;
+    padding: 8px 36px 8px 12px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    font-family: var(--font-family-mono);
+    transition: border-color 0.15s;
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--color-accent-primary);
+}
+
+.input::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.visibilityButton {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    border-radius: var(--radius-sm, 4px);
+    transition: color 0.15s;
+}
+
+.visibilityButton:hover {
+    color: var(--color-text-primary);
+}
+
+.saveButton {
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-default);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.saveButton:hover {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+}
+
+.testButton {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-secondary);
+    border-radius: var(--radius-md, 6px);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.testButton:hover:not(:disabled) {
+    border-color: var(--color-border-secondary);
+    color: var(--color-text-primary);
+}
+
+.testButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.testSuccess {
+    border-color: #16a34a;
+    color: #16a34a;
+}
+
+.testError {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.successIcon {
+    color: #16a34a;
+    font-weight: bold;
+}
+
+.errorIcon {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+.deleteButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--color-border-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-tertiary);
+    border-radius: var(--radius-md, 6px);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.deleteButton:hover {
+    border-color: #dc2626;
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+}
+
+/* Local provider URL 配置区域 */
+.localUrlSection {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border-primary);
+}
+
+.urlLabel {
+    display: block;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+}
+
+.localUrlHint {
+    margin: 0 0 10px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs, 11px);
+    line-height: 1.5;
+}

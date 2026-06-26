@@ -1,0 +1,238 @@
+/**
+ * CodeHighlight 样式
+ */
+
+/* 容器 - 包裹头部和代码区域 */
+.container {
+    position: relative;
+    margin: 0.5em 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: #1e1e1e;
+    /* 关键：确保代码块能够收缩适应父容器宽度 */
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/* 头部 - 语言标签和复制按钮 */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-xs) var(--spacing-md);
+    background: #2d2d2d;
+    border-bottom: 1px solid #3d3d3d;
+}
+
+.language {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    text-transform: lowercase;
+}
+
+/* 复制按钮 */
+.copyBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.copyBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-secondary);
+}
+
+.copyBtn:active {
+    transform: scale(0.95);
+}
+
+/* 复制成功图标颜色 */
+.copyIconSuccess {
+    color: var(--color-status-success);
+}
+
+/* 预览按钮 */
+.previewBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #a6e3a1;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.previewBtn:hover {
+    background: rgba(166, 227, 161, 0.15);
+    color: #a6e3a1;
+}
+
+.previewBtn:active {
+    transform: scale(0.95);
+}
+
+/* 项目预览按钮（Vite 多文件项目） */
+.projectPreviewBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #89b4fa;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.projectPreviewBtn:hover {
+    background: rgba(137, 180, 250, 0.15);
+    color: #89b4fa;
+}
+
+.projectPreviewBtn:active {
+    transform: scale(0.95);
+}
+
+/* 代码区域 */
+.pre {
+    margin: 0;
+    padding: var(--spacing-md);
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    background: transparent !important;
+}
+
+.code {
+    display: block;
+}
+
+.line {
+    display: flex;
+    min-height: 1.5em;
+}
+
+.lineNumber {
+    flex-shrink: 0;
+    width: 3em;
+    padding-right: var(--spacing-sm);
+    color: var(--color-text-tertiary);
+    text-align: right;
+    user-select: none;
+    opacity: 0.5;
+}
+
+.lineContent {
+    flex: 1;
+    white-space: pre;
+}
+
+/* 滚动条样式 */
+.pre::-webkit-scrollbar {
+    height: 8px;
+}
+
+.pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.pre::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+}
+
+.pre::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover);
+}
+
+/* ==================== 行数标签 ==================== */
+.lineCountBadge {
+    margin-left: 8px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-family: inherit;
+    color: var(--color-text-tertiary);
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    opacity: 0.7;
+}
+
+/* ==================== 代码折叠 ==================== */
+
+/* 折叠容器 */
+.codeWrapper {
+    position: relative;
+    overflow: hidden;
+    /* 展开时平滑过渡 */
+    transition: max-height 0.3s ease;
+}
+
+/* 折叠状态 */
+.codeCollapsed {
+    overflow: hidden;
+}
+
+/* 底部渐变遮罩：暗示下方有更多内容 */
+.collapseGradient {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(
+        to bottom,
+        rgba(30, 30, 30, 0) 0%,
+        rgba(30, 30, 30, 0.85) 70%,
+        rgba(30, 30, 30, 1) 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 展开/收起按钮 */
+.collapseToggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 6px 0;
+    border: none;
+    background: #252525;
+    border-top: 1px solid #3d3d3d;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.collapseToggle:hover {
+    background: #2d2d2d;
+    color: var(--color-text-secondary);
+}
+
+.collapseToggle:active {
+    background: #333;
+}

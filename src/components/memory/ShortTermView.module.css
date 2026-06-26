@@ -1,0 +1,137 @@
+/**
+ * ShortTermView 组件样式
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+}
+
+/* 加载中 */
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 120px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+/* 错误提示 */
+.error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    color: var(--color-status-error);
+    font-size: var(--font-size-sm);
+}
+
+.error button {
+    padding: 6px 12px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.error button:hover {
+    background-color: var(--color-bg-secondary);
+}
+
+/* 空状态 */
+.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+/* 消息列表 */
+.messageList {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* 消息项 */
+.messageItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: var(--color-bg-secondary);
+    border-radius: 4px;
+    font-size: var(--font-size-sm);
+    transition: background-color 150ms ease;
+}
+
+.messageItem:hover {
+    background-color: var(--color-bg-tertiary);
+}
+
+/* 用户消息 */
+.messageItem[data-role="user"] {
+    border-left: 2px solid var(--color-status-info);
+}
+
+/* Agent 消息 */
+.messageItem[data-role="assistant"] {
+    border-left: 2px solid var(--color-status-success);
+}
+
+/* 轮次编号 */
+.turnNumber {
+    min-width: 28px;
+    color: var(--color-text-tertiary);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+}
+
+/* 角色标签 */
+.role {
+    min-width: 44px;
+    color: var(--color-text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* 内容 */
+.content {
+    flex: 1;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 跳转按钮 */
+.jumpBtn {
+    padding: 2px 8px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: 1px solid var(--color-border-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 150ms ease;
+}
+
+.messageItem:hover .jumpBtn {
+    opacity: 1;
+}
+
+.jumpBtn:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-border-hover);
+    background-color: var(--color-bg-primary);
+}

@@ -1,0 +1,185 @@
+/**
+ * AgentVis 全局样式
+ * 
+ * 包含 CSS Reset、全局样式和基础布局
+ */
+
+@import './tokens.css';
+
+/* ============================================
+ * CSS Reset
+ * ============================================ */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-primary);
+    overflow: hidden;
+    /* 禁止页面滚动，由内部组件控制滚动 */
+}
+
+/* 链接样式 */
+a {
+    color: var(--color-action-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--color-action-primary-hover);
+}
+
+/* 按钮基础 Reset */
+button {
+    font-family: inherit;
+    font-size: inherit;
+    background: none;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    color: inherit;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* 输入框基础 Reset */
+input,
+textarea,
+select {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+/* 列表 Reset */
+ul,
+ol {
+    list-style: none;
+}
+
+/* 代码字体 */
+code,
+pre,
+kbd {
+    font-family: var(--font-family-mono);
+}
+
+/* ============================================
+ * 滚动条样式
+ * ============================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-border-default);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover);
+}
+
+/* ============================================
+ * 选中文本样式
+ * ============================================ */
+
+::selection {
+    background-color: var(--color-action-primary);
+    color: white;
+}
+
+/* ============================================
+ * 应用根容器
+ * ============================================ */
+
+#root {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ============================================
+ * 工具类
+ * ============================================ */
+
+/* 文本截断 */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Flex 工具类 */
+.flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flex-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* ============================================
+ * 消息跳转高亮效果
+ * ============================================ */
+
+@keyframes highlight-flash {
+    0% {
+        background-color: rgba(59, 130, 246, 0.3);
+    }
+
+    50% {
+        background-color: rgba(59, 130, 246, 0.15);
+    }
+
+    100% {
+        background-color: transparent;
+    }
+}
+
+.highlight-flash {
+    animation: highlight-flash 2s ease-out;
+}

@@ -1,0 +1,130 @@
+/**
+ * ChatHistory 样式
+ */
+
+.container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--spacing-lg);
+}
+
+.messageList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    min-height: 100%;
+}
+
+/* 滚动锚点 - 用于自动滚动到底部 */
+.scrollAnchor {
+    height: 1px;
+    flex-shrink: 0;
+}
+
+/* ==================== 加载更多 ==================== */
+
+.loadMoreWrapper {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-sm) 0 var(--spacing-md);
+}
+
+.loadMoreBtn {
+    padding: var(--spacing-xs) var(--spacing-lg);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.loadMoreBtn:hover:not(:disabled) {
+    color: var(--color-text-primary);
+    background: var(--color-bg-hover);
+    border-color: var(--color-border-hover);
+}
+
+.loadMoreBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ==================== 空状态 ==================== */
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 300px;
+    gap: var(--spacing-md);
+    color: var(--color-text-tertiary);
+}
+
+.emptyIcon {
+    opacity: 0.5;
+}
+
+.emptyIcon svg {
+    width: 64px;
+    height: 64px;
+}
+
+.emptyText {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.emptyHint {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-tertiary);
+    margin: 0;
+}
+
+/* ==================== 日期分隔线 ==================== */
+
+.dateDivider {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) 0;
+}
+
+.dateDivider::before,
+.dateDivider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background-color: var(--color-border-default);
+}
+
+.dateLabel {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+}
+
+/* ==================== 滚动条样式 ==================== */
+
+.container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.container::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-default);
+    border-radius: 3px;
+}
+
+.container::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-border-hover);
+}

@@ -1,0 +1,266 @@
+/**
+ * HitlInterventionBar 样式
+ *
+ * 轻量暂停按钮（运行中）+ 展开式介入操作区（暂停后）
+ * 色调与 SubAgentObservationSection 保持统一
+ */
+
+/* 根容器 */
+.container {
+    margin-top: var(--spacing-xs, 4px);
+    border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+    padding-top: var(--spacing-xs, 4px);
+}
+
+/* ─── 运行中：暂停按钮行 ─── */
+.runningBar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.runningBarWithHint {
+    justify-content: space-between;
+}
+
+.timeoutHint {
+    display: inline-flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+    color: rgba(137, 137, 137, 0.82);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.timeoutIcon {
+    color: rgba(168, 168, 168, 0.82);
+    flex-shrink: 0;
+}
+
+.timeoutText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.pauseBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--color-text-tertiary, #6B7280);
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.pauseBtn:hover {
+    color: var(--color-text-secondary, #9CA3AF);
+    border-color: var(--color-border-hover, rgba(255, 255, 255, 0.2));
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* ─── 暂停后：展开介入区 ─── */
+.pausedBar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs, 6px);
+    padding: 8px;
+    background: rgba(251, 191, 36, 0.04);
+    border: 1px solid rgba(251, 191, 36, 0.15);
+    border-radius: var(--radius-md, 6px);
+    animation: slideDown 0.15s ease-out;
+}
+
+/* ─── 预解决等待：指令已发，等待工具完成 ─── */
+.pendingBar {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: var(--radius-md, 6px);
+    animation: slideDown 0.15s ease-out;
+}
+
+.pendingIcon {
+    /* 让 lucide Clock 图标颜色融入蓝色调 */
+    color: rgba(96, 165, 250, 0.8);
+    flex-shrink: 0;
+    margin-top: 2px;
+    /* 轻微旋转动画，暗示"等待中" */
+    animation: pendingPulse 2s ease-in-out infinite;
+}
+
+@keyframes pendingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+.pendingText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.pendingTitle {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(147, 197, 253, 0.9);
+    line-height: 1.4;
+}
+
+.pendingSubtext {
+    font-size: 10px;
+    color: rgba(147, 197, 253, 0.5);
+    line-height: 1.4;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 暂停状态提示行 */
+.pauseHint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--color-warning, #F59E0B);
+    font-weight: 500;
+}
+
+/* 闪烁状态指示器 */
+.pauseIndicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-warning, #F59E0B);
+    flex-shrink: 0;
+    animation: pauseBlink 1.2s ease-in-out infinite;
+}
+
+@keyframes pauseBlink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* 介入指令输入框 */
+.interventionInput {
+    width: 100%;
+    resize: none;
+    padding: 6px 8px;
+    background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+    border-radius: var(--radius-sm, 4px);
+    color: var(--color-text-primary, #E5E7EB);
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1.5;
+    outline: none;
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+}
+
+.interventionInput:focus {
+    border-color: rgba(251, 191, 36, 0.4);
+}
+
+.interventionInput::placeholder {
+    color: var(--color-text-tertiary, #6B7280);
+}
+
+/* 操作按钮行 */
+.actionRow {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+/* 右侧继续按钮组 */
+.resumeGroup {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 通用小按钮基础样式 */
+.pauseBtn,
+.stopBtn,
+.resumeBtn,
+.sendResumeBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+/* 终止按钮 */
+.stopBtn {
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    background: transparent;
+    color: var(--color-error, #F87171);
+}
+
+.stopBtn:hover {
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.5);
+}
+
+/* 继续按钮（轮廓样式） */
+.resumeBtn {
+    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.15));
+    background: transparent;
+    color: var(--color-text-secondary, #9CA3AF);
+}
+
+.resumeBtn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+/* 发送并继续按钮（强调样式） */
+.sendResumeBtn {
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--color-action-primary, #60A5FA);
+}
+
+.sendResumeBtn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.6);
+}

@@ -1,0 +1,62 @@
+.shell {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--color-bg-primary);
+}
+
+.main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.leftPanel {
+    flex-shrink: 0;
+    background-color: var(--color-bg-secondary);
+    overflow-y: auto;
+}
+
+/* 仅在非拖拽状态下才应用过渡效果 */
+.leftPanel:not(.resizing) {
+    transition: width var(--transition-normal);
+}
+
+.centerPanel {
+    flex: 1;
+    min-width: 400px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.rightPanel {
+    flex-shrink: 0;
+    background-color: var(--color-bg-secondary);
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* 仅在非拖拽状态下才应用过渡效果 */
+.rightPanel:not(.resizing) {
+    transition: width var(--transition-normal);
+}
+
+/* 拖拽时禁用过渡效果 */
+.resizing {
+    transition: none !important;
+}
+
+/*
+ * 左栏 handle（位于左栏右侧）：背景与左栏一致，视觉上无缝延伸左栏
+ * 右栏 handle（位于右栏左侧）：透明，显示中栏背景，不产生额外色块
+ */
+.leftResizeHandle {
+    background-color: var(--color-bg-secondary);
+}
+
+.rightResizeHandle {
+    background-color: transparent;
+}

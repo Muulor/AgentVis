@@ -1,0 +1,109 @@
+/**
+ * InlineGeneratedImages 样式
+ *
+ * 消息气泡内的 SA 生成图片缩略图网格
+ * 设计风格：与现有 MessageBubble 的视觉语言一致（圆角、阴影、半透明遮罩）
+ */
+
+.container {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* 缩略图网格布局：固定尺寸，不随窗口拉伸 */
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* 单张缩略图卡片：尺寸由 JS 根据图片宽高比动态设置 */
+.thumbnailCard {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    /* 实际尺寸由 inline style 动态控制（最短边 250px） */
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.thumbnailCard:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+}
+
+/* 缩略图图片 */
+.thumbnailImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* 悬停遮罩层 */
+.thumbnailOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: white;
+    pointer-events: none;
+}
+
+.thumbnailCard:hover .thumbnailOverlay {
+    opacity: 1;
+}
+
+/* 加载失败占位符 */
+.thumbnailError {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 250px;
+    height: 250px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.errorText {
+    font-size: 11px;
+}
+
+/* 加载中占位符 */
+.thumbnailLoading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 250px;
+    height: 250px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

@@ -1,0 +1,61 @@
+# runtime-requirements-v1.txt
+# Agent External Runtime v1 — 2026.06
+# ═══════════════════════════════════════════════
+# Packaged Python runtime: 3.13.14
+# Python 版本要求: >= 3.11
+#
+# 所需的 Python 依赖，以及常用数据分析库。
+# Script 模式 Skill 包的额外依赖会增量安装。
+# ═══════════════════════════════════════════════
+
+# ═══ 核心网络 ═══
+requests==2.34.2
+httpx==0.27.2
+curl_cffi==0.14.0
+pydantic==2.12.5
+
+# ═══ HTML/XML 解析 ═══
+beautifulsoup4==4.14.3
+lxml==6.0.2
+
+# ═══ 文档处理 ═══
+pypdf==6.6.2
+pdf2image==1.17.0
+python-docx==1.2.0
+python-pptx==1.0.2
+openpyxl==3.1.5
+markdown==3.10.1
+
+# ═══ 配置文件 ═══
+pyyaml==6.0.3
+
+# ═══ 工具库 ═══
+chardet==5.2.0
+python-dateutil==2.9.0.post0
+tabulate==0.9.0
+
+# ═══ 模板与配置 ═══
+jinja2==3.1.6
+python-dotenv==1.2.2
+
+# ═══ 数据可视化 ═══
+matplotlib==3.10.8
+pillow==12.1.0
+plotly==6.4.0
+
+# ═══ 数据分析 ═══
+numpy==2.4.6
+pandas==2.3.3
+
+# ═══ 系统/进程管理 ═══
+psutil==7.0.0
+
+# ═══ 脚本辅助 ═══
+tqdm==4.67.3
+
+# ═══ 源码包构建辅助（部分 Skill 依赖仅发布 sdist） ═══
+setuptools==82.0.1
+wheel==0.47.0
+
+# ═══ SSL 兼容 ═══
+pip-system-certs==5.3

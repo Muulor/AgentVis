@@ -1,0 +1,198 @@
+/**
+ * FullFileDiffViewer 样式
+ *
+ * 全文档 Diff 查看器
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--color-bg-primary);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* 文件头部 */
+.fileHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border-default);
+    flex-shrink: 0;
+}
+
+.fileInfo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fileIcon {
+    color: var(--color-text-tertiary);
+}
+
+.fileName {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    font-family: var(--font-family-mono);
+}
+
+/* 文件所在目录路径（文件名后的辅助信息） */
+.filePath {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    opacity: 0.7;
+    font-family: var(--font-family-mono);
+    margin-left: 4px;
+}
+
+.statsContainer {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    font-family: var(--font-family-mono);
+}
+
+.statsAdded {
+    color: var(--color-status-success);
+}
+
+.statsRemoved {
+    color: var(--color-status-error);
+}
+
+/* 内容区域 */
+.content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    position: relative;
+}
+
+.virtualSpacer {
+    min-height: 100%;
+}
+
+.virtualRow {
+    width: 100%;
+    position: relative;
+}
+
+/* 底部操作栏 */
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--color-bg-secondary);
+    /* 明确的上边框 */
+    border-top: 2px solid var(--color-border-default);
+    flex-shrink: 0;
+}
+
+.footerActions {
+    display: flex;
+    gap: 12px;
+}
+
+.acceptAllBtn,
+.rejectAllBtn {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    /* 明确的边框按钮样式 */
+    background: transparent;
+    border: 1px solid var(--color-text-tertiary) !important;
+    color: var(--color-text-secondary);
+}
+
+.acceptAllBtn:hover:not(:disabled),
+.rejectAllBtn:hover:not(:disabled) {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+    border-color: var(--color-text-secondary) !important;
+}
+
+.acceptAllBtn:disabled,
+.rejectAllBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.footerStats {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+}
+
+/* 空状态 */
+.emptyState {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--color-text-tertiary);
+}
+
+.emptyState svg {
+    opacity: 0.5;
+}
+
+.emptyState p {
+    font-size: 14px;
+    margin: 0;
+}
+
+.largeDiffSummary {
+    display: flex;
+    gap: 12px;
+    padding: 24px;
+    color: var(--color-text-secondary);
+}
+
+.largeDiffIcon {
+    flex: 0 0 auto;
+    color: var(--color-status-warning);
+    margin-top: 2px;
+}
+
+.largeDiffBody {
+    max-width: 720px;
+}
+
+.largeDiffBody h3 {
+    margin: 0 0 8px;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.largeDiffBody p {
+    margin: 0;
+    line-height: 1.6;
+    font-size: 13px;
+}
+
+.largeDiffMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-top: 14px;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    font-family: var(--font-family-mono);
+}

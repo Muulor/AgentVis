@@ -1,0 +1,108 @@
+/**
+ * CollapsibleSection 样式
+ *
+ * 可折叠区块的视觉样式
+ */
+
+.container {
+    background-color: var(--color-bg-secondary, #1E1E2E);
+    border-radius: 6px;
+    overflow: hidden;
+    min-width: 100%;
+    /* 确保容器占满可用宽度 */
+}
+
+/* 标题栏 */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    user-select: none;
+    text-align: left;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base, 13px);
+    transition: background var(--transition-fast);
+}
+
+.header:hover {
+    background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
+}
+
+/* 左侧区域 */
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 标题图标 */
+.icon {
+    display: flex;
+    align-items: center;
+    color: var(--color-action-primary);
+    flex-shrink: 0;
+}
+
+/* 标题文字 - 不加粗 */
+.title {
+    color: var(--color-text-secondary, #9CA3AF);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+/* 状态标签 */
+.statusBadge {
+    flex-shrink: 0;
+    margin-left: var(--spacing-xs, 4px);
+}
+
+/* 右侧切换按钮 */
+.toggleButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-tertiary, #6B7280);
+    font-size: 12px;
+}
+
+.toggleButton:hover {
+    color: var(--color-text-secondary, #9CA3AF);
+}
+
+/* 折叠时的摘要 */
+.collapsedSummary {
+    color: var(--color-text-tertiary, #6B7280);
+    font-size: 12px;
+}
+
+/* 分隔线 - 贯穿整个容器 */
+.divider {
+    height: 1px;
+    background-color: var(--color-border-primary, rgba(255, 255, 255, 0.1));
+}
+
+/* 内容区域 */
+.content {
+    overflow: hidden;
+    transition: max-height var(--transition-normal, 0.2s), opacity var(--transition-normal, 0.2s);
+}
+
+.content.expanded {
+    max-height: 5000px;
+    opacity: 1;
+}
+
+.content.collapsed {
+    max-height: 0;
+    opacity: 0;
+}
+
+/* 内容内部容器 */
+.contentInner {
+    padding: 8px 16px 12px;
+}

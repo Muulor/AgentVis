@@ -1,0 +1,88 @@
+/**
+ * AttachmentCard 样式
+ * 
+ * 深色背景样式，与消息区协调
+ */
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+/* ==================== 附件项 ==================== */
+
+.item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    max-width: 180px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.item:hover {
+    transform: translateY(-1px);
+}
+
+.item:active {
+    transform: translateY(0);
+}
+
+.item[data-type="image"] {
+    background-color: rgba(59, 130, 246, 0.15);
+}
+
+.item[data-type="image"]:hover {
+    background-color: rgba(59, 130, 246, 0.25);
+}
+
+.item[data-type="document"] {
+    background-color: rgba(16, 185, 129, 0.15);
+}
+
+.item[data-type="document"]:hover {
+    background-color: rgba(16, 185, 129, 0.25);
+}
+
+/* ==================== 图标 ==================== */
+
+.icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.item[data-type="image"] .icon {
+    color: #3B82F6;
+}
+
+.item[data-type="document"] .icon {
+    color: #10B981;
+}
+
+/* ==================== 文件名 ==================== */
+
+.fileName {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+}
+
+/* ==================== 已索引标记 ==================== */
+
+.indexedBadge {
+    font-size: 10px;
+    color: #10B981;
+    flex-shrink: 0;
+}

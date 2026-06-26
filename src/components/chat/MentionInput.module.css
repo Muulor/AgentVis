@@ -1,0 +1,130 @@
+/**
+ * MentionInput 样式
+ */
+
+.container {
+    position: relative;
+    width: 100%;
+    --blocked-cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E") 8 8,not-allowed;
+}
+
+/* ==================== 输入框 ==================== */
+
+.textarea {
+    width: 100%;
+    min-height: 40px;
+    max-height: 200px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    resize: none;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.textarea:focus {
+    border-color: var(--color-action-primary);
+}
+
+.textarea:disabled {
+    opacity: 0.6;
+    cursor: var(--blocked-cursor);
+}
+
+.textarea::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+/* ==================== 下拉菜单 ==================== */
+
+.dropdown {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    margin-bottom: var(--spacing-xs);
+    width: 200px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: var(--spacing-xs);
+    background-color: var(--color-bg-primary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    animation: slideUp 150ms ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== 选项 ==================== */
+
+.option {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: none;
+    border-radius: var(--radius-md);
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.option:hover,
+.option[data-selected="true"] {
+    background-color: var(--color-bg-secondary);
+}
+
+.optionAvatar {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    background-color: var(--color-action-primary);
+    color: white;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.optionName {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ==================== 滚动条 ==================== */
+
+.dropdown::-webkit-scrollbar {
+    width: 4px;
+}
+
+.dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dropdown::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-default);
+    border-radius: 2px;
+}

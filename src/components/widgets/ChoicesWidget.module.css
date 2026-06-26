@@ -1,0 +1,215 @@
+/* ChoicesWidget - 选项卡片交互组件样式 */
+
+.container {
+    border-radius: var(--radius-xl, 12px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px solid var(--color-border-default, #E5E5E5);
+    overflow: hidden;
+}
+
+/* 标题区 */
+.header {
+    padding: 14px 16px 6px;
+}
+
+.title {
+    margin: 0;
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+.description {
+    margin: 4px 0 0;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* 选项列表 */
+.optionsList {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px;
+}
+
+/* 单个选项卡片 */
+.optionCard {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    border: 1px solid transparent;
+    background: var(--color-bg-primary, #FFFFFF);
+    cursor: pointer;
+    transition:
+        background var(--transition-fast, 150ms ease),
+        border-color var(--transition-fast, 150ms ease),
+        transform var(--transition-fast, 150ms ease),
+        box-shadow var(--transition-fast, 150ms ease);
+    text-align: left;
+    width: 100%;
+    font-family: inherit;
+}
+
+.optionCard:hover:not(:disabled) {
+    background: var(--color-bg-tertiary, #EBEBEB);
+    border-color: var(--color-action-primary, #2563EB);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.optionCard:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+/* 选中状态 */
+.optionSelected {
+    background: rgba(37, 99, 235, 0.08) !important;
+    border-color: var(--color-action-primary, #2563EB) !important;
+}
+
+/* 禁用状态（其他未选中的选项） */
+.optionDisabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* 图标 */
+.optionIcon {
+    font-size: 20px;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+    line-height: 1;
+}
+
+/* 文字容器 */
+.optionTextWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.optionLabel {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary, #1A1A1A);
+    line-height: var(--line-height-tight, 1.25);
+}
+
+.optionDesc {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #666666);
+    line-height: var(--line-height-normal, 1.5);
+}
+
+/* 重选按钮 */
+.reselectBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    padding: 6px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary, #999999);
+    transition: color var(--transition-fast, 150ms ease);
+}
+
+.reselectBtn:hover {
+    color: var(--color-action-primary, #2563EB);
+}
+
+/* 错误降级 */
+.errorFallback {
+    padding: 10px 14px;
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px dashed var(--color-border-default, #E5E5E5);
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-tertiary, #999999);
+}
+
+/* ============================================================
+   多选模式新增样式
+   ============================================================ */
+
+/* 多选模式下的选项卡片：左侧面展示 checkbox，需要调整 gap */
+.optionCardMulti {
+    gap: 8px;
+}
+
+/* Checkbox 指示器：未选时显示空圈，已选时显示蓝色填充 */
+.checkboxIndicator {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-tertiary, #BBBBBB);
+    transition: color var(--transition-fast, 150ms ease);
+}
+
+.checkboxChecked {
+    color: var(--color-action-primary, #2563EB);
+}
+
+/* 多选已选项的高亮样式（浅蓝背景 + 实线边框） */
+.multiSelected {
+    background: rgba(37, 99, 235, 0.07) !important;
+    border-color: var(--color-action-primary, #2563EB) !important;
+}
+
+/* 确认按钮（primary 样式） */
+.confirmBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: calc(100% - 16px);
+    margin: 4px 8px 10px;
+    padding: 9px 16px;
+    border-radius: var(--radius-lg, 8px);
+    border: none;
+    background: var(--color-action-primary, #2563EB);
+    color: #fff;
+    font-family: inherit;
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: pointer;
+    transition:
+        background var(--transition-fast, 150ms ease),
+        opacity var(--transition-fast, 150ms ease),
+        transform var(--transition-fast, 150ms ease);
+}
+
+.confirmBtn:hover:not(:disabled) {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.confirmBtn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.confirmBtnDisabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 确认按钮中已选数量标记 */
+.confirmCount {
+    font-size: var(--font-size-xs, 11px);
+    font-weight: var(--font-weight-normal, 400);
+    opacity: 0.85;
+}

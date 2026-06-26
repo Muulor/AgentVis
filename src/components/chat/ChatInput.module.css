@@ -1,0 +1,522 @@
+/**
+ * ChatInput 样式
+ */
+
+.inputArea {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    border-top: 1px solid var(--color-border-default);
+    background-color: var(--color-bg-primary);
+}
+
+/* ==================== 输入框容器 ==================== */
+
+.inputWrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    position: relative;
+    /* 为拖放覆盖层提供定位上下文 */
+}
+
+.textareaWrapper {
+    flex: 1;
+    position: relative;
+    --blocked-cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E") 8 8, not-allowed;
+}
+
+.textarea {
+    width: 100%;
+    min-height: 40px;
+    max-height: 200px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    resize: none;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.textarea:focus {
+    border-color: var(--color-action-primary);
+}
+
+.textarea:disabled {
+    opacity: 0.6;
+    cursor: var(--blocked-cursor);
+}
+
+.textarea::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+.richEditor {
+    width: 100%;
+    min-height: 40px;
+    max-height: 200px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    outline: none;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    transition: border-color var(--transition-fast);
+}
+
+.richEditor:focus {
+    border-color: var(--color-action-primary);
+}
+
+.richEditor[contenteditable="false"] {
+    opacity: 0.6;
+    cursor: var(--blocked-cursor);
+}
+
+.richEditor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+}
+
+.richEditor :global(.inline-context-token) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: min(260px, 60%);
+    margin: 0 1px;
+    padding: 0 2px;
+    border: none;
+    background: transparent;
+    color: var(--color-action-primary);
+    font: inherit;
+    font-weight: var(--font-weight-semibold);
+    line-height: inherit;
+    vertical-align: baseline;
+    cursor: pointer;
+}
+
+.richEditor :global(.inline-file-token) {
+    color: var(--color-action-primary);
+}
+
+.richEditor :global(.inline-skill-token) {
+    color: var(--color-status-success);
+}
+
+.richEditor :global(.inline-context-token:hover),
+.richEditor :global(.inline-context-token:focus-visible) {
+    color: color-mix(in srgb, var(--color-action-primary) 78%, var(--color-text-primary));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    outline: none;
+}
+
+.richEditor :global(.inline-skill-token:hover),
+.richEditor :global(.inline-skill-token:focus-visible) {
+    color: color-mix(in srgb, var(--color-status-success) 82%, var(--color-text-primary));
+}
+
+.richEditor :global(.inline-context-token-icon) {
+    width: 0.92em;
+    height: 0.92em;
+    flex-shrink: 0;
+    stroke-width: 2.2;
+}
+
+.richEditor :global(.inline-context-token-label) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ==================== 已选技能上下文 ==================== */
+
+.skillContextBar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.skillContextLabel {
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    flex-shrink: 0;
+}
+
+.skillChipList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.skillChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 260px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-action-primary);
+    overflow: visible;
+}
+
+.skillChipMain {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 0 2px;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-normal);
+    text-align: left;
+    cursor: pointer;
+}
+
+.skillChipMain:hover:not(:disabled) {
+    color: color-mix(in srgb, var(--color-action-primary) 78%, var(--color-text-primary));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.skillChipMain:disabled {
+    cursor: default;
+}
+
+.skillChipIcon {
+    flex-shrink: 0;
+}
+
+.skillChipLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.skillChipBadge {
+    padding: 0 2px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    flex-shrink: 0;
+}
+
+.skillChipRemove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    appearance: none;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.skillChipRemove:hover {
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+/* ==================== 技能快捷选择 ==================== */
+
+.skillDropdown {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + var(--spacing-xs));
+    width: min(420px, 100%);
+    max-height: 280px;
+    overflow-y: auto;
+    padding: var(--spacing-xs);
+    background-color: var(--color-bg-primary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 120;
+    animation: fadeIn 0.1s ease;
+}
+
+.skillDropdownHeader {
+    padding: 6px 8px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+}
+
+.skillOption {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.skillOption:hover,
+.skillOption[data-selected="true"] {
+    background-color: var(--color-bg-secondary);
+}
+
+.skillOptionIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-md);
+    background-color: var(--color-action-primary);
+    color: white;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    flex-shrink: 0;
+}
+
+.skillOptionText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.skillOptionName {
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.skillOptionDesc {
+    overflow: hidden;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.skillOptionMode {
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    flex-shrink: 0;
+}
+
+.skillEmpty {
+    padding: 12px 8px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm);
+}
+
+.skillDropdown::-webkit-scrollbar {
+    width: 4px;
+}
+
+.skillDropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.skillDropdown::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-default);
+    border-radius: 2px;
+}
+
+/* ==================== 发送/停止按钮 ==================== */
+
+.contextMenu {
+    position: fixed;
+    min-width: 160px;
+    padding: 4px;
+    background-color: var(--color-bg-primary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 200;
+    animation: fadeIn 0.1s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.menuItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.menuItem:hover:not(:disabled) {
+    background-color: var(--color-bg-secondary);
+}
+
+.menuItem:disabled {
+    color: var(--color-text-tertiary);
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.menuItem svg {
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.menuItem:disabled svg {
+    color: var(--color-text-tertiary);
+}
+
+.divider {
+    height: 1px;
+    margin: 4px 0;
+    background-color: var(--color-border-default);
+}
+
+.sendBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-full);
+    background-color: var(--color-action-primary);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.sendBtn:hover:not(:disabled) {
+    background-color: var(--color-action-primary-hover);
+}
+
+.sendBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sendBtn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+/* 停止按钮样式 - 尺寸为发送按钮的三分之二 */
+.sendBtn.stopBtn {
+    width: 28px;
+    height: 28px;
+    background-color: #ff6363;
+}
+
+.sendBtn.stopBtn:hover:not(:disabled) {
+    background-color: #ff7474;
+}
+
+/* ==================== 工具栏 ==================== */
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.toolbarLeft {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.shortcutHint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-tertiary);
+}
+
+/* ==================== 拖拽上传样式 ==================== */
+
+.dragActive {
+    position: relative;
+}
+
+.dragActive::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 2px dashed var(--color-action-primary);
+    border-radius: var(--radius-lg);
+    background-color: rgba(59, 130, 246, 0.05);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.dropOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 2px dashed var(--color-action-primary);
+    border-radius: var(--radius-lg);
+    color: var(--color-action-primary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    z-index: 20;
+    pointer-events: none;
+}
+
+.dropOverlay svg {
+    width: 24px;
+    height: 24px;
+}

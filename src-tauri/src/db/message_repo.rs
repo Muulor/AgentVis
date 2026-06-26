@@ -1,0 +1,678 @@
+﻿//! Message 数据访问层
+//!
+//! 提供消息实体的 CRUD 操作
+
+use chrono::Utc;
+use sqlx::{Pool, Sqlite};
+
+use super::models::{Message, MessageRole};
+use crate::error::{AppError, AppResult};
+
+/// Message Repository - 管理消息数据访问
+pub struct MessageRepository {
+    pool: Pool<Sqlite>,
+}
+
+impl MessageRepository {
+    /// 创建新的 MessageRepository 实例
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self { pool }
+    }
+
+    /// 创建新的消息
+    /// 
+    /// # Arguments
+    /// * `agent_id` - 所属 Agent ID
+    /// * `role` - 消息角色
+    /// * `content` - 消息内容
+    /// * `metadata` - 元数据（JSON 字符串，可选）
+    /// 
+    /// # Returns
+    /// 创建成功的 Message 实体
+    pub async fn create(
+        &self, 
+        agent_id: &str, 
+        role: MessageRole, 
+        content: &str,
+        metadata: Option<String>,
+    ) -> AppResult<Message> {
+        let message = Message::with_metadata(agent_id, role, content, metadata);
+        
+        sqlx::query(
+            r#"
+            INSERT INTO messages (id, agent_id, role, content, metadata, created_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&message.id)
+        .bind(&message.agent_id)
+        .bind(&message.role)
+        .bind(&message.content)
+        .bind(&message.metadata)
+        .bind(message.created_at)
+        .bind(message.deleted_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(message)
+    }
+
+    /// 根据 ID 获取消息
+    pub async fn get(&self, id: &str) -> AppResult<Option<Message>> {
+        let message: Option<Message> = sqlx::query_as(
+            r#"
+            SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+            FROM messages
+            WHERE id = ? AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(message)
+    }
+
+    /// 获取指定 Agent 的消息列表
+    /// 
+    /// # Arguments
+    /// * `agent_id` - Agent ID
+    /// * `limit` - 最多返回条数
+    /// * `offset` - 偏移量
+    /// 
+    /// # Returns
+    /// 消息列表，按创建时间升序排列 (最早的在前)
+    pub async fn list_by_agent(
+        &self, 
+        agent_id: &str, 
+        limit: i64, 
+        offset: i64
+    ) -> AppResult<Vec<Message>> {
+        let messages: Vec<Message> = sqlx::query_as(
+            r#"
+            SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+            FROM messages
+            WHERE agent_id = ? AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            LIMIT ? OFFSET ?
+            "#,
+        )
+        .bind(agent_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// 获取指定 Agent 最近的 N 条消息
+    /// 
+    /// # Arguments
+    /// * `agent_id` - Agent ID
+    /// * `count` - 返回条数
+    /// 
+    /// # Returns
+    /// 消息列表，按创建时间升序排列
+    pub async fn get_recent(&self, agent_id: &str, count: i64) -> AppResult<Vec<Message>> {
+        // 使用子查询获取最近的 N 条，然后按时间正序排列
+        let messages: Vec<Message> = sqlx::query_as(
+            r#"
+            SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+            FROM (
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM messages
+                WHERE agent_id = ? AND deleted_at IS NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            )
+            ORDER BY created_at ASC, id ASC
+            "#,
+        )
+        .bind(agent_id)
+        .bind(count)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// 获取指定消息 ID 之后的所有消息（增量加载）
+    /// 
+    /// # Arguments
+    /// * `agent_id` - Agent ID
+    /// * `after_message_id` - 起始消息 ID（不包含）
+    /// * `limit` - 最大返回数量
+    /// 
+    /// # Returns
+    /// 消息列表，按创建时间升序排列
+    pub async fn get_after(&self, agent_id: &str, after_message_id: &str, limit: i64) -> AppResult<Vec<Message>> {
+        // 先获取起始消息的创建时间
+        let after_message = self.get(after_message_id).await?;
+        
+        let messages: Vec<Message> = if let Some(msg) = after_message {
+            sqlx::query_as(
+                r#"
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM messages
+                WHERE agent_id = ? 
+                  AND deleted_at IS NULL
+                  AND (created_at > ? OR (created_at = ? AND id > ?))
+                ORDER BY created_at ASC, id ASC
+                LIMIT ?
+                "#,
+            )
+            .bind(agent_id)
+            .bind(msg.created_at)
+            .bind(msg.created_at)
+            .bind(after_message_id)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?
+        } else {
+            // 如果起始Message does not exist（可能已被删除），返回空列表
+            vec![]
+        };
+
+        Ok(messages)
+    }
+
+    /// 获取指定消息 ID 之前的 N 条消息（向前分页，用于"加载更多"）
+    ///
+    /// # Arguments
+    /// * `agent_id` - Agent ID
+    /// * `before_message_id` - 边界消息 ID（不包含）
+    /// * `count` - 最大返回数量
+    ///
+    /// # Returns
+    /// 消息列表，按创建时间升序排列（最早在前）
+    pub async fn get_before(&self, agent_id: &str, before_message_id: &str, count: i64) -> AppResult<Vec<Message>> {
+        // 先获取边界消息的创建时间
+        let before_message = self.get(before_message_id).await?;
+
+        let messages: Vec<Message> = if let Some(msg) = before_message {
+            // 子查询获取 before 消息之前的最近 N 条，再翻转为正序
+            sqlx::query_as(
+                r#"
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM (
+                    SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                    FROM messages
+                    WHERE agent_id = ?
+                      AND deleted_at IS NULL
+                      AND (created_at < ? OR (created_at = ? AND id < ?))
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                )
+                ORDER BY created_at ASC, id ASC
+                "#,
+            )
+            .bind(agent_id)
+            .bind(msg.created_at)
+            .bind(msg.created_at)
+            .bind(before_message_id)
+            .bind(count)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?
+        } else {
+            // 边界Message does not exist（可能已被删除），返回空列表
+            vec![]
+        };
+
+        Ok(messages)
+    }
+
+    /// 获取指定 Agent 的消息总数
+
+    pub async fn count_by_agent(&self, agent_id: &str) -> AppResult<i64> {
+        let count: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*) FROM messages
+            WHERE agent_id = ? AND deleted_at IS NULL
+            "#,
+        )
+        .bind(agent_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(count.0)
+    }
+
+    /// 根据 ID 列表批量获取消息
+    /// 
+    /// # Arguments
+    /// * `ids` - 消息 ID 列表
+    /// 
+    /// # Returns
+    /// 消息列表（顺序可能与输入不同）
+    pub async fn get_by_ids(&self, ids: &[String]) -> AppResult<Vec<Message>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        
+        // 构建占位符 (?, ?, ...)
+        let placeholders: Vec<&str> = ids.iter().map(|_| "?").collect();
+        let placeholders_str = placeholders.join(", ");
+        
+        let query = format!(
+            r#"
+            SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+            FROM messages
+            WHERE id IN ({}) AND deleted_at IS NULL
+            ORDER BY created_at ASC
+            "#,
+            placeholders_str
+        );
+        
+        let mut query_builder = sqlx::query_as::<_, Message>(&query);
+        for id in ids {
+            query_builder = query_builder.bind(id);
+        }
+        
+        let messages = query_builder
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        
+        Ok(messages)
+    }
+
+    /// 软删除消息
+    pub async fn soft_delete(&self, id: &str) -> AppResult<()> {
+        let now = Utc::now().timestamp_millis();
+        
+        let result = sqlx::query(
+            r#"
+            UPDATE messages 
+            SET deleted_at = ?
+            WHERE id = ? AND deleted_at IS NULL
+            "#,
+        )
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound(format!("Message does not exist or has been deleted: {}", id)));
+        }
+
+        Ok(())
+    }
+
+    /// List message ids from the given message onward for an agent.
+    pub async fn list_ids_from(&self, id: &str, agent_id: &str) -> AppResult<Vec<String>> {
+        let message = self.get(id).await?;
+        let message = message.ok_or_else(|| AppError::NotFound(format!("Message not found: {}", id)))?;
+
+        if message.agent_id != agent_id {
+            return Err(AppError::Forbidden("Message does not belong to the specified agent".to_string()));
+        }
+
+        let rows: Vec<(String,)> = sqlx::query_as(
+            r#"
+            SELECT id
+            FROM messages
+            WHERE agent_id = ? AND created_at >= ? AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            "#,
+        )
+        .bind(agent_id)
+        .bind(message.created_at)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(rows.into_iter().map(|row| row.0).collect())
+    }
+
+    /// 删除指定消息及其之后的所有消息 (撤回功能)
+    ///
+    /// # Arguments
+    /// * `id` - 起始消息 ID (包含)
+    /// * `agent_id` - Agent ID (用于安全验证)
+    ///
+    /// # Returns
+    /// 删除的消息数量
+    pub async fn retract_from(&self, id: &str, agent_id: &str) -> AppResult<u64> {
+        let now = Utc::now().timestamp_millis();
+        
+        // 获取起始消息的创建时间
+        let message = self.get(id).await?;
+        let message = message.ok_or_else(|| AppError::NotFound(format!("Message does not exist: {}", id)))?;
+        
+        if message.agent_id != agent_id {
+            return Err(AppError::Forbidden("Message does not belong to the specified Agent".to_string()));
+        }
+        
+        let result = sqlx::query(
+            r#"
+            UPDATE messages 
+            SET deleted_at = ?
+            WHERE agent_id = ? AND created_at >= ? AND deleted_at IS NULL
+            "#,
+        )
+        .bind(now)
+        .bind(agent_id)
+        .bind(message.created_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(result.rows_affected())
+    }
+
+    /// 获取指定 Hub 的所有消息（从 metadata.hubId 过滤）
+    ///
+    /// Hub 消息分两类存储：
+    /// 1. 无 @提及时：agent_id = hub_id
+    /// 2. 有 @提及时：agent_id = mentioned_agent_id，metadata.hubId = hub_id
+    ///
+    /// 此方法合并两类查询，并按时间升序排列。
+    ///
+    /// # Arguments
+    /// * `hub_id` - Hub ID
+    /// * `limit` - 最多返回条数
+    ///
+    /// # Returns
+    /// 按创建时间升序排列的消息列表
+    pub async fn list_by_hub_id(
+        &self,
+        hub_id: &str,
+        limit: i64,
+    ) -> AppResult<Vec<Message>> {
+        // 使用 UNION ALL 合并两类 Hub 消息：
+        // - 类型1：直接以 hub_id 为 agent_id 存储（无 @提及）
+        // - 类型2：metadata 中 hubId 字段等于 hub_id（有 @提及，存在对应 Agent 下）
+        // 使用 json_extract 读取 JSON metadata 中的 hubId 字段，效率高于 LIKE 模糊匹配
+        let messages: Vec<Message> = sqlx::query_as(
+            r#"
+            SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+            FROM (
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM messages
+                WHERE agent_id = ? AND deleted_at IS NULL
+
+                UNION ALL
+
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM messages
+                WHERE json_extract(metadata, '$.hubId') = ?
+                  AND agent_id != ?
+                  AND deleted_at IS NULL
+            )
+            ORDER BY created_at ASC, id ASC
+            LIMIT ?
+            "#,
+        )
+        .bind(hub_id)
+        .bind(hub_id)
+        .bind(hub_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// 获取指定 Hub 最近 N 条消息（合并双源，用于初始加载）
+    ///
+    /// 与 get_recent 类似，使用 DESC 子查询取最新的 N 条再翻转为 ASC
+    pub async fn get_recent_by_hub_id(&self, hub_id: &str, count: i64) -> AppResult<Vec<Message>> {
+        let messages: Vec<Message> = sqlx::query_as(
+            r#"
+            SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+            FROM (
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM (
+                    SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                    FROM messages
+                    WHERE agent_id = ? AND deleted_at IS NULL
+
+                    UNION ALL
+
+                    SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                    FROM messages
+                    WHERE json_extract(metadata, '$.hubId') = ?
+                      AND agent_id != ?
+                      AND deleted_at IS NULL
+                )
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+            )
+            ORDER BY created_at ASC, id ASC
+            "#,
+        )
+        .bind(hub_id)
+        .bind(hub_id)
+        .bind(hub_id)
+        .bind(count)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// 获取指定 Hub 中某消息之前的 N 条消息（向前分页，"加载更多"用）
+    pub async fn get_before_by_hub_id(
+        &self,
+        hub_id: &str,
+        before_message_id: &str,
+        count: i64,
+    ) -> AppResult<Vec<Message>> {
+        let before_message = self.get(before_message_id).await?;
+
+        let messages: Vec<Message> = if let Some(msg) = before_message {
+            sqlx::query_as(
+                r#"
+                SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                FROM (
+                    SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                    FROM (
+                        SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                        FROM messages
+                        WHERE agent_id = ? AND deleted_at IS NULL
+
+                        UNION ALL
+
+                        SELECT id, agent_id, role, content, metadata, created_at, deleted_at
+                        FROM messages
+                        WHERE json_extract(metadata, '$.hubId') = ?
+                          AND agent_id != ?
+                          AND deleted_at IS NULL
+                    )
+                    WHERE (created_at < ? OR (created_at = ? AND id < ?))
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                )
+                ORDER BY created_at ASC, id ASC
+                "#,
+            )
+            .bind(hub_id)
+            .bind(hub_id)
+            .bind(hub_id)
+            .bind(msg.created_at)
+            .bind(msg.created_at)
+            .bind(before_message_id)
+            .bind(count)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?
+        } else {
+            vec![]
+        };
+
+        Ok(messages)
+    }
+
+    /// 获取指定 Hub 的消息总数（合并双源）
+    pub async fn count_by_hub_id(&self, hub_id: &str) -> AppResult<i64> {
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*) FROM (
+                SELECT id FROM messages
+                WHERE agent_id = ? AND deleted_at IS NULL
+
+                UNION ALL
+
+                SELECT id FROM messages
+                WHERE json_extract(metadata, '$.hubId') = ?
+                  AND agent_id != ?
+                  AND deleted_at IS NULL
+            )
+            "#,
+        )
+        .bind(hub_id)
+        .bind(hub_id)
+        .bind(hub_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(row.0)
+    }
+
+    /// 清空指定 Agent 的所有消息
+    pub async fn clear_by_agent(&self, agent_id: &str) -> AppResult<u64> {
+        let now = Utc::now().timestamp_millis();
+        
+        let result = sqlx::query(
+            r#"
+            UPDATE messages 
+            SET deleted_at = ?
+            WHERE agent_id = ? AND deleted_at IS NULL
+            "#,
+        )
+        .bind(now)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(result.rows_affected())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::agent_repo::AgentRepository;
+    use crate::db::hub_repo::HubRepository;
+    use crate::db::schema::{create_pool, initialize_schema};
+
+    async fn setup_test_db() -> (HubRepository, AgentRepository, MessageRepository) {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        initialize_schema(&pool).await.unwrap();
+        (
+            HubRepository::new(pool.clone()),
+            AgentRepository::new(pool.clone()),
+            MessageRepository::new(pool),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_create_message() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+        
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        
+        let message = msg_repo.create(&agent.id, MessageRole::User, "你好", None).await.unwrap();
+        
+        assert!(!message.id.is_empty());
+        assert_eq!(message.agent_id, agent.id);
+        assert_eq!(message.role, "user");
+        assert_eq!(message.content, "你好");
+    }
+
+    #[tokio::test]
+    async fn test_list_messages() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+        
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        
+        msg_repo.create(&agent.id, MessageRole::User, "消息1", None).await.unwrap();
+        msg_repo.create(&agent.id, MessageRole::Assistant, "消息2", None).await.unwrap();
+        msg_repo.create(&agent.id, MessageRole::User, "消息3", None).await.unwrap();
+        
+        let messages = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        
+        // 验证返回了 3 条消息
+        assert_eq!(messages.len(), 3);
+        
+        // 验证所有消息内容都存在
+        let contents: Vec<&str> = messages.iter().map(|m| m.content.as_str()).collect();
+        assert!(contents.contains(&"消息1"));
+        assert!(contents.contains(&"消息2"));
+        assert!(contents.contains(&"消息3"));
+    }
+
+
+    #[tokio::test]
+    async fn test_get_recent_messages() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+        
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        
+        for i in 1..=5 {
+            msg_repo.create(&agent.id, MessageRole::User, &format!("消息{}", i), None).await.unwrap();
+        }
+        
+        let recent = msg_repo.get_recent(&agent.id, 3).await.unwrap();
+        
+        // 验证返回了 3 条消息
+        assert_eq!(recent.len(), 3);
+        
+        // 验证返回的消息确实是创建的消息之一
+        let all_msgs = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        assert_eq!(all_msgs.len(), 5);
+        
+        // 验证 recent 中的消息都在 all_msgs 中
+        for r in &recent {
+            assert!(all_msgs.iter().any(|m| m.id == r.id));
+        }
+    }
+
+
+    #[tokio::test]
+    async fn test_retract_messages() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+        
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        
+        let msg1 = msg_repo.create(&agent.id, MessageRole::User, "消息1", None).await.unwrap();
+        msg_repo.create(&agent.id, MessageRole::Assistant, "消息2", None).await.unwrap();
+        msg_repo.create(&agent.id, MessageRole::User, "消息3", None).await.unwrap();
+        
+        // 验证创建了 3 条消息
+        let all = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        assert_eq!(all.len(), 3);
+        
+        // 软删除第一条消息（单条删除验证）
+        msg_repo.soft_delete(&msg1.id).await.unwrap();
+        
+        let remaining = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        assert_eq!(remaining.len(), 2);
+        
+        // 清空剩余消息
+        let count = msg_repo.clear_by_agent(&agent.id).await.unwrap();
+        assert_eq!(count, 2);
+        
+        let final_count = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        assert!(final_count.is_empty());
+    }
+
+}

@@ -1,0 +1,37 @@
+/**
+ * ThinkingStream 样式
+ *
+ * 思维流组件的视觉样式
+ */
+
+.container {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-relaxed);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.text {
+    color: inherit;
+}
+
+/* 闪烁光标 */
+.cursor {
+    display: inline-block;
+    color: var(--color-action-primary);
+    animation: blink 1s step-end infinite;
+    margin-left: 2px;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}

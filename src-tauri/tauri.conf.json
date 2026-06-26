@@ -1,0 +1,52 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "AgentVis",
+    "identifier": "com.agentvis.app",
+    "version": "0.3.2",
+    "build": {
+        "beforeDevCommand": "npm run dev:tauri",
+        "devUrl": "http://localhost:1420",
+        "beforeBuildCommand": "npm run build:python-runtime && npm run build && npm run build:broker-helper",
+        "frontendDist": "../dist"
+    },
+    "app": {
+        "withGlobalTauri": true,
+        "windows": [
+            {
+                "title": "AgentVis",
+                "width": 1600,
+                "height": 960,
+                "minWidth": 1024,
+                "minHeight": 600,
+                "resizable": true,
+                "fullscreen": false,
+                "center": true,
+                "dragDropEnabled": false
+            }
+        ],
+        "security": {
+            "csp": null,
+            "capabilities": [
+                "default"
+            ]
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "resources": {
+            "skills-bundle/": "skills-bundle/",
+            "python-embed/": "python-embed/",
+            "python-runtime/": "python-runtime/",
+            "node-bundle/": "node-bundle/",
+            "broker-bin/": "bin/"
+        }
+    }
+}

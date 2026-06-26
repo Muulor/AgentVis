@@ -1,0 +1,136 @@
+/**
+ * DecisionCard 样式
+ *
+ * 决策卡片的视觉样式
+ */
+
+.container {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border-default);
+    background: var(--color-bg-primary);
+}
+
+/* 颜色变体 */
+.success {
+    border-left: 3px solid var(--color-status-success);
+}
+
+.error {
+    border-left: 3px solid var(--color-status-error);
+}
+
+.primary {
+    border-left: 3px solid var(--color-action-primary);
+}
+
+.warning {
+    border-left: 3px solid var(--color-status-warning);
+}
+
+.neutral {
+    border-left: 3px solid var(--color-text-tertiary);
+}
+
+/* 头部 */
+.header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.icon {
+    flex-shrink: 0;
+}
+
+.success .icon {
+    color: var(--color-status-success);
+}
+
+.error .icon {
+    color: var(--color-status-error);
+}
+
+.primary .icon {
+    color: var(--color-action-primary);
+}
+
+.warning .icon {
+    color: var(--color-status-warning);
+}
+
+.neutral .icon {
+    color: var(--color-text-tertiary);
+}
+
+.label {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+}
+
+/* 风险标签 */
+.riskBadge {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+}
+
+.riskLow {
+    background: rgba(22, 163, 74, 0.1);
+    color: var(--color-status-success);
+}
+
+.riskMedium {
+    background: rgba(202, 138, 4, 0.1);
+    color: var(--color-status-warning);
+}
+
+.riskHigh {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--color-status-error);
+}
+
+/* 理由 */
+.rationale {
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    line-height: var(--line-height-relaxed);
+}
+
+/* 详情 */
+.details {
+    margin-top: var(--spacing-sm);
+    font-size: var(--font-size-sm);
+}
+
+.detailLabel {
+    color: var(--color-text-tertiary);
+    margin-right: var(--spacing-xs);
+}
+
+.detailValue {
+    color: var(--color-text-primary);
+}
+
+/* 问题列表 */
+.questions {
+    margin-top: var(--spacing-sm);
+}
+
+.questionList {
+    margin: var(--spacing-xs) 0 0;
+    padding-left: var(--spacing-lg);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.questionList li {
+    margin-bottom: var(--spacing-xs);
+}

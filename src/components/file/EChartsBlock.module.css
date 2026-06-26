@@ -1,0 +1,93 @@
+/* EChartsBlock - ECharts 图表渲染样式 */
+
+.wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.container {
+    width: 100%;
+    /* 默认高度 360px，JS 会根据图表类型动态覆盖 --chart-height */
+    height: var(--chart-height, 360px);
+    min-height: 180px;
+    max-height: 600px;
+}
+
+/* 等待渲染时的占位区域 */
+.placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-secondary, #F7F7F7);
+    border: 1px dashed var(--color-border-default, #E5E5E5);
+}
+
+.placeholderText {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-tertiary, #999999);
+}
+
+.tableFallback {
+    width: 100%;
+    max-height: 520px;
+    overflow: hidden;
+    border: 1px solid var(--color-border-default, rgba(148, 163, 184, 0.24));
+    border-radius: var(--radius-lg, 8px);
+    background: var(--color-bg-secondary, rgba(255, 255, 255, 0.04));
+}
+
+.tableTitle {
+    padding: 12px 14px 10px;
+    font-size: var(--font-size-md, 14px);
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--color-text-primary, #F5F5F5);
+    border-bottom: 1px solid var(--color-border-default, rgba(148, 163, 184, 0.18));
+}
+
+.tableScroll {
+    max-height: 462px;
+    overflow: auto;
+}
+
+.table {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+    table-layout: auto;
+}
+
+.table th,
+.table td {
+    height: var(--echarts-table-row-height, 30px);
+    padding: 7px 12px;
+    font-size: var(--font-size-sm, 12px);
+    line-height: 1.35;
+    text-align: left;
+    vertical-align: middle;
+    color: var(--color-text-secondary, rgba(245, 245, 245, 0.82));
+    border-bottom: 1px solid var(--color-border-default, rgba(148, 163, 184, 0.16));
+    overflow-wrap: anywhere;
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-bg-secondary, #242424);
+    color: var(--color-text-primary, #F5F5F5);
+}
+
+.tableHeaderBold {
+    font-weight: 700;
+}
+
+.table tbody tr:last-child td {
+    border-bottom: 0;
+}

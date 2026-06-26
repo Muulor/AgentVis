@@ -1,0 +1,92 @@
+# Agent Service FSM 定义
+# 
+# 主状态机配置，驱动 Planning 模块的核心循环
+# ═══════════════════════════════════════════════════════════════
+
+version: "1.0"
+name: AgentServiceFSM
+initialState: IDLE
+
+states:
+  # ─────────────────────────────────────────────────────────────
+  # IDLE - 空闲状态
+  # ─────────────────────────────────────────────────────────────
+  IDLE:
+    on:
+      USER_REQUEST:
+        guard: loopBudgetRemaining
+        actions:
+          - initLoopBudget
+        next: PREPARE_CONTEXT
+
+  # ─────────────────────────────────────────────────────────────
+  # PREPARE_CONTEXT - 上下文准备
+  # ─────────────────────────────────────────────────────────────
+  PREPARE_CONTEXT:
+    on:
+      CONTEXT_READY:
+        next: MASTER_DECISION
+      CONTEXT_ERROR:
+        actions:
+          - recordNoProgress
+        next: TERMINATE
+
+  # ─────────────────────────────────────────────────────────────
+  # MASTER_DECISION - Master Brain 决策
+  # ─────────────────────────────────────────────────────────────
+  MASTER_DECISION:
+    on:
+      DECISION_RECEIVED:
+        guard: hasCurrentDecision
+        next: DISPATCH
+      DECISION_INVALID:
+        actions:
+          - recordNoProgress
+        next: TERMINATE
+
+  # ─────────────────────────────────────────────────────────────
+  # DISPATCH - 分发执行
+  # ─────────────────────────────────────────────────────────────
+  DISPATCH:
+    on:
+      ACTION_COMPLETED:
+        actions:
+          - recordProgress
+        next: OBSERVE
+      ACTION_FAILED:
+        actions:
+          - recordNoProgress
+        next: OBSERVE
+      AGENT_OUTPUT:
+        next: OBSERVE
+      AGENT_ERROR:
+        actions:
+          - recordNoProgress
+        next: OBSERVE
+
+  # ─────────────────────────────────────────────────────────────
+  # OBSERVE - 观察结果
+  # ─────────────────────────────────────────────────────────────
+  OBSERVE:
+    on:
+      CONTINUE:
+        next: EVALUATE
+      TIMEOUT:
+        next: TERMINATE
+
+  # ─────────────────────────────────────────────────────────────
+  # EVALUATE - 评估是否继续
+  # ─────────────────────────────────────────────────────────────
+  # 注意：多条件转移通过代码处理，YAML 不直接支持
+  EVALUATE:
+    on:
+      CONTINUE:
+        actions:
+          - decrementBudget
+        next: PREPARE_CONTEXT
+
+  # ─────────────────────────────────────────────────────────────
+  # TERMINATE - 终止状态
+  # ─────────────────────────────────────────────────────────────
+  TERMINATE:
+    on: {}

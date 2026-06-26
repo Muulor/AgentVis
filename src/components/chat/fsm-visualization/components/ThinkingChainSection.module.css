@@ -1,0 +1,164 @@
+/**
+ * ThinkingChainSection 样式
+ *
+ * 思维链区块的视觉样式（按步显示）
+ * 
+ * @version 2.0 - 按步显示布局
+ */
+
+/* 状态标签 */
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin-left: auto;
+    padding: 2px 8px;
+    background: rgba(37, 99, 235, 0.1);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    color: var(--color-action-primary);
+}
+
+.statusDot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-action-primary);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* 步骤容器：固定 1000px 滚动窗口，有新内容时自动滚到底部 */
+.stepsContainer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) 0;
+    max-height: 600px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+/* 单个步骤项 */
+.stepItem {
+    display: flex;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.stepItem.active {
+    background: rgba(37, 99, 235, 0.05);
+    border-left: 2px solid var(--color-action-primary);
+}
+
+.stepItem.completed {
+    opacity: 0.85;
+    border-left: 2px solid var(--color-success);
+}
+
+/* 步骤指示器（左侧圆圈或数字） */
+.stepIndicator {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border-default);
+}
+
+.stepNumber {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-secondary);
+}
+
+/* 旋转的加载图标 */
+.spinningIcon {
+    color: var(--color-action-primary);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 步骤内容区域 */
+.stepContent {
+    flex: 1;
+    min-width: 0;
+    padding: var(--spacing-xs) 0;
+}
+
+/* 已完成的内容 */
+.completedContent {
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* 带动画的标题 */
+.titleWithAnimation {
+    display: inline-flex;
+    align-items: center;
+}
+
+.thinkingDots {
+    display: inline-flex;
+    margin-left: 2px;
+}
+
+.thinkingDot {
+    display: inline-block;
+    animation: thinkingDotBounce 1.4s infinite ease-in-out;
+    opacity: 0.4;
+}
+
+.thinkingDot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.thinkingDot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.thinkingDot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes thinkingDotBounce {
+
+    0%,
+    60%,
+    100% {
+        opacity: 0.4;
+    }
+
+    30% {
+        opacity: 1;
+    }
+}

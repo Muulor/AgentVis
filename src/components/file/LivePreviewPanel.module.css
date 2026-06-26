@@ -1,0 +1,274 @@
+/**
+ * LivePreviewPanel 样式
+ *
+ * 预览面板布局：顶部工具栏 + 内容区域
+ * 支持 HTML（srcdoc）和 Project（Vite Dev Server iframe）两种模式
+ */
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-bg-primary);
+    transition: all 0.2s ease;
+}
+
+/* 全屏模式：覆盖整个窗口 */
+.panel.fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    border-radius: 0;
+}
+
+/* ==================== 工具栏 ==================== */
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    gap: 8px;
+}
+
+.titleArea {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.toolbarActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ==================== 状态指示器 ==================== */
+
+/* Vite 运行中的绿色小圆点 */
+.statusDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #50fa7b;
+    box-shadow: 0 0 4px rgba(80, 250, 123, 0.5);
+    flex-shrink: 0;
+}
+
+/* 加载中的旋转图标 */
+.statusSpinner {
+    color: var(--color-text-tertiary);
+    animation: spin 1s linear infinite;
+    flex-shrink: 0;
+}
+
+/* 错误状态图标 */
+.statusError {
+    color: #ff5555;
+    flex-shrink: 0;
+}
+
+/* Code / Preview 切换按钮组 */
+.viewToggle {
+    display: flex;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    overflow: hidden;
+}
+
+.toggleBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.toggleBtn:hover {
+    color: var(--color-text-primary);
+    background: rgba(128, 128, 128, 0.1);
+}
+
+.toggleActive {
+    color: var(--color-text-primary);
+    background: rgba(137, 180, 250, 0.15);
+}
+
+/* 图标按钮 */
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.iconBtn:hover {
+    color: var(--color-text-primary);
+    background: rgba(128, 128, 128, 0.15);
+}
+
+/* ==================== 内容区域 ==================== */
+
+.content {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Code 视图 */
+.codeView {
+    height: 100%;
+    overflow: auto;
+}
+
+/* Preview iframe（HTML srcdoc 和 Project src 共用） */
+.previewFrame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #fff;
+}
+
+/* ==================== Project 模式 — 加载状态 ==================== */
+
+.projectLoading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: var(--color-text-secondary);
+}
+
+.projectSpinner {
+    color: var(--color-text-tertiary);
+    animation: spin 1s linear infinite;
+}
+
+.projectLoadingText {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.projectLoadingHint {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+}
+
+/* ==================== Project 模式 — 错误状态 ==================== */
+
+.projectError {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 10px;
+    padding: 20px;
+}
+
+.projectErrorIcon {
+    color: #ff5555;
+}
+
+.projectErrorText {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.projectErrorDetail {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    max-width: 400px;
+    text-align: center;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.retryBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    margin-top: 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.retryBtn:hover {
+    background: rgba(128, 128, 128, 0.15);
+}
+
+/* ==================== 通用动画 ==================== */
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==================== 滚动条 ==================== */
+
+.codeView::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.codeView::-webkit-scrollbar-track {
+    background: var(--color-bg-tertiary);
+    border-radius: 5px;
+}
+
+.codeView::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.5);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.codeView::-webkit-scrollbar-thumb:hover {
+    background: rgba(128, 128, 128, 0.7);
+    background-clip: padding-box;
+}

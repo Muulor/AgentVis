@@ -1,0 +1,154 @@
+/**
+ * AgentVis Design System - Design Tokens
+ * 
+ * 基于 UI-Spec 文档定义的设计系统变量
+ * 包含颜色、字体、间距、圆角、阴影等 Token
+ */
+
+:root {
+  /* ============================================
+   * 颜色系统 - 浅色模式 (默认)
+   * ============================================ */
+
+  /* 背景色 */
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F7F7F7;
+  --color-bg-tertiary: #EBEBEB;
+
+  /* 文本色 */
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+
+  /* 边框色 */
+  --color-border-default: #E5E5E5;
+  --color-border-hover: #CCCCCC;
+
+  /* 主操作色 */
+  --color-action-primary: #2563EB;
+  --color-action-primary-hover: #1D4ED8;
+
+  /* 状态色 */
+  --color-status-success: #16A34A;
+  --color-status-warning: #CA8A04;
+  --color-status-error: #DC2626;
+  --color-status-info: #0891B2;
+
+  /* Diff 相关颜色 */
+  --color-diff-add-bg: #E6FFEC;
+  --color-diff-remove-bg: #FFEBE9;
+  --color-diff-modify-bg: #FFF8E1;
+
+  /* ============================================
+   * 字体系统
+   * ============================================ */
+
+  /* 字体族 */
+  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+  /* 字号 */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 24px;
+
+  /* 字重 */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* 行高 */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ============================================
+   * 间距系统
+   * ============================================ */
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+
+  /* ============================================
+   * 圆角系统
+   * ============================================ */
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* ============================================
+   * 阴影系统
+   * ============================================ */
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+
+  /* ============================================
+   * 布局尺寸
+   * ============================================ */
+
+  --layout-top-bar-height: 48px;
+  --layout-status-bar-height: 32px;
+  --layout-left-panel-width: 220px;
+  --layout-left-panel-collapsed: 48px;
+  --layout-left-panel-min: 160px;
+  --layout-right-panel-width: 300px;
+  --layout-right-panel-min: 200px;
+  --layout-center-panel-min: 400px;
+
+  /* ============================================
+   * 动效
+   * ============================================ */
+
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+/* ============================================
+ * 深色模式
+ * ============================================ */
+
+[data-theme='dark'] {
+  /* 背景色 */
+  --color-bg-primary: #1E1E1E;
+  --color-bg-secondary: #252525;
+  --color-bg-tertiary: #333333;
+
+  /* 文本色 */
+  --color-text-primary: #F5F5F5;
+  --color-text-secondary: #A0A0A0;
+  --color-text-tertiary: #707070;
+
+  /* 边框色 */
+  --color-border-default: #3D3D3D;
+  --color-border-hover: #505050;
+
+  /* 主操作色 */
+  --color-action-primary: #3B82F6;
+  --color-action-primary-hover: #60A5FA;
+
+  /* 状态色 */
+  --color-status-success: #22C55E;
+  --color-status-warning: #FACC15;
+  --color-status-error: #EF4444;
+  --color-status-info: #06B6D4;
+
+  /* Diff 相关颜色 */
+  --color-diff-add-bg: #1A3D1A;
+  --color-diff-remove-bg: #3D1A1A;
+  --color-diff-modify-bg: #3D3A1A;
+}

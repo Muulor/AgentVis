@@ -1,0 +1,252 @@
+/**
+ * SubAgentObservationDisplay 样式
+ * 
+ * 静态 Sub-Agent 观测展示（MessageBubble 中持久化）
+ * 样式与 ThinkingChainDisplay 和 SubAgentObservationSection 保持一致
+ */
+
+.container {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 8px;
+    background-color: var(--color-bg-secondary, #1E1E2E);
+    overflow: hidden;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    text-align: left;
+    transition: background-color 0.15s ease;
+}
+
+.header:hover {
+    background: var(--color-bg-hover);
+}
+
+.headerIcon {
+    color: var(--color-action-primary, #3B82F6);
+    flex-shrink: 0;
+}
+
+.headerTitle {
+    font-weight: 500;
+    flex-grow: 1;
+}
+
+.toggle {
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+}
+
+.stepCount {
+    font-size: 11px;
+    color: var(--color-text-tertiary, #6B7280);
+    margin-left: auto;
+}
+
+/* 内容容器 */
+.contentContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px 12px;
+}
+
+/* 工具行为指示器 */
+.toolAction {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm, 4px);
+    background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.toolActionExpanded {
+    align-items: flex-start;
+}
+
+.toolIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    line-height: 0;
+}
+
+.toolActionExpanded .toolIcon {
+    margin-top: 0;
+}
+
+.toolIcon.success {
+    color: var(--color-success, #34D399);
+}
+
+.toolIcon.failure {
+    color: var(--color-error, #F87171);
+}
+
+.toolIcon.pending {
+    color: var(--color-text-tertiary, #6B7280);
+}
+
+.toolLabel {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-text-secondary, #9CA3AF);
+    flex-shrink: 0;
+}
+
+.toolTarget {
+    display: -webkit-box;
+    flex: 1;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-text-primary, #E5E7EB);
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    word-break: normal;
+}
+
+.toolTargetExpanded {
+    display: block;
+    -webkit-box-orient: initial;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    max-height: 160px;
+    overflow: auto;
+    overflow-wrap: anywhere;
+    padding-right: 2px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.toolTargetToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-left: auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm, 4px);
+    background: transparent;
+    color: var(--color-text-tertiary, #6B7280);
+    cursor: pointer;
+    transition: background-color var(--transition-fast, 150ms ease), color var(--transition-fast, 150ms ease);
+}
+
+.toolTargetToggle:hover {
+    background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+/* 最终结果卡片 */
+.resultCard {
+    margin-top: 4px;
+    padding: 6px 10px;
+    border-left: 2px solid var(--color-success, #34D399);
+    background: rgba(52, 211, 153, 0.06);
+    border-radius: 0 var(--radius-sm, 4px) var(--radius-sm, 4px) 0;
+    font-size: var(--font-size-sm, 12px);
+    color: var(--color-text-secondary, #9CA3AF);
+    word-break: break-word;
+}
+
+/* 覆盖 MarkdownRenderer 的默认间距，适配紧凑卡片场景 */
+.resultCard p {
+    margin: 0.2em 0;
+    line-height: 1.5;
+}
+
+.resultCard h1,
+.resultCard h2,
+.resultCard h3,
+.resultCard h4,
+.resultCard h5,
+.resultCard h6 {
+    margin-top: 0.5em;
+    margin-bottom: 0.2em;
+    font-size: 1em;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.resultCard ul,
+.resultCard ol {
+    margin: 0.2em 0;
+    padding-left: 1.2em;
+}
+
+.resultCard li {
+    margin: 0.1em 0;
+    line-height: 1.4;
+}
+
+/* 列表项内段落不占额外空间 */
+.resultCard li>p {
+    margin: 0;
+}
+
+/* ─── 用户 HITL 介入消息气泡（静态版） ─── */
+.interventionAction {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm, 4px);
+    background-color: rgba(251, 191, 36, 0.06);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    font-size: var(--font-size-sm, 12px);
+}
+
+.interventionIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    line-height: 0;
+    color: var(--color-warning, #F59E0B);
+}
+
+.interventionLabel {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-warning, #F59E0B);
+    flex-shrink: 0;
+    font-weight: 500;
+}
+
+.interventionMessage {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--color-text-secondary, #9CA3AF);
+    word-break: break-word;
+    min-width: 0;
+}
