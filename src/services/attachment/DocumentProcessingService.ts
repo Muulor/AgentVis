@@ -269,7 +269,7 @@ export class DocumentProcessingService {
      * 读取原始文档内容
      *
      * Office 格式（docx/xlsx/pdf/pptx）需要专用的 Rust 解析器提取文本；
-     * 代码文件和配置文件本质是纯文本，直接复用 parse_txt 读取，无需额外命令。
+     * Markdown/纯文本/代码/配置文件走通用文本读取命令，避免扩展名专用命令误拒。
      */
     private async readRawContent(filePath: string, extension: DocumentExtension): Promise<string> {
         switch (extension) {
@@ -283,12 +283,11 @@ export class DocumentProcessingService {
             case 'pptx':
                 return await invoke<string>('parse_pptx', { filePath });
 
-            // 纯文本格式（txt/md/所有代码与配置文件）：统一使用 parse_txt 读取
-            // 使用 PLAIN_TEXT_FORMATS 白名单校验，任何纯文本格式均可复用此路径
             default: {
                 const { PLAIN_TEXT_FORMATS } = await import('./constants');
                 if ((PLAIN_TEXT_FORMATS as readonly string[]).includes(extension)) {
-                    return await invoke<string>('parse_txt', { filePath });
+                    // 纯文本/代码/配置格式使用通用读取，避免 parse_txt 的 .txt 扩展名限制。
+                    return await invoke<string>('file_read_content', { filePath });
                 }
                 throw new DocumentProcessingError(
                     'UNSUPPORTED_FORMAT',

@@ -21,7 +21,7 @@ import type {
     ExternalGuideSkillInfo,
     ExternalScriptSkillInfo,
 } from '../../brain/types';
-import type { SubAgentOutput, TaskContext, WorkdirFileInfo } from '../../sub-agents/types';
+import type { SubAgentOutput, TaskAttachmentReference, TaskContext, WorkdirFileInfo } from '../../sub-agents/types';
 import type { FSMEvent } from '../../fsm/types';
 import type { SkillDefinition } from '../../skills/types';
 import type { TaskArtifactStore } from '../../artifact/TaskArtifactStore';
@@ -72,6 +72,8 @@ export interface SubAgentDispatcherConfig {
      * （如 DeliverableIndexer 索引、跨 Agent 协作文件访问等）。
      */
     deliverableWorkdir?: string;
+    /** 本轮用户上传的附件路径清单，直接注入 SA TaskContext */
+    attachmentReferences?: TaskAttachmentReference[];
 }
 
 /**
@@ -581,8 +583,14 @@ export class SubAgentDispatcher {
         // 扫描工作目录已有文件，使 SA 感知文件系统状态（最新 50 个 + 总文件数）
         const { files: existingFiles, totalFileCount, scanTruncated } = await this.scanWorkdirFiles();
 
+        const attachmentReferences = this.config.attachmentReferences?.filter(attachment => attachment.path.trim());
+
         return {
             cwd: this.config.workdir,
+            ...(attachmentReferences?.length ? {
+                attachments: attachmentReferences,
+                attachmentInstruction: translate('planning.subAgent.attachmentContextInstruction'),
+            } : {}),
             sandboxMode: this.config.sandboxMode ?? 'LocalAudit',
             files: existingFiles.length > 0 ? existingFiles : undefined,
             totalFileCount: totalFileCount > 0 ? totalFileCount : undefined,

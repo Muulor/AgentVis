@@ -324,6 +324,7 @@ pub async fn save_clipboard_image(
     app_handle: tauri::AppHandle,
     base64_data: String,
     mime_type: String,
+    target_dir: Option<String>,
 ) -> AppResult<String> {
     use base64::Engine;
     use base64::engine::general_purpose::STANDARD;
@@ -337,16 +338,19 @@ pub async fn save_clipboard_image(
         _ => "png",  // 默认使用 png
     };
     
-    // 获取临时目录
-    let temp_dir = app_handle
-        .path()
-        .temp_dir()
-        .map_err(|e| AppError::FileSystem(format!("Failed to get temporary directory: {}", e)))?;
-    
-    // 确保目录存在
-    let clipboard_dir = temp_dir.join("clipboard_images");
+    // 获取保存目录：优先写入调用方指定目录，未指定时保持旧的临时目录行为
+    let clipboard_dir = if let Some(dir) = normalize_optional_dir(target_dir) {
+        PathBuf::from(dir)
+    } else {
+        let temp_dir = app_handle
+            .path()
+            .temp_dir()
+            .map_err(|e| AppError::FileSystem(format!("Failed to get temporary directory: {}", e)))?;
+        temp_dir.join("clipboard_images")
+    };
+
     fs::create_dir_all(&clipboard_dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create temporary directory: {}", e)))?;
+        .map_err(|e| AppError::FileSystem(format!("Failed to create image attachment directory: {}", e)))?;
     
     // 生成唯一文件名
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
@@ -368,10 +372,10 @@ pub async fn save_clipboard_image(
     Ok(path_str)
 }
 
-/// 保存拖放文件到临时目录
+/// 保存拖放文件到附件目录
 ///
-/// 用于 HTML5 Drag API 拖放上传功能，将 base64 编码的文件数据保存为临时文件，
-/// 返回文件路径供附件上传流程使用。
+/// 用于 HTML5 Drag API 拖放上传功能，将 base64 编码的文件数据保存为本地文件，
+/// 返回文件路径供附件上传流程使用。未指定目标目录时回退到临时目录。
 ///
 /// # Arguments
 /// * `base64_data` - base64 编码的文件数据
@@ -379,31 +383,34 @@ pub async fn save_clipboard_image(
 /// * `mime_type` - MIME 类型
 ///
 /// # Returns
-/// 保存的临时文件路径
+/// 保存的本地文件路径
 #[tauri::command]
 pub async fn save_dropped_file(
     app_handle: tauri::AppHandle,
     base64_data: String,
     file_name: String,
     mime_type: String,
+    target_dir: Option<String>,
 ) -> AppResult<String> {
     use base64::Engine;
     use base64::engine::general_purpose::STANDARD;
     
-    // 获取临时目录
-    let temp_dir = app_handle
-        .path()
-        .temp_dir()
-        .map_err(|e| AppError::FileSystem(format!("Failed to get temporary directory: {}", e)))?;
-    
-    // 确保目录存在
-    let dropped_dir = temp_dir.join("dropped_files");
+    // 获取保存目录：优先写入调用方指定目录，未指定时保持旧的临时目录行为
+    let dropped_dir = if let Some(dir) = normalize_optional_dir(target_dir) {
+        PathBuf::from(dir)
+    } else {
+        let temp_dir = app_handle
+            .path()
+            .temp_dir()
+            .map_err(|e| AppError::FileSystem(format!("Failed to get temporary directory: {}", e)))?;
+        temp_dir.join("dropped_files")
+    };
+
     fs::create_dir_all(&dropped_dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create temporary directory: {}", e)))?;
-    
-    // 生成唯一文件名（保留原文件名但添加时间戳前缀避免冲突）
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
-    let safe_file_name = format!("{}_{}", timestamp, sanitize_filename(&file_name));
+        .map_err(|e| AppError::FileSystem(format!("Failed to create dropped file directory: {}", e)))?;
+
+    // 保留原文件名；仅在同名文件已存在时追加序号避免覆盖
+    let safe_file_name = get_unique_filename_with_counter(&dropped_dir, &sanitize_filename(&file_name));
     let file_path = dropped_dir.join(&safe_file_name);
     
     // 解码 base64 数据
@@ -429,6 +436,11 @@ fn sanitize_filename(name: &str) -> String {
             _ => c,
         })
         .collect()
+}
+
+fn normalize_optional_dir(dir: Option<String>) -> Option<String> {
+    dir.map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 /// 清洗允许为空的相对路径（例如当前浏览目录）
@@ -505,6 +517,35 @@ fn get_unique_filename(dir: &Path, file_name: &str) -> String {
     
     // 添加时间戳
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    format!("{}_{}{}", base_name, timestamp, extension)
+}
+
+/// 获取不冲突文件名：首选原文件名，仅冲突时追加 (1)、(2) 这类最小后缀
+fn get_unique_filename_with_counter(dir: &Path, file_name: &str) -> String {
+    let normalized_file_name = if file_name.trim().is_empty() {
+        "attachment".to_string()
+    } else {
+        file_name.to_string()
+    };
+
+    if !dir.join(&normalized_file_name).exists() {
+        return normalized_file_name;
+    }
+
+    let (base_name, extension) = if let Some(dot_idx) = normalized_file_name.rfind('.') {
+        (&normalized_file_name[..dot_idx], &normalized_file_name[dot_idx..])
+    } else {
+        (normalized_file_name.as_str(), "")
+    };
+
+    for index in 1..10_000 {
+        let candidate = format!("{} ({}){}", base_name, index, extension);
+        if !dir.join(&candidate).exists() {
+            return candidate;
+        }
+    }
+
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
     format!("{}_{}{}", base_name, timestamp, extension)
 }
 
@@ -712,6 +753,7 @@ pub async fn file_copy_to_attachments(
     app_handle: tauri::AppHandle,
     source_path: String,
     agent_id: String,
+    target_dir: Option<String>,
 ) -> AppResult<String> {
     let source = PathBuf::from(&source_path);
     
@@ -719,32 +761,45 @@ pub async fn file_copy_to_attachments(
         return Err(AppError::NotFound(format!("File does not exist: {}", source_path)));
     }
     
-    // 获取附件目录
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
-    
-    let attachments_dir = app_data_dir.join("attachments").join(&agent_id);
+    // 获取附件目录：优先写入调用方指定的 workdir/attachments，未指定时保持旧目录
+    let attachments_dir = if let Some(dir) = normalize_optional_dir(target_dir) {
+        PathBuf::from(dir)
+    } else {
+        let app_data_dir = app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
+        app_data_dir.join("attachments").join(&agent_id)
+    };
     fs::create_dir_all(&attachments_dir)
         .map_err(|e| AppError::FileSystem(format!("Failed to create attachments directory: {}", e)))?;
-    
-    // 生成目标文件名（添加时间戳避免重名）
+
+    // 默认保留原文件名；仅在目标目录已有不同文件同名时追加序号避免覆盖
     let file_name = source.file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    
-    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    
-    let (base_name, extension) = if let Some(dot_idx) = file_name.rfind('.') {
-        (&file_name[..dot_idx], &file_name[dot_idx..])
-    } else {
-        (file_name.as_str(), "")
-    };
-    
-    let target_file_name = format!("{}_{}{}", base_name, timestamp, extension);
+
+    let safe_file_name = sanitize_filename(&file_name);
+    let preferred_target_path = attachments_dir.join(&safe_file_name);
+
+    if preferred_target_path.exists() {
+        let source_canonical = source
+            .canonicalize()
+            .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize source file: {}", e)))?;
+        let target_canonical = preferred_target_path
+            .canonicalize()
+            .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize target file: {}", e)))?;
+
+        if source_canonical == target_canonical {
+            let target_path_str = preferred_target_path.to_string_lossy().to_string();
+            log::debug!("[file] 附件已在目标目录，无需复制: {}", target_path_str);
+            return Ok(target_path_str);
+        }
+    }
+
+    let target_file_name = get_unique_filename_with_counter(&attachments_dir, &safe_file_name);
     let target_path = attachments_dir.join(&target_file_name);
-    
+
     // 复制文件
     fs::copy(&source, &target_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to copy file: {}", e)))?;

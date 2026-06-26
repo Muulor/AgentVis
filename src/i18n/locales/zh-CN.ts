@@ -523,6 +523,9 @@ export const zhCN = {
         unsupportedFileFormatDescription: '不支持的文件格式: .{extension}。支持的格式: {formats}',
         documentTooLargeError: '文件过大: {size}MB，{format} 格式最大支持 {max}MB',
         unsupportedDocumentFormat: '不支持的文档格式: .{extension}',
+        attachmentManifestHeader: '## 用户上传的附件文件\n以下文件已保存到本地。若下方内联内容不完整或被截断，请让 Sub-Agent 使用 read/搜索工具直接查看这些路径。\n{items}',
+        attachmentManifestItem: '- {fileName} ({type}, .{extension}, {size}KB): {path}',
+        attachmentContextBlock: '📎 附件 [{fileName}]\n路径: {path}\n内容:\n{content}',
         encodingDetectionFailed: '无法识别文件编码，请确保文件使用 UTF-8、GBK 或 GB2312 编码',
         emptyDocument: '文档内容为空',
         documentParseFailed: '{format} 文档解析失败: {reason}',
@@ -813,6 +816,8 @@ export const zhCN = {
             historicalUserMessagePlaceholder: '[历史用户消息]',
             historicalAssistantMessagePlaceholder: '[历史助手消息]',
             historicalGeneratedImageReference: '[历史参考：上一条助手消息生成的最后一张图片]',
+            attachmentReferenceEvidenceHeader: '本轮用户上传附件路径清单。内联附件正文可能被截断；如任务需要完整内容，请派发 Sub-Agent 直接读取这些路径。\n{items}',
+            attachmentReferenceEvidenceItem: '- {fileName} ({type}, .{extension}, {size}KB): {path}',
             sandboxAwareness: {
                 OfflineIsolated: '### 沙箱认知\n\n当前模式为 `{mode}`。请把离线隔离沙箱视为任务边界，而不是需要绕过的失败。不要派发 Sub-Agent 去关闭沙箱策略、启动脱离沙箱的 GUI 应用、访问允许工作区之外的文件，或给用户提供可在宿主机手动绕过沙箱的命令。若用户明确是在做沙箱/红队验证，只能派发谨慎验证任务，确认预期阻断后停止。若用户任务涉及工作区外路径文件的访问与操作，直接告知用户当前`{mode}`沙箱环境中无法执行此类任务，不要派遣SA进行试探。',
                 ControlledNetwork: '### 受控联网沙箱认知\n\n当前模式为 `{mode}`。请把 AgentVis 受控联网与 broker/proxy 策略视为任务要求，而不是需要绕开的障碍。若用户要求绕过、禁用、清空、避开或规避 AgentVis 联网策略，不要派发 Sub-Agent 去用这种方式获得网络访问。\n\n高信号绕过请求包括 `curl --noproxy`、`curl -x ""`、`--proxy=direct://`、清空 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `npm_config_proxy`、浏览器 `--proxy-server=direct://` 等参数、Node/Python/PowerShell 中禁用代理的代码、直接访问 localhost/私网/link-local/metadata 目标，以及在沙箱阻断后继续寻找绕过路径的指令。\n\n若用户明确是在做沙箱或红队验证，只能派发 `careful` Sub-Agent 来验证预期阻断/审计是否发生。SA 应在阻断后停止，在合适时将其报告为安全结果，不得继续寻找替代绕过方式，也不得提供手动在本机绕过的命令。合法联网任务应优先使用 broker/proxy-aware 命令、AgentVis 受控浏览器/runtime 路径、web_search，或受支持的 direct-audit/上传确认流程。',
@@ -821,6 +826,7 @@ export const zhCN = {
         subAgent: {
             initialUserMessage: '请稳健执行上方系统提示中定义的 Sub-Agent 派发任务。',
             attachmentPathsForReference: '[用户上传的图片附件已保存到以下路径，可作为 generate_image 工具的 ref_image_path / ref_image_paths 参数使用]:\n{paths}',
+            attachmentContextInstruction: '用户本轮上传的附件已列在 attachments 中。即使 Master Brain 提供的附件正文摘要被截断，也要优先按任务需要使用 read 或搜索工具打开这些路径查看完整内容；不要假设内联摘要就是完整文件。',
             sandboxRuntimeContext: {
                 OfflineIsolated: '## Sandbox Runtime Context\n\n[SANDBOX_RUNTIME_CONTEXT] 你正在 `{mode}` 离线隔离沙箱中执行任务。沙箱内的 HOME / USERPROFILE / APPDATA、PATH、CLI 安装、缓存、登录态和凭证文件可能与主机全局环境不同；直接网络访问被阻断。命令找不到、配置/Token/登录态缺失，不代表用户主机没有安装或没有配置。不要自行全局安装 CLI、执行登录流程或写入长期凭证；如任务需要依赖，优先使用已提供 runtime 或项目内/沙箱内临时依赖。只有确实依赖主机全局 CLI、主机登录态、长期凭证或桌面环境时，才报告将沙箱权限需要切换为本机审计模式。',
                 ControlledNetwork: '## Sandbox Runtime Context\n\n[SANDBOX_RUNTIME_CONTEXT] 你正在 `{mode}` 受控联网沙箱中执行任务。原生文件工具使用本机文件空间，包括真实的 HOME / USERPROFILE / APPDATA 以及已有 token/cache 文件。普通 shell 命令的文件空间取决于当前 shell backend：network-only backend 也使用本机文件空间；legacy 或 Script brokerOnly 路径仍可能处于硬隔离。网络访问由系统授权工具或 broker 策略单独控制；不要假定可以直连公网、127.0.0.1/localhost、私有网络或 link-local 地址。任务适合时优先复用用户已经配置好的 CLI 和 token 缓存；除非用户明确要求，不要自行创建新的长期凭证。如果网络请求失败，优先按网络策略或 broker 问题分析，不要先假定本机凭证缺失。',

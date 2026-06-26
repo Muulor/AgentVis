@@ -144,6 +144,31 @@ function sanitizeFolderName(name: string): string {
         || 'unnamed';
 }
 
+async function resolveAttachmentTargetDir(params: {
+    projectPath?: string | null;
+    hubName?: string;
+    agentName?: string;
+}): Promise<string | undefined> {
+    const { join, appDataDir } = await import('@tauri-apps/api/path');
+
+    if (params.projectPath?.trim()) {
+        return await join(params.projectPath, 'attachments');
+    }
+
+    if (params.hubName && params.agentName) {
+        const appData = await appDataDir();
+        return await join(
+            appData,
+            'deliverables',
+            sanitizeFolderName(params.hubName),
+            sanitizeFolderName(params.agentName),
+            'attachments'
+        );
+    }
+
+    return undefined;
+}
+
 function getSelectionOffset(root: HTMLElement): number | null {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return null;
@@ -623,7 +648,7 @@ interface ChatInputProps {
     /** 移除引用回调 */
     onRemoveQuote?: (messageId: string) => void;
     /** 附件选择回调（支持多选） */
-    onAttachmentAdd?: (filePaths: string[]) => void;
+    onAttachmentAdd?: (filePaths: string[], options?: { targetDir?: string }) => void;
     /** 附件移除回调 */
     onAttachmentRemove?: (attachmentId: string) => void;
     /** 附件重排序回调 */
@@ -716,6 +741,15 @@ export const ChatInput = memo(function ChatInput({
     const contextTokensRef = useRef<InputContextToken[]>(initialDraft.contextTokens);
     const lastRestoreDraftIdRef = useRef<string | null>(null);
     const installedSkills = useRuntimeStore((s) => s.installedSkills);
+
+    const getAttachmentTargetDir = useCallback(async () => {
+        try {
+            return await resolveAttachmentTargetDir({ projectPath, hubName, agentName });
+        } catch (error) {
+            logger.warn('[ChatInput] 解析附件保存目录失败，回退到默认目录:', error);
+            return undefined;
+        }
+    }, [agentName, hubName, projectPath]);
 
     const setValue = useCallback((nextValue: string) => {
         valueRef.current = nextValue;
@@ -1345,9 +1379,10 @@ export const ChatInput = memo(function ChatInput({
     }, [agentName, closeFileDropdown, hubName, projectPath]);
 
     // 附件选择处理（支持多选）
-    const handleAttachmentSelect = useCallback((filePaths: string[]) => {
-        onAttachmentAdd?.(filePaths);
-    }, [onAttachmentAdd]);
+    const handleAttachmentSelect = useCallback(async (filePaths: string[]) => {
+        const targetDir = await getAttachmentTargetDir();
+        onAttachmentAdd?.(filePaths, targetDir ? { targetDir } : undefined);
+    }, [getAttachmentTargetDir, onAttachmentAdd]);
 
     // 附件移除处理
     const handleAttachmentRemove = useCallback((id: string) => {
@@ -1429,6 +1464,7 @@ export const ChatInput = memo(function ChatInput({
         logger.debug('[ChatInput] HTML5 拖放文件:', files.length, '个');
 
         const { invoke } = await import('@tauri-apps/api/core');
+        const targetDir = await getAttachmentTargetDir();
         const savedPaths: string[] = [];
 
         for (const file of files) {
@@ -1442,11 +1478,12 @@ export const ChatInput = memo(function ChatInput({
                 }
                 const base64Data = btoa(binary);
 
-                // 调用后端保存到临时文件（复用粘贴功能的保存逻辑）
+                // 调用后端保存到当前附件目录
                 const savedPath = await invoke<string>('save_dropped_file', {
                     base64Data,
                     fileName: file.name,
                     mimeType: file.type || 'application/octet-stream',
+                    ...(targetDir ? { targetDir } : {}),
                 });
 
                 savedPaths.push(savedPath);
@@ -1458,9 +1495,9 @@ export const ChatInput = memo(function ChatInput({
 
         // 将所有保存的文件路径传递给附件上传流程
         if (savedPaths.length > 0) {
-            onAttachmentAdd?.(savedPaths);
+            onAttachmentAdd?.(savedPaths, targetDir ? { targetDir } : undefined);
         }
-    }, [enableAttachment, disabled, onAttachmentAdd]);
+    }, [enableAttachment, disabled, getAttachmentTargetDir, onAttachmentAdd]);
 
     // ==================== 粘贴上传事件处理 ====================
 
@@ -1470,7 +1507,7 @@ export const ChatInput = memo(function ChatInput({
      * 工作流程：
      * 1. 检测剪贴板中是否有图片
      * 2. 将图片转换为 base64
-     * 3. 调用后端命令保存到临时文件
+         * 3. 调用后端命令保存到当前附件目录
      * 4. 将临时文件路径传递给附件上传流程
      */
     const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
@@ -1498,6 +1535,7 @@ export const ChatInput = memo(function ChatInput({
 
         // 现在可以安全地进行异步操作，因为 File 对象已经获取
         const { invoke } = await import('@tauri-apps/api/core');
+        const targetDir = await getAttachmentTargetDir();
         const savedPaths: string[] = [];
 
         for (const file of imageFiles) {
@@ -1511,10 +1549,11 @@ export const ChatInput = memo(function ChatInput({
                 }
                 const base64Data = btoa(binary);
 
-                // 调用后端保存到临时文件
+                // 调用后端保存到当前附件目录
                 const savedPath = await invoke<string>('save_clipboard_image', {
                     base64Data,
                     mimeType: file.type,
+                    ...(targetDir ? { targetDir } : {}),
                 });
 
                 savedPaths.push(savedPath);
@@ -1525,9 +1564,9 @@ export const ChatInput = memo(function ChatInput({
 
         // 将所有保存的文件路径传递给附件上传流程
         if (savedPaths.length > 0) {
-            onAttachmentAdd?.(savedPaths);
+            onAttachmentAdd?.(savedPaths, targetDir ? { targetDir } : undefined);
         }
-    }, [enableAttachment, disabled, onAttachmentAdd]);
+    }, [enableAttachment, disabled, getAttachmentTargetDir, onAttachmentAdd]);
 
     const canSend = (value.trim().length > 0 || contextTokens.length > 0) && !disabled;
     const inputContextMenuStyle = inputContextMenu

@@ -45,7 +45,7 @@ import type {
     ExternalScriptSkillInfo,
     MbDecisionLogEntry,
 } from '../brain/types';
-import type { ProgressReport } from '../sub-agents/types';
+import type { ProgressReport, TaskAttachmentReference } from '../sub-agents/types';
 
 // ==========  Sub-Agent 集成 ==========
 
@@ -135,6 +135,8 @@ export interface FSMIntegrationConfig {
      * - MB 注入 [PROJECT_CONTEXT] 快照供决策参考
      */
     projectPath?: string;
+    /** 用户本轮上传的附件路径清单，注入 Sub-Agent TaskContext */
+    attachmentReferences?: TaskAttachmentReference[];
     /** 用户可见的三档沙箱权限。 */
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
     /** 是否启用 Sub-Agent 每步 Safety Footer 热区提示词。 */
@@ -491,6 +493,7 @@ export class AgentLoopFSMIntegration {
                 tokenContextId: this.config.tokenContextId ?? this.config.agentId,
                 // 原始交付物目录（projectPath 切换时保留引用，用于跨目录访问）
                 deliverableWorkdir: this.config.projectPath ? this.config.workdir : undefined,
+                attachmentReferences: this.config.attachmentReferences,
                 subAgentSafetyFooterEnabled: this.config.subAgentSafetyFooterEnabled,
                 subAgentSafetyFooterText: this.config.subAgentSafetyFooterText,
             },

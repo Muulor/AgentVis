@@ -26,6 +26,7 @@ import type {
     ThinkingPhaseEvent,
     SubAgentObservationEvent,
 } from './agent-loop/types';
+import type { TaskAttachmentReference } from './sub-agents/types';
 import type { GovernorSnapshot } from './agent-loop/LoopGovernor';
 import type { ProgressItemData } from '@/types/message';
 import { getLogger } from '@services/logger';
@@ -197,6 +198,9 @@ export interface ProcessMessageOptions {
 
     /** 图片附件的 base64 数据（由 UI 层传入，注入到 AgentLoop 的首轮 LLM 调用） */
     imageAttachments?: Array<{ mime_type: string; data: string }>;
+
+    /** 用户本轮上传的附件路径清单，注入 Sub-Agent TaskContext */
+    attachmentReferences?: TaskAttachmentReference[];
 
     /**
      * 触发本次任务关联的 IM Bot ID（IM 或绑定 IM Bot 的 cron 触发时有值）
@@ -586,6 +590,8 @@ export class AgentService {
                 baseUrl: this.config.baseUrl,
                 // 用户上传的图片 base64 数据，仅首轮 LLM 调用注入
                 imageAttachments: options.imageAttachments,
+                // 用户上传的附件路径清单，供 SA 通过 TaskContext 直接读取
+                attachmentReferences: options.attachmentReferences,
                 // 精准命中技能：跳过语义检索，直接加载绑定技能
                 pinnedSkills: this.config.pinnedSkills,
                 // Agent 头像（身份形象感知注入）

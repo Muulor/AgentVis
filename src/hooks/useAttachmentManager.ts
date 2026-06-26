@@ -42,6 +42,11 @@ export interface UseAttachmentManagerOptions {
     enableRagIndex?: boolean;
 }
 
+export interface AddAttachmentsOptions {
+    /** 附件保存目录，通常为当前 workdir/attachments */
+    targetDir?: string;
+}
+
 /** Hook 返回值 */
 export interface UseAttachmentManagerReturn {
     /** 当前待发送的附件列表 */
@@ -49,7 +54,7 @@ export interface UseAttachmentManagerReturn {
     /** 是否正在添加附件 */
     isAddingAttachment: boolean;
     /** 添加附件（支持多选） */
-    addAttachments: (filePaths: string[]) => Promise<void>;
+    addAttachments: (filePaths: string[], options?: AddAttachmentsOptions) => Promise<void>;
     /** 移除单个附件 */
     removeAttachment: (attachmentId: string) => void;
     /** 重排序附件 */
@@ -131,7 +136,7 @@ export function useAttachmentManager(
      * 3. 调用 attachmentService 处理文件
      * 4. 可选：启动 RAG 索引
      */
-    const addAttachments = useCallback(async (filePaths: string[]) => {
+    const addAttachments = useCallback(async (filePaths: string[], addOptions: AddAttachmentsOptions = {}) => {
         if (!contextId || filePaths.length === 0) return;
 
         for (const filePath of filePaths) {
@@ -194,7 +199,9 @@ export function useAttachmentManager(
 
             try {
                 // 使用 attachmentService 处理文件
-                const attachment = await attachmentService.addAttachment(filePath, contextId);
+                const attachment = await attachmentService.addAttachment(filePath, contextId, {
+                    targetDir: addOptions.targetDir,
+                });
 
                 // 可选：启动异步 RAG 索引
                 if (enableRagIndex && attachment.type === 'document' && attachment.parsedContent) {

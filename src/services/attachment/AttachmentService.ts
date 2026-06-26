@@ -18,7 +18,7 @@ import {
 } from './ImageCompressionService';
 import { documentProcessingService } from './DocumentProcessingService';
 import { DocumentProcessingError } from './types';
-import { ATTACHMENT_SIZE_LIMITS, DOCUMENT_PROGRESS_MESSAGES } from './constants';
+import { ATTACHMENT_SIZE_LIMITS, DOCUMENT_PROGRESS_MESSAGES, PLAIN_TEXT_FORMATS } from './constants';
 import type { DocumentProcessingResult } from './types';
 import { getLogger } from '@services/logger';
 import { translate } from '@/i18n';
@@ -64,6 +64,10 @@ interface ValidationResult {
     valid: boolean;
     type?: AttachmentType;
     error?: string;
+}
+
+interface AddAttachmentOptions {
+    targetDir?: string;
 }
 
 // ==================== 工具函数 ====================
@@ -183,7 +187,7 @@ export class AttachmentService {
      * @param agentId - Agent ID
      * @returns 附件信息
      */
-    async addAttachment(filePath: string, agentId: string): Promise<AttachmentInfo> {
+    async addAttachment(filePath: string, agentId: string, options: AddAttachmentOptions = {}): Promise<AttachmentInfo> {
         // 1. 验证文件类型
         const validation = this.validateFile(filePath);
         if (!validation.valid) {
@@ -205,10 +209,12 @@ export class AttachmentService {
                 throw error;
             }
 
+            const localPath = await this.copyToAttachmentStorage(filePath, agentId, options.targetDir);
+
             // 压缩图片
             try {
-                const originalFileName = getFileName(filePath);
-                const compressionResult = await imageCompressionService.compressImage(filePath, originalFileName);
+                const originalFileName = getFileName(localPath);
+                const compressionResult = await imageCompressionService.compressImage(localPath, originalFileName);
 
                 // 将压缩后的 Blob 转为 base64
                 const base64Data = await imageCompressionService.toBase64(compressionResult);
@@ -220,7 +226,7 @@ export class AttachmentService {
                     fileExtension: 'webp',  // 统一转为 WebP
                     type: 'image',
                     size: compressionResult.compressedSize,
-                    localPath: filePath,  // 保留原始路径用于引用
+                    localPath,
                     originalPath: filePath,
                     base64Data,
                     createdAt: Date.now(),
@@ -265,10 +271,7 @@ export class AttachmentService {
         }
 
         // 3. 复制到附件目录
-        const localPath = await invoke<string>('file_copy_to_attachments', {
-            sourcePath: filePath,
-            agentId,
-        });
+        const localPath = await this.copyToAttachmentStorage(filePath, agentId, options.targetDir);
 
         // 4. 构建附件信息
         const attachment: AttachmentInfo = {
@@ -379,6 +382,18 @@ export class AttachmentService {
         );
     }
 
+    private async copyToAttachmentStorage(
+        filePath: string,
+        agentId: string,
+        targetDir?: string
+    ): Promise<string> {
+        return await invoke<string>('file_copy_to_attachments', {
+            sourcePath: filePath,
+            agentId,
+            ...(targetDir ? { targetDir } : {}),
+        });
+    }
+
     /**
      * 解析文档内容（兼容性方法）
      * 
@@ -388,20 +403,26 @@ export class AttachmentService {
      * @returns 解析后的文本内容
      */
     async parseDocument(filePath: string, extension: string): Promise<string> {
-        switch (extension) {
+        const normalizedExtension = extension.toLowerCase();
+
+        switch (normalizedExtension) {
             case 'docx':
                 return await invoke<string>('parse_docx', { filePath });
             case 'xlsx':
                 return await invoke<string>('parse_xlsx', { filePath });
             case 'pdf':
                 return await invoke<string>('parse_pdf', { filePath });
-            case 'txt':
-                return await invoke<string>('parse_txt', { filePath });
-            case 'md':
+            case 'pptx':
+                return await invoke<string>('parse_pptx', { filePath });
             case 'markdown':
-                return await invoke<string>('parse_md', { filePath });
-            default:
+                return await invoke<string>('file_read_content', { filePath });
+            default: {
+                if ((PLAIN_TEXT_FORMATS as readonly string[]).includes(normalizedExtension)) {
+                    return await invoke<string>('file_read_content', { filePath });
+                }
+
                 throw new Error(translate('chat.unsupportedDocumentFormat', { extension }));
+            }
         }
     }
 
@@ -523,19 +544,48 @@ export class AttachmentService {
      * @returns 格式化的上下文字符串
      */
     buildAttachmentContext(attachments: AttachmentInfo[]): string {
+        const manifest = this.buildAttachmentManifest(attachments);
         const documentAttachments = attachments.filter(
             a => a.type === 'document' && a.parsedContent
         );
 
-        if (documentAttachments.length === 0) {
+        if (documentAttachments.length === 0 && !manifest) {
             return '';
         }
 
         const parts = documentAttachments.map(a =>
-            `📎 Attachment [${a.fileName}]:\n${a.parsedContent ?? ''}`
+            translate('chat.attachmentContextBlock', {
+                fileName: a.fileName,
+                path: a.localPath,
+                content: a.parsedContent ?? '',
+            })
         );
 
-        return '\n\n---\n\n' + parts.join('\n\n---\n\n') + '\n\n---\n\n';
+        const sections = [
+            manifest,
+            ...parts,
+        ].filter((part): part is string => Boolean(part.trim()));
+
+        return '\n\n---\n\n' + sections.join('\n\n---\n\n') + '\n\n---\n\n';
+    }
+
+    buildAttachmentManifest(attachments: AttachmentInfo[]): string {
+        if (attachments.length === 0) return '';
+
+        const items = attachments
+            .filter(attachment => attachment.localPath)
+            .map(attachment => translate('chat.attachmentManifestItem', {
+                fileName: attachment.fileName,
+                type: attachment.type,
+                extension: attachment.fileExtension,
+                size: Math.max(1, Math.round((attachment.size || 0) / 1024)),
+                path: attachment.localPath,
+            }))
+            .join('\n');
+
+        if (!items.trim()) return '';
+
+        return translate('chat.attachmentManifestHeader', { items });
     }
 }
 

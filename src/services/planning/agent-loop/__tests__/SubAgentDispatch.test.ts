@@ -264,6 +264,34 @@ describe('Sub-Agent 派遣', () => {
             });
         });
 
+        it('includes current-turn attachment references in TaskContext', async () => {
+            const attachmentReferences = [{
+                fileName: 'spec.md',
+                path: 'D:\\AgentVis\\attachments\\spec.md',
+                type: 'document' as const,
+                extension: 'md',
+                sizeBytes: 2048,
+            }];
+            const dispatcher = new SubAgentDispatcher(
+                createMockSession(),
+                {},
+                {
+                    providerId: 'test-provider',
+                    modelId: 'test-model',
+                    attachmentReferences,
+                },
+                vi.fn(),
+                []
+            );
+
+            const context = await (dispatcher as unknown as {
+                buildTaskContext: () => Promise<Record<string, unknown>>;
+            }).buildTaskContext();
+
+            expect(context.attachments).toEqual(attachmentReferences);
+            expect(context.attachmentInstruction).toBe(translate('planning.subAgent.attachmentContextInstruction'));
+        });
+
         it('应该构建包含最近工具结果的上下文', async () => {
             const onSubAgentSpawn = vi.fn();
             config.callbacks.onSubAgentSpawn = onSubAgentSpawn;

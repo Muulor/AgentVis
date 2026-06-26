@@ -5,7 +5,7 @@
  */
 
 import type { ToolCall, ToolResult } from '../tools/types';
-import type { SubAgentSpec, SubAgentOutput } from '../sub-agents/types';
+import type { SubAgentSpec, SubAgentOutput, TaskAttachmentReference } from '../sub-agents/types';
 import type { AgentServiceState } from '../fsm/types';
 import type { GovernorSnapshot } from './LoopGovernor';
 
@@ -151,6 +151,8 @@ export interface AgentLoopConfig {
     tokenBudget?: number;
     /** 用户上传的图片附件（仅首轮 LLM 调用注入，后续迭代不重复发送） */
     imageAttachments?: Array<{ mime_type: string; data: string }>;
+    /** 用户本轮上传的附件路径清单，注入 Sub-Agent TaskContext */
+    attachmentReferences?: TaskAttachmentReference[];
     /**
      * Agent 头像 base64 数据（用于身份形象感知注入）
      *

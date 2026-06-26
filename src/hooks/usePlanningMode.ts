@@ -31,6 +31,7 @@ import { PLANNING_CONSTANTS } from '@services/planning/PlanningConstants';
 import { upsertSubAgentObservationEvent } from '@services/planning/utils/SubAgentObservationEvents';
 import type { Message } from '@/types';
 import type { AttachmentInfo } from '@/types/message';
+import type { TaskAttachmentReference } from '@services/planning/sub-agents/types';
 import { getLogger } from '@services/logger';
 import { useI18n, type TranslationKey, type TranslationParams } from '@/i18n';
 import { getQuoteContextContent, serializeQuotesForMessage } from '@utils/quoteContent';
@@ -43,6 +44,18 @@ const PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT = 12;
 const PLANNING_CHECKPOINT_PERSIST_MAX_CHARS = 4200;
 const PLANNING_CHECKPOINT_MB_MAX_CHARS = 1800;
 const PLANNING_CHECKPOINT_EVENT_MAX_CHARS = 1200;
+
+function buildAttachmentReferences(attachments: AttachmentInfo[]): TaskAttachmentReference[] {
+    return attachments
+        .filter(attachment => attachment.localPath.trim())
+        .map(attachment => ({
+            fileName: attachment.fileName,
+            path: attachment.localPath,
+            type: attachment.type,
+            extension: attachment.fileExtension,
+            sizeBytes: attachment.size,
+        }));
+}
 
 type PlanningCheckpointStatus = 'running' | 'failed' | 'abandoned';
 type PlanningCheckpointTranslate = (key: TranslationKey, params?: TranslationParams) => string;
@@ -1040,20 +1053,18 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             // ====== 步骤 3.3: 处理附件内容 ======
             // 构建附件文本内容，后续通过 processMessage 的 attachmentContent 选项注入
             let attachmentContent: string | undefined;
+            // 结构化附件路径清单，用于注入 Sub-Agent TaskContext
+            let attachmentReferences: TaskAttachmentReference[] | undefined;
             // 图片 base64 数据列表（与 attachmentContent 同级作用域，供 processMessage 使用）
             let imageDataForLLM: Array<{ mime_type: string; data: string }> = [];
             if (attachmentsToSend.length > 0) {
+                attachmentReferences = buildAttachmentReferences(attachmentsToSend);
+
                 try {
-                    const documentAttachments = attachmentsToSend.filter(a => a.type === 'document');
                     const imageAttachments = attachmentsToSend.filter(a => a.type === 'image');
 
-                    let builtContent = '';
-
-                    // 文档附件：构建文本内容
-                    if (documentAttachments.length > 0) {
-                        const { attachmentService } = await import('@services/attachment');
-                        builtContent = attachmentService.buildAttachmentContext(documentAttachments) || '';
-                    }
+                    const { attachmentService } = await import('@services/attachment');
+                    let builtContent = attachmentService.buildAttachmentContext(attachmentsToSend) || '';
 
                     // 图片附件：提取 base64 数据用于多模态传递，同时注入文件名提示到文本上下文
                     if (supportsVisionInput && imageAttachments.length > 0) {
@@ -1266,6 +1277,8 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             const result = await agentService.processMessage(contentWithQuotes, {
                 // 附件文本内容注入（通过 RuntimeContext.attachments）
                 attachmentContent,
+                // 附件路径清单注入（通过 Sub-Agent TaskContext）
+                attachmentReferences: attachmentReferences?.length ? attachmentReferences : undefined,
                 // 图片 base64 数据注入（通过 AgentLoop.config.imageAttachments → 首轮 LLM 调用）
                 imageAttachments: imageDataForLLM.length > 0 ? imageDataForLLM : undefined,
                 // IM/cron 触发时携带的机器人 ID，经由 AgentLoop → ToolExecutionContext 传递给工具

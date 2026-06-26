@@ -805,6 +805,12 @@ The system has configured a Python virtual environment. Use the \`python\` comma
         if (context.cwd) {
             sanitized.cwd = context.cwd;
         }
+        if (context.attachments?.length) {
+            sanitized.attachments = context.attachments;
+        }
+        if (context.attachmentInstruction) {
+            sanitized.attachmentInstruction = context.attachmentInstruction;
+        }
         if (context.data) {
             // 过滤敏感字段
             const safeData: Record<string, unknown> = {};

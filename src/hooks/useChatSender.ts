@@ -568,12 +568,11 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
 
             // 2.5 收集附件内容
             const imageAttachments = attachmentsToSend.filter(a => a.type === 'image');
-            const documentAttachments = attachmentsToSend.filter(a => a.type === 'document');
 
             let attachmentContent: string | undefined;
-            if (documentAttachments.length > 0) {
+            if (attachmentsToSend.length > 0) {
                 const { attachmentService } = await import('@services/attachment');
-                attachmentContent = attachmentService.buildAttachmentContext(documentAttachments) || undefined;
+                attachmentContent = attachmentService.buildAttachmentContext(attachmentsToSend) || undefined;
             }
 
             // 2.6 构建引用上下文

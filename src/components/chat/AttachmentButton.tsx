@@ -19,7 +19,7 @@ const logger = getLogger('AttachmentButton');
 
 interface AttachmentButtonProps {
     /** 文件选择回调（支持多选） */
-    onFileSelect: (filePaths: string[]) => void;
+    onFileSelect: (filePaths: string[]) => void | Promise<void>;
     /** 是否禁用 */
     disabled?: boolean;
 }
@@ -41,7 +41,7 @@ export const AttachmentButton = memo(function AttachmentButton({
         try {
             const filePaths = await attachmentService.selectFiles();
             if (filePaths.length > 0) {
-                onFileSelect(filePaths);
+                await onFileSelect(filePaths);
             }
         } catch (error) {
             logger.error('[AttachmentButton] 文件选择失败:', error);

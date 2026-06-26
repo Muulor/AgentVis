@@ -123,7 +123,7 @@ class MbAnomalousDecisionContentError extends Error {
 /**
  * 默认配置
  */
-const DEFAULT_CONFIG: Required<Omit<AgentLoopConfig, 'agentId' | 'tokenContextId' | 'agentName' | 'mbAgentRules' | 'saAgentRules' | 'providerId' | 'modelId' | 'workdir' | 'baseUrl' | 'imageAttachments' | 'agentAvatar' | 'pinnedSkills' | 'imBotId' | 'mbDecisionBudget' | 'projectPath' | 'sandboxMode' | 'subAgentSafetyFooterEnabled' | 'subAgentSafetyFooterText'>> = {
+const DEFAULT_CONFIG: Required<Omit<AgentLoopConfig, 'agentId' | 'tokenContextId' | 'agentName' | 'mbAgentRules' | 'saAgentRules' | 'providerId' | 'modelId' | 'workdir' | 'baseUrl' | 'imageAttachments' | 'attachmentReferences' | 'agentAvatar' | 'pinnedSkills' | 'imBotId' | 'mbDecisionBudget' | 'projectPath' | 'sandboxMode' | 'subAgentSafetyFooterEnabled' | 'subAgentSafetyFooterText'>> = {
     maxIterations: PLANNING_CONSTANTS.AGENT_LOOP_MAX_ITERATIONS,
     tokenBudget: PLANNING_CONSTANTS.AGENT_LOOP_TOKEN_BUDGET,
 };
@@ -253,6 +253,7 @@ export class AgentLoop {
             mbDecisionBudget: this.config.mbDecisionBudget,
             // 用户关联的外部项目路径（cwd 切换为 projectPath）
             projectPath: this.config.projectPath,
+            attachmentReferences: this.config.attachmentReferences,
             sandboxMode: this.config.sandboxMode,
             subAgentSafetyFooterEnabled: this.config.subAgentSafetyFooterEnabled,
             subAgentSafetyFooterText: this.config.subAgentSafetyFooterText,
@@ -2069,6 +2070,23 @@ export class AgentLoop {
         return TOOL_RISK_REGISTRY[toolName] ?? DEFAULT_TOOL_RISK;
     }
 
+    private buildAttachmentReferenceEvidence(): string {
+        const attachmentReferences = this.config.attachmentReferences?.filter(reference => reference.path.trim());
+        if (!attachmentReferences?.length) return '';
+
+        const items = attachmentReferences
+            .map(reference => translate('planning.masterBrain.attachmentReferenceEvidenceItem', {
+                fileName: reference.fileName,
+                type: reference.type,
+                extension: reference.extension,
+                size: Math.max(1, Math.round((reference.sizeBytes ?? 0) / 1024)),
+                path: reference.path,
+            }))
+            .join('\n');
+
+        return translate('planning.masterBrain.attachmentReferenceEvidenceHeader', { items });
+    }
+
     /**
      * 从 Session 的 PreparedContext 提取 RAG 证据和附件内容
      *
@@ -2078,12 +2096,20 @@ export class AgentLoop {
      */
     private extractRAGEvidenceFromSession(): import('../brain/types').RAGEvidence[] {
         const preparedContext = this.session.getLastPreparedContext();
-        if (!preparedContext?.contextBlocks) {
-            logger.trace('[AgentLoop] 无 PreparedContext 或 contextBlocks，RAG 证据为空');
-            return [];
-        }
-
         const allEvidence: import('../brain/types').RAGEvidence[] = [];
+
+        if (!preparedContext?.contextBlocks) {
+            const attachmentReferenceEvidence = this.buildAttachmentReferenceEvidence();
+            if (attachmentReferenceEvidence) {
+                allEvidence.push({
+                    source: 'attachment_paths',
+                    content: attachmentReferenceEvidence,
+                    relevance: 1.0,
+                });
+            }
+            logger.trace('[AgentLoop] 无 PreparedContext 或 contextBlocks，RAG 证据仅包含附件路径清单');
+            return allEvidence;
+        }
 
         // 提取附件内容（用户主动上传的文档，优先级最高）
         const attachmentBlock = preparedContext.contextBlocks.find(block => block.type === 'attachment');
@@ -2095,6 +2121,15 @@ export class AgentLoop {
                 relevance: 1.0,
             });
             logger.trace(`[AgentLoop] 📎 提取附件内容: ${attachmentBlock.tokenEstimate} tokens`);
+        } else {
+            const attachmentReferenceEvidence = this.buildAttachmentReferenceEvidence();
+            if (attachmentReferenceEvidence) {
+                allEvidence.push({
+                    source: 'attachment_paths',
+                    content: attachmentReferenceEvidence,
+                    relevance: 1.0,
+                });
+            }
         }
 
         // 提取 RAG 检索结果

@@ -41,6 +41,19 @@ export interface WorkdirFileInfo {
     modified: string;
 }
 
+export interface TaskAttachmentReference {
+    /** 原始附件文件名 */
+    fileName: string;
+    /** 本地绝对路径，通常位于 cwd/attachments 下 */
+    path: string;
+    /** 附件类型 */
+    type: 'document' | 'image';
+    /** 文件扩展名（小写，不含点号） */
+    extension: string;
+    /** 文件大小（字节） */
+    sizeBytes?: number;
+}
+
 /**
  * 任务上下文（隔离的最小必要信息）
  *
@@ -60,6 +73,10 @@ export interface TaskContext {
     workdirScanTruncated?: boolean;
     /** 工作目录（SubAgent 执行工具时的根目录） */
     cwd?: string;
+    /** 用户本轮上传的附件路径清单，供 Sub-Agent 使用 read/搜索/图片引用工具按需查看 */
+    attachments?: TaskAttachmentReference[];
+    /** 附件读取提示 */
+    attachmentInstruction?: string;
     /** 当前运行时沙箱模式；仅用于给 Sub-Agent 注入运行边界提示，不写入普通上下文 JSON */
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
     /** 任务特定数据 */

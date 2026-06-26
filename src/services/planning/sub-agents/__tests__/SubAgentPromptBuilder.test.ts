@@ -203,6 +203,29 @@ describe('SubAgentPromptBuilder', () => {
             expect(prompt).toContain('/home/project');
         });
 
+        it('preserves attachment references in the task context', () => {
+            const spec = createMockSpec();
+            const context = createMockContext({
+                attachments: [{
+                    fileName: 'spec.md',
+                    path: '/project/attachments/spec.md',
+                    type: 'document',
+                    extension: 'md',
+                    sizeBytes: 512,
+                }],
+                attachmentInstruction: 'Read full attachment paths when needed.',
+            });
+
+            const prompt = builder.build(spec, context, []);
+            const jsonMatch = prompt.match(/```json\n([\s\S]*?)```/);
+            expect(jsonMatch).toBeTruthy();
+            const jsonBlock = jsonMatch![1]!;
+            expect(jsonBlock).toContain('"attachments"');
+            expect(jsonBlock).toContain('/project/attachments/spec.md');
+            expect(jsonBlock).toContain('"attachmentInstruction"');
+            expect(jsonBlock).toContain('Read full attachment paths when needed.');
+        });
+
         it('应排除 artifactSnapshot 避免 JSON 二次序列化', () => {
             const spec = createMockSpec();
             const context = createMockContext({
