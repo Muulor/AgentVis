@@ -12,7 +12,7 @@ import { useAttachmentManager } from '@/hooks/useAttachmentManager';
 import { useMessageActions } from '@/hooks/useMessageActions';
 import { useChatSender } from '@/hooks/useChatSender';
 import { usePlanningMode } from '@/hooks/usePlanningMode';
-import { ChatHistory, ChatInput, ChatSearchBar } from '@components/chat';
+import { ChatHistory, ChatInput, ChatSearchBar, type ChatInputRestoreDraft } from '@components/chat';
 import { buildWidgetUndoRetractionPlan } from '@components/widgets/widgetUndo';
 import { collectWidgetBubbleSubmissions } from '@stores/widgetSubmissionRecovery';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
@@ -52,6 +52,26 @@ function parseMentions(content: string): string[] {
         }
     }
     return mentions;
+}
+
+function buildRevokeRestoreDraft(message: UIMessage): ChatInputRestoreDraft {
+    const metadataDisplayContent = message.metadata?.displayContent;
+
+    return {
+        id: `revoke:${message.id}:${Date.now()}`,
+        value: typeof metadataDisplayContent === 'string'
+            ? metadataDisplayContent
+            : message.content,
+        contextTokens: [],
+    };
+}
+
+function getMessageAttachments(message: UIMessage) {
+    if (Array.isArray(message.metadata?.attachments)) {
+        return message.metadata.attachments;
+    }
+
+    return Array.isArray(message.attachments) ? message.attachments : [];
 }
 
 /**
@@ -107,6 +127,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
     const hasMoreByHub = useChatStore((state) => state.hasMoreByHub);
     const hubHasMore = currentHubId ? (hasMoreByHub.get(currentHubId) ?? false) : false;
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [restoreDraft, setRestoreDraft] = useState<ChatInputRestoreDraft | null>(null);
 
     // Toast 通知 hook
     const { toast } = useToast();
@@ -118,6 +139,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
         addAttachments: handleAttachmentAdd,
         removeAttachment: handleAttachmentRemove,
         reorderAttachments: handleAttachmentReorder,
+        restoreAttachments,
         clearAttachments,
         getAttachmentsCopy,
     } = useAttachmentManager(currentHubId, { enableRagIndex: false });
@@ -150,6 +172,12 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
             status: 'completed' as const,
         }));
     }, [currentHubId, messagesByHub]);
+
+    const handleRevokeComplete = useCallback((message: UIMessage) => {
+        restoreAttachments(getMessageAttachments(message));
+        setRestoreDraft(buildRevokeRestoreDraft(message));
+    }, [restoreAttachments]);
+
     // 消息操作（由 useMessageActions Hook 管理）
     const {
         handleMessageAction,
@@ -161,6 +189,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
         contextType: 'hub',
         contextId: currentHubId,
         messages: hubMessages,
+        onRevokeComplete: handleRevokeComplete,
     });
 
     // Chat 模式消息发送（由 useChatSender Hook 管理）
@@ -807,6 +836,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
                 enableAttachment={true}
                 attachments={pendingAttachments}
                 draftKey={currentHubId ? `hub:${currentHubId}` : undefined}
+                restoreDraft={restoreDraft}
                 isStreaming={isStreaming}
                 onStop={() => {
                     if (currentHubId) {

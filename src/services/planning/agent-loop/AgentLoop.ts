@@ -792,7 +792,7 @@ export class AgentLoop {
                             });
                         }
 
-                        // 持久化图片到 workdir/attachments/ 并透传给 SA
+                        // 缓存图片到系统临时目录并透传给 SA
                         // 必须 await：确保 fsmIntegration.setImageAttachments() 在 MB LLM 调用前完成，
                         // 否则 DISPATCH 触发时 pendingImageAttachments 仍为 undefined
                         try {
@@ -851,13 +851,13 @@ export class AgentLoop {
                         }
 
                         if (pairedMessages.length > 0) {
-                            // 仅持久化图片到 workdir/attachments/（供 ref_image_path 使用）
+                            // 仅缓存历史图片到系统临时目录，避免把运行期图片缓存混入工作区附件列表
                             // 不走 setImageAttachments 路径（那是扁平 pendingImageAttachments 专用）
                             const allImages = pairedMessages.flatMap(m => m.images ?? []);
                             try {
-                                await this.saveImagesToWorkdir(allImages);
+                                await this.saveImagesToTempCache(allImages);
                             } catch (saveErr: unknown) {
-                                logger.warn('[AgentLoop] 跨轮图片持久化失败（不影响配对透传）:', saveErr);
+                                logger.warn('[AgentLoop] 跨轮图片缓存失败（不影响配对透传）:', saveErr);
                             }
 
                             // 通过配对路径传递给 FSMIntegration（DISPATCH 时注入 SA messages[] 前段）
@@ -1653,20 +1653,27 @@ export class AgentLoop {
     }
 
     /**
-     * 保存图片附件到 workdir/attachments/ 并传递给 FSMIntegration
+     * 缓存图片附件并传递给 FSMIntegration
      *
      * 双重目的：
-     * 1. 持久化到文件系统 → SA 可通过路径引用（如 generate_image 的 ref_image_path）
+     * 1. 缓存到文件系统 → SA 可通过路径引用（如 generate_image 的 ref_image_path）
      * 2. 设置到 fsmIntegration → DISPATCH 时注入 SA 首条 user 消息（SA 能"看到"图片）
      *
      * 仅用于当轮新上传的图片（扁平 pendingImageAttachments 路径）；
-     * 历史跨轮图片使用 saveImagesToWorkdir + setPairedHistoryMessages（配对模式路径）。
+     * 历史跨轮图片使用 saveImagesToTempCache + setPairedHistoryMessages（配对模式路径）。
      */
     private async saveAndPassImagesToSA(
         camelCaseImages: Array<{ mimeType: string; data: string }>
     ): Promise<void> {
-        // 持久化到文件系统
-        const savedPaths = await this.saveImagesToWorkdir(camelCaseImages);
+        // 优先复用本轮附件系统已经保存的图片路径；缺失时才写入临时缓存，避免污染工作区附件列表
+        let savedPaths = this.getCurrentImageAttachmentPaths();
+        if (savedPaths.length < camelCaseImages.length) {
+            const unsavedImages = camelCaseImages.slice(savedPaths.length);
+            savedPaths = [
+                ...savedPaths,
+                ...await this.saveImagesToTempCache(unsavedImages),
+            ];
+        }
 
         // 透传给 FSMIntegration（DISPATCH 时注入 SA 首条 user 消息）
         if (this.fsmIntegration) {
@@ -1675,33 +1682,35 @@ export class AgentLoop {
         }
     }
 
+    private getCurrentImageAttachmentPaths(): string[] {
+        return this.config.attachmentReferences
+            ?.filter(reference => reference.type === 'image' && reference.path.trim())
+            .map(reference => reference.path.trim()) ?? [];
+    }
+
     /**
-     * 持久化图片到 workdir/attachments/ 目录
+     * 缓存图片到系统临时目录
      *
      * 单一职责：只负责文件写入，不涉及 FSMIntegration 透传。
      * 供两条路径共同使用：
      * - 当轮新图片路径（saveAndPassImagesToSA 内部调用）
      * - 历史配对消息路径（历史跨轮图片直接调用，再走 setPairedHistoryMessages）
      *
-     * @returns 成功保存的文件路径列表（失败的路径不包含，整体失败时返回空数组）
+     * @returns 成功缓存的文件路径列表（失败的路径不包含，整体失败时返回空数组）
      */
-    private async saveImagesToWorkdir(
+    private async saveImagesToTempCache(
         camelCaseImages: Array<{ mimeType: string; data: string }>
     ): Promise<string[]> {
         const savedPaths: string[] = [];
 
-        if (!this.config.workdir) {
-            return savedPaths;
-        }
-
         try {
-            const { join } = await import('@tauri-apps/api/path');
+            const { join, tempDir } = await import('@tauri-apps/api/path');
             const { mkdir, exists, writeFile } = await import('@tauri-apps/plugin-fs');
 
-            const attachmentsDir = await join(this.config.workdir, 'attachments');
-            const dirExists = await exists(attachmentsDir);
+            const cacheDir = await join(await tempDir(), 'dropped_files', 'agentvis_image_cache');
+            const dirExists = await exists(cacheDir);
             if (!dirExists) {
-                await mkdir(attachmentsDir, { recursive: true });
+                await mkdir(cacheDir, { recursive: true });
             }
 
             for (let i = 0; i < camelCaseImages.length; i++) {
@@ -1713,13 +1722,13 @@ export class AgentLoop {
                 // 简易哈希：取 base64 数据的前 64 字符计算数值指纹
                 const contentFingerprint = this.computeSimpleHash(img.data);
                 const fileName = `attachment_${contentFingerprint}_${i}.${ext}`;
-                const filePath = await join(attachmentsDir, fileName);
+                const filePath = await join(cacheDir, fileName);
 
                 // 去重：同哈希文件已存在则跳过保存，直接复用路径
                 const fileExists = await exists(filePath);
                 if (fileExists) {
                     savedPaths.push(filePath);
-                    logger.trace(`[AgentLoop] 📁 图片已存在，跳过保存: ${filePath}`);
+                    logger.trace(`[AgentLoop] 📁 图片缓存已存在，跳过保存: ${filePath}`);
                     continue;
                 }
 
@@ -1727,11 +1736,11 @@ export class AgentLoop {
                 const binaryData = Uint8Array.from(atob(img.data), c => c.charCodeAt(0));
                 await writeFile(filePath, binaryData);
                 savedPaths.push(filePath);
-                logger.trace(`[AgentLoop] 📁 图片已保存: ${filePath}`);
+                logger.trace(`[AgentLoop] 📁 图片已缓存: ${filePath}`);
             }
         } catch (saveError: unknown) {
-            logger.warn('[AgentLoop] 图片持久化到 workdir 失败:', saveError);
-            // 持久化失败不阻塞调用方（返回空数组，base64 数据仍可透传）
+            logger.warn('[AgentLoop] 图片缓存到临时目录失败:', saveError);
+            // 缓存失败不阻塞调用方（返回空数组，base64 数据仍可透传）
         }
 
         return savedPaths;

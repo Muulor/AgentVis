@@ -390,6 +390,10 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                             useAttachmentViewerStore.getState().clearDocumentPreview();
                             useAttachmentViewerStore.getState().triggerClearPreview();
                             logger.trace('[useMessageActions] Hub 模式撤回：已清理附件预览状态');
+
+                            if (msg?.role === 'user') {
+                                onRevokeComplete?.(msg);
+                            }
                         }
                     };
 

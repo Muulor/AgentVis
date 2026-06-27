@@ -59,10 +59,35 @@ export interface UseAttachmentManagerReturn {
     removeAttachment: (attachmentId: string) => void;
     /** 重排序附件 */
     reorderAttachments: (reorderedAttachments: AttachmentInfo[]) => void;
+    /** 恢复附件列表（撤回消息后复用已保存的附件对象） */
+    restoreAttachments: (attachments: AttachmentInfo[]) => void;
     /** 清空所有附件（发送消息后调用） */
     clearAttachments: () => void;
     /** 获取附件列表副本（用于发送前保存） */
     getAttachmentsCopy: () => AttachmentInfo[];
+}
+
+function normalizeAttachmentPath(path?: string): string | null {
+    const normalized = path?.trim().replace(/\\/g, '/');
+    if (!normalized) return null;
+
+    return /^[a-z]:\//i.test(normalized)
+        ? normalized.toLowerCase()
+        : normalized;
+}
+
+function getAttachmentIdentity(attachment: AttachmentInfo): string {
+    return normalizeAttachmentPath(attachment.localPath)
+        ?? normalizeAttachmentPath(attachment.originalPath)
+        ?? `${attachment.fileName}:${attachment.fileExtension}:${attachment.size}`;
+}
+
+function isSameAttachmentPath(filePath: string, attachment: AttachmentInfo): boolean {
+    const normalizedPath = normalizeAttachmentPath(filePath);
+    if (!normalizedPath) return false;
+
+    return normalizedPath === normalizeAttachmentPath(attachment.localPath)
+        || normalizedPath === normalizeAttachmentPath(attachment.originalPath);
 }
 
 // ==================== Hook 实现 ====================
@@ -140,6 +165,11 @@ export function useAttachmentManager(
         if (!contextId || filePaths.length === 0) return;
 
         for (const filePath of filePaths) {
+            if (pendingAttachmentsRef.current.some(attachment => isSameAttachmentPath(filePath, attachment))) {
+                logger.trace('[useAttachmentManager] 附件已存在，跳过重复添加:', filePath);
+                continue;
+            }
+
             // ==================== 同步预占验证 ====================
             // 使用计数器立即预占位置，解决并发异步调用期间的验证问题
             const currentOccupied = pendingAttachmentsRef.current.length + pendingCountRef.current;
@@ -325,6 +355,41 @@ export function useAttachmentManager(
     }, []);
 
     /**
+     * 恢复附件列表（撤回消息后调用）
+     * 直接复用消息 metadata 中的 AttachmentInfo，避免重新复制/解析/索引同一文件
+     */
+    const restoreAttachments = useCallback((attachments: AttachmentInfo[]) => {
+        if (!contextId || attachments.length === 0) return;
+
+        const mergedAttachments = [...pendingAttachmentsRef.current];
+        const knownIdentities = new Set(mergedAttachments.map(getAttachmentIdentity));
+
+        for (const attachment of attachments) {
+            if (mergedAttachments.length >= MAX_FILE_COUNT) break;
+
+            const identity = getAttachmentIdentity(attachment);
+            if (knownIdentities.has(identity)) continue;
+
+            mergedAttachments.push(attachment);
+            knownIdentities.add(identity);
+        }
+
+        pendingAttachmentsRef.current = mergedAttachments;
+        pendingCountRef.current = 0;
+        setPendingAttachments(mergedAttachments);
+        useAttachmentViewerStore.getState().setContextAttachments(contextId, mergedAttachments);
+
+        const firstDocument = mergedAttachments.find(attachment => attachment.type === 'document');
+        if (firstDocument) {
+            useAttachmentViewerStore.getState().setDocumentPreview(firstDocument);
+        }
+
+        logger.trace('[useAttachmentManager] 附件已恢复:',
+            attachments.map(attachment => attachment.fileName),
+            '当前数量:', mergedAttachments.length);
+    }, [contextId]);
+
+    /**
      * 清空所有附件（发送消息后调用）
      * 清空本地状态和 store 中的待发送附件列表
      * 但保留右栏的预览内容（previewDocument 不清空）
@@ -354,6 +419,7 @@ export function useAttachmentManager(
         addAttachments,
         removeAttachment,
         reorderAttachments,
+        restoreAttachments,
         clearAttachments,
         getAttachmentsCopy,
     };

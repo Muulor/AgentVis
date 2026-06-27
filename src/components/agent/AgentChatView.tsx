@@ -120,6 +120,14 @@ function buildRevokeRestoreDraft(message: UIMessage): ChatInputRestoreDraft {
     };
 }
 
+function getMessageAttachments(message: UIMessage) {
+    if (Array.isArray(message.metadata?.attachments)) {
+        return message.metadata.attachments;
+    }
+
+    return Array.isArray(message.attachments) ? message.attachments : [];
+}
+
 /**
  * AgentChatView 组件
  *
@@ -185,6 +193,7 @@ export function AgentChatView() {
         addAttachments: handleAttachmentAdd,
         removeAttachment: handleAttachmentRemove,
         reorderAttachments: handleAttachmentReorder,
+        restoreAttachments,
         clearAttachments,
         getAttachmentsCopy,
     } = useAttachmentManager(currentAgentId, { enableRagIndex: true });
@@ -331,8 +340,9 @@ export function AgentChatView() {
     }, [currentAgentId, messagesByAgent]);
 
     const handleRevokeComplete = useCallback((message: UIMessage) => {
+        restoreAttachments(getMessageAttachments(message));
         setRestoreDraft(buildRevokeRestoreDraft(message));
-    }, []);
+    }, [restoreAttachments]);
 
     // 消息操作（由 useMessageActions Hook 管理）
     const {

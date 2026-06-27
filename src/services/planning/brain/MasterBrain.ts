@@ -99,7 +99,7 @@ export class MasterBrain {
         const systemPrompt = this.promptBuilder.build(input);
 
         // 打印完整 System Prompt 便于调试
-        logger.debug(`[MasterBrain] System Prompt:\n${systemPrompt}`);
+        logger.trace(`[MasterBrain] System Prompt:\n${systemPrompt}`);
 
         // 2. 调用 LLM（透传 mbBudgetRemaining 供 AgentLoop 注入 messages 尾部警告）
         const rawResponse = await this.callLLM(systemPrompt, {

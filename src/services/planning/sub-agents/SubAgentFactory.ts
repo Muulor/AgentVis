@@ -131,7 +131,7 @@ export class SubAgentFactory {
         );
 
         // 打印完整 System Prompt 便于调试
-        logger.debug(`[SubAgentFactory] System Prompt:\n${systemPrompt}`);
+        logger.trace(`[SubAgentFactory] System Prompt:\n${systemPrompt}`);
 
         // 4. 确定最大工具调用数（优先使用 loopConfig，否则用默认值）
         const maxSteps = spec.loopConfig?.maxSteps ?? PLANNING_CONSTANTS.SUB_AGENT_DEFAULT_MAX_STEPS;
