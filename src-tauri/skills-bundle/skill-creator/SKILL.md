@@ -78,7 +78,7 @@ AgentVis uses different disclosure surfaces for Guide and Script skills:
 
 - Guide Skill frontmatter controls retrieval. Once triggered, the `SKILL.md` body is injected to the Sub-Agent and should teach the workflow.
 - Script Skill frontmatter controls retrieval, tool schema, execution contract, permissions, and credential policy. The Sub-Agent does not rely on the body for tool use.
-- Script Skill body is still useful for the user, maintainers, and debugging, but critical runtime instructions must be represented in `description`, `argsSchema`, `execution.permissions`, `execution.credentials`, and script behavior.
+- Script Skill body is fallback reference for the user, maintainers, and debugging. Routine tool-use instructions must be represented in `description`, `argsSchema`, `execution.permissions`, `execution.credentials`, and script behavior because the Sub-Agent normally sees only the compact contract card.
 - Keep Guide bodies concise but complete. Keep Script bodies shorter and focused on capability summary, setup notes, troubleshooting, and maintainer context.
 
 ## Frontmatter Rules
@@ -86,7 +86,7 @@ AgentVis uses different disclosure surfaces for Guide and Script skills:
 Common fields:
 
 - `name`: lowercase letters, numbers, and hyphens only. The name is also an automatic L1 trigger keyword.
-- `description`: natural-language description of what the skill does and when to use it. Make it specific and slightly assertive so it triggers when useful.
+- `description`: natural-language description of what the skill does and when to use it. Make it specific and slightly assertive so MB can choose the skill reliably. For Script Skills, include essential call-level caveats MB should pass to SA, such as single-flight, rate limits, or required serialization.
 - `triggers`: exact-match retrieval phrases. Include abbreviations, domain terms, file extensions, and common Chinese/English variants.
 
 Guide network fields:
@@ -212,10 +212,10 @@ Write the body as operational instructions for the Sub-Agent:
 
 Write the body for users and maintainers:
 
-- Summarize what the script can do.
-- Explain setup requirements that are not secrets.
+- Keep it short and diagnostic-first; do not duplicate the full action list, argument list, examples, or query syntax already encoded in frontmatter.
+- Include only fallback notes that are not practical in the compact contract card, such as known failure modes, troubleshooting, setup requirements that are not secrets, and maintainer context.
 - Explain credential provider names and troubleshooting, but never include token-handling code that reads host secrets in broker mode.
-- Do not put required tool-use instructions only in the body; encode them in the contract and script behavior.
+- Put every normal-use instruction in `description`, `argsSchema`, contract metadata, permissions, credentials, or script validation. The body should not be required for a successful first tool call.
 
 ### Script Output Contract
 
@@ -233,50 +233,17 @@ For any bundled script, whether it is used by a Guide Skill or exposed as a Scri
 
 For Script Skills:
 
-- Parse only arguments declared in `argsSchema`, and parse them as named CLI flags using the exact `--{argsSchema.name}` form.
+- Use `references/agentvis-skill-templates.md` as the canonical source for Script Skill ABI, safe `execution.entry`, safe `argsSchema.name`, contract metadata, brokerOnly file shape, and smoke-test command shape.
+- Keep `argsSchema.description` concise because it is injected into the Sub-Agent compact contract card. Put hard choices and ranges in `allowedValues`, `min`, `max`, `default`, or `examples` instead of repeating them in prose.
+- Before finalizing, compare every `argsSchema.name` with the parser's named CLI flag and smoke-test the declared entrypoint with the same named-flag shape used by `ExternalExecutor`.
 - Print concise, structured output suitable for observations.
 - Exit non-zero for real execution failure; exit zero with a clear message for user-correctable states such as missing optional credential.
 - Keep secrets out of command-line args, environment variables, stdout, stderr, and logs.
-- For brokerOnly HTTP(S), centralize network calls in helper functions such as `broker_get` or `broker_post`.
-- For brokerOnly HTTP(S), preserve broker helper diagnostics in failed observations: `brokerReasonCode`, `brokerErrorKind`, `brokerTargetHost`, `brokerCredentialRef`, and `credentialApplied`. Expose stable fields so Agent can reason about the failure; do not hard-code speculative root-cause claims in script output.
-- For brokerOnly HTTP(S), keep `execution.entry` as a thin entrypoint that only parses CLI flags, validates simple inputs, imports a sibling core module, and prints the result.
-- Put API base URL constants, broker helper code, and HTTP response handling in the sibling core module, not in the declared entry file. The current sandbox scanner inspects the declared entry file before launch.
-- Avoid helper names that contain the word `fetch` immediately followed by an opening parenthesis in source code, because the network sandbox static scanner treats that literal pattern as a direct network API signal. Use names such as `broker_request`, `broker_get`, or `broker_post`.
+- For brokerOnly HTTP(S), preserve stable broker diagnostics in failed observations so Agent can distinguish routing, credential, policy, and malformed-request failures without guessing from prose.
 
 ### Script Skill Entry ABI
 
-AgentVis `ExternalExecutor` passes Script Skill arguments as CLI flags, not positional arguments and not stdin. For this contract:
-
-```yaml
-argsSchema:
-  - name: packageName
-    type: string
-    required: true
-  - name: registry
-    type: string
-    required: false
-  - name: includeMetadata
-    type: boolean
-    required: false
-```
-
-The entry command will be shaped like:
-
-```bash
-python scripts/lookup.py --packageName "lodash" --registry "npm" --includeMetadata
-```
-
-Required implementation rules:
-
-- In Python, use `argparse.add_argument("--packageName", required=True)` and matching named options for every `argsSchema` field.
-- Boolean fields are passed only when true, so use `action="store_true"`.
-- Number fields arrive as strings on the CLI; use `type=int` or `type=float` in `argparse`.
-- For brokerOnly Script Skills, the declared entry file should avoid URL literals such as `https://...`, direct network-client imports, and broker helper implementations. Use a structure like `scripts/package_lookup_entry.py` plus `scripts/script_core.py` or another imported core module.
-- Do not parse Script Skill arguments with positional `sys.argv[1]`, `sys.argv[2]`, etc.
-- Do not invent CLI flags that are missing from `argsSchema`; SA cannot pass them through `external_skill_execute`.
-- Pre-install smoke commands may run the script directly, but they must use the same named flag shape that `ExternalExecutor` uses.
-
-Before finalizing a Script Skill, compare `argsSchema.name` values with the parser's `--name` options. They must match exactly.
+AgentVis `ExternalExecutor` passes Script Skill arguments as named CLI flags, not positional arguments and not stdin. Detailed ABI examples and required implementation rules live in `references/agentvis-skill-templates.md`; read that reference before creating or changing any Script Skill.
 
 ## Anti-Patterns
 

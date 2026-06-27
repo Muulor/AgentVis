@@ -507,6 +507,24 @@ describe('SubAgentPromptBuilder', () => {
                             required: true,
                             description: 'Public URL to fetch through the broker',
                         },
+                        {
+                            name: 'mode',
+                            type: 'string',
+                            required: false,
+                            description: 'Fetch mode',
+                            allowedValues: ['summary', 'full'],
+                            default: 'summary',
+                        },
+                        {
+                            name: 'limit',
+                            type: 'number',
+                            required: false,
+                            description: 'Result limit',
+                            min: 1,
+                            max: 20,
+                            default: 10,
+                            examples: [5, 10],
+                        },
                     ],
                     permissions: { networkMode: 'brokerOnly' },
                 },
@@ -526,8 +544,14 @@ describe('SubAgentPromptBuilder', () => {
             expect(prompt).toContain('external_skill_execute');
             expect(prompt).toContain('networkMode=brokerOnly');
             expect(prompt).toContain('scripts/broker_e2e.py');
+            expect(prompt).toContain('allowed="summary"|"full"');
+            expect(prompt).toContain('default="summary"');
+            expect(prompt).toContain('range=1..20');
+            expect(prompt).toContain('examples=5|10');
             expect(prompt).toContain('"skillName": "broker-e2e"');
             expect(prompt).toContain('"url": "<url>"');
+            expect(prompt).toContain('"mode": "summary"');
+            expect(prompt).toContain('"limit": 10');
         });
     });
 

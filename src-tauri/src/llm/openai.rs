@@ -16,6 +16,7 @@ use super::types::{
     ToolCallProgressCallback, ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
     TOOL_CALL_PROGRESS_STEP_BYTES,
 };
+use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
 use crate::text_utils::safe_truncate;
@@ -62,16 +63,10 @@ fn build_openai_tool_parameters_schema(
     _tool_name: &str,
     parameters: &serde_json::Value,
 ) -> serde_json::Value {
-    let mut schema = parameters.clone();
+    let mut schema = sanitize_tool_schema_for_compatible_gateway(parameters);
     if let Some(schema_object) = schema.as_object_mut() {
-        // Some OpenAI-compatible gateways reject top-level composition
-        // keywords even when the provider API accepts regular JSON Schema.
-        // Keep conditional validation in local tool execution instead.
-        schema_object.remove("oneOf");
-        schema_object.remove("anyOf");
-        schema_object.remove("allOf");
-        schema_object.remove("not");
-        schema_object.remove("enum");
+        // Some OpenAI-compatible gateways only accept a plain object schema.
+        // Rich validation stays in local tool execution.
         schema_object
             .entry("type".to_string())
             .or_insert_with(|| serde_json::json!("object"));
@@ -1561,7 +1556,12 @@ mod tests {
             "properties": {
                 "mode": {
                     "type": "string",
+                    "anyOf": [{ "minLength": 1 }],
                     "enum": ["full", "patch"]
+                },
+                "badMode": {
+                    "type": "string",
+                    "enum": [1, 2]
                 }
             },
             "required": ["path"]
@@ -1579,6 +1579,8 @@ mod tests {
             normalized["properties"]["mode"]["enum"],
             serde_json::json!(["full", "patch"])
         );
+        assert!(normalized["properties"]["mode"].get("anyOf").is_none());
+        assert!(normalized["properties"]["badMode"].get("enum").is_none());
     }
 
     #[test]

@@ -12,7 +12,7 @@ import { getLogger } from '@services/logger';
 import { useRuntimeStore } from '@stores/runtimeStore';
 import type { Tool, ToolSchema, ToolResult, ToolExecutionContext } from '../../tools/types';
 import { skillLoader } from '../SkillLoader';
-import { validateArgs } from '../external/ContractValidator';
+import { normalizeArgsForContract, validateArgs } from '../external/ContractValidator';
 import { ExternalExecutor, type ShellExecuteFn } from '../external/ExternalExecutor';
 import type { SkillAgentVisNetworkEntrypointMode } from '../external/types';
 import type { SkillDefinition } from '../types';
@@ -180,11 +180,12 @@ class ExternalScriptSkillExecuteToolImpl implements Tool {
             };
         }
 
-        const argResult = validateArgs(args, skill.contract);
+        const { args: normalizedArgs } = normalizeArgsForContract(args, skill.contract);
+        const argResult = validateArgs(normalizedArgs, skill.contract);
         if (!argResult.valid) {
             logger.debug('[ExternalScriptSkillExecuteTool] Script Skill args validation failed', {
                 skillName,
-                argKeys: Object.keys(args).sort(),
+                argKeys: Object.keys(normalizedArgs).sort(),
                 errors: argResult.errors,
             });
             return {
@@ -213,7 +214,7 @@ class ExternalScriptSkillExecuteToolImpl implements Tool {
             network: skill.contract.permissions?.network,
             networkMode: skill.contract.permissions?.networkMode,
             sandboxMode: context.sandboxMode ?? 'LocalAudit',
-            argKeys: Object.keys(args).sort(),
+            argKeys: Object.keys(normalizedArgs).sort(),
             hasVenvPythonPath: Boolean(context.venvPythonPath),
             agentId: context.agentId,
         });
@@ -224,7 +225,7 @@ class ExternalScriptSkillExecuteToolImpl implements Tool {
         );
         const result = await this.executor.execute(
             skill.contract,
-            args,
+            normalizedArgs,
             skill.packagePath,
             resolveVenvRoot(context.venvPythonPath),
             {

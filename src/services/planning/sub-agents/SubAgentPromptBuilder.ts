@@ -645,7 +645,10 @@ ${spec.contextSummary}
             } else {
                 for (const arg of contract.argsSchema) {
                     const required = arg.required ? 'required' : 'optional';
-                    sections.push(`- \`${arg.name}\` (${arg.type}, ${required}): ${arg.description}`);
+                    const constraints = this.formatScriptSkillArgConstraints(arg);
+                    sections.push(
+                        `- \`${arg.name}\` (${arg.type}, ${required}${constraints}): ${arg.description}`
+                    );
                 }
             }
             sections.push('');
@@ -660,6 +663,31 @@ ${spec.contextSummary}
         }
 
         return sections.join('\n');
+    }
+
+    private formatScriptSkillArgConstraints(
+        arg: ExternalScriptSkillInfo['contract']['argsSchema'][number]
+    ): string {
+        const constraints: string[] = [];
+        if (arg.allowedValues?.length) {
+            constraints.push(`allowed=${arg.allowedValues.map(value => JSON.stringify(value)).join('|')}`);
+        }
+        if (arg.default !== undefined) {
+            constraints.push(`default=${JSON.stringify(arg.default)}`);
+        }
+        if (arg.type === 'number') {
+            if (arg.min !== undefined && arg.max !== undefined) {
+                constraints.push(`range=${arg.min}..${arg.max}`);
+            } else if (arg.min !== undefined) {
+                constraints.push(`min=${arg.min}`);
+            } else if (arg.max !== undefined) {
+                constraints.push(`max=${arg.max}`);
+            }
+        }
+        if (arg.examples?.length) {
+            constraints.push(`examples=${arg.examples.map(value => JSON.stringify(value)).join('|')}`);
+        }
+        return constraints.length > 0 ? `, ${constraints.join(', ')}` : '';
     }
 
     private formatScriptSkillPermissionSummary(skill: ExternalScriptSkillInfo): string {
@@ -687,17 +715,17 @@ ${spec.contextSummary}
     private buildScriptSkillExampleArgs(skill: ExternalScriptSkillInfo): Record<string, unknown> {
         const args: Record<string, unknown> = {};
         for (const arg of skill.contract.argsSchema) {
-            if (!arg.required) continue;
+            if (!arg.required && arg.default === undefined && !arg.allowedValues?.length) continue;
             switch (arg.type) {
                 case 'number':
-                    args[arg.name] = 0;
+                    args[arg.name] = arg.default ?? arg.allowedValues?.[0] ?? arg.min ?? 0;
                     break;
                 case 'boolean':
-                    args[arg.name] = true;
+                    args[arg.name] = arg.default ?? arg.allowedValues?.[0] ?? true;
                     break;
                 case 'string':
                 default:
-                    args[arg.name] = `<${arg.name}>`;
+                    args[arg.name] = arg.default ?? arg.allowedValues?.[0] ?? `<${arg.name}>`;
                     break;
             }
         }

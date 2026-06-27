@@ -22,7 +22,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: search, info, readme, tree, file, releases, or issues."
+      description: "Operation to run."
+      allowedValues: [search, info, readme, tree, file, releases, issues]
+      examples: [search, readme, file]
     - name: query
       type: string
       required: false
@@ -42,11 +44,15 @@ execution:
     - name: sort
       type: string
       required: false
-      description: "Search sort for action=search: best-match, stars, forks, or updated."
+      description: "Search sort for action=search."
+      allowedValues: [best-match, stars, forks, updated]
+      default: best-match
     - name: state
       type: string
       required: false
-      description: "Issue state for action=issues: open, closed, or all."
+      description: "Issue state for action=issues."
+      allowedValues: [open, closed, all]
+      default: open
     - name: labels
       type: string
       required: false
@@ -55,20 +61,27 @@ execution:
       type: number
       required: false
       description: "Maximum number of results to display."
+      min: 1
+      max: 100
+      examples: [10, 100]
     - name: max
       type: number
       required: false
       description: "Maximum number of characters for readme/file output."
+      min: 1
+      examples: [8000, 10000]
     - name: depth
       type: number
       required: false
       description: "Tree display depth for action=tree."
+      min: 1
+      default: 3
 ---
 
 # GitHub Lookup Skill for AgentVis
 
 Search repositories, get README files, browse directory structures, read source files, and view Releases and Issues through the GitHub REST API. No additional dependencies are required (only httpx is used).
-⚠️ Important: this skill can be used anonymously without a token. If a 403 quota exhausted error or 401 token expired error is encountered during use, the task must report it to MB after completion and guide the user to obtain a token. After configuration, the limit can be increased to continue use.
+⚠️ Important: this skill can be used anonymously without a token. If a 403 quota exhausted error or 401 token expired error is encountered during use, the task must report it after completion and guide the user to obtain a token. After configuration, the limit can be increased to continue use.
 
 ## Token Configuration (Automatically Reused After First Configuration)
 

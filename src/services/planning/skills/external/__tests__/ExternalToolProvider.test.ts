@@ -135,6 +135,40 @@ describe('ExternalToolProvider', () => {
             expect(result.content).toContain('1000');
         });
 
+        it('should coerce numeric and boolean string args before execution', async () => {
+            const shell = createMockShell();
+            const provider = new ExternalToolProvider(shell);
+            provider.registerSkill({
+                ...MOCK_SCRIPT_SKILL,
+                contract: {
+                    ...MOCK_SCRIPT_SKILL.contract!,
+                    argsSchema: [
+                        ...MOCK_SCRIPT_SKILL.contract!.argsSchema,
+                        { name: 'limit', type: 'number', required: false, description: 'Limit' },
+                        { name: 'verbose', type: 'boolean', required: false, description: 'Verbose' },
+                    ],
+                },
+            });
+
+            const result = await provider.execute(
+                'csv-analyzer',
+                { file_path: '/data/sales.csv', limit: '10', verbose: 'true' },
+                MOCK_CONTEXT
+            );
+
+            expect(result.success).toBe(true);
+            expect(shell).toHaveBeenCalledTimes(1);
+            expect(shell).toHaveBeenCalledWith(expect.objectContaining({
+                command: expect.stringContaining('--limit'),
+            }));
+            expect(shell).toHaveBeenCalledWith(expect.objectContaining({
+                command: expect.stringContaining('10'),
+            }));
+            expect(shell).toHaveBeenCalledWith(expect.objectContaining({
+                command: expect.stringContaining('--verbose'),
+            }));
+        });
+
         it('执行失败应该返回 failure ToolResult', async () => {
             const shell = createMockShell({
                 exitCode: 1,

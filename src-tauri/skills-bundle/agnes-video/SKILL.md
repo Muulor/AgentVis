@@ -23,7 +23,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: payload, create, status, create-and-wait, or download. Use payload to preview without network or cost."
+      description: "Operation to run. Use payload to preview without network or cost."
+      allowedValues: [payload, create, status, create-and-wait, download]
+      examples: [payload, create, status]
     - name: prompt
       type: string
       required: false
@@ -44,6 +46,7 @@ execution:
       type: string
       required: false
       description: "Agnes video model id. Defaults to agnes-video-v2.0."
+      default: agnes-video-v2.0
     - name: image
       type: string
       required: false
@@ -60,22 +63,34 @@ execution:
       type: number
       required: false
       description: "Video width. Defaults to 1152."
+      min: 1
+      default: 1152
     - name: height
       type: number
       required: false
       description: "Video height. Defaults to 768."
+      min: 1
+      default: 768
     - name: numFrames
       type: number
       required: false
       description: "Frame count; must be <=441 and satisfy 8n+1. Defaults to 121."
+      min: 1
+      max: 441
+      default: 121
+      examples: [81, 121, 161, 241, 281, 441]
     - name: frameRate
       type: number
       required: false
       description: "FPS from 1 to 60. Defaults to 24."
+      min: 1
+      max: 60
+      default: 24
     - name: numInferenceSteps
       type: number
       required: false
       description: "Optional inference step count."
+      min: 1
     - name: seed
       type: number
       required: false
@@ -87,15 +102,22 @@ execution:
     - name: pollInterval
       type: number
       required: false
-      description: "Seconds between polling checks for create-and-wait. Defaults to 90 to avoid excessive status checks."
+      description: "Seconds between polling checks for create-and-wait."
+      min: 1
+      default: 180
     - name: maxPollInterval
       type: number
       required: false
-      description: "Maximum adaptive polling interval in seconds when progress is slow or unchanged. Defaults to 180."
+      description: "Maximum adaptive polling interval in seconds when progress is slow or unchanged."
+      min: 1
+      default: 270
     - name: timeoutSeconds
       type: number
       required: false
-      description: "Maximum wait time for create-and-wait. Defaults to 540; use status for longer tasks."
+      description: "Maximum wait time for create-and-wait; use status for longer tasks."
+      min: 1
+      max: 540
+      default: 540
     - name: download
       type: boolean
       required: false
@@ -111,7 +133,9 @@ execution:
     - name: outputFormat
       type: string
       required: false
-      description: "Output format: text or json. Defaults to text."
+      description: "Output format."
+      allowedValues: [text, json]
+      default: text
 dependencies:
   python: ">=3.11"
   packages: []
@@ -121,15 +145,7 @@ dependencies:
 
 Create and monitor Agnes AI video generation tasks with no third-party Python dependencies. The script always uses AgentVis `brokerOnly` networking with `credentialRef=agnes`; it never reads API keys from environment variables, Home/AppData files, or Windows Credential Manager directly.
 
-## Actions
-
-- `payload`: validate inputs and print the request body without sending a network request. Use this before costly video calls.
-- `create`: submit an Agnes video task and return the task id, video id, status, progress, and raw response.
-- `status`: fetch a task by `videoId` through the recommended Agnes result endpoint, or by legacy `taskId`; when complete, return the video URL fields and save the MP4 by default unless `skipDownload=true`.
-- `create-and-wait`: submit a task and poll until `completed`, `failed`, or timeout, then save the MP4 by default unless `skipDownload=true`.
-- `download`: save a known `videoUrl` to `savePath` or the AgentVis deliverable directory.
-
-## Usage Guidance
+## Troubleshooting
 
 Use `payload` first when prompt or frame settings are uncertain. Video generation may consume free quota, queue capacity, or account limits; current pricing and free-use policy should follow the user's Agnes account/docs page. Do not call `create` or `create-and-wait` just to test wiring unless the user has approved generating a real video.
 

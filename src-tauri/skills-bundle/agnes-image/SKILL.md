@@ -25,7 +25,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: payload, generate, or download-url. Use payload to preview without network or cost. For editing a prior Agnes output, use generate with image set to the HTTPS URL from latest-url.md or the sidecar .url.md."
+      description: "Operation to run. Use payload to preview without network or cost."
+      allowedValues: [payload, generate, download-url]
+      examples: [payload, generate]
     - name: prompt
       type: string
       required: false
@@ -34,6 +36,7 @@ execution:
       type: string
       required: false
       description: "Agnes image model id. Defaults to agnes-image-2.1-flash."
+      default: agnes-image-2.1-flash
     - name: size
       type: string
       required: false
@@ -41,11 +44,15 @@ execution:
     - name: aspectRatio
       type: string
       required: false
-      description: "Output aspect ratio such as 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, or 21:9."
+      description: "Output aspect ratio used when size is omitted."
+      allowedValues: ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"]
+      default: "1:1"
     - name: imageSize
       type: string
       required: false
-      description: "Size tier: 1K, 2K, 4K, or auto. Used with aspectRatio when size is omitted."
+      description: "Size tier used with aspectRatio when size is omitted."
+      allowedValues: [1K, 2K, 4K, auto]
+      default: 1K
     - name: image
       type: string
       required: false
@@ -78,10 +85,15 @@ execution:
       type: number
       required: false
       description: "HTTP request timeout in seconds. Defaults to 115 because the broker helper caps per-request waits."
+      min: 1
+      max: 115
+      default: 115
     - name: outputFormat
       type: string
       required: false
-      description: "Observation format: text or json. Defaults to text."
+      description: "Observation format."
+      allowedValues: [text, json]
+      default: text
 dependencies:
   python: ">=3.11"
   packages: []
@@ -91,21 +103,11 @@ dependencies:
 
 Generate or edit images through Agnes Image 2.1 Flash with no third-party Python dependencies. The script always uses AgentVis `brokerOnly` networking with `credentialRef=agnes`; it never reads API keys from environment variables, Home/AppData files, or Windows Credential Manager directly.
 
-## Actions
+## Troubleshooting
 
-- `payload`: validate inputs and print the Agnes request body without sending a network request.
-- `generate`: call `POST /v1/images/generations`, request URL output, download the generated image into the AgentVis workdir by default, and record the generated URL.
-- `download-url`: download a known generated image URL and write the same URL note files.
-
-## Usage Guidance
-
-Prefer the native `generate_image` tool for normal image generation and local-reference editing, because it supports top-tier providers and richer local image inputs. Use this Script Skill when the native tool cannot run because image provider API keys are missing, the configured provider path is hard-blocked, or the user explicitly asks to use Agnes Image.
-
-Use `image` or `images` only for public HTTPS URLs or Data URI inputs. If a small local image must be used, pass `imagePath`; the script converts it to a Data URI, but the AgentVis broker request body is limited to about 1MB. For normal local-image editing or local multi-image editing, prefer `generate_image` unless the user specifically wants Agnes.
-
-Default settings are `model=agnes-image-2.1-flash`, `size=1024x1024`, and URL output. The skill writes generated files under `workdir/agnes-image/` unless `savePath` is provided.
-
-If the measured `actualSize` is lower than `requestedSize`, report the Agnes provider limitation plainly. Do not upscale or create a derived image file to satisfy the requested size unless the user explicitly asks for upscaling.
+- Prefer the native `generate_image` tool for normal image generation and local-reference editing. Use this Script Skill when the native path cannot run, the user explicitly asks for Agnes Image, or a previous Agnes URL should be edited.
+- Use `image` or `images` only for public HTTPS URLs or Data URI inputs. If a tiny local image must be used, pass `imagePath`; the broker request body is limited to about 1MB.
+- If the measured `actualSize` is lower than `requestedSize`, report the Agnes provider limitation plainly. Do not upscale or create a derived image file unless the user explicitly asks for upscaling.
 
 ## URL Persistence
 

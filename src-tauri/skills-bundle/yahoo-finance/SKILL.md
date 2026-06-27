@@ -14,7 +14,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: price, quote, fundamentals, earnings, profile, dividends, ratings, options, history, compare, or search."
+      description: "Operation to run."
+      allowedValues: [price, quote, fundamentals, earnings, profile, dividends, ratings, options, history, compare, search]
+      examples: [price, history, search]
     - name: symbol
       type: string
       required: false
@@ -26,7 +28,9 @@ execution:
     - name: period
       type: string
       required: false
-      description: "Historical data period for action=history: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, or max. Defaults to 1mo."
+      description: "Historical data period for action=history."
+      allowedValues: [1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max]
+      default: 1mo
 dependencies:
   python: ">=3.11"
   packages:
@@ -37,33 +41,12 @@ dependencies:
 
 Query Yahoo Finance market data through a Script Skill contract. In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `agentvis-broker-fetch`; direct local runs fall back to `httpx`.
 
-The implementation calls Yahoo Finance JSON endpoints directly and manages the required Yahoo cookie/crumb flow itself, so it no longer depends on `yfinance`.
+## Symbol Hints
 
-## Actions
-
-- `price`: quick current price snapshot.
-- `quote`: detailed quote table.
-- `fundamentals`: valuation, profitability, financial health, and analyst target metrics.
-- `earnings`: EPS and earnings/financials overview.
-- `profile`: company profile and business description.
-- `dividends`: dividend metrics and recent dividend events.
-- `ratings`: analyst recommendation metrics and recent changes.
-- `options`: nearest expiration options chain.
-- `history`: historical OHLCV prices for `period`.
-- `compare`: compare multiple comma-separated symbols.
-- `search`: find ticker symbols by company/name text.
-
-## Symbol Examples
-
-| Asset | Example |
-| --- | --- |
-| US stock | `AAPL`, `MSFT`, `GOOGL`, `TSLA` |
-| Japan stock | `7453.T`, `6758.T` |
-| India NSE | `RELIANCE.NS`, `TCS.NS` |
-| Cryptocurrency | `BTC-USD`, `ETH-USD` |
-| FX | `EURUSD=X`, `GBPUSD=X` |
-| ETF | `SPY`, `QQQ`, `VOO` |
+Common Yahoo symbols include US stocks such as `AAPL`, Japan stocks such as `7453.T`, India NSE symbols such as `RELIANCE.NS`, crypto pairs such as `BTC-USD`, FX pairs such as `EURUSD=X`, and ETFs such as `SPY`.
 
 ## Maintainer Notes
+
+In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `agentvis-broker-fetch`; direct local runs fall back to `httpx`. The implementation calls Yahoo Finance JSON endpoints directly and manages the required Yahoo cookie/crumb flow itself, so it no longer depends on `yfinance`.
 
 The declared Script entrypoint is `scripts/yf_entry.py` and intentionally contains no URL literals or direct network client imports. Keep Yahoo HTTP access inside `yf.py` behind `YahooSession`, so sandboxed execution remains brokerOnly while local development stays convenient.

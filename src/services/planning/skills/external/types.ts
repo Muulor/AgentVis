@@ -68,6 +68,16 @@ export interface ContractArg {
     required: boolean;
     /** 参数描述（注入 LLM 的工具 Schema） */
     description: string;
+    /** Local value constraint; not exposed directly as provider JSON Schema. */
+    allowedValues?: Array<string | number | boolean>;
+    /** Local lower bound for number args. */
+    min?: number;
+    /** Local upper bound for number args. */
+    max?: number;
+    /** Suggested default value for prompt guidance and local validation. */
+    default?: string | number | boolean;
+    /** Prompt examples; not exposed directly as provider JSON Schema. */
+    examples?: Array<string | number | boolean>;
 }
 
 /**

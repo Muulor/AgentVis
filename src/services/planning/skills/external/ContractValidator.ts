@@ -28,6 +28,8 @@ const SUPPORTED_CREDENTIAL_MODES = ['brokerAuth'];
 const SUPPORTED_FILESYSTEM_ACCESS = ['readOnly', 'readWrite'];
 const DEFAULT_MAX_TIMEOUT_SECONDS = 300;
 const LONG_RUNNING_MAX_TIMEOUT_SECONDS = 1800;
+const SAFE_ARG_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const SAFE_ENTRY_PATH_PATTERN = /^[A-Za-z0-9_./\\-]+$/;
 
 // ==================== 验证结果类型 ====================
 
@@ -37,6 +39,13 @@ const LONG_RUNNING_MAX_TIMEOUT_SECONDS = 1800;
 export type ValidationResult =
     | { valid: true; contract: ExecutionContract }
     | { valid: false; errors: string[] };
+
+export interface ArgNormalizationResult {
+    args: Record<string, unknown>;
+    changedKeys: string[];
+}
+
+const NUMERIC_STRING_PATTERN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 
 /**
  * 参数验证结果
@@ -84,6 +93,8 @@ export function validateContract(
         errors.push('Missing execution.entry field (entry script path)');
     } else if (typeof exec.entry !== 'string' || exec.entry.trim().length === 0) {
         errors.push('execution.entry must be a non-empty string');
+    } else {
+        errors.push(...validateEntryPath(exec.entry));
     }
 
     // 验证 permissions（可选）
@@ -244,6 +255,7 @@ export function validateArgs(
     for (const [key, value] of Object.entries(args)) {
         // 跳过未知参数（宽容策略，仅警告不阻断）
         if (!validArgNames.has(key)) {
+            errors.push(`Unknown argument: ${key}`);
             continue;
         }
 
@@ -254,11 +266,16 @@ export function validateArgs(
         const actualType = typeof value;
         if (argDef.type === 'string' && actualType !== 'string') {
             errors.push(`Argument ${key} has invalid type: expected string, got ${actualType}`);
+            continue;
         } else if (argDef.type === 'number' && actualType !== 'number') {
             errors.push(`Argument ${key} has invalid type: expected number, got ${actualType}`);
+            continue;
         } else if (argDef.type === 'boolean' && actualType !== 'boolean') {
             errors.push(`Argument ${key} has invalid type: expected boolean, got ${actualType}`);
+            continue;
         }
+
+        errors.push(...validateArgValueConstraints(key, value, argDef));
     }
 
     if (errors.length > 0) {
@@ -266,6 +283,45 @@ export function validateArgs(
     }
 
     return { valid: true };
+}
+
+export function normalizeArgsForContract(
+    args: Record<string, unknown>,
+    contract: ExecutionContract
+): ArgNormalizationResult {
+    const normalized: Record<string, unknown> = { ...args };
+    const changedKeys: string[] = [];
+
+    for (const argDef of contract.argsSchema) {
+        if (!(argDef.name in normalized)) {
+            continue;
+        }
+
+        const value = normalized[argDef.name];
+        if (argDef.type === 'number' && typeof value === 'string') {
+            const trimmed = value.trim();
+            if (!NUMERIC_STRING_PATTERN.test(trimmed)) {
+                continue;
+            }
+
+            const parsed = Number(trimmed);
+            if (Number.isFinite(parsed)) {
+                normalized[argDef.name] = parsed;
+                changedKeys.push(argDef.name);
+            }
+            continue;
+        }
+
+        if (argDef.type === 'boolean' && typeof value === 'string') {
+            const normalizedBoolean = value.trim().toLowerCase();
+            if (normalizedBoolean === 'true' || normalizedBoolean === 'false') {
+                normalized[argDef.name] = normalizedBoolean === 'true';
+                changedKeys.push(argDef.name);
+            }
+        }
+    }
+
+    return { args: normalized, changedKeys };
 }
 
 /**
@@ -312,10 +368,17 @@ function validateArgsSchema(argsSchema: unknown[]): string[] {
 
         if (!arg.name || typeof arg.name !== 'string') {
             errors.push(`${prefix}: missing name or name is not a string`);
-        } else if (seenNames.has(arg.name)) {
-            errors.push(`${prefix}: duplicate name "${arg.name}"`);
         } else {
-            seenNames.add(arg.name);
+            if (seenNames.has(arg.name)) {
+                errors.push(`${prefix}: duplicate name "${arg.name}"`);
+            } else {
+                seenNames.add(arg.name);
+            }
+            if (!SAFE_ARG_NAME_PATTERN.test(arg.name)) {
+                errors.push(
+                    `${prefix}: name must start with a letter or underscore and contain only letters, numbers, underscores, or hyphens`
+                );
+            }
         }
 
         if (!arg.type || !validArgTypes.includes(arg.type)) {
@@ -331,6 +394,185 @@ function validateArgsSchema(argsSchema: unknown[]): string[] {
         if (!arg.description || typeof arg.description !== 'string') {
             errors.push(`${prefix}: missing description or description is not a string`);
         }
+
+        errors.push(...validateArgContractMetadata(arg, prefix));
+    }
+
+    return errors;
+}
+
+function validateArgContractMetadata(
+    arg: Partial<ContractArg>,
+    prefix: string
+): string[] {
+    const errors: string[] = [];
+    const type = arg.type;
+    if (type !== 'string' && type !== 'number' && type !== 'boolean') {
+        return errors;
+    }
+
+    if (arg.allowedValues !== undefined) {
+        if (!Array.isArray(arg.allowedValues)) {
+            errors.push(`${prefix}: allowedValues must be an array`);
+        } else if (arg.allowedValues.length === 0) {
+            errors.push(`${prefix}: allowedValues must not be empty`);
+        } else {
+            for (const value of arg.allowedValues) {
+                if (!valueMatchesArgType(value, type)) {
+                    errors.push(`${prefix}: allowedValues entries must match type ${type}`);
+                    break;
+                }
+            }
+        }
+    }
+
+    if (arg.examples !== undefined) {
+        if (!Array.isArray(arg.examples)) {
+            errors.push(`${prefix}: examples must be an array`);
+        } else if (arg.examples.length > 8) {
+            errors.push(`${prefix}: examples cannot contain more than 8 values`);
+        } else {
+            for (const value of arg.examples) {
+                if (!valueMatchesArgType(value, type)) {
+                    errors.push(`${prefix}: examples entries must match type ${type}`);
+                    break;
+                }
+            }
+        }
+    }
+
+    if (arg.default !== undefined && !valueMatchesArgType(arg.default, type)) {
+        errors.push(`${prefix}: default must match type ${type}`);
+    }
+
+    const hasMin = arg.min !== undefined;
+    const hasMax = arg.max !== undefined;
+    if ((hasMin || hasMax) && type !== 'number') {
+        errors.push(`${prefix}: min and max are only valid for number args`);
+    }
+    if (hasMin && !isFiniteNumber(arg.min)) {
+        errors.push(`${prefix}: min must be a finite number`);
+    }
+    if (hasMax && !isFiniteNumber(arg.max)) {
+        errors.push(`${prefix}: max must be a finite number`);
+    }
+    if (
+        type === 'number' &&
+        isFiniteNumber(arg.min) &&
+        isFiniteNumber(arg.max) &&
+        arg.min > arg.max
+    ) {
+        errors.push(`${prefix}: min cannot be greater than max`);
+    }
+
+    if (
+        arg.allowedValues &&
+        Array.isArray(arg.allowedValues) &&
+        arg.default !== undefined &&
+        valueMatchesArgType(arg.default, type) &&
+        !arg.allowedValues.some(value => value === arg.default)
+    ) {
+        errors.push(`${prefix}: default must be included in allowedValues`);
+    }
+
+    if (type === 'number') {
+        for (const [label, value] of [
+            ['default', arg.default],
+            ...(Array.isArray(arg.allowedValues)
+                ? arg.allowedValues.map((value, index) => [`allowedValues[${index}]`, value] as const)
+                : []),
+        ] as Array<readonly [string, unknown]>) {
+            if (typeof value === 'number') {
+                errors.push(...validateNumberBounds(`${prefix}: ${label}`, value, arg));
+            }
+        }
+    }
+
+    return errors;
+}
+
+function validateArgValueConstraints(
+    key: string,
+    value: unknown,
+    argDef: ContractArg
+): string[] {
+    const errors: string[] = [];
+
+    if (argDef.type === 'number' && !Number.isFinite(value)) {
+        errors.push(`Argument ${key} must be a finite number`);
+        return errors;
+    }
+
+    if (
+        argDef.allowedValues &&
+        !argDef.allowedValues.some(allowedValue => allowedValue === value)
+    ) {
+        errors.push(
+            `Argument ${key} must be one of: ${formatAllowedValues(argDef.allowedValues)}`
+        );
+    }
+
+    if (typeof value === 'number') {
+        errors.push(...validateNumberBounds(`Argument ${key}`, value, argDef));
+    }
+
+    return errors;
+}
+
+function validateNumberBounds(
+    label: string,
+    value: number,
+    argDef: Pick<ContractArg, 'min' | 'max'>
+): string[] {
+    const errors: string[] = [];
+    if (argDef.min !== undefined && value < argDef.min) {
+        errors.push(`${label} must be >= ${argDef.min}`);
+    }
+    if (argDef.max !== undefined && value > argDef.max) {
+        errors.push(`${label} must be <= ${argDef.max}`);
+    }
+    return errors;
+}
+
+function valueMatchesArgType(
+    value: unknown,
+    type: ContractArg['type']
+): value is string | number | boolean {
+    if (type === 'number') {
+        return isFiniteNumber(value);
+    }
+    return typeof value === type;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function formatAllowedValues(values: Array<string | number | boolean>): string {
+    return values.map(value => JSON.stringify(value)).join(', ');
+}
+
+function validateEntryPath(entry: string): string[] {
+    const errors: string[] = [];
+    const trimmed = entry.trim();
+    const normalized = trimmed.replace(/\\/g, '/');
+
+    if (trimmed !== entry) {
+        errors.push('execution.entry must not contain leading or trailing whitespace');
+    }
+    if (!SAFE_ENTRY_PATH_PATTERN.test(trimmed)) {
+        errors.push('execution.entry contains unsupported path characters');
+    }
+    if (normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized) || normalized.startsWith('~/')) {
+        errors.push('execution.entry must be relative to the skill package');
+    }
+
+    const parts = normalized.split('/');
+    if (parts.some(part => part.length === 0)) {
+        errors.push('execution.entry must not contain empty path segments');
+    }
+    if (parts.some(part => part === '..')) {
+        errors.push('execution.entry must not escape the skill package');
     }
 
     return errors;

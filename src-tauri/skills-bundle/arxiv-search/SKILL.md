@@ -14,7 +14,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: search, latest, detail, download, or categories. Do not issue multiple arxiv-search tool calls in parallel; run them sequentially."
+      description: "Operation to run. Do not issue multiple arxiv-search calls in parallel."
+      allowedValues: [search, latest, detail, download, categories]
+      examples: [search, detail]
     - name: query
       type: string
       required: false
@@ -30,23 +32,35 @@ execution:
     - name: sort
       type: string
       required: false
-      description: "Sort mode for action=search: relevance, date, or updated. Defaults to relevance."
+      description: "Sort mode for search."
+      allowedValues: [relevance, date, updated]
+      default: relevance
     - name: sort_order
       type: string
       required: false
-      description: "Sort order for search/latest: descending/newest or ascending/oldest. Defaults to descending."
+      description: "Sort order for search/latest."
+      allowedValues: [ascending, asc, oldest, descending, desc, newest]
+      default: descending
     - name: start
       type: number
       required: false
-      description: "Zero-based result offset for pagination. Defaults to 0."
+      description: "Zero-based result offset for pagination."
+      min: 0
+      default: 0
     - name: limit
       type: number
       required: false
-      description: "Maximum number of results for search/latest. Must be a JSON number, not a quoted string. Defaults to 10, matching the arXiv API default. Keep <=10 unless the user explicitly needs a broader page; larger pages and parallel calls increase the risk of arXiv throttling."
+      description: "Maximum search/latest results. Keep <=10 unless the user explicitly needs more."
+      min: 1
+      max: 50
+      default: 10
+      examples: [5, 10]
     - name: field
       type: string
       required: false
-      description: "Optional field for plain search terms: all, title, author, abstract, category, ti, au, abs, cat, co, jr, rn, or id. Defaults to all."
+      description: "Field for plain search terms."
+      allowedValues: [all, title, ti, author, au, abstract, abs, comment, co, journal, jr, category, cat, report, rn, id]
+      default: all
     - name: filter
       type: string
       required: false
@@ -74,7 +88,10 @@ execution:
     - name: abstract_max
       type: number
       required: false
-      description: "Maximum abstract characters in search/latest list output. Defaults to 500."
+      description: "Maximum abstract characters in search/latest list output."
+      min: 1
+      max: 5000
+      default: 500
     - name: output_dir
       type: string
       required: false
@@ -90,48 +107,18 @@ dependencies:
 
 # arXiv Search Skill for AgentVis
 
-Search academic papers through the public arXiv API, fetch latest papers by category, inspect complete paper metadata, list common categories, and download PDFs through a Script Skill contract.
+Routine Sub-Agent usage is encoded in the frontmatter execution contract and injected as a compact Script Skill card. This body is fallback material for maintainers and failure diagnosis.
 
-In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `agentvis-broker-fetch`; direct local runs use Python standard-library networking. The implementation parses arXiv Atom XML directly and no longer depends on the third-party `arxiv` Python package.
+## Troubleshooting
 
-## Actions
-
-- `search`: search papers by keyword or arXiv advanced query syntax.
-- `latest`: fetch latest papers for a category or alias.
-- `detail`: show complete metadata for one arXiv ID or URL.
-- `download`: download one paper PDF to `output_file`, `output_dir`, or the current Agent deliverables/workdir. In AgentVis brokerOnly mode, PDF downloads stream through broker `savePath` instead of returning the file body as base64, avoiding large-response truncation.
-- `categories`: list common category IDs and aliases.
-
-## Query Syntax
-
-arXiv supports field prefixes and boolean operators:
-
-| Prefix | Description | Example |
-| --- | --- | --- |
-| `ti:` | Search titles | `ti:transformer` |
-| `au:` | Search authors | `au:Hinton` |
-| `abs:` | Search abstracts | `abs:reinforcement learning` |
-| `cat:` | Search category | `cat:cs.AI` |
-| `submittedDate:` | Filter by submitted date range | `submittedDate:[202603010000 TO 202605312359]` |
-| `AND/OR/ANDNOT` | Boolean combination | `au:LeCun AND ti:deep` |
-
-The official arXiv query endpoint accepts `search_query`, `id_list`, `start`, `max_results`, `sortBy`, and `sortOrder`. Use this skill's `filter`, `date_from`, `date_to`, `author`, `title`, `abstract`, `category`, and `field` arguments as local helpers that are combined into `search_query`.
-
-The skill waits at least 3.2 seconds between arXiv API calls across AgentVis skill processes and holds a single-flight lock while the arXiv API request is in progress. Do not launch multiple `external_skill_execute` calls for this skill in parallel. Keep the default `limit=10` unless the user explicitly needs a broader page; repeated small requests should still be avoided. If multiple keyword searches are necessary, run them sequentially or combine terms with arXiv boolean syntax.
-
-## Category Aliases
-
-| Alias | Category |
-| --- | --- |
-| `ai` | `cs.AI` |
-| `ml` | `cs.LG` |
-| `nlp` | `cs.CL` |
-| `cv` | `cs.CV` |
-| `robotics` | `cs.RO` |
-| `security` | `cs.CR` |
-| `ir` | `cs.IR` |
-| `se` | `cs.SE` |
+- If the arXiv API throttles or returns transient network errors, retry serially after a delay. The script already holds a cross-process single-flight lock and waits at least 3.2 seconds between arXiv API calls.
+- If several related keyword searches are needed, combine terms with arXiv boolean syntax such as `OR`, `AND`, field prefixes (`ti:`, `au:`, `abs:`, `cat:`), or submitted-date clauses instead of launching parallel tool calls.
+- If downloaded PDFs are corrupt or too small, inspect the script output for the saved path, byte count, content type, and `%PDF` validation result. Broker-mode downloads stream through `savePath` to avoid large base64 responses.
+- If a category alias is unclear, run `action=categories` first.
+- `filter`, `date_from`, `date_to`, `author`, `title`, `abstract`, `category`, and `field` are local helpers that are combined into the official arXiv `search_query`.
 
 ## Maintainer Notes
+
+In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `agentvis-broker-fetch`; direct local runs use Python standard-library networking. The implementation parses arXiv Atom XML directly and no longer depends on the third-party `arxiv` Python package.
 
 The declared Script entrypoint is `scripts/arxiv_search_entry.py` and intentionally contains no URL literals or direct network client imports. Keep arXiv HTTP access inside `scripts/arxiv_search.py` behind `request_url`, so sandboxed execution remains brokerOnly while local development stays convenient.

@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
     validateContract,
     validateArgs,
+    normalizeArgsForContract,
     isNativeSkillConflict,
     isValidSkillName,
 } from '../ContractValidator';
@@ -449,6 +450,23 @@ describe('validateContract', () => {
         }
     });
 
+    it('应该拒绝不安全的 entry 路径', () => {
+        for (const entry of ['../run.py', 'C:/tools/run.py', 'scripts/run".py']) {
+            const frontmatter: ExternalSkillFrontmatter = {
+                name: 'unsafe-entry',
+                description: 'Unsafe entry',
+                execution: {
+                    runtime: 'python',
+                    entry,
+                },
+            };
+
+            const result = validateContract(frontmatter);
+
+            expect(result.valid).toBe(false);
+        }
+    });
+
     it('timeout 超过上限应该失败', () => {
         const frontmatter: ExternalSkillFrontmatter = {
             name: 'long-timeout',
@@ -551,6 +569,113 @@ describe('validateContract', () => {
         }
     });
 
+    it('argsSchema 中有不安全 name 应该失败', () => {
+        const frontmatter: ExternalSkillFrontmatter = {
+            name: 'unsafe-args',
+            description: 'Unsafe args',
+            execution: {
+                runtime: 'python',
+                entry: 'run.py',
+                argsSchema: [
+                    { name: 'good_name', type: 'string', required: true, description: 'Good' },
+                    { name: 'bad name', type: 'string', required: false, description: 'Bad' },
+                    { name: 'also"bad', type: 'number', required: false, description: 'Bad' },
+                ],
+            },
+        };
+
+        const result = validateContract(frontmatter);
+
+        expect(result.valid).toBe(false);
+        if (!result.valid) {
+            expect(result.errors.filter(e => e.includes('name must start'))).toHaveLength(2);
+        }
+    });
+
+    it('应接受本地参数约束元数据', () => {
+        const frontmatter: ExternalSkillFrontmatter = {
+            name: 'constrained-args',
+            description: 'Constrained args',
+            execution: {
+                runtime: 'python',
+                entry: 'run.py',
+                argsSchema: [
+                    {
+                        name: 'action',
+                        type: 'string',
+                        required: true,
+                        description: 'Action',
+                        allowedValues: ['search', 'read'],
+                        default: 'search',
+                        examples: ['search'],
+                    },
+                    {
+                        name: 'limit',
+                        type: 'number',
+                        required: false,
+                        description: 'Limit',
+                        min: 1,
+                        max: 50,
+                        default: 10,
+                        examples: [5, 10],
+                    },
+                ],
+            },
+        };
+
+        const result = validateContract(frontmatter);
+
+        expect(result.valid).toBe(true);
+    });
+
+    it('应拒绝不合法的本地参数约束元数据', () => {
+        const frontmatter: ExternalSkillFrontmatter = {
+            name: 'bad-constraints',
+            description: 'Bad constraints',
+            execution: {
+                runtime: 'python',
+                entry: 'run.py',
+                argsSchema: [
+                    {
+                        name: 'action',
+                        type: 'string',
+                        required: true,
+                        description: 'Action',
+                        allowedValues: ['search'],
+                        default: 'read',
+                    },
+                    {
+                        name: 'mode',
+                        type: 'boolean',
+                        required: false,
+                        description: 'Mode',
+                        min: 1,
+                    },
+                    {
+                        name: 'limit',
+                        type: 'number',
+                        required: false,
+                        description: 'Limit',
+                        min: 20,
+                        max: 10,
+                        examples: ['ten'],
+                    },
+                ],
+            },
+        };
+
+        const result = validateContract(frontmatter);
+
+        expect(result.valid).toBe(false);
+        if (!result.valid) {
+            const errors = result.errors.join('\n');
+            expect(errors).toContain('default must be included in allowedValues');
+            expect(errors).toContain('min and max are only valid for number args');
+            expect(errors).toContain('min cannot be greater than max');
+            expect(errors).toContain('examples entries must match type number');
+        }
+    });
+
     it('应该支持所有有效的 runtime 类型', () => {
         for (const runtime of ['python', 'bash', 'node'] as const) {
             const frontmatter: ExternalSkillFrontmatter = {
@@ -615,12 +740,114 @@ describe('validateArgs', () => {
             { file_path: '/data/test.csv', unknown_param: 'hello' },
             contract
         );
-        expect(result.valid).toBe(true);
+        expect(result.valid).toBe(false);
+        if (!result.valid) {
+            expect(result.errors).toContain('Unknown argument: unknown_param');
+        }
     });
 
     it('仅传可选参数也应该失败（缺少必填）', () => {
         const result = validateArgs({ verbose: true }, contract);
         expect(result.valid).toBe(false);
+    });
+
+    it('应校验 allowedValues 和数字范围', () => {
+        const constrainedContract: ExecutionContract = {
+            runtime: 'python',
+            entry: 'run.py',
+            timeout: 30,
+            maxOutput: 65536,
+            argsSchema: [
+                {
+                    name: 'action',
+                    type: 'string',
+                    required: true,
+                    description: 'Action',
+                    allowedValues: ['search', 'read'],
+                },
+                {
+                    name: 'limit',
+                    type: 'number',
+                    required: false,
+                    description: 'Limit',
+                    min: 1,
+                    max: 10,
+                },
+            ],
+        };
+
+        expect(validateArgs({ action: 'search', limit: 5 }, constrainedContract).valid).toBe(true);
+
+        const invalidAction = validateArgs({ action: 'delete', limit: 5 }, constrainedContract);
+        expect(invalidAction.valid).toBe(false);
+        if (!invalidAction.valid) {
+            expect(invalidAction.errors[0]).toContain('must be one of');
+        }
+
+        const invalidLimit = validateArgs({ action: 'search', limit: 50 }, constrainedContract);
+        expect(invalidLimit.valid).toBe(false);
+        if (!invalidLimit.valid) {
+            expect(invalidLimit.errors[0]).toContain('<= 10');
+        }
+    });
+
+    it('应拒绝 NaN 和 Infinity 数字参数', () => {
+        const nanResult = validateArgs({ file_path: '/data/test.csv', count: Number.NaN }, contract);
+        expect(nanResult.valid).toBe(false);
+        if (!nanResult.valid) {
+            expect(nanResult.errors).toContain('Argument count must be a finite number');
+        }
+
+        const infinityResult = validateArgs({ file_path: '/data/test.csv', count: Infinity }, contract);
+        expect(infinityResult.valid).toBe(false);
+    });
+});
+
+describe('normalizeArgsForContract', () => {
+    const contract: ExecutionContract = {
+        runtime: 'python',
+        entry: 'run.py',
+        timeout: 30,
+        maxOutput: 65536,
+        argsSchema: [
+            { name: 'file_path', type: 'string', required: true, description: 'file path' },
+            { name: 'count', type: 'number', required: false, description: 'count' },
+            { name: 'ratio', type: 'number', required: false, description: 'ratio' },
+            { name: 'verbose', type: 'boolean', required: false, description: 'verbose' },
+        ],
+    };
+
+    it('coerces numeric and boolean strings for declared args', () => {
+        const original = {
+            file_path: '/data/test.csv',
+            count: '10',
+            ratio: ' 3.5 ',
+            verbose: 'false',
+            unknown: '42',
+        };
+
+        const result = normalizeArgsForContract(original, contract);
+
+        expect(result.args).toEqual({
+            file_path: '/data/test.csv',
+            count: 10,
+            ratio: 3.5,
+            verbose: false,
+            unknown: '42',
+        });
+        expect(result.changedKeys).toEqual(['count', 'ratio', 'verbose']);
+        expect(original.count).toBe('10');
+    });
+
+    it('leaves unsafe numeric strings unchanged so validation can reject them', () => {
+        const result = normalizeArgsForContract(
+            { file_path: '/data/test.csv', count: '10 papers', verbose: 'yes' },
+            contract
+        );
+
+        expect(result.args.count).toBe('10 papers');
+        expect(result.args.verbose).toBe('yes');
+        expect(validateArgs(result.args, contract).valid).toBe(false);
     });
 });
 

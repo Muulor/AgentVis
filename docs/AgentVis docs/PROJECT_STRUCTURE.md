@@ -1045,6 +1045,7 @@ llm/
 ├── mod.rs                        # 模块入口
 ├── types.rs                      # LLM 类型定义
 ├── http_client.rs                # HTTP 客户端（连接池）
+├── schema_compat.rs
 ├── gemini.rs                     # Google Gemini 适配器
 ├── openai.rs                     # OpenAI 适配器（ZhipuAI/火山引擎复用）
 └── anthropic.rs                  # Anthropic Claude 适配器（百炼/Minimax 复用）

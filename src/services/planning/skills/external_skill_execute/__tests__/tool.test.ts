@@ -216,6 +216,40 @@ describe('externalSkillExecuteTool', () => {
         });
     });
 
+    it('应在校验前归一化数字字符串参数', async () => {
+        registerSkill({
+            name: 'broker-e2e',
+            description: 'Broker E2E',
+            fullContent: '# Broker E2E',
+            source: 'external',
+            mode: 'script',
+            packagePath: 'C:/skills/external/packages/broker-e2e',
+            contract: {
+                ...BROKER_CONTRACT,
+                argsSchema: [
+                    ...BROKER_CONTRACT.argsSchema,
+                    {
+                        name: 'limit',
+                        type: 'number',
+                        required: false,
+                        description: 'Result limit',
+                    },
+                ],
+            },
+        });
+
+        const result = await externalSkillExecuteTool.execute(
+            { skillName: 'broker-e2e', args: { url: 'https://example.com', limit: '10' } },
+            {}
+        );
+
+        expect(result.success).toBe(true);
+        expect(invokeMock).toHaveBeenCalledTimes(1);
+        const shellParams = invokeMock.mock.calls[0]?.[1] as Record<string, unknown>;
+        expect(String(shellParams.command)).toContain('--limit');
+        expect(String(shellParams.command)).toContain('10');
+    });
+
     it('abort signal 应向 shell_cancel 传递 Script Skill executionId', async () => {
         registerSkill({
             name: 'broker-e2e',

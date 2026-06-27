@@ -21,6 +21,8 @@ execution:
       type: string
       required: false
       description: "Action to run: plan, apply, or undo. Defaults to plan; for an explicit organize request, review a normal plan then run apply in the same task without waiting for a separate confirmation."
+      allowedValues: [plan, apply, undo]
+      default: plan
     - name: recursive
       type: boolean
       required: false
@@ -29,6 +31,7 @@ execution:
       type: string
       required: false
       description: "Destination layout: flat or preserveTree. Defaults to preserveTree when recursive, otherwise flat."
+      allowedValues: [flat, preserveTree]
     - name: exclude
       type: string
       required: false
@@ -45,10 +48,14 @@ execution:
       type: number
       required: false
       description: "Maximum planned moves allowed for action=apply unless allowLarge is true. Defaults to 2000."
+      min: 1
+      default: 2000
     - name: previewLimit
       type: number
       required: false
       description: "Maximum planned move rows included in JSON output. Defaults to 200."
+      min: 0
+      default: 200
     - name: allowLarge
       type: boolean
       required: false
@@ -81,20 +88,6 @@ Plan, apply, and undo file organization in a target directory by file type.
 | `apply` | Move files according to the generated plan and write an undo manifest. |
 | `undo` | Restore files from an undo manifest. Uses `manifestPath` when supplied; otherwise auto-selects the newest matching manifest in the target directory. |
 
-## Category Mapping
-
-| Category   | Extensions |
-|------------|------------|
-| Images     | .jpg .jpeg .jpe .png .gif .bmp .svg .svgz .webp .ico .tiff .tif .raw .psd .ai .eps .heic .avif .jfif .pjpeg .pjp .dng .cr2 .cr3 .nef .nrw .arw .srf .sr2 .orf .rw2 .raf .pef .srw .x3f .sketch .fig .xd |
-| Documents  | .pdf .doc .docx .docm .dot .dotx .xls .xlsx .xlsm .xlsb .xlt .xltx .ppt .pptx .pptm .pps .ppsx .pot .potx .txt .md .csv .tsv .rtf .odt .ods .odp .pages .numbers .key .tex .bib .log .epub .mobi .azw .azw3 .fb2 .djvu .chm .eml .msg .one |
-| Videos     | .mp4 .avi .mkv .mov .wmv .flv .webm .m4v .3gp .mpg .mpeg .mpe .m2v .mts .m2ts .ogv .asf .rm .rmvb .vob .divx .f4v |
-| Audio      | .mp3 .wav .flac .aac .ogg .wma .m4a .opus .aif .aiff .alac .mid .midi .amr .ape .caf .mka .ra .dsf .dff |
-| Archives   | .zip .rar .7z .tar .gz .bz2 .xz .iso .tgz .tbz .tbz2 .txz .lz .lzma .zst .z .cab .jar .war .ear .whl .egg .tar.gz .tar.bz2 .tar.xz .tar.zst .tar.lz .tar.lzma .tar.z |
-| Code       | .py .js .jsx .ts .tsx .mjs .cjs .html .css .scss .less .sass .styl .json .xml .yaml .yml .java .c .cpp .h .hpp .rs .go .rb .php .sh .bat .ps1 .sql .toml .ini .cfg .lock .vue .svelte .astro .cs .csx .swift .kt .kts .scala .lua .pl .pm .r .jl .dart .ex .exs .erl .hrl .clj .cljs .fs .fsx .vb .groovy .gradle .cmake .mk .make .proto .graphql .gql .tf .tfvars .hcl .properties .conf .env .ipynb .mdx .sol .zig .nim .v .sv |
-| Fonts      | .ttf .otf .woff .woff2 .eot .fon .fnt .ttc .dfont .pfa .pfb |
-| Installers | .exe .msi .msix .appx .appxbundle .appinstaller .dmg .pkg .deb .rpm .apk .xapk .ipa |
-| Data       | .db .sqlite .sqlite3 .parquet .avro .orc .feather .arrow .h5 .hdf5 .npy .npz .pkl .pickle .sav .dta .rds .sas7bdat .jsonl .ndjson |
-| Others     | Any extension not listed above, plus files without extensions |
 
 ## Recommended Use
 

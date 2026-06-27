@@ -177,6 +177,8 @@ execution:
       type: string
       required: false
       description: "Action to run."
+      allowedValues: [plan, inspect, apply]
+      default: plan
 ---
 ```
 
@@ -184,7 +186,7 @@ execution:
 
 ## Script Skill With BrokerOnly HTTP(S)
 
-Use for deterministic, parameterized HTTP(S) tools. The body is not the Sub-Agent's runtime instruction surface, so every operation must be represented in `argsSchema`.
+Use for deterministic, parameterized HTTP(S) tools. The body is not the Sub-Agent's runtime instruction surface, so every operation must be represented in `argsSchema`. Keep the body as fallback troubleshooting and maintainer notes; do not duplicate the full action list, argument list, or examples there.
 
 ```yaml
 ---
@@ -203,7 +205,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: search, info, or read."
+      description: "Operation to run."
+      allowedValues: [search, info, read]
+      default: search
     - name: query
       type: string
       required: false
@@ -215,7 +219,7 @@ execution:
 ---
 ```
 
-The script must call `agentvis-broker-fetch` explicitly. It should not use direct `requests`, `httpx`, `urllib`, `socket`, or native fetch paths for brokerOnly requests.
+The script must call `agentvis-broker-fetch` explicitly. It should not use direct `requests`, `httpx`, `urllib`, `socket`, or native fetch paths for brokerOnly requests. Centralize brokered HTTP(S) calls in helper functions such as `broker_request`, `broker_get`, or `broker_post`.
 
 Use `templates/python_script_entry.py` for the declared entrypoint shape, `templates/python_script_core.py` for the recommended brokerOnly core module, and `templates/python_broker_fetch.py` for a smaller broker helper snippet. The helper function should be named `broker_request`, `broker_get`, or `broker_post`, not `broker_fetch`, because the sandbox static scanner treats a fetch-style call pattern as a direct network API signal.
 
@@ -239,6 +243,12 @@ Keep API base URL constants and broker helper subprocess code out of the declare
 python scripts/package_lookup_entry.py --packageName "lodash" --registry "npm" --includeMetadata
 ```
 
+Keep `execution.entry` as a safe relative package path such as `scripts/package_lookup_entry.py`; do not use absolute paths, `..`, quotes, shell metacharacters, or paths outside the skill package.
+
+Keep `argsSchema.name` values compatible with CLI flags: start with a letter or underscore, then use letters, numbers, underscores, or hyphens. Do not use spaces, quotes, dots, slashes, or shell punctuation.
+
+Use local contract metadata for argument constraints instead of complex JSON Schema: `allowedValues` for choices, `min`/`max` for number bounds, `default` for the suggested value, and `examples` for prompt guidance. The values must match the declared `type`, and scripts should mirror the same constraints with `argparse` choices or explicit validation. Keep `description` short and avoid repeating values already expressed by these metadata fields, because the compact Script Skill card renders them together.
+
 Do not parse Script Skill arguments as positional `sys.argv[1]`, `sys.argv[2]`. Match every `argsSchema.name` with an option of the same name:
 
 ```python
@@ -254,6 +264,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 args = build_parser().parse_args()
 ```
+
+Boolean fields are passed only when true, so Python parsers should use `action="store_true"`. Number fields arrive as CLI strings, so parse them with `type=int` or `type=float` in `argparse`.
+
+Do not invent CLI flags that are missing from `argsSchema`; Sub-Agents cannot pass them through `external_skill_execute`. Before finalizing a Script Skill, compare every `argsSchema.name` with the parser's `--name` options and confirm they match exactly.
 
 Direct smoke tests should use the same shape:
 
@@ -292,7 +306,9 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: search, info, readme, tree, file, releases, or issues."
+      description: "Operation to run."
+      allowedValues: [search, info, readme, tree, file, releases, issues]
+      default: search
     - name: query
       type: string
       required: false

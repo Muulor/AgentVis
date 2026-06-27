@@ -29,7 +29,7 @@ import type {
 } from './types';
 import { emit } from '@tauri-apps/api/event';
 import { translate } from '@/i18n';
-import { validateArgs } from './ContractValidator';
+import { normalizeArgsForContract, validateArgs } from './ContractValidator';
 import { ExternalExecutor, type ShellExecuteFn } from './ExternalExecutor';
 import { getLogger } from '@services/logger';
 
@@ -204,7 +204,8 @@ class ExternalTool implements Tool {
         context: ToolExecutionContext
     ): Promise<ToolResult> {
         // Step 1: 参数验证
-        const argResult = validateArgs(params, this.contract);
+        const { args: normalizedParams } = normalizeArgsForContract(params, this.contract);
+        const argResult = validateArgs(normalizedParams, this.contract);
         if (!argResult.valid) {
             return {
                 success: false,
@@ -226,7 +227,7 @@ class ExternalTool implements Tool {
         );
         const result = await this.executor.execute(
             this.contract,
-            params,
+            normalizedParams,
             this.skill.packagePath,
             this.venvPath,
             {

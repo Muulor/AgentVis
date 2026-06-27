@@ -14,15 +14,19 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: fetch, detail, or list."
+      description: "Operation to run."
+      allowedValues: [fetch, detail, list]
+      examples: [fetch, detail]
     - name: category
       type: string
       required: false
-      description: "News category for action=fetch: general, ai, finance, culture, or all. Defaults to general."
+      description: "News category for action=fetch."
+      allowedValues: [general, ai, finance, culture, all, world, china, tech, business]
+      default: general
     - name: source
       type: string
       required: false
-      description: "Optional fuzzy source-name filter, such as NPR, 36氪, The Verge, FT, or 澎湃."
+      description: "Optional fuzzy source-name filter, such as NPR, 36Kr, The Verge, FT, or 澎湃."
     - name: url
       type: string
       required: false
@@ -30,7 +34,9 @@ execution:
     - name: limit
       type: number
       required: false
-      description: "Maximum number of RSS items to display per source. Defaults to 5 to avoid timeouts and improve stability."
+      description: "Maximum number of RSS items to display per source."
+      min: 1
+      default: 5
     - name: full
       type: boolean
       required: false
@@ -39,6 +45,8 @@ execution:
       type: number
       required: false
       description: "Maximum characters for each full article body or detail output."
+      min: 1
+      examples: [800, 3000]
 dependencies:
   python: ">=3.11"
   packages:

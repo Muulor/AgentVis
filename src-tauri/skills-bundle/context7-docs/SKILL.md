@@ -23,6 +23,8 @@ execution:
       type: string
       required: true
       description: "Action to run: search, docs, or resolve-docs. Use search to find a library id, docs when libraryId is known, and resolve-docs when one call should search then fetch docs."
+      allowedValues: [search, docs, resolve-docs]
+      examples: [search, docs]
     - name: libraryName
       type: string
       required: false
@@ -38,15 +40,21 @@ execution:
     - name: outputFormat
       type: string
       required: false
-      description: "Output format for docs or resolve-docs: text or json. Defaults to text."
+      description: "Output format for docs or resolve-docs."
+      allowedValues: [text, json]
+      default: text
     - name: limit
       type: number
       required: false
       description: "Maximum search results or formatted snippets to show. Defaults to 5."
+      min: 1
+      default: 5
     - name: max
       type: number
       required: false
       description: "Maximum characters for text output. Defaults to 12000."
+      min: 1
+      default: 12000
 dependencies:
   python: ">=3.11"
   packages: []

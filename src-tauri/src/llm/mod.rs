@@ -8,6 +8,7 @@ pub mod openai;
 pub mod anthropic;
 pub mod gemini;
 pub mod json_repair;
+mod schema_compat;
 
 use async_trait::async_trait;
 use futures::stream::Stream;
