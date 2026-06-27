@@ -24,6 +24,10 @@ class BrokerResponse:
     headers: dict[str, str]
     text: str
     credential_applied: bool
+    truncated: bool = False
+    saved_path: str = ""
+    bytes_in: int = 0
+    final_url: str = ""
 
     def json(self) -> Any:
         return json.loads(self.text)
@@ -66,9 +70,14 @@ def broker_request(
     headers: dict[str, str] | None = None,
     body: bytes | None = None,
     credential_ref: str | None = None,
+    save_path: str = "",
     timeout_seconds: int = 30,
 ) -> BrokerResponse:
-    """Send one HTTP(S) request through agentvis-broker-fetch."""
+    """Send one HTTP(S) request through agentvis-broker-fetch.
+
+    Use save_path for binary or large responses. Non-savePath bodyBase64
+    responses are capped by the broker and must not be treated as files.
+    """
     helper = os.environ.get("AGENTVIS_BROKER_FETCH") or "agentvis-broker-fetch"
     request: dict[str, Any] = {
         "method": method.upper(),
@@ -84,6 +93,8 @@ def broker_request(
         request["bodyBase64"] = base64.b64encode(body).decode("ascii")
     if credential_ref:
         request["credentialRef"] = credential_ref
+    if save_path:
+        request["savePath"] = save_path
 
     completed = subprocess.run(
         [helper],
@@ -108,12 +119,20 @@ def broker_request(
         for item in payload.get("headers") or []
         if item.get("name")
     }
-    body_bytes = base64.b64decode(payload.get("bodyBase64") or "")
+    truncated = bool(payload.get("truncated"))
+    saved_path = str(payload.get("savedPath") or "")
+    if truncated and not saved_path:
+        raise RuntimeError("Broker response was truncated; use savePath for large or binary responses.")
+    body_bytes = b"" if saved_path else base64.b64decode(payload.get("bodyBase64") or "")
     return BrokerResponse(
         status=int(payload.get("status") or 0),
         headers=response_headers,
         text=body_bytes.decode("utf-8", errors="replace"),
         credential_applied=bool(payload.get("credentialApplied")),
+        truncated=truncated,
+        saved_path=saved_path,
+        bytes_in=int(payload.get("bytesIn") or len(body_bytes)),
+        final_url=str(payload.get("finalUrl") or url),
     )
 
 

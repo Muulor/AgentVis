@@ -225,6 +225,8 @@ Use `templates/python_script_entry.py` for the declared entrypoint shape, `templ
 
 BrokerOnly helpers should preserve stable failure diagnostics in observations. Include `brokerReasonCode`, `brokerErrorKind`, `brokerTargetHost`, `brokerCredentialRef`, and `credentialApplied` when the helper returns them. This lets Agent distinguish network routing, credential, policy, and malformed-request failures without guessing from prose error text.
 
+BrokerOnly helpers should use `savePath` for binary downloads or any response that may exceed a few MiB, such as PDFs, archives, images, audio, or videos. Non-`savePath` responses are returned as `bodyBase64` and may be capped by the broker; always treat `truncated=true` as a hard failure and never write a truncated body to a file. When `savePath` is used, read `savedPath` and `bytesIn` from the broker response instead of expecting `bodyBase64`.
+
 Recommended file shape:
 
 ```text

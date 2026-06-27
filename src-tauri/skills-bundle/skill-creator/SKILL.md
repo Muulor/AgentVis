@@ -240,6 +240,7 @@ For Script Skills:
 - Exit non-zero for real execution failure; exit zero with a clear message for user-correctable states such as missing optional credential.
 - Keep secrets out of command-line args, environment variables, stdout, stderr, and logs.
 - For brokerOnly HTTP(S), preserve stable broker diagnostics in failed observations so Agent can distinguish routing, credential, policy, and malformed-request failures without guessing from prose.
+- For brokerOnly downloads, use broker `savePath` for binary or large responses such as PDFs, images, archives, audio, or video. Treat `truncated=true` on non-`savePath` responses as a hard failure; never write a truncated `bodyBase64` response to a file.
 
 ### Script Skill Entry ABI
 
@@ -263,6 +264,7 @@ AgentVis `ExternalExecutor` passes Script Skill arguments as named CLI flags, no
 - Do not treat a failed `external_skill_execute` as a sandbox failure until checking contract parsing, CLI flags, and broker helper availability.
 - Do not name Python broker helper functions `broker_fetch`; use `broker_request`, `broker_get`, or `broker_post` to avoid the static fetch-call network API scan.
 - Do not put brokerOnly URL constants or broker helper subprocess code directly in the declared `execution.entry`; place them in an imported sibling module.
+- Do not download binary or large files through broker `bodyBase64`; use `savePath` and validate `savedPath`/`bytesIn`.
 
 ## Validate The Skill
 
