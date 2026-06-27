@@ -108,6 +108,7 @@ Dependency rules:
 
 - For fixed Python 3.13/3.14 runtimes, continue if the dependency block installs and `moss-doctor` passes.
 - Do not use `pip install git+https://github.com/OpenMOSS/MOSS-TTS-Nano.git` for this workflow; it tries to install the full PyTorch dependency set.
+- If `moss-bootstrap` reports `Observation: moss_source_dir_invalid`, the MOSS source checkout is incomplete or from the wrong repo. Let bootstrap repair the managed `.moss/MOSS-TTS-Nano` directory, or provide a clean checkout. Do not create `pyproject.toml` manually and do not install `transformers`.
 - Do not try `npx moss-tts-nano`; MOSS-TTS-Nano is a Python CLI, not an npm CLI.
 - `moss-audio` auto-detects the CLI from `--moss-bin`, `MOSS_TTS_NANO_BIN`, `VIRTUAL_ENV`, the current Python Scripts directory, and the Windows embedded-runtime fallback `Scripts/Scripts/moss-tts-nano.exe`. Pass `--moss-bin <path>` only if all auto-detection fails.
 - If models were intentionally bootstrapped somewhere else, pass `--onnx-model-dir <models-dir>` to `moss-audio`.
@@ -256,6 +257,7 @@ When building scene starts from `audio_meta.json`, insert a tiny timeline gap su
 | Agent is unsure how to install MOSS | Run `scripts/hf-workflow.mjs moss-doctor --json` and follow `recommendedCommands`; do not probe npm or install full PyTorch |
 | `moss-tts-nano` not found | Run `moss-doctor --json`. `moss-audio` searches PATH, `MOSS_TTS_NANO_BIN`, `VIRTUAL_ENV`, Python `Scripts/`, and Windows `Scripts/Scripts/`; if all fail, pass `--moss-bin <path>` |
 | CLI installed in `Scripts/Scripts` on Windows | This is a non-standard embedded Python layout. Current `moss-audio` and `moss-doctor` auto-detect it; no manual `dir /s` probe is needed |
+| `Observation: moss_source_dir_invalid` | The source dir is a partial checkout, wrong repo, or stale interrupted download. Let `moss-bootstrap` repair the managed `.moss/MOSS-TTS-Nano` directory, or provide a clean MOSS checkout. Do not create `pyproject.toml` manually or install `transformers` |
 | Full `pip install git+...` fails on torch | Stop that path. Use `scripts/hf-workflow.mjs moss-bootstrap --in-place --python python --source-dir ./.moss/MOSS-TTS-Nano`; model weights go to the shared user cache by default |
 | Python 3.13/3.14 package resolution fails | The fixed runtime lacks a required wheel such as `onnxruntime`; the skill cannot repair that except by using a compatible runtime |
 | First run is slow | Model weights are downloading or ONNX runtime is initializing |

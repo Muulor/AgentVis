@@ -97,6 +97,7 @@ Use MOSS-TTS-Nano for new voiceover unless the user explicitly asks for another 
 - Prefer the MOSS ONNX backend on CPU: `--backend onnx --execution-provider cpu`.
 - Managed Python 3.13/3.14 can be used if the dependency block installs and `moss-doctor` passes.
 - Do not install MOSS for this workflow with `pip install git+...`; that pulls the full PyTorch dependency set and often fails. Use `moss-bootstrap --in-place`, or install the MOSS source with `pip install --no-deps -e <source-dir>` plus the ONNX dependencies.
+- If `moss-bootstrap` reports `Observation: moss_source_dir_invalid` or `pip install -e <source-dir>` fails because packaging files are missing, treat the source checkout as corrupt. Do not create `pyproject.toml` manually and do not install `transformers`; rerun `moss-bootstrap` with the managed `.moss/MOSS-TTS-Nano` source dir or a clean MOSS checkout.
 - If the user supplies reference audio, pass it as `--prompt-speech` for voice cloning. Do not ask the user to record inside the workflow.
 - If no reference audio is supplied, use the built-in MOSS ONNX voice preset, default `Junhao`(Male voice) or `Yuewen`(Female Voice).
 - Keep silence buffers around generated scene audio. The MOSS helper defaults to 240 ms before and 360 ms after each scene to avoid clipped first syllables and over-tight scene changes.

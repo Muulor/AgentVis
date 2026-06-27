@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -82,6 +82,41 @@ function ensureDir(path) {
   if (!existsSync(path)) mkdirSync(path, { recursive: true });
 }
 
+function samePath(left, right) {
+  const resolvedLeft = resolve(left);
+  const resolvedRight = resolve(right);
+  return isWin ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase() : resolvedLeft === resolvedRight;
+}
+
+function isFile(path) {
+  try {
+    return existsSync(path) && statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isDir(path) {
+  try {
+    return existsSync(path) && statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function mossSourceStatus(sourceDir) {
+  if (!existsSync(sourceDir)) return { ok: false, missing: ["source directory"], exists: false };
+
+  const missing = [];
+  if (!isFile(join(sourceDir, "pyproject.toml")) && !isFile(join(sourceDir, "setup.py"))) {
+    missing.push("pyproject.toml or setup.py");
+  }
+  if (!isDir(join(sourceDir, "moss_tts_nano"))) missing.push("moss_tts_nano/");
+  if (!isFile(join(sourceDir, "onnx_tts_runtime.py"))) missing.push("onnx_tts_runtime.py");
+
+  return { ok: missing.length === 0, missing, exists: true };
+}
+
 function venvPython(venvDir) {
   return isWin ? join(venvDir, "Scripts", "python.exe") : join(venvDir, "bin", "python");
 }
@@ -139,6 +174,64 @@ tmp.unlink(missing_ok=True)
   run(pythonBin, ["-c", code], options);
 }
 
+function cloneOrDownloadSource(pythonBin, sourceDir, options) {
+  if (options.dryRun) {
+    console.log(`[dry-run] git clone --depth 1 https://github.com/OpenMOSS/MOSS-TTS-Nano.git ${sourceDir}`);
+    return;
+  }
+
+  const clone = spawnSync("git", ["clone", "--depth", "1", "https://github.com/OpenMOSS/MOSS-TTS-Nano.git", sourceDir], {
+    stdio: "inherit",
+    encoding: "utf8",
+    shell: false,
+  });
+  if (clone.error || clone.status !== 0) {
+    rmSync(sourceDir, { recursive: true, force: true });
+    downloadSourceZip(pythonBin, sourceDir, options);
+  }
+}
+
+function printInvalidSourceObservation(sourceDir, status, managedSourceDir, defaultSourceDir) {
+  console.error("Observation: moss_source_dir_invalid");
+  console.error(`Source dir: ${sourceDir}`);
+  console.error(`Missing: ${status.missing.join(", ")}`);
+  if (managedSourceDir) {
+    console.error("Repair: removing the managed source dir and fetching a clean MOSS-TTS-Nano checkout.");
+  } else {
+    console.error(`Next step: use a valid MOSS-TTS-Nano checkout or the managed source dir: ${defaultSourceDir}`);
+  }
+  console.error("Do not create pyproject.toml manually or install transformers for this ONNX CPU workflow.");
+}
+
+function ensureMossSourceDir(pythonBin, sourceDir, defaultSourceDir, options) {
+  const managedSourceDir = samePath(sourceDir, defaultSourceDir);
+  if (!existsSync(sourceDir)) {
+    cloneOrDownloadSource(pythonBin, sourceDir, options);
+  } else {
+    const status = mossSourceStatus(sourceDir);
+    if (!status.ok) {
+      printInvalidSourceObservation(sourceDir, status, managedSourceDir, defaultSourceDir);
+      if (!managedSourceDir) {
+        throw new Error(`Invalid MOSS source directory: ${sourceDir}`);
+      }
+      if (options.dryRun) {
+        console.log(`[dry-run] Remove invalid managed source dir: ${sourceDir}`);
+      } else {
+        rmSync(sourceDir, { recursive: true, force: true });
+      }
+      cloneOrDownloadSource(pythonBin, sourceDir, options);
+    }
+  }
+
+  if (!options.dryRun) {
+    const status = mossSourceStatus(sourceDir);
+    if (!status.ok) {
+      printInvalidSourceObservation(sourceDir, status, managedSourceDir, defaultSourceDir);
+      throw new Error(`MOSS source directory is still invalid after bootstrap fetch: ${sourceDir}`);
+    }
+  }
+}
+
 if (hasFlag("-h") || hasFlag("--help")) usage(0);
 
 const dryRun = hasFlag("--dry-run");
@@ -148,7 +241,8 @@ const venvFlag = takeFlag("--venv");
 if (!inPlace && !venvFlag) usage(1);
 const venvDir = venvFlag ? resolve(venvFlag) : null;
 const runtimeRoot = inPlace ? process.cwd() : dirname(venvDir);
-const sourceDir = resolve(takeFlag("--source-dir", join(runtimeRoot, ".moss", "MOSS-TTS-Nano")));
+const defaultSourceDir = resolve(join(runtimeRoot, ".moss", "MOSS-TTS-Nano"));
+const sourceDir = resolve(takeFlag("--source-dir", defaultSourceDir));
 const modelsDir = resolve(takeFlag("--models-dir", defaultMossModelDir()));
 const skipDeps = hasFlag("--skip-deps");
 const skipModels = hasFlag("--skip-models");
@@ -186,21 +280,7 @@ try {
     );
   }
 
-  if (!existsSync(sourceDir)) {
-    if (dryRun) {
-      console.log(`[dry-run] git clone --depth 1 https://github.com/OpenMOSS/MOSS-TTS-Nano.git ${sourceDir}`);
-    } else {
-      const clone = spawnSync("git", ["clone", "--depth", "1", "https://github.com/OpenMOSS/MOSS-TTS-Nano.git", sourceDir], {
-        stdio: "inherit",
-        encoding: "utf8",
-        shell: false,
-      });
-      if (clone.error || clone.status !== 0) {
-        rmSync(sourceDir, { recursive: true, force: true });
-        downloadSourceZip(py, sourceDir, options);
-      }
-    }
-  }
+  ensureMossSourceDir(py, sourceDir, defaultSourceDir, options);
 
   run(py, ["-m", "pip", "install", "--no-deps", "-e", sourceDir], options);
 

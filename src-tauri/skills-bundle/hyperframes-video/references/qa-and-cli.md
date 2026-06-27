@@ -95,8 +95,9 @@ MOSS readiness flow:
 1. Run `node <skill>/scripts/hf-workflow.mjs moss-doctor --json --python python`.
 2. If `ok:false`, run `recommendedCommands` in order. Do not try `npx`, full PyTorch installs, or random package managers.
 3. For a fresh runtime, bootstrap should use `--skip-models` so package installation and model download are separate recoverable steps.
-4. For missing models, the first command is Hugging Face-only: `moss-models --skip-modelscope`. If that command fails or the agent's outer exec times out, run the next ModelScope-only command: `moss-models --skip-hf`.
-5. During long direct downloads, `moss-models` prints sparse `Progress:` heartbeats: first after about 15 seconds, then about every 30 seconds. If an outer exec timeout kills the command, inspect the last `Progress:` line to see whether bytes were still increasing before retrying or reporting the manual download observation.
+4. If bootstrap reports `Observation: moss_source_dir_invalid`, the managed `.moss/MOSS-TTS-Nano` directory will be repaired automatically. For an external `--source-dir`, provide a clean MOSS checkout. Do not create `pyproject.toml` manually or install `transformers`.
+5. For missing models, the first command is Hugging Face-only: `moss-models --skip-modelscope`. If that command fails or the agent's outer exec times out, run the next ModelScope-only command: `moss-models --skip-hf`.
+6. During long direct downloads, `moss-models` prints sparse `Progress:` heartbeats: first after about 15 seconds, then about every 30 seconds. If an outer exec timeout kills the command, inspect the last `Progress:` line to see whether bytes were still increasing before retrying or reporting the manual download observation.
 
 The MOSS ModelScope mirrors are:
 
@@ -208,6 +209,7 @@ Correct text, punctuation, names, and technical terms, but preserve timestamps.
 | --- | --- | --- |
 | Sub-agent loops through `where`, `npx`, and random pip installs for MOSS | Dependency path is underspecified | Run `moss-doctor --json`; execute its `recommendedCommands`; prefer `moss-bootstrap --skip-models` before model downloads |
 | MOSS CLI is in `Scripts/Scripts` or another non-standard venv path | Embedded Python installed the console script outside PATH | Rerun with the current scripts; `moss-audio` auto-detects `VIRTUAL_ENV`, Python `Scripts/`, and Windows `Scripts/Scripts/`. Pass `--moss-bin <path>` only if auto-detection fails |
+| `Observation: moss_source_dir_invalid` during bootstrap | `.moss/MOSS-TTS-Nano` is a partial checkout, wrong repo, or stale interrupted download | Let bootstrap repair the managed source dir, or pass a clean external MOSS checkout. Do not create `pyproject.toml` manually or install `transformers` |
 | Only background and narration render | Scene roots are hidden, often `.scene { opacity: 0 }`, while only child elements are animated | Remove scene-root `opacity:0`, animate children with `gsap.from()`, then run `visual-guard` and snapshots |
 | Snapshot shows a catalog block but rendered MP4 is blank at that timestamp | A mounted `data-composition-src` file is a standalone HTML page instead of a `<template>` sub-composition, or host/inner/timeline ids do not match | Convert the block to template sub-composition form, make ids match, rerun `visual-guard`, then render and extract the MP4 frame at the same timestamp |
 | Google Fonts warnings | Composition loads fonts from `fonts.googleapis.com`/`fonts.gstatic.com`, so headless render depends on network and fallback metrics | Remove remote font imports. Use system stacks or bundle local `assets/fonts/*.woff2` with `@font-face` |
