@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from collections.abc import Iterable
 from datetime import datetime, timezone
 import io
 import json
@@ -29,6 +30,7 @@ if sys.platform == "win32":
 REQUEST_TIMEOUT_SECONDS = 30
 USER_AGENT = "Mozilla/5.0 AgentVis-Yahoo-Finance/1.0"
 DEFAULT_HISTORY_PERIOD = "1mo"
+HeaderItems = Iterable[tuple[str, str]]
 QUOTE_SUMMARY_MODULES = ",".join([
     "assetProfile",
     "summaryProfile",
@@ -158,6 +160,15 @@ def broker_helper_available() -> bool:
     )
 
 
+def broker_helper_required() -> bool:
+    if not broker_helper_available():
+        return False
+    return (
+        os.environ.get("AGENTVIS_NETWORK_BROKER_MODE") == "required"
+        or os.environ.get("AGENTVIS_BROKER_MODE") == "explicit"
+    )
+
+
 def broker_failure_diagnostics(payload: dict[str, Any], url: str) -> str:
     """Return stable broker diagnostics for Agent observations."""
     lines = []
@@ -180,6 +191,26 @@ def broker_failure_diagnostics(payload: dict[str, Any], url: str) -> str:
     return "\n" + "\n".join(lines)
 
 
+def broker_response_header_items(payload: dict[str, Any]) -> list[tuple[str, str]]:
+    result: list[tuple[str, str]] = []
+    for item in payload.get("headers") or []:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        result.append((str(item.get("name", "")), str(item.get("value", ""))))
+    return result
+
+
+def response_headers_dict(headers: HeaderItems) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for name, value in headers:
+        key = name.lower()
+        if key == "set-cookie" and key in result:
+            result[key] = f"{result[key]}\n{value}"
+        else:
+            result[key] = value
+    return result
+
+
 class YahooSession:
     def __init__(self) -> None:
         self.cookies: dict[str, str] = {}
@@ -193,15 +224,17 @@ class YahooSession:
     def _cookie_header(self) -> str:
         return "; ".join(f"{name}={value}" for name, value in self.cookies.items())
 
-    def _update_cookies(self, headers: dict[str, str]) -> None:
-        for name, value in headers.items():
+    def _update_cookies(self, headers: HeaderItems | dict[str, str]) -> None:
+        items = headers.items() if isinstance(headers, dict) else headers
+        for name, value in items:
             if name.lower() != "set-cookie":
                 continue
-            cookie = value.split(";", 1)[0]
-            if "=" in cookie:
-                key, cookie_value = cookie.split("=", 1)
-                if key and cookie_value:
-                    self.cookies[key] = cookie_value
+            for header_value in str(value).splitlines():
+                cookie = header_value.split(";", 1)[0]
+                if "=" in cookie:
+                    key, cookie_value = cookie.split("=", 1)
+                    if key and cookie_value:
+                        self.cookies[key] = cookie_value
 
     def _request_broker(self, url: str, accept: str = "application/json") -> HTTPResponse:
         helper = os.environ.get("AGENTVIS_BROKER_FETCH") or "agentvis-broker-fetch"
@@ -233,12 +266,9 @@ class YahooSession:
         if completed.returncode != 0 or payload.get("ok") is not True:
             error = payload.get("error") or completed.stderr or "unknown broker helper failure"
             raise YahooAPIError(f"Broker helper request failed: {error}{broker_failure_diagnostics(payload, url)}")
-        response_headers = {
-            str(item.get("name", "")).lower(): str(item.get("value", ""))
-            for item in payload.get("headers") or []
-            if item.get("name")
-        }
-        self._update_cookies(response_headers)
+        response_header_items = broker_response_header_items(payload)
+        response_headers = response_headers_dict(response_header_items)
+        self._update_cookies(response_header_items)
         body = base64.b64decode(payload.get("bodyBase64") or "")
         return HTTPResponse(
             status_code=int(payload.get("status") or 0),
@@ -274,7 +304,7 @@ class YahooSession:
         )
 
     def request(self, url: str, accept: str = "application/json") -> HTTPResponse:
-        response = self._request_broker(url, accept) if broker_helper_available() else self._request_direct(url, accept)
+        response = self._request_broker(url, accept) if broker_helper_required() else self._request_direct(url, accept)
         if response.status_code >= 400 and response.status_code != 404:
             raise YahooAPIError(f"HTTP {response.status_code}: {response.text[:180]}")
         return response

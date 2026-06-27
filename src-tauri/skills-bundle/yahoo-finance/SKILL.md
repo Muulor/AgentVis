@@ -2,6 +2,7 @@
 name: yahoo-finance
 description: "Get stock, ETF, index, forex, and crypto market data from Yahoo Finance. Use this skill when the user asks for prices, detailed quotes, fundamentals, earnings, company profiles, dividends, analyst ratings, options chains, historical prices, ticker comparison, or symbol search for financial analysis. This skill provides market data only and should not be treated as investment advice."
 triggers: [yahoo-finance, Yahoo Finance, 股票查询, 股价, 财报, fundamentals, earnings, options chain, dividends, analyst ratings, stock quote, ticker]
+agentvisNetwork: brokerProxyPreferred
 execution:
   runtime: python
   entry: scripts/yf_entry.py
@@ -9,7 +10,6 @@ execution:
   maxOutput: 131072
   permissions:
     network: true
-    networkMode: brokerOnly
   argsSchema:
     - name: action
       type: string
@@ -39,7 +39,7 @@ dependencies:
 
 # Yahoo Finance Skill for AgentVis
 
-Query Yahoo Finance market data through a Script Skill contract. In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `agentvis-broker-fetch`; direct local runs fall back to `httpx`.
+Query Yahoo Finance market data through a Script Skill contract. In LocalAudit mode, HTTP(S) requests use `httpx` directly; in ControlledNetwork mode, the script is proxy-aware and can use the AgentVis broker/proxy environment.
 
 ## Symbol Hints
 
@@ -47,6 +47,6 @@ Common Yahoo symbols include US stocks such as `AAPL`, Japan stocks such as `745
 
 ## Maintainer Notes
 
-In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `agentvis-broker-fetch`; direct local runs fall back to `httpx`. The implementation calls Yahoo Finance JSON endpoints directly and manages the required Yahoo cookie/crumb flow itself, so it no longer depends on `yfinance`.
+The implementation calls Yahoo Finance JSON endpoints directly and manages the required Yahoo cookie/crumb flow itself, so it no longer depends on `yfinance`. If a future policy requires explicit `brokerOnly` execution, the broker path preserves all `Set-Cookie` headers before building the next request.
 
-The declared Script entrypoint is `scripts/yf_entry.py` and intentionally contains no URL literals or direct network client imports. Keep Yahoo HTTP access inside `yf.py` behind `YahooSession`, so sandboxed execution remains brokerOnly while local development stays convenient.
+The declared Script entrypoint is `scripts/yf_entry.py` and intentionally contains no URL literals or direct network client imports. Keep Yahoo HTTP access inside `yf.py` behind `YahooSession`, so sandboxed execution remains policy-aware while local development stays convenient.

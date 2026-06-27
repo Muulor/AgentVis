@@ -39,6 +39,8 @@ const MAX_REDIRECTS: usize = 5;
 const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 const MAX_RESPONSE_BODY_BYTES: usize = 5 * 1024 * 1024;
 const MAX_PROXY_HEADER_BYTES: usize = 64 * 1024;
+const MAX_NETWORK_SEND_RETRIES: usize = 1;
+const NETWORK_SEND_RETRY_DELAY_MS: u64 = 350;
 const FILE_SESSION_POLL_MS: u64 = 25;
 const FILE_SESSION_IDLE_GRACE_MS: u64 = 2_000;
 const PROXY_AUTH_USERNAME: &str = "agentvis";
@@ -1896,21 +1898,9 @@ pub async fn execute_broker_http_request(
         if let Some(credential) = request.credential.as_ref() {
             ensure_credential_injection_url_allowed(&url, credential)?;
         }
-        let target = resolve_and_validate_url_target(&url).await?;
-        let client = broker_http_client_for_target(&target)?;
-
-        let mut builder = client
-            .request(method.as_reqwest_method(), url.clone())
-            .headers(headers.clone())
-            .timeout(timeout);
-
-        if method.allows_body() {
-            builder = builder.body(request.body.clone());
-        }
-
-        let response = builder.send().await.map_err(|error| {
-            AppError::LlmApi(format!("Network broker request failed: {}", error))
-        })?;
+        let response =
+            send_broker_http_request_with_retry(method, &url, &headers, &request.body, timeout)
+                .await?;
 
         let status = response.status();
         if status.is_redirection() {
@@ -2001,21 +1991,9 @@ async fn execute_broker_http_request_to_file(
         if let Some(credential) = request.credential.as_ref() {
             ensure_credential_injection_url_allowed(&url, credential)?;
         }
-        let target = resolve_and_validate_url_target(&url).await?;
-        let client = broker_http_client_for_target(&target)?;
-
-        let mut builder = client
-            .request(method.as_reqwest_method(), url.clone())
-            .headers(headers.clone())
-            .timeout(timeout);
-
-        if method.allows_body() {
-            builder = builder.body(request.body.clone());
-        }
-
-        let response = builder.send().await.map_err(|error| {
-            AppError::LlmApi(format!("Network broker request failed: {}", error))
-        })?;
+        let response =
+            send_broker_http_request_with_retry(method, &url, &headers, &request.body, timeout)
+                .await?;
 
         let status = response.status();
         if status.is_redirection() {
@@ -2332,6 +2310,67 @@ fn broker_http_client_for_target(target: &ValidatedNetworkTarget) -> Result<Clie
     builder.build().map_err(|error| {
         AppError::Generic(format!("Failed to create pinned broker client: {error}"))
     })
+}
+
+async fn send_broker_http_request_with_retry(
+    method: BrokerHttpMethod,
+    url: &Url,
+    headers: &HeaderMap,
+    body: &[u8],
+    timeout: Duration,
+) -> Result<reqwest::Response, AppError> {
+    for attempt in 0..=MAX_NETWORK_SEND_RETRIES {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(NETWORK_SEND_RETRY_DELAY_MS)).await;
+        }
+
+        let target = resolve_and_validate_url_target(url).await?;
+        let client = broker_http_client_for_target(&target)?;
+
+        let mut builder = client
+            .request(method.as_reqwest_method(), url.clone())
+            .headers(headers.clone())
+            .timeout(timeout);
+
+        if method.allows_body() {
+            builder = builder.body(body.to_vec());
+        }
+
+        match builder.send().await {
+            Ok(response) => return Ok(response),
+            Err(error) => {
+                if attempt < MAX_NETWORK_SEND_RETRIES
+                    && should_retry_broker_send_error(method, &error)
+                {
+                    log::debug!(
+                        "[NetworkBroker] retrying broker request after send failure: method={}, host={}, attempt={}, error={}",
+                        method.as_str(),
+                        target.host,
+                        attempt + 1,
+                        error
+                    );
+                    continue;
+                }
+                return Err(AppError::LlmApi(format!(
+                    "Network broker request failed: {}",
+                    error
+                )));
+            }
+        }
+    }
+
+    Err(AppError::LlmApi(
+        "Network broker request failed after retry".to_string(),
+    ))
+}
+
+fn should_retry_broker_send_error(method: BrokerHttpMethod, error: &reqwest::Error) -> bool {
+    if error.is_connect() {
+        return true;
+    }
+
+    matches!(method, BrokerHttpMethod::Get | BrokerHttpMethod::Head)
+        && (error.is_timeout() || error.is_request())
 }
 
 async fn connect_to_validated_target(
@@ -3036,6 +3075,13 @@ mod tests {
         );
     }
 
+    async fn unused_loopback_addr() -> SocketAddr {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        addr
+    }
+
     #[tokio::test]
     async fn broker_accepts_public_https_ip_url() {
         let url = parse_and_validate_url("https://93.184.216.34/search")
@@ -3164,6 +3210,69 @@ mod tests {
 
         assert_eq!(response.status, 200);
         assert_eq!(String::from_utf8(response.body).unwrap(), "canary-ok");
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn broker_retries_get_connect_failure_with_fresh_resolution() {
+        let host = format!("retry-get-{}.agentvis-canary.test", Uuid::new_v4());
+        let closed_addr = unused_loopback_addr().await;
+        let (addr, handle) = spawn_broker_canary_server(
+            vec![("/ok", BrokerCanaryResponse::Body("retry-get-ok"))],
+            1,
+        )
+        .await;
+        push_public_canary_resolution(&host, closed_addr);
+        push_public_canary_resolution(&host, addr);
+
+        let response = execute_broker_http_request(BrokerHttpRequest {
+            method: BrokerHttpMethod::Get,
+            url: format!("http://{host}/ok"),
+            headers: Vec::new(),
+            body: Vec::new(),
+            timeout_ms: Some(5_000),
+            credential: None,
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(response.status, 200);
+        assert_eq!(String::from_utf8(response.body).unwrap(), "retry-get-ok");
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn broker_retries_post_connect_failure_with_fresh_resolution() {
+        let host = format!("retry-post-{}.agentvis-canary.test", Uuid::new_v4());
+        let closed_addr = unused_loopback_addr().await;
+        let upload_body = br#"{"probe":"agentvis-post-retry-canary"}"#;
+        let (addr, handle) = spawn_broker_canary_server(
+            vec![(
+                "/upload",
+                BrokerCanaryResponse::UploadBody {
+                    expected_body: upload_body,
+                    response_body: "retry-post-ok",
+                },
+            )],
+            1,
+        )
+        .await;
+        push_public_canary_resolution(&host, closed_addr);
+        push_public_canary_resolution(&host, addr);
+
+        let response = execute_broker_http_request(BrokerHttpRequest {
+            method: BrokerHttpMethod::Post,
+            url: format!("http://{host}/upload"),
+            headers: Vec::new(),
+            body: upload_body.to_vec(),
+            timeout_ms: Some(5_000),
+            credential: None,
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(response.status, 200);
+        assert_eq!(String::from_utf8(response.body).unwrap(), "retry-post-ok");
         handle.await.unwrap();
     }
 
