@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import argparse
 import base64
-from http.client import IncompleteRead
+from contextlib import contextmanager
+from http.client import IncompleteRead, RemoteDisconnected
 from dataclasses import dataclass
 from datetime import datetime
 import io
@@ -38,10 +39,11 @@ ARXIV_API_BASE = "http://export.arxiv.org/api/query"
 ARXIV_ABS_BASE = "https://arxiv.org/abs"
 ARXIV_PDF_BASE = "https://arxiv.org/pdf"
 REQUEST_TIMEOUT_SECONDS = 25
+PDF_DOWNLOAD_TIMEOUT_SECONDS = 120
 MAX_REQUEST_RETRIES = 1
 ARXIV_API_MIN_INTERVAL_SECONDS = 3.2
-RATE_LIMIT_LOCK_MAX_WAIT_SECONDS = 15.0
-RATE_LIMIT_STALE_LOCK_SECONDS = 30.0
+RATE_LIMIT_LOCK_MAX_WAIT_SECONDS = 60.0
+RATE_LIMIT_STALE_LOCK_SECONDS = 120.0
 DEFAULT_ABSTRACT_MAX_CHARS = 500
 FILENAME_UNSAFE_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -131,6 +133,9 @@ class HTTPResponse:
     status_code: int
     headers: dict[str, str]
     body: bytes
+    saved_path: str = ""
+    bytes_in: int = 0
+    final_url: str = ""
 
     @property
     def text(self) -> str:
@@ -184,12 +189,38 @@ def broker_failure_diagnostics(payload: dict[str, Any], url: str) -> str:
     return "\n" + "\n".join(lines)
 
 
-def request_url(url: str, accept: str = "*/*") -> HTTPResponse:
+def request_url(
+    url: str,
+    accept: str = "*/*",
+    save_path: str = "",
+    timeout_seconds: int = REQUEST_TIMEOUT_SECONDS,
+) -> HTTPResponse:
     if url.startswith(ARXIV_API_BASE):
-        wait_for_arxiv_api_slot()
+        with arxiv_api_slot():
+            if broker_helper_available():
+                return request_url_broker(
+                    url,
+                    accept,
+                    save_path=save_path,
+                    timeout_seconds=timeout_seconds,
+                )
+            return request_url_direct(url, accept, timeout_seconds=timeout_seconds)
     if broker_helper_available():
-        return request_url_broker(url, accept)
-    return request_url_direct(url, accept)
+        return request_url_broker(
+            url,
+            accept,
+            save_path=save_path,
+            timeout_seconds=timeout_seconds,
+        )
+    return request_url_direct(url, accept, timeout_seconds=timeout_seconds)
+
+
+def arxiv_api_usage_guidance() -> str:
+    return (
+        "arXiv API calls are single-flight in this skill. Do not call "
+        "arxiv-search in parallel; serialize calls at least 3 seconds apart "
+        "or combine terms into one broader query."
+    )
 
 
 def skill_state_dir() -> Path:
@@ -210,7 +241,8 @@ def skill_state_dir() -> Path:
     return Path(tempfile.gettempdir())
 
 
-def wait_for_arxiv_api_slot() -> None:
+@contextmanager
+def arxiv_api_slot():
     """Coordinate arXiv API calls across short-lived skill processes."""
     state_dir = skill_state_dir()
     lock_path = state_dir / "api_rate.lock"
@@ -229,8 +261,10 @@ def wait_for_arxiv_api_slot() -> None:
             except OSError:
                 pass
             if time.time() - started_at >= RATE_LIMIT_LOCK_MAX_WAIT_SECONDS:
-                time.sleep(ARXIV_API_MIN_INTERVAL_SECONDS)
-                return
+                raise ArxivAPIError(
+                    "Timed out waiting for the arXiv API rate-limit queue. "
+                    f"{arxiv_api_usage_guidance()}"
+                )
             time.sleep(0.1)
 
     try:
@@ -246,6 +280,14 @@ def wait_for_arxiv_api_slot() -> None:
         if wait_seconds > 0:
             time.sleep(wait_seconds)
         state_path.write_text(str(time.time()), encoding="utf-8")
+        queued_seconds = time.time() - started_at
+        if queued_seconds >= 1.0:
+            print(
+                "[arxiv-search notice] Waited "
+                f"{queued_seconds:.1f}s for arXiv API rate-limit serialization. "
+                f"{arxiv_api_usage_guidance()}"
+            )
+        yield
     finally:
         try:
             lock_path.unlink(missing_ok=True)
@@ -253,7 +295,12 @@ def wait_for_arxiv_api_slot() -> None:
             pass
 
 
-def request_url_broker(url: str, accept: str) -> HTTPResponse:
+def request_url_broker(
+    url: str,
+    accept: str,
+    save_path: str = "",
+    timeout_seconds: int = REQUEST_TIMEOUT_SECONDS,
+) -> HTTPResponse:
     helper = os.environ.get("AGENTVIS_BROKER_FETCH") or "agentvis-broker-fetch"
     payload = {
         "method": "GET",
@@ -262,8 +309,10 @@ def request_url_broker(url: str, accept: str) -> HTTPResponse:
             {"name": "Accept", "value": accept},
             {"name": "User-Agent", "value": "AgentVis-arXiv-Search/1.0"},
         ],
-        "timeoutMs": REQUEST_TIMEOUT_SECONDS * 1000,
+        "timeoutMs": timeout_seconds * 1000,
     }
+    if save_path:
+        payload["savePath"] = save_path
     last_error = "unknown broker helper failure"
     for attempt in range(MAX_REQUEST_RETRIES + 1):
         completed = subprocess.run(
@@ -271,7 +320,7 @@ def request_url_broker(url: str, accept: str) -> HTTPResponse:
             input=json.dumps(payload),
             text=True,
             capture_output=True,
-            timeout=REQUEST_TIMEOUT_SECONDS + 10,
+            timeout=timeout_seconds + 10,
             check=False,
         )
         try:
@@ -293,18 +342,48 @@ def request_url_broker(url: str, accept: str) -> HTTPResponse:
         }
         body = base64.b64decode(data.get("bodyBase64") or "")
         status_code = int(data.get("status") or 0)
+        saved_path = str(data.get("savedPath") or "")
+        truncated = bool(data.get("truncated"))
+        if truncated and not saved_path:
+            raise ArxivAPIError(
+                "Broker response was truncated before the complete body was returned. "
+                "Use broker savePath streaming for large downloads."
+            )
         if status_code in {429, 502, 503} and attempt < MAX_REQUEST_RETRIES:
+            remove_saved_broker_file(saved_path)
             retry_after = headers.get("retry-after")
             delay = int(retry_after) if retry_after and retry_after.isdigit() else 3 + attempt * 2
+            delay = max(delay, ARXIV_API_MIN_INTERVAL_SECONDS)
             time.sleep(delay)
             continue
         if status_code >= 400:
+            remove_saved_broker_file(saved_path)
             raise ArxivAPIError(f"HTTP {status_code}: {body[:200].decode('utf-8', errors='replace')}")
-        return HTTPResponse(status_code=status_code, headers=headers, body=body)
+        return HTTPResponse(
+            status_code=status_code,
+            headers=headers,
+            body=body,
+            saved_path=saved_path,
+            bytes_in=int(data.get("bytesIn") or len(body)),
+            final_url=str(data.get("finalUrl") or url),
+        )
     raise ArxivAPIError(f"Broker helper request failed: {last_error}")
 
 
-def request_url_direct(url: str, accept: str) -> HTTPResponse:
+def remove_saved_broker_file(saved_path: str) -> None:
+    if not saved_path:
+        return
+    try:
+        Path(saved_path).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def request_url_direct(
+    url: str,
+    accept: str,
+    timeout_seconds: int = REQUEST_TIMEOUT_SECONDS,
+) -> HTTPResponse:
     request = Request(
         url,
         headers={
@@ -315,11 +394,14 @@ def request_url_direct(url: str, accept: str) -> HTTPResponse:
     last_error: Exception | None = None
     for attempt in range(MAX_REQUEST_RETRIES + 1):
         try:
-            with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            with urlopen(request, timeout=timeout_seconds) as response:
+                body = response.read()
                 return HTTPResponse(
                     status_code=response.status,
                     headers={k.lower(): v for k, v in response.headers.items()},
-                    body=response.read(),
+                    body=body,
+                    bytes_in=len(body),
+                    final_url=response.geturl(),
                 )
         except HTTPError as exc:
             last_error = exc
@@ -328,13 +410,20 @@ def request_url_direct(url: str, accept: str) -> HTTPResponse:
                 raise ArxivAPIError(f"HTTP {exc.code}: {body or exc.reason}") from exc
             retry_after = exc.headers.get("Retry-After")
             delay = int(retry_after) if retry_after and retry_after.isdigit() else 3 + attempt * 2
+            delay = max(delay, ARXIV_API_MIN_INTERVAL_SECONDS)
             time.sleep(delay)
-        except (TimeoutError, URLError, IncompleteRead) as exc:
+        except (TimeoutError, URLError, IncompleteRead, RemoteDisconnected, ConnectionError) as exc:
             last_error = exc
             if attempt >= MAX_REQUEST_RETRIES:
-                raise ArxivAPIError(f"Request failed: {exc}") from exc
-            time.sleep(1 + attempt)
-    raise ArxivAPIError(f"Request failed: {last_error}") from last_error
+                message = f"Request failed: {exc}"
+                if url.startswith(ARXIV_API_BASE):
+                    message += f". {arxiv_api_usage_guidance()}"
+                raise ArxivAPIError(message) from exc
+            time.sleep(max(1 + attempt, ARXIV_API_MIN_INTERVAL_SECONDS))
+    message = f"Request failed: {last_error}"
+    if url.startswith(ARXIV_API_BASE):
+        message += f". {arxiv_api_usage_guidance()}"
+    raise ArxivAPIError(message) from last_error
 
 
 def build_api_url(params: dict[str, Any]) -> str:
@@ -674,6 +763,34 @@ def cmd_detail(args: argparse.Namespace) -> int:
     return 0
 
 
+def validate_pdf_file(path: Path) -> None:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise ArxivAPIError(f"Downloaded PDF file is missing: {path}") from exc
+
+    if size < 8:
+        raise ArxivAPIError(f"Downloaded PDF is too small to be valid: {path}")
+
+    with path.open("rb") as file:
+        head = file.read(512)
+        if not head.startswith(b"%PDF-"):
+            preview = head[:80].decode("utf-8", errors="replace")
+            raise ArxivAPIError(
+                "Downloaded content is not a PDF. "
+                f"First bytes: {preview!r}"
+            )
+
+        tail_size = min(size, 64 * 1024)
+        file.seek(-tail_size, os.SEEK_END)
+        tail = file.read()
+        if b"%%EOF" not in tail:
+            raise ArxivAPIError(
+                "Downloaded PDF appears incomplete: missing %%EOF marker near the end. "
+                "This usually means the response was truncated during download."
+            )
+
+
 def cmd_download(args: argparse.Namespace) -> int:
     arxiv_id = extract_arxiv_id(args.arxiv_id)
     print(f"Downloading paper: {arxiv_id}")
@@ -689,12 +806,26 @@ def cmd_download(args: argparse.Namespace) -> int:
         raise ArxivAPIError(f"Output parent path is not a directory: {parent_dir}")
     parent_dir.mkdir(parents=True, exist_ok=True)
 
-    response = request_url(paper.pdf_url, accept="application/pdf")
-    output_path.write_bytes(response.body)
+    response = request_url(
+        paper.pdf_url,
+        accept="application/pdf",
+        save_path=str(output_path) if broker_helper_available() else "",
+        timeout_seconds=PDF_DOWNLOAD_TIMEOUT_SECONDS,
+    )
+    saved_path = Path(response.saved_path) if response.saved_path else output_path
+    if not response.saved_path:
+        output_path.write_bytes(response.body)
+
+    try:
+        validate_pdf_file(saved_path)
+    except ArxivAPIError:
+        remove_saved_broker_file(str(saved_path))
+        raise
+
     print("\n  Download succeeded!")
     print(f"  Title: {paper.title}")
-    print(f"  File: {output_path.resolve()}")
-    print(f"  Size: {output_path.stat().st_size / 1024:.1f} KB")
+    print(f"  File: {saved_path.resolve()}")
+    print(f"  Size: {saved_path.stat().st_size / 1024:.1f} KB")
     return 0
 
 

@@ -1,6 +1,6 @@
 ---
 name: arxiv-search
-description: "Search, browse, inspect, and download academic papers from arXiv through the public arXiv API. Use this skill when the user asks for research papers, academic literature, paper summaries, latest ML/AI/CS papers, paper metadata, arXiv IDs, PDF downloads, or literature review starting points."
+description: "Search, browse, inspect, and download academic papers from arXiv through the public arXiv API. Single-flight only: do not call this skill in parallel; serialize arxiv-search calls at least 3 seconds apart or combine terms into one broader query. Use this skill when the user asks for research papers, academic literature, paper summaries, latest ML/AI/CS papers, paper metadata, arXiv IDs, PDF downloads, or literature review starting points."
 triggers: [arxiv-search, arxiv, arXiv, 论文搜索, 学术论文, 论文下载, 文献检索, 最新论文, research paper, paper search, academic search, paper download, literature review]
 execution:
   runtime: python
@@ -14,11 +14,11 @@ execution:
     - name: action
       type: string
       required: true
-      description: "Action to run: search, latest, detail, download, or categories."
+      description: "Action to run: search, latest, detail, download, or categories. Do not issue multiple arxiv-search tool calls in parallel; run them sequentially."
     - name: query
       type: string
       required: false
-      description: "Search query for action=search, or fallback arXiv ID/URL for detail/download."
+      description: "Search query for action=search, or fallback arXiv ID/URL for detail/download. For multiple related terms, prefer one broader arXiv query with OR/AND instead of parallel skill calls."
     - name: category
       type: string
       required: false
@@ -42,7 +42,7 @@ execution:
     - name: limit
       type: number
       required: false
-      description: "Maximum number of results for search/latest. Defaults to 10, matching the arXiv API default. Exceeding 10 is not recommended due to the risk of triggering a 429 rate limit."
+      description: "Maximum number of results for search/latest. Must be a JSON number, not a quoted string. Defaults to 10, matching the arXiv API default. Keep <=10 unless the user explicitly needs a broader page; larger pages and parallel calls increase the risk of arXiv throttling."
     - name: field
       type: string
       required: false
@@ -99,7 +99,7 @@ In AgentVis `brokerOnly` mode, HTTP(S) requests are sent explicitly through `age
 - `search`: search papers by keyword or arXiv advanced query syntax.
 - `latest`: fetch latest papers for a category or alias.
 - `detail`: show complete metadata for one arXiv ID or URL.
-- `download`: download one paper PDF to `output_file`, `output_dir`, or the current Agent deliverables/workdir.
+- `download`: download one paper PDF to `output_file`, `output_dir`, or the current Agent deliverables/workdir. In AgentVis brokerOnly mode, PDF downloads stream through broker `savePath` instead of returning the file body as base64, avoiding large-response truncation.
 - `categories`: list common category IDs and aliases.
 
 ## Query Syntax
@@ -117,7 +117,7 @@ arXiv supports field prefixes and boolean operators:
 
 The official arXiv query endpoint accepts `search_query`, `id_list`, `start`, `max_results`, `sortBy`, and `sortOrder`. Use this skill's `filter`, `date_from`, `date_to`, `author`, `title`, `abstract`, `category`, and `field` arguments as local helpers that are combined into `search_query`.
 
-The skill waits at least 3.2 seconds between arXiv API calls across AgentVis skill processes. Keep the default `limit=10` unless the user explicitly needs a broader page; repeated small requests should still be avoided.
+The skill waits at least 3.2 seconds between arXiv API calls across AgentVis skill processes and holds a single-flight lock while the arXiv API request is in progress. Do not launch multiple `external_skill_execute` calls for this skill in parallel. Keep the default `limit=10` unless the user explicitly needs a broader page; repeated small requests should still be avoided. If multiple keyword searches are necessary, run them sequentially or combine terms with arXiv boolean syntax.
 
 ## Category Aliases
 
