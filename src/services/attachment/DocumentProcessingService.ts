@@ -10,9 +10,9 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import {
-    FORMAT_MAX_SIZE,
     DOCUMENT_SIZE_THRESHOLDS,
     SUPPORTED_DOCUMENT_EXTENSIONS,
+    getFormatMaxSize,
     getProcessingLevel,
     DocumentProcessingLevel,
     DOCUMENT_ERROR_MESSAGES,
@@ -27,6 +27,7 @@ import type {
 import { DocumentProcessingError } from './types';
 import { getProcessor, hasProcessor } from './processors';
 import { getLogger } from '@services/logger';
+import { getRustParserCommand, isPlainTextProcessableFile } from '@services/file-types';
 
 const logger = getLogger('DocumentProcessingService');
 
@@ -108,7 +109,7 @@ export class DocumentProcessingService {
         }
 
         // 4. 检查格式专属大小限制
-        const maxSize = FORMAT_MAX_SIZE[ext];
+        const maxSize = getFormatMaxSize(ext);
         if (size > maxSize) {
             return {
                 valid: false,
@@ -272,29 +273,20 @@ export class DocumentProcessingService {
      * Markdown/纯文本/代码/配置文件走通用文本读取命令，避免扩展名专用命令误拒。
      */
     private async readRawContent(filePath: string, extension: DocumentExtension): Promise<string> {
-        switch (extension) {
-            // Office 格式：需要专属 Rust 解析器
-            case 'docx':
-                return await invoke<string>('parse_docx', { filePath });
-            case 'xlsx':
-                return await invoke<string>('parse_xlsx', { filePath });
-            case 'pdf':
-                return await invoke<string>('parse_pdf', { filePath });
-            case 'pptx':
-                return await invoke<string>('parse_pptx', { filePath });
-
-            default: {
-                const { PLAIN_TEXT_FORMATS } = await import('./constants');
-                if ((PLAIN_TEXT_FORMATS as readonly string[]).includes(extension)) {
-                    // 纯文本/代码/配置格式使用通用读取，避免 parse_txt 的 .txt 扩展名限制。
-                    return await invoke<string>('file_read_content', { filePath });
-                }
-                throw new DocumentProcessingError(
-                    'UNSUPPORTED_FORMAT',
-                    `Unsupported format: ${extension}`
-                );
-            }
+        const extensionFileName = `file.${extension}`;
+        const parserCommand = getRustParserCommand(extensionFileName);
+        if (parserCommand) {
+            return await invoke<string>(parserCommand, { filePath });
         }
+
+        if (isPlainTextProcessableFile(extensionFileName)) {
+            return await invoke<string>('file_read_content', { filePath });
+        }
+
+        throw new DocumentProcessingError(
+            'UNSUPPORTED_FORMAT',
+            `Unsupported format: ${extension}`
+        );
     }
 }
 

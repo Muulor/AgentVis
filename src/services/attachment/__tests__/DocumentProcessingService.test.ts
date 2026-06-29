@@ -65,4 +65,36 @@ describe('DocumentProcessingService text attachment parsing', () => {
         expect(invokeMock).toHaveBeenCalledWith('file_read_content', { filePath });
         expect(invokeMock).not.toHaveBeenCalledWith('parse_txt', expect.anything());
     });
+
+    it('processes legacy xls spreadsheets with the Excel parser', async () => {
+        const filePath = 'C:\\Users\\Muulo\\Documents\\legacy-sheet.xls';
+        invokeMock.mockImplementation(async (command: string) => {
+            if (command === 'parse_xlsx') {
+                return [
+                    '## Worksheet: Sheet1',
+                    '',
+                    '| Name | Count |',
+                    '| --- | --- |',
+                    '| Alpha | 3 |',
+                ].join('\n');
+            }
+
+            throw new Error(`Unexpected command: ${command}`);
+        });
+
+        const service = new DocumentProcessingService();
+        const result = await service.processDocument(
+            filePath,
+            'legacy-sheet.xls',
+            'xls',
+            'agent-1',
+            undefined,
+            256
+        );
+
+        expect(result.content).toContain('Excel Document: legacy-sheet.xls');
+        expect(result.metadata.fileType).toBe('xls');
+        expect(result.metadata.sheetCount).toBe(1);
+        expect(invokeMock).toHaveBeenCalledWith('parse_xlsx', { filePath });
+    });
 });

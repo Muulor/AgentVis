@@ -516,6 +516,7 @@ export const enUS = {
         documentProcessingFailed: 'Document Cannot Be Processed',
         unsupportedFileFormat: 'Unsupported File Format',
         supportedFormats: 'Supported formats: {formats}',
+        attachmentSupportedFormats: 'JPEG, PNG, WebP, HEIF/HEIC | DOCX, XLS/XLSX, PDF, TXT, MD, CSV/TSV, ADOC, LOG | Code and config text files',
         addAttachmentFailed: 'Failed to Add Attachment',
         attachmentFilterName: 'Attachments',
         imageTooLargeError: 'Image file is too large ({size}MB). Maximum size is 5MB.',

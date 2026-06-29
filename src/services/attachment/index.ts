@@ -7,7 +7,7 @@
 export {
     AttachmentService,
     attachmentService,
-    SUPPORTED_FORMATS_DISPLAY,
+    getSupportedFormatsDisplay,
     validateAttachmentLimits,
     type AttachmentLimitResult,
 } from './AttachmentService';

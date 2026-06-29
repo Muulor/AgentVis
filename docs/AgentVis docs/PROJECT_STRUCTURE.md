@@ -491,6 +491,7 @@ services/
 ├── 📁 data/                      # 数据管理服务
 ├── 📁 diagnostics/               # 诊断服务
 ├── 📁 fast-apply/                # Fast-Apply 快速应用引擎
+├── 📁 file-types/                # 文件类型能力注册表（附件/预览/解析/知识库策略）
 ├── 📁 llm/                       # LLM 调用服务
 ├── 📁 memory/                    # 记忆系统服务
 ├── 📁 planning/                  # 规划执行服务（Agent Loop）
@@ -517,8 +518,17 @@ attachment/
     ├── DocxProcessor.ts          # Word 文档处理器
     ├── PdfProcessor.ts           # PDF 文档处理器
     ├── PptxProcessor.ts          # PPT 文档处理器
-    ├── TextProcessor.ts          # 文本文件处理器（TXT/MD）
-    └── XlsxProcessor.ts          # Excel 表格处理器
+    ├── TextProcessor.ts          # 文本/代码/配置类文件处理器
+    └── XlsxProcessor.ts          # Excel 表格处理器（XLSX/XLS）
+```
+
+### 📁 services/file-types/ - 文件类型能力注册表
+```
+file-types/
+├── index.ts                      # 模块导出索引
+├── FileTypeRegistry.ts           # 文件类型统一注册表（附件上传、文件预览、解析命令、知识库过滤策略）
+└── 📁 __tests__/                 # 文件类型策略单元测试
+    └── FileTypeRegistry.test.ts  # 附件/预览/解析/知识库能力矩阵测试
 ```
 
 ### 📁 services/data/ - 数据管理服务
@@ -852,6 +862,7 @@ rag/
 ├── RagQueryPreprocessor.ts       # RAG 查询预处理器
 ├── RerankService.ts              # 重排序服务
 ├── DocumentOverviewBuilder.ts    # 文档总览合成块构建器（提升概览类 RAG 召回）
+├── KnowledgeFileFilter.ts        # 知识库自动索引文件过滤兼容入口（委托 file-types 策略）
 ├── LruCache.ts                   # 轻量级 LRU 缓存工具类
 └── 📁 __tests__/                # 单元测试
     ├── LruCache.test.ts          # LRU 缓存测试

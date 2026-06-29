@@ -18,6 +18,7 @@ describe('KnowledgeFileFilter', () => {
 
         expect(isKnowledgeTextFile('/tmp/notes.txt')).toBe(true);
         expect(isKnowledgeOfficeFile('/tmp/book.xlsx')).toBe(true);
+        expect(isKnowledgeOfficeFile('/tmp/legacy-book.xls')).toBe(true);
         expect(getKnowledgeDocumentType('/tmp/report.markdown')).toBe('markdown');
     });
 
@@ -30,11 +31,21 @@ describe('KnowledgeFileFilter', () => {
         expect(isCodeFileForKnowledge('/tmp/pyproject.toml')).toBe(true);
         expect(isCodeFileForKnowledge('/tmp/web.config.xml')).toBe(true);
         expect(isCodeFileForKnowledge('/tmp/readme.rst')).toBe(true);
+        expect(isCodeFileForKnowledge('/tmp/package-lock.json')).toBe(true);
+        expect(isCodeFileForKnowledge('/tmp/notebook.ipynb')).toBe(true);
+        expect(isCodeFileForKnowledge('/tmp/schema.graphql')).toBe(true);
+        expect(isCodeFileForKnowledge('/tmp/main.tf')).toBe(true);
+        expect(isCodeFileForKnowledge('/tmp/app.mjs')).toBe(true);
         expect(shouldAutoIndexKnowledgeFile('/tmp/app.ts')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/script.py')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/query.sql')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/config.json')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/data.jsonl')).toBe(false);
+        expect(shouldAutoIndexKnowledgeFile('/tmp/package-lock.json')).toBe(false);
+        expect(shouldAutoIndexKnowledgeFile('/tmp/notebook.ipynb')).toBe(false);
+        expect(shouldAutoIndexKnowledgeFile('/tmp/schema.graphql')).toBe(false);
+        expect(shouldAutoIndexKnowledgeFile('/tmp/main.tf')).toBe(false);
+        expect(shouldAutoIndexKnowledgeFile('/tmp/app.mjs')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/settings.ini')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/archive.bin')).toBe(false);
         expect(shouldAutoIndexKnowledgeFile('/tmp/README')).toBe(false);

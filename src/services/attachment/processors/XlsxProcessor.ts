@@ -50,7 +50,7 @@ const DEFAULT_CONFIG: XlsxProcessorConfig = {
  * 支持 .xlsx 和 .xls 文件
  */
 export class XlsxProcessor extends BaseProcessor {
-    readonly supportedExtensions: readonly DocumentExtension[] = ['xlsx'];
+    readonly supportedExtensions: readonly DocumentExtension[] = ['xlsx', 'xls'];
 
     private xlsxConfig: XlsxProcessorConfig;
 
@@ -77,7 +77,7 @@ export class XlsxProcessor extends BaseProcessor {
             return {
                 content: '',
                 metadata: {
-                    fileType: 'xlsx',
+                    fileType: context.extension,
                     originalSize: context.fileSize,
                 },
             };
@@ -88,7 +88,7 @@ export class XlsxProcessor extends BaseProcessor {
 
         // 3. 构建元数据
         const metadata: DocumentMetadata = {
-            fileType: 'xlsx',
+            fileType: context.extension,
             originalSize: context.fileSize,
             sheetCount: sheets.length,
         };

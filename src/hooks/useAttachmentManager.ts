@@ -17,7 +17,6 @@ import {
     attachmentService,
     ImageCompressionError,
     CompressionErrorCode,
-    SUPPORTED_FORMATS_DISPLAY,
     DocumentProcessingError,
 } from '@services/attachment';
 import type { AttachmentInfo } from '@/types/message';
@@ -298,7 +297,7 @@ export function useAttachmentManager(
             toast({
                 type: 'warning',
                 title: t('chat.unsupportedFileFormat'),
-                description: t('chat.supportedFormats', { formats: SUPPORTED_FORMATS_DISPLAY }),
+                description: t('chat.supportedFormats', { formats: t('chat.attachmentSupportedFormats') }),
                 duration: 5000,
             });
         } else {

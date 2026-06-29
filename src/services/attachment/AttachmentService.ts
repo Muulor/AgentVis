@@ -18,44 +18,29 @@ import {
 } from './ImageCompressionService';
 import { documentProcessingService } from './DocumentProcessingService';
 import { DocumentProcessingError } from './types';
-import { ATTACHMENT_SIZE_LIMITS, DOCUMENT_PROGRESS_MESSAGES, PLAIN_TEXT_FORMATS } from './constants';
+import { ATTACHMENT_SIZE_LIMITS, DOCUMENT_PROGRESS_MESSAGES } from './constants';
 import type { DocumentProcessingResult } from './types';
 import { getLogger } from '@services/logger';
 import { translate } from '@/i18n';
+import {
+    getAttachmentAcceptedExtensions,
+    getAttachmentKind,
+    getFileExtension,
+    getRustParserCommand,
+    isPlainTextProcessableFile,
+} from '@services/file-types';
 
 const logger = getLogger('AttachmentService');
 
 // ==================== 常量定义 ====================
 
-/** 支持的图片扩展名 */
-const SUPPORTED_IMAGES = ['jpeg', 'jpg', 'png', 'webp', 'heif', 'heic'] as const;
-
-/** 支持的文档扩展名 */
-const SUPPORTED_DOCUMENTS = [
-    // 办公文档
-    'docx', 'xlsx', 'pdf', 'txt', 'md', 'pptx',
-    // 代码文件（Web 与前端）
-    'html', 'css', 'scss', 'js', 'jsx', 'ts', 'tsx',
-    // 代码文件（通用编程语言）
-    'py', 'go', 'rs',
-    // 配置与数据格式
-    'json', 'yaml', 'yml', 'toml', 'sql',
-] as const;
-
 /** 所有支持的扩展名 */
-const ALL_SUPPORTED_EXTENSIONS = [...SUPPORTED_IMAGES, ...SUPPORTED_DOCUMENTS] as const;
+const ALL_SUPPORTED_EXTENSIONS = getAttachmentAcceptedExtensions();
 
 /** 用于 Toast 提示的格式显示字符串 */
-export const SUPPORTED_FORMATS_DISPLAY = [
-    // 图片
-    'JPEG, PNG, WebP, HEIF/HEIC',
-    // 办公文档
-    'DOCX, XLSX, PDF, TXT, MD, PPTX',
-    // 代码文件
-    'HTML, CSS, SCSS, JS/JSX, TS/TSX, PY, GO, RS',
-    // 配置文件
-    'JSON, YAML, TOML, SQL',
-].join(' | ');
+export function getSupportedFormatsDisplay(): string {
+    return translate('chat.attachmentSupportedFormats');
+}
 
 // ==================== 类型定义 ====================
 
@@ -71,15 +56,6 @@ interface AddAttachmentOptions {
 }
 
 // ==================== 工具函数 ====================
-
-/**
- * 获取文件扩展名（小写，不含点号）
- */
-function getFileExtension(filePath: string): string {
-    const lastDot = filePath.lastIndexOf('.');
-    if (lastDot === -1) return '';
-    return filePath.substring(lastDot + 1).toLowerCase();
-}
 
 /**
  * 获取文件名（不含路径）
@@ -118,12 +94,12 @@ export class AttachmentService {
         }
 
         // 检查是否为图片
-        if ((SUPPORTED_IMAGES as readonly string[]).includes(ext)) {
+        if (getAttachmentKind(filePath) === 'image') {
             return { valid: true, type: 'image' };
         }
 
         // 检查是否为文档
-        if ((SUPPORTED_DOCUMENTS as readonly string[]).includes(ext)) {
+        if (getAttachmentKind(filePath) === 'document') {
             return { valid: true, type: 'document' };
         }
 
@@ -131,7 +107,7 @@ export class AttachmentService {
             valid: false,
             error: translate('chat.unsupportedFileFormatDescription', {
                 extension: ext,
-                formats: ALL_SUPPORTED_EXTENSIONS.join(', '),
+                formats: getSupportedFormatsDisplay(),
             }),
         };
     }
@@ -404,26 +380,18 @@ export class AttachmentService {
      */
     async parseDocument(filePath: string, extension: string): Promise<string> {
         const normalizedExtension = extension.toLowerCase();
+        const extensionFileName = `file.${normalizedExtension}`;
+        const parserCommand = getRustParserCommand(extensionFileName);
 
-        switch (normalizedExtension) {
-            case 'docx':
-                return await invoke<string>('parse_docx', { filePath });
-            case 'xlsx':
-                return await invoke<string>('parse_xlsx', { filePath });
-            case 'pdf':
-                return await invoke<string>('parse_pdf', { filePath });
-            case 'pptx':
-                return await invoke<string>('parse_pptx', { filePath });
-            case 'markdown':
-                return await invoke<string>('file_read_content', { filePath });
-            default: {
-                if ((PLAIN_TEXT_FORMATS as readonly string[]).includes(normalizedExtension)) {
-                    return await invoke<string>('file_read_content', { filePath });
-                }
-
-                throw new Error(translate('chat.unsupportedDocumentFormat', { extension }));
-            }
+        if (parserCommand) {
+            return await invoke<string>(parserCommand, { filePath });
         }
+
+        if (normalizedExtension === 'markdown' || isPlainTextProcessableFile(extensionFileName)) {
+            return await invoke<string>('file_read_content', { filePath });
+        }
+
+        throw new Error(translate('chat.unsupportedDocumentFormat', { extension }));
     }
 
     /**

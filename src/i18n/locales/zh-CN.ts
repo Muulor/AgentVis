@@ -514,6 +514,7 @@ export const zhCN = {
         documentProcessingFailed: '文档无法处理',
         unsupportedFileFormat: '不支持的文件格式',
         supportedFormats: '支持的格式: {formats}',
+        attachmentSupportedFormats: 'JPEG、PNG、WebP、HEIF/HEIC | DOCX、XLS/XLSX、PDF、TXT、MD、CSV/TSV、ADOC、LOG | 代码与配置类文本文件',
         addAttachmentFailed: '添加附件失败',
         attachmentFilterName: '附件',
         imageTooLargeError: '图片文件过大（{size}MB），最大支持 5MB',

@@ -26,6 +26,21 @@ import { usePreviewStore } from '@stores/previewStore';
 import { getLogger } from '@services/logger';
 import { isPreviewableFile, inferTemplateFromFileName } from '@services/preview';
 import { useI18n } from '@/i18n';
+import {
+    getAudioMimeType,
+    getCodeLanguage,
+    getFileExtension,
+    getImageMimeType,
+    getVideoMimeType,
+    isAudioFile as isRegistryAudioFile,
+    isBinaryDocumentFile,
+    isCodeFile as isRegistryCodeFile,
+    isHtmlFile as isRegistryHtmlFile,
+    isImageFile as isRegistryImageFile,
+    isInlineVideoFile as isRegistryInlineVideoFile,
+    isMarkdownFile as isRegistryMarkdownFile,
+    isSystemVideoFile as isRegistrySystemVideoFile,
+} from '@services/file-types';
 import styles from './FilePreview.module.css';
 
 const logger = getLogger('FilePreview');
@@ -43,60 +58,37 @@ interface FilePreviewProps {
 
 /** 获取文件扩展名（小写） */
 function getExt(fileName: string): string {
-    return fileName.split('.').pop()?.toLowerCase() ?? '';
+    return getFileExtension(fileName);
 }
 
 /** 获取文件扩展名对应的语言 */
 function getLanguageFromFileName(fileName: string): string {
-    const langMap: Record<string, string> = {
-        'js': 'javascript',
-        'ts': 'typescript',
-        'tsx': 'tsx',
-        'jsx': 'jsx',
-        'py': 'python',
-        'rs': 'rust',
-        'json': 'json',
-        'css': 'css',
-        'html': 'html',
-        'yml': 'yaml',
-        'yaml': 'yaml',
-        'sh': 'bash',
-        'bash': 'bash',
-        'sql': 'sql',
-        'xml': 'xml',
-        'toml': 'toml',
-    };
-    return langMap[getExt(fileName)] ?? 'text';
+    return getCodeLanguage(fileName);
 }
 
 /** 判断是否为 Markdown 文件 */
 function isMarkdownFile(fileName: string): boolean {
-    return ['md', 'markdown'].includes(getExt(fileName));
+    return isRegistryMarkdownFile(fileName);
 }
 
 /** 判断是否为代码文件 */
 function isCodeFile(fileName: string): boolean {
-    const codeExtensions = [
-        'js', 'ts', 'tsx', 'jsx', 'py', 'rs', 'json', 'css', 'html',
-        'yml', 'yaml', 'sh', 'bash', 'sql', 'xml', 'toml', 'c', 'cpp',
-        'h', 'hpp', 'java', 'go', 'rb', 'php', 'swift', 'kt',
-    ];
-    return codeExtensions.includes(getExt(fileName));
+    return isRegistryCodeFile(fileName);
 }
 
 /** 判断是否为图片文件 */
 function isImageFile(fileName: string): boolean {
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(getExt(fileName));
+    return isRegistryImageFile(fileName);
 }
 
 /** 判断是否为二进制办公文档 */
 function isBinaryDocFile(fileName: string): boolean {
-    return ['docx', 'xlsx', 'xls', 'pptx', 'pdf'].includes(getExt(fileName));
+    return isBinaryDocumentFile(fileName);
 }
 
 /** 判断是否为 HTML 文件（可预览） */
 function isHtmlFile(fileName: string): boolean {
-    return ['html', 'htm'].includes(getExt(fileName));
+    return isRegistryHtmlFile(fileName);
 }
 
 /**
@@ -112,17 +104,17 @@ const LARGE_HTML_THRESHOLD_CHARS = 500 * 1024; // 500KB
 /** 判断是否为可内嵌播放的视频文件 */
 function isInlineVideoFile(fileName: string): boolean {
     // WebView2 (Chromium) 和 WebKit 都支持的常见格式
-    return ['mp4', 'webm', 'ogg', 'mov'].includes(getExt(fileName));
+    return isRegistryInlineVideoFile(fileName);
 }
 
 /** 判断是否为需要系统打开的视频文件（浏览器不支持的格式） */
 function isSystemVideoFile(fileName: string): boolean {
-    return ['mkv', 'avi', 'flv', 'wmv', 'rmvb', 'ts'].includes(getExt(fileName));
+    return isRegistrySystemVideoFile(fileName);
 }
 
 /** 判断是否为音频文件 */
 function isAudioFile(fileName: string): boolean {
-    return ['mp3', 'wav', 'ogg', 'aac', 'flac', 'm4a', 'wma'].includes(getExt(fileName));
+    return isRegistryAudioFile(fileName);
 }
 
 /** 根据扩展名获取文档类型图标和标签 */
@@ -163,13 +155,7 @@ function ImagePreview({ filePath, fileName }: { filePath: string; fileName: stri
         setHasError(false);
         setImageSrc(null);
 
-        const ext = getExt(fileName);
-        const mimeMap: Record<string, string> = {
-            jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-            gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
-            bmp: 'image/bmp', ico: 'image/x-icon',
-        };
-        const mimeType = mimeMap[ext] ?? 'image/png';
+        const mimeType = getImageMimeType(fileName);
 
         invoke<string>('file_read_as_base64', { path: filePath })
             .then((base64) => {
@@ -285,12 +271,7 @@ function VideoPreview({ filePath, fileName }: { filePath: string; fileName: stri
     const [fileSize, setFileSize] = useState<number | null>(null);
     const [isTooLarge, setIsTooLarge] = useState(false);
 
-    const ext = getExt(fileName);
-    const mimeMap: Record<string, string> = {
-        mp4: 'video/mp4', webm: 'video/webm',
-        ogg: 'video/ogg', mov: 'video/mp4',
-    };
-    const mimeType = mimeMap[ext] ?? 'video/mp4';
+    const mimeType = getVideoMimeType(fileName);
 
     useEffect(() => {
         setHasError(false);
@@ -390,13 +371,7 @@ function AudioPreview({ filePath, fileName }: { filePath: string; fileName: stri
         setAudioUrl(null);
         setIsTooLarge(false);
 
-        const ext = getExt(fileName);
-        const mimeMap: Record<string, string> = {
-            mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
-            aac: 'audio/aac', flac: 'audio/flac', m4a: 'audio/mp4',
-            wma: 'audio/x-ms-wma',
-        };
-        const mimeType = mimeMap[ext] ?? 'audio/mpeg';
+        const mimeType = getAudioMimeType(fileName);
 
         invoke<number>('file_get_size', { path: filePath })
             .then((size) => {

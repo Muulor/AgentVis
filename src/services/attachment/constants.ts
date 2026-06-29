@@ -5,6 +5,12 @@
  */
 
 import { translate } from '@/i18n';
+import {
+    DOCUMENT_PROCESSING_EXTENSIONS,
+    OFFICE_DOCUMENT_EXTENSIONS,
+    PDF_DOCUMENT_EXTENSIONS,
+    PLAIN_TEXT_PROCESSING_EXTENSIONS,
+} from '@services/file-types';
 
 // ==================== 附件文件大小限制 (字节) ====================
 
@@ -49,64 +55,78 @@ export const DOCUMENT_SIZE_THRESHOLDS = {
 } as const;
 
 /** 格式专属最大大小限制 (字节) */
-export const FORMAT_MAX_SIZE = {
+export const DEFAULT_TEXT_MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+
+export const FORMAT_MAX_SIZE: Partial<Record<string, number>> = {
     // 办公文档类
-    txt: 10 * 1024 * 1024,      // 10 MB
-    md: 10 * 1024 * 1024,       // 10 MB
+    txt: DEFAULT_TEXT_MAX_SIZE,
+    md: DEFAULT_TEXT_MAX_SIZE,
     docx: 20 * 1024 * 1024,     // 20 MB
     xlsx: 15 * 1024 * 1024,     // 15 MB
+    xls:  15 * 1024 * 1024,     // 15 MB
     pdf: 30 * 1024 * 1024,      // 30 MB
     pptx: 25 * 1024 * 1024,     // 25 MB
     // 代码文件（Web 与前端）：单文件通常小，10 MB 绰绰有余
-    html: 10 * 1024 * 1024,     // 10 MB
+    html: DEFAULT_TEXT_MAX_SIZE,
     css:  5 * 1024 * 1024,      // 5 MB
     scss: 5 * 1024 * 1024,      // 5 MB
-    js:   10 * 1024 * 1024,     // 10 MB
-    jsx:  10 * 1024 * 1024,     // 10 MB
-    ts:   10 * 1024 * 1024,     // 10 MB
-    tsx:  10 * 1024 * 1024,     // 10 MB
+    js:   DEFAULT_TEXT_MAX_SIZE,
+    jsx:  DEFAULT_TEXT_MAX_SIZE,
+    ts:   DEFAULT_TEXT_MAX_SIZE,
+    tsx:  DEFAULT_TEXT_MAX_SIZE,
     // 代码文件（通用编程语言）
-    py:   10 * 1024 * 1024,     // 10 MB
-    go:   10 * 1024 * 1024,     // 10 MB
-    rs:   10 * 1024 * 1024,     // 10 MB
+    py:   DEFAULT_TEXT_MAX_SIZE,
+    go:   DEFAULT_TEXT_MAX_SIZE,
+    rs:   DEFAULT_TEXT_MAX_SIZE,
     // 配置与数据格式
     json: 5 * 1024 * 1024,      // 5 MB（JSON 冗余高，5 MB 已含大量有效数据）
     yaml: 5 * 1024 * 1024,      // 5 MB
     yml:  5 * 1024 * 1024,      // 5 MB
     toml: 5 * 1024 * 1024,      // 5 MB
-    sql:  10 * 1024 * 1024,     // 10 MB
+    sql:  DEFAULT_TEXT_MAX_SIZE,
 } as const;
 
 // ==================== Token 限制 ====================
 
 /** 格式专属 Token 限制 */
-export const FORMAT_TOKEN_LIMITS = {
+export const DEFAULT_TEXT_TOKEN_LIMIT = 64000;
+
+export const FORMAT_TOKEN_LIMITS: Partial<Record<string, number>> = {
     // 办公文档类
-    txt:  64000,
-    md:   64000,
+    txt:  DEFAULT_TEXT_TOKEN_LIMIT,
+    md:   DEFAULT_TEXT_TOKEN_LIMIT,
     docx: 32000,
     xlsx: 16000,
+    xls:  16000,
     pdf:  32000,
     pptx: 32000,
     // 代码文件（Web 与前端）：代码密度高，64k 足以覆盖绝大多数单文件
-    html: 64000,
+    html: DEFAULT_TEXT_TOKEN_LIMIT,
     css:  32000,
     scss: 32000,
-    js:   64000,
-    jsx:  64000,
-    ts:   64000,
-    tsx:  64000,
+    js:   DEFAULT_TEXT_TOKEN_LIMIT,
+    jsx:  DEFAULT_TEXT_TOKEN_LIMIT,
+    ts:   DEFAULT_TEXT_TOKEN_LIMIT,
+    tsx:  DEFAULT_TEXT_TOKEN_LIMIT,
     // 代码文件（通用编程语言）
-    py:   64000,
-    go:   64000,
-    rs:   64000,
+    py:   DEFAULT_TEXT_TOKEN_LIMIT,
+    go:   DEFAULT_TEXT_TOKEN_LIMIT,
+    rs:   DEFAULT_TEXT_TOKEN_LIMIT,
     // 配置与数据格式
     json: 32000,
     yaml: 32000,
     yml:  32000,
     toml: 32000,
-    sql:  64000,
+    sql:  DEFAULT_TEXT_TOKEN_LIMIT,
 } as const;
+
+export function getFormatMaxSize(extension: string): number {
+    return FORMAT_MAX_SIZE[extension] ?? DEFAULT_TEXT_MAX_SIZE;
+}
+
+export function getFormatTokenLimit(extension: string): number {
+    return FORMAT_TOKEN_LIMITS[extension] ?? DEFAULT_TEXT_TOKEN_LIMIT;
+}
 
 /** Token 估算参数 */
 export const TOKEN_ESTIMATION = {
@@ -140,33 +160,19 @@ export const TRUNCATION_CONFIG = {
 // ==================== 文档类型映射 ====================
 
 /** 支持的文档扩展名（办公文档类） */
-export const SUPPORTED_DOCUMENT_EXTENSIONS = [
-    // 办公文档
-    'txt', 'md', 'docx', 'xlsx', 'pdf', 'pptx',
-    // 代码文件（Web 与前端）
-    'html', 'css', 'scss', 'js', 'jsx', 'ts', 'tsx',
-    // 代码文件（通用编程语言）
-    'py', 'go', 'rs',
-    // 配置与数据格式
-    'json', 'yaml', 'yml', 'toml', 'sql',
-] as const;
+export const SUPPORTED_DOCUMENT_EXTENSIONS = DOCUMENT_PROCESSING_EXTENSIONS;
 
 /** 文档类型分类 */
 export type DocumentExtension = typeof SUPPORTED_DOCUMENT_EXTENSIONS[number];
 
 /** 纯文本格式列表（含所有代码与配置文件） */
-export const PLAIN_TEXT_FORMATS = [
-    'txt', 'md',
-    'html', 'css', 'scss', 'js', 'jsx', 'ts', 'tsx',
-    'py', 'go', 'rs',
-    'json', 'yaml', 'yml', 'toml', 'sql',
-] as const;
+export const PLAIN_TEXT_FORMATS = PLAIN_TEXT_PROCESSING_EXTENSIONS;
 
 /** Office 格式列表 */
-export const OFFICE_FORMATS = ['docx', 'xlsx', 'pptx'] as const;
+export const OFFICE_FORMATS = OFFICE_DOCUMENT_EXTENSIONS;
 
 /** PDF 格式 */
-export const PDF_FORMATS = ['pdf'] as const;
+export const PDF_FORMATS = PDF_DOCUMENT_EXTENSIONS;
 
 // ==================== 处理级别 ====================
 

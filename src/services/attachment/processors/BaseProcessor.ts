@@ -9,7 +9,7 @@
 
 import {
     TOKEN_ESTIMATION,
-    FORMAT_TOKEN_LIMITS,
+    getFormatTokenLimit,
     TRUNCATION_CONFIG,
     RAG_ONLY_THRESHOLDS,
     type DocumentExtension,
@@ -65,7 +65,7 @@ export abstract class BaseProcessor implements IDocumentProcessor {
         const warnings: string[] = [];
 
         // 1. 获取格式专属 Token 限制
-        const maxTokens = FORMAT_TOKEN_LIMITS[context.extension];
+        const maxTokens = getFormatTokenLimit(context.extension);
 
         // 2. 调用子类实现的格式特定处理
         const { content, metadata } = await this.processInternal(context, rawContent, warnings);
