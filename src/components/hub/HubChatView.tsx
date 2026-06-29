@@ -142,7 +142,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
         restoreAttachments,
         clearAttachments,
         getAttachmentsCopy,
-    } = useAttachmentManager(currentHubId, { enableRagIndex: false });
+    } = useAttachmentManager(currentHubId);
 
     // Hub 视图激活时，注册 token 追踪上下文 ID
     // StatusBar 通过 activeTokenContextId 确定读取哪个上下文的 token 数据，

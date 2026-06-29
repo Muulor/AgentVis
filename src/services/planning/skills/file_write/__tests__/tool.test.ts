@@ -137,6 +137,41 @@ describe('file_write tool', () => {
         }));
     });
 
+    it('writes code deliverables without syncing them to the knowledge base', async () => {
+        mocks.invoke.mockImplementation(async (command: string) => {
+            if (command === 'file_write_to_path') {
+                return null;
+            }
+            throw new Error(`Unexpected command: ${command}`);
+        });
+
+        const result = await fileWriteTool.execute(
+            {
+                path: 'src/app.ts',
+                mode: 'full',
+                content: 'export const answer = 42;\n',
+            },
+            {
+                workdir: 'D:\\AgentVis',
+                agentId: 'agent-1',
+            }
+        );
+
+        expect(result.success).toBe(true);
+        expect(mocks.invoke).toHaveBeenCalledWith('file_write_to_path', {
+            path: 'D:\\AgentVis\\src/app.ts',
+            content: 'export const answer = 42;\n',
+            createBackup: false,
+        });
+        expect(mocks.agentState.updateAgent).not.toHaveBeenCalled();
+        expect(mocks.ragService.deleteDocumentIndex).not.toHaveBeenCalled();
+        expect(mocks.ragService.indexDocument).not.toHaveBeenCalled();
+        expect(mocks.emit).toHaveBeenCalledWith('file:deliverable_created', expect.objectContaining({
+            agentId: 'agent-1',
+            fileName: 'app.ts',
+        }));
+    });
+
     it('falls back to overwrite when smart merge output differs from intended Rust lib.rs content', async () => {
         const originalContent = [
             'pub mod midi_engine {',

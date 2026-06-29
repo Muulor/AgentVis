@@ -38,7 +38,7 @@ const MAX_TOTAL_SIZE = 50 * 1024 * 1024;
 
 /** Hook 配置选项 */
 export interface UseAttachmentManagerOptions {
-    /** 是否启用 RAG 索引（仅 Agent 模式需要） */
+    /** @deprecated 附件上传不再自动同步到知识库。 */
     enableRagIndex?: boolean;
 }
 
@@ -108,14 +108,13 @@ function isSameAttachmentPath(filePath: string, attachment: AttachmentInfo): boo
  *     removeAttachment,
  *     reorderAttachments,
  *     clearAttachments,
- * } = useAttachmentManager(currentAgentId, { enableRagIndex: true });
+ * } = useAttachmentManager(currentAgentId);
  * ```
  */
 export function useAttachmentManager(
     contextId: string | null,
-    options: UseAttachmentManagerOptions = {}
+    _options: UseAttachmentManagerOptions = {}
 ): UseAttachmentManagerReturn {
-    const { enableRagIndex = false } = options;
     const { toast } = useToast();
     const { t } = useI18n();
 
@@ -159,7 +158,7 @@ export function useAttachmentManager(
      * 1. 同步预占验证（数量限制）
      * 2. 异步获取文件大小并验证容量
      * 3. 调用 attachmentService 处理文件
-     * 4. 可选：启动 RAG 索引
+     * 4. 更新待发送附件列表
      */
     const addAttachments = useCallback(async (filePaths: string[], addOptions: AddAttachmentsOptions = {}) => {
         if (!contextId || filePaths.length === 0) return;
@@ -233,22 +232,6 @@ export function useAttachmentManager(
                     targetDir: addOptions.targetDir,
                 });
 
-                // 可选：启动异步 RAG 索引
-                if (enableRagIndex && attachment.type === 'document' && attachment.parsedContent) {
-                    attachment.indexStatus = 'indexing';
-                    attachment.indexingPromise = attachmentService.indexToKnowledge(attachment, contextId)
-                        .then(() => {
-                            attachment.indexStatus = 'indexed';
-                            attachment.indexed = true;
-                            logger.trace('[useAttachmentManager]  附件索引完成:', attachment.fileName);
-                        })
-                        .catch((err: unknown) => {
-                            attachment.indexStatus = 'failed';
-                            logger.warn('[useAttachmentManager]  附件索引失败:', attachment.fileName, err);
-                        });
-                    logger.trace('[useAttachmentManager]  异步索引已启动:', attachment.fileName);
-                }
-
                 // 同时更新 ref 和 state
                 pendingAttachmentsRef.current = [...pendingAttachmentsRef.current, attachment];
                 setPendingAttachments(pendingAttachmentsRef.current);
@@ -278,7 +261,7 @@ export function useAttachmentManager(
                 setIsAddingAttachment(false);
             }
         }
-    }, [contextId, enableRagIndex, toast, t]);
+    }, [contextId, toast, t]);
 
     /**
      * 处理附件添加错误

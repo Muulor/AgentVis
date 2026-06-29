@@ -12,4 +12,4 @@ export * from './BM25Index';
 export * from './HybridRetriever';
 export * from './RagQueryPreprocessor';
 export * from './LruCache';
-
+export * from './KnowledgeFileFilter';

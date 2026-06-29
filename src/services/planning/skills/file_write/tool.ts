@@ -20,6 +20,7 @@ import { validateSyntax, type SyntaxError as PostWriteSyntaxError } from './Post
 import { getLogger } from '@services/logger';
 import { getSandboxPathViolation } from '../shared/sandboxPath';
 import { countTextLines, measureRendererWork } from '@services/diagnostics/rendererHealth';
+import { getKnowledgeDocumentType, shouldAutoIndexKnowledgeFile } from '@services/rag/KnowledgeFileFilter';
 
 const logger = getLogger('tool');
 
@@ -1129,6 +1130,11 @@ class FileWriteToolImpl implements Tool {
 
     private async addToKnowledgePaths(agentId: string, filePath: string): Promise<void> {
         try {
+            if (!shouldAutoIndexKnowledgeFile(filePath)) {
+                logger.trace(`[FileWriteTool] 文件类型不适合自动同步知识库，跳过: ${filePath}`);
+                return;
+            }
+
             const { useAgentStore } = await import('../../../../stores/agentStore');
             const store = useAgentStore.getState();
             const agent = store.agents.find((a) => a.id === agentId);
@@ -1188,6 +1194,11 @@ class FileWriteToolImpl implements Tool {
         content: string
     ): Promise<void> {
         try {
+            if (!shouldAutoIndexKnowledgeFile(filePath)) {
+                logger.trace(`[FileWriteTool] 文件类型不适合自动索引，跳过: ${filePath}`);
+                return;
+            }
+
             const { getRagService } = await import('@services/rag');
             const ragService = getRagService();
 
@@ -1195,12 +1206,7 @@ class FileWriteToolImpl implements Tool {
             // 使用 filePath 作为 documentId，确保同一文件的旧向量被覆盖而非累积
             const documentId = filePath;
 
-            const ext = fileName.split('.').pop()?.toLowerCase();
-            const documentType = ['md', 'markdown'].includes(ext ?? '')
-                ? 'markdown'
-                : ['ts', 'js', 'py', 'rs', 'go', 'java', 'cpp', 'c', 'h'].includes(ext ?? '')
-                    ? 'code'
-                    : 'text';
+            const documentType = getKnowledgeDocumentType(fileName);
 
             // 先清除旧向量（幂等，文档不存在时无操作）
             await ragService.deleteDocumentIndex(agentId, documentId);

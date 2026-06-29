@@ -14,6 +14,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { getLogger } from '@services/logger';
+import { isKnowledgeOfficeFile } from '@services/rag/KnowledgeFileFilter';
 
 const logger = getLogger('DeliverableIndexer');
 
@@ -62,7 +63,7 @@ export async function indexUnindexedDeliverables(
         for (const entry of entries) {
             if (!entry.name || entry.isDirectory) continue;
             const ext = entry.name.split('.').pop()?.toLowerCase() ?? '';
-            if (BINARY_EXTENSIONS.has(ext)) {
+            if (BINARY_EXTENSIONS.has(ext) && isKnowledgeOfficeFile(entry.name)) {
                 const fullPath = await join(workdir, entry.name);
 
                 // 仅处理本次任务期间创建/修改的文件

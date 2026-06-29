@@ -196,7 +196,7 @@ export function AgentChatView() {
         restoreAttachments,
         clearAttachments,
         getAttachmentsCopy,
-    } = useAttachmentManager(currentAgentId, { enableRagIndex: true });
+    } = useAttachmentManager(currentAgentId);
 
 
     // Agent 切换或组件卸载时触发 onSessionEnd
