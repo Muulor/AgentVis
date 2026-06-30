@@ -1072,31 +1072,6 @@ crypto/
 
 ---
 
-## 📊 架构概览图
-
-```mermaid
-graph TB
-    subgraph Frontend["前端 (React + TypeScript)"]
-        UI[UI 组件层]
-        Stores[Zustand 状态管理]
-        Services[业务服务层]
-    end
-    
-    subgraph Backend["后端 (Tauri + Rust)"]
-        Commands[IPC 命令层]
-        DB[(SQLite 数据库)]
-        LLM[LLM 提供商]
-    end
-    
-    UI --> Stores
-    Stores --> Services
-    Services --> Commands
-    Commands --> DB
-    Commands --> LLM
-```
-
----
-
 ## 🏗️ 核心模块说明
 
 | 模块 | 说明 |
