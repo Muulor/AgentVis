@@ -220,6 +220,15 @@ export interface ProcessMessageOptions {
     onEmbeddingWarning?: (errorMessage: string) => void;
 }
 
+interface ChatHistoryMessageInput {
+    role: 'user' | 'assistant';
+    content: string;
+    /** 消息创建时间戳（Unix ms），用于对话历史时间感知 */
+    createdAt?: number;
+    /** 历史 user 消息的图片附件（从 metadata.attachments 恢复） */
+    images?: Array<{ mime_type: string; data: string }>;
+}
+
 // ==================== 主类 ====================
 
 /**
@@ -350,85 +359,32 @@ export class AgentService {
      * 
      * @param messages 历史消息列表（不包含当前用户消息）
      */
-    loadChatHistory(messages: Array<{
-        role: 'user' | 'assistant';
-        content: string;
-        /** 消息创建时间戳（Unix ms），用于对话历史时间感知 */
-        createdAt?: number;
-        /** 历史 user 消息的图片附件（从 metadata.attachments 恢复） */
-        images?: Array<{ mime_type: string; data: string }>;
-    }>): void {
+    loadChatHistory(messages: ChatHistoryMessageInput[]): void {
         const session = this.getOrCreateSession();
-
-        // 会话已有消息时（跨轮复用缓存实例），不重复加载历史，
-        // 但仍需将历史消息携带的图片补丁到 Session 现有条目，
-        // 否则用户上一轮发送的截图在本轮 MB 多模态上下文中将不可见。
-        if (session.getMessageCount() > 0) {
-            logger.trace('[AgentService] 会话已有消息，跳过整体加载，执行图片补丁');
-            this.patchSessionMessageImages(session, messages);
-            return;
-        }
-
-        // 加载历史消息（过滤 system 角色，只保留 user/assistant）
         let imageCount = 0;
-        for (const msg of messages) {
-            session.addMessage({
+
+        const sessionMessages: AgentMessage[] = messages.map(msg => {
+            if (msg.images && msg.images.length > 0) {
+                imageCount += msg.images.length;
+            }
+
+            return {
                 role: msg.role,
                 content: msg.content,
                 // 时间戳透传到 Session，供 CONVERSATION_HISTORY 渲染时间标签
                 createdAt: msg.createdAt,
                 // 图片数据透传到 Session，供 MB 对话历史构建时使用
                 ...(msg.images && msg.images.length > 0 ? { images: msg.images } : {}),
-            });
-            if (msg.images && msg.images.length > 0) {
-                imageCount += msg.images.length;
-            }
-        }
+            };
+        });
 
-        logger.trace('[AgentService]  已加载聊天历史:', messages.length, '条消息',
+        // 每轮都以 UI 从持久化消息重建出的历史快照为准。
+        // 其中可能包含历史附件提示、引用恢复、assistant persistContent 等跨请求注入内容；
+        // 若复用旧 Session 而不替换，第二轮 MB 会只看到上一轮运行时保存的原始文本。
+        session.replaceMessages(sessionMessages);
+
+        logger.trace('[AgentService] 已同步聊天历史:', messages.length, '条消息',
             imageCount > 0 ? `(含 ${imageCount} 张历史图片)` : '');
-    }
-
-    /**
-     * 将历史消息中的图片补丁写入 Session 现有消息
-     *
-     * 用于跨轮缓存场景：Session 已有消息，无法整体重新加载，
-     * 但历史 user 消息携带的图片仍需写入 Session 对应条目，
-     * 确保 MB 在多模态 messages 数组中能看到正确配对的截图。
-     *
-     * 匹配策略：按 content 文本匹配（同一轮内容唯一），跳过已有 images 的消息（避免重复写入）。
-     */
-    private patchSessionMessageImages(
-        session: AgentSession,
-        historyMessages: Array<{
-            role: 'user' | 'assistant';
-            content: string;
-            images?: Array<{ mime_type: string; data: string }>;
-        }>
-    ): void {
-        const sessionMessages = session.getMessages();
-        let patchCount = 0;
-
-        for (const histMsg of historyMessages) {
-            // 只处理携带图片的历史 user 消息
-            if (histMsg.role !== 'user' || !histMsg.images || histMsg.images.length === 0) continue;
-
-            // 按 content 文本匹配 Session 中对应的 user 消息，且尚未携带图片
-            const match = sessionMessages.find(
-                sm => sm.role === 'user' && sm.content === histMsg.content && (!sm.images || sm.images.length === 0)
-            );
-
-            if (match) {
-                match.images = histMsg.images;
-                patchCount++;
-            }
-        }
-
-        if (patchCount > 0) {
-            logger.trace('[AgentService] 🖼️ 图片补丁完成：', patchCount, '条历史 user 消息已写入图片');
-        } else {
-            logger.trace('[AgentService] 图片补丁：无匹配的历史 user 消息需要写入图片');
-        }
     }
 
     // ==================== 消息处理 ====================

@@ -375,7 +375,7 @@ export function buildPlanningCheckpointProgressText(
 export function isPlanningCheckpointMessage(
     message: Pick<Message, 'role' | 'metadata'>
 ): boolean {
-    const metadata = message.metadata as Record<string, unknown> | undefined;
+    const metadata = message.metadata;
     if (message.role !== 'assistant' || metadata?.mode !== 'planning') return false;
 
     return metadata.responseType === 'agent_loop_checkpoint'
@@ -389,7 +389,7 @@ export function isRecoverablePlanningCheckpointMessage(
     message: Pick<Message, 'role' | 'metadata'>,
     siblingMessages?: Array<Pick<Message, 'id'>>
 ): boolean {
-    const metadata = message.metadata as Record<string, unknown> | undefined;
+    const metadata = message.metadata;
     if (!isPlanningCheckpointMessage(message)) return false;
     if (!metadata) return false;
     if (metadata.recoverable === false || metadata.agentLoopStatus === 'abandoned') return false;
@@ -981,13 +981,20 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
         try {
             // ====== 步骤 0:  重置 FSM 可视化状态（绑定当前 Agent contextId，防止跨 Agent 思考内容泄露） ======
+            const attachmentsForSend = attachments.length > 0
+                ? await (await import('@services/attachment')).attachmentService.hydrateAttachmentsForContext(
+                    attachments,
+                    messageAgentId
+                )
+                : [];
+
             fsmVisualizationActions.reset(contextId);
 
             // ====== 步骤 1: 创建并添加用户消息 ======
             // Hub 模式的消息需要标记 sourceType 以便加载时过滤
             // 用户消息 metadata 中保存附件信息（与 Chat 模式一致）
             const userMetadata = {
-                ...(attachments.length > 0 ? { attachments } : {}),
+                ...(attachmentsForSend.length > 0 ? { attachments: attachmentsForSend } : {}),
                 ...(contextType === 'hub' ? { sourceType: 'hub' as const, hubId: contextId } : {}),
                 // quotedFrom 写入 metadata，重启后能从 DB 恢复引用内容展示
                 ...(quotes.length > 0 ? { quotedFrom: serializeQuotesForMessage(quotes) } : {}),
@@ -1033,7 +1040,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             }
 
             // 用户消息发送成功，立即清空附件预览和引用预览
-            if (attachments.length > 0 && onClearAttachments) {
+            if (attachmentsForSend.length > 0 && onClearAttachments) {
                 onClearAttachments();
             }
             // 引用消息在用户消息成功入库后清空，避免发送失败时引用丢失
@@ -1042,7 +1049,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             }
 
             // 复制附件用于后续处理（已在清空前获取）
-            const attachmentsToSend = [...attachments];
+            const attachmentsToSend = [...attachmentsForSend];
 
             // ====== 步骤 2: 显示加载状态 ======
             startStreaming(contextId, effectiveAgentConfig.name);
@@ -1168,7 +1175,10 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     const imageAttachments = attachmentsToSend.filter(a => a.type === 'image');
 
                     const { attachmentService } = await import('@services/attachment');
-                    let builtContent = attachmentService.buildAttachmentContext(attachmentsToSend) || '';
+                    let builtContent = attachmentService.buildAttachmentContext(
+                        attachmentsToSend,
+                        { mode: 'planning' }
+                    ) || '';
 
                     // 图片附件：提取 base64 数据用于多模态传递，同时注入文件名提示到文本上下文
                     if (supportsVisionInput && imageAttachments.length > 0) {

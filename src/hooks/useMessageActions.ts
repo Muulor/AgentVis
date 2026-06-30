@@ -15,6 +15,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useChatStore } from '@stores/chatStore';
 import { useDiffStore } from '@stores/diffStore';
 import { useAttachmentViewerStore } from '@stores/attachmentViewerStore';
+import { destroyAgentService } from '@services/planning/AgentService';
 import type { QuoteInfo, UIMessage } from '@/types/message';
 import type { DiffRecord } from '@components/ui';
 import { getLogger } from '@services/logger';
@@ -229,7 +230,7 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                 case 'delete': {
                     // 构建确认文案：Planning 模式 assistant 消息需要额外警告进度快照丢失
                     const isPlanningAssistant = msg?.role === 'assistant'
-                        && (msg.metadata as Record<string, unknown> | undefined)?.mode === 'planning';
+                        && (msg.metadata)?.mode === 'planning';
 
                     const deleteDescription = isPlanningAssistant
                         ? t('chat.deletePlanningRecordDescription')
@@ -339,7 +340,7 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                     const revokeIdx = messages.findIndex(m => m.id === messageId);
                     const followingMessages = revokeIdx !== -1 ? messages.slice(revokeIdx) : [];
                     const hasPlanningContent = followingMessages.some(m =>
-                        (m.metadata as Record<string, unknown> | undefined)?.mode === 'planning'
+                        (m.metadata)?.mode === 'planning'
                     );
 
                     const revokeDescription = hasPlanningContent
@@ -366,6 +367,7 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                             if (idx !== -1) {
                                 const messagesToRevoke = allMessages.slice(idx);
                                 useChatStore.getState().setHubMessages(contextId, allMessages.slice(0, idx));
+                                destroyAgentService(contextId);
 
                                 // Hub 消息的 agentId 可能是 hubId 或 mentionedAgent.id
                                 // 需按消息自身的 agentId 分组后，对每组调用 message_retract_from

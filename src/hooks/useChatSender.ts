@@ -34,6 +34,10 @@ import {
     getChatContextSectionTitle,
     NO_CONVERSATION_HISTORY,
 } from './useChatSenderPrompt';
+import {
+    buildChatHistoricalAttachmentContext,
+    getChatHistoricalMessageAttachments,
+} from './chatAttachmentContext';
 import { serializeQuotesForMessage } from '@utils/quoteContent';
 import { modelSupportsVision } from '@/config/modelRegistry';
 
@@ -320,12 +324,21 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         } = useChatStore.getState();
 
         try {
+            const attachmentOwnerId = contextType === 'agent'
+                ? contextId
+                : mentionedAgent?.id ?? contextId;
+            const attachmentsForSend = attachments.length > 0
+                ? await (await import('@services/attachment')).attachmentService.hydrateAttachmentsForContext(
+                    attachments,
+                    attachmentOwnerId
+                )
+                : [];
             // ====== 步骤 1: 创建用户消息并持久化 ======
             // Hub 模式的消息需要标记 sourceType 以便加载时过滤
             // 同时合并 userMessageMeta（Widget 交互等场景的额外元数据）
-            const autoMetadata = attachments.length > 0
+            const autoMetadata = attachmentsForSend.length > 0
                 ? {
-                    attachments,
+                    attachments: attachmentsForSend,
                     ...(contextType === 'hub' ? { sourceType: 'hub' as const, hubId: contextId } : {}),
                 }
                 : contextType === 'hub'
@@ -434,12 +447,12 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             startStreaming(contextId, streamingAgentName);
 
             // 用户消息发送成功，清空附件预览
-            if (attachments.length > 0 && onClearAttachments) {
+            if (attachmentsForSend.length > 0 && onClearAttachments) {
                 onClearAttachments();
             }
 
             // 复制附件用于后续处理（因为即将清空）
-            const attachmentsToSend = [...attachments];
+            const attachmentsToSend = [...attachmentsForSend];
 
             // ====== 步骤 2: 构建消息上下文 ======
             const messages: ChatMessage[] = [];
@@ -572,7 +585,10 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             let attachmentContent: string | undefined;
             if (attachmentsToSend.length > 0) {
                 const { attachmentService } = await import('@services/attachment');
-                attachmentContent = attachmentService.buildAttachmentContext(attachmentsToSend) || undefined;
+                attachmentContent = attachmentService.buildAttachmentContext(
+                    attachmentsToSend,
+                    { mode: 'chat' }
+                ) || undefined;
             }
 
             // 2.6 构建引用上下文
@@ -589,10 +605,23 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             const historyImages: ExtractedImage[] = [];
             const chatHistory: Array<{ role: string; content: string; createdAt?: number; images?: Array<{ mime_type: string; data: string }> }> = currentMessages
                 .filter((m: { role: string }) => m.role !== 'system')
-                .map((m: { role: string; content: string; createdAt?: number; metadata?: Record<string, unknown> }) => {
+                .map((m: { id?: string; role: string; content: string; createdAt?: number; metadata?: Message['metadata'] }) => {
+                    let effectiveContent = m.content;
+
+                    if (m.role === 'user' && m.id !== userMessageId && m.metadata) {
+                        const historicalAttachmentContext = buildChatHistoricalAttachmentContext(
+                            getChatHistoricalMessageAttachments(m.metadata),
+                            effectiveContent,
+                            t
+                        );
+                        if (historicalAttachmentContext) {
+                            effectiveContent = `${historicalAttachmentContext}\n\n${effectiveContent}`;
+                        }
+                    }
+
                     // assistant 消息中的 AI 生成图片：提取后替换为占位符
-                    if (m.role === 'assistant' && m.content.includes('](data:image/')) {
-                        const { cleanedContent, images } = extractGeneratedImages(m.content);
+                    if (m.role === 'assistant' && effectiveContent.includes('](data:image/')) {
+                        const { cleanedContent, images } = extractGeneratedImages(effectiveContent);
                         if (images.length > 0 && supportsVisionInput) {
                             historyImages.push(...images);
                             logger.trace('[useChatSender] 从历史消息提取生成图片:', images.length, '张');
@@ -621,7 +650,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                                     }];
                                 });
                                 logger.trace('[useChatSender] 🖼️ 恢复历史 user 消息图片:', restoredImages.length, '张');
-                                return { role: m.role, content: m.content, createdAt: m.createdAt, images: restoredImages };
+                                return { role: m.role, content: effectiveContent, createdAt: m.createdAt, images: restoredImages };
                             }
                         }
                     }
@@ -631,13 +660,13 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                         const genImages = (m.metadata as { generatedImages?: string[] }).generatedImages;
                         if (genImages && genImages.length > 0) {
                             return {
-                                role: m.role, content: m.content, createdAt: m.createdAt,
+                                role: m.role, content: effectiveContent, createdAt: m.createdAt,
                                 _pendingImagePaths: genImages,
-                            } as typeof chatHistory[number] & { _pendingImagePaths?: string[] };
+                            };
                         }
                     }
 
-                    return { role: m.role, content: m.content, createdAt: m.createdAt };
+                    return { role: m.role, content: effectiveContent, createdAt: m.createdAt };
                 });
 
             // 异步解析 assistant 消息标记的生成图片路径为 base64
@@ -875,7 +904,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             // 打印完整 System Prompt 便于调试时间注入效果
             const systemMessages = messages.filter(m => m.role === 'system');
             for (const sysMsg of systemMessages) {
-                logger.trace(`[useChatSender] System Prompt:\n${sysMsg.content}`);
+                logger.debug(`[useChatSender] System Prompt:\n${sysMsg.content}`);
             }
 
             // 图像模型检测：自动注入 response_modalities 和从提示词解析 image_size

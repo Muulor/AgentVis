@@ -21,7 +21,7 @@ import { DocumentProcessingError } from './types';
 import { ATTACHMENT_SIZE_LIMITS, DOCUMENT_PROGRESS_MESSAGES } from './constants';
 import type { DocumentProcessingResult } from './types';
 import { getLogger } from '@services/logger';
-import { translate } from '@/i18n';
+import { translate, type TranslationKey } from '@/i18n';
 import {
     getAttachmentAcceptedExtensions,
     getAttachmentKind,
@@ -53,6 +53,18 @@ interface ValidationResult {
 
 interface AddAttachmentOptions {
     targetDir?: string;
+}
+
+type AttachmentContextMode = 'chat' | 'planning';
+
+interface BuildAttachmentContextOptions {
+    mode?: AttachmentContextMode;
+}
+
+function hasParsedDocumentContent(attachment: AttachmentInfo): boolean {
+    return attachment.type === 'document'
+        && typeof attachment.parsedContent === 'string'
+        && attachment.parsedContent.trim().length > 0;
 }
 
 // ==================== 工具函数 ====================
@@ -448,6 +460,77 @@ export class AttachmentService {
     }
 
     /**
+     * 发送前补齐附件上下文所需的解析内容。
+     *
+     * 撤回重发、草稿恢复或附件存储去重时，UI 可能复用旧的附件文件路径，
+     * 但消息级 AttachmentInfo 里缺少 parsedContent。本方法只补齐发送实例的解析内容，
+     * 不重新复制文件，也不破坏底层附件文件去重。
+     */
+    async hydrateAttachmentForContext(
+        attachment: AttachmentInfo,
+        agentId: string
+    ): Promise<AttachmentInfo> {
+        const attachmentSnapshot = { ...attachment };
+
+        if (attachment.type !== 'document' || hasParsedDocumentContent(attachment)) {
+            return attachmentSnapshot;
+        }
+
+        const filePath = attachment.localPath.trim();
+        if (!filePath) {
+            return attachmentSnapshot;
+        }
+
+        const extension = attachment.fileExtension || getFileExtension(attachment.fileName || filePath);
+        if (!extension) {
+            return attachmentSnapshot;
+        }
+
+        try {
+            const knownSize = attachment.size > 0
+                ? attachment.size
+                : await invoke<number>('file_get_size', { path: filePath });
+            const result = await this.processDocumentWithService(
+                filePath,
+                attachment.fileName,
+                extension,
+                agentId,
+                knownSize
+            );
+
+            return {
+                ...attachmentSnapshot,
+                fileExtension: extension,
+                size: knownSize,
+                parsedContent: result.content,
+                estimatedTokens: result.estimatedTokens,
+            };
+        } catch (error) {
+            logger.warn('[AttachmentService] 发送前补齐附件解析内容失败:', attachment.fileName, error);
+            return attachmentSnapshot;
+        }
+    }
+
+    /**
+     * 为一次消息发送准备附件上下文。
+     *
+     * 返回新的附件对象数组，使每次发送都拥有独立的 metadata 快照，同时继续复用
+     * localPath 指向的去重后文件。
+     */
+    async hydrateAttachmentsForContext(
+        attachments: AttachmentInfo[],
+        agentId: string
+    ): Promise<AttachmentInfo[]> {
+        const hydratedAttachments: AttachmentInfo[] = [];
+
+        for (const attachment of attachments) {
+            hydratedAttachments.push(await this.hydrateAttachmentForContext(attachment, agentId));
+        }
+
+        return hydratedAttachments;
+    }
+
+    /**
      * 将附件路径添加到 Agent 的 knowledgePaths
      * 
      * @param filePath - 附件文件路径
@@ -463,7 +546,10 @@ export class AttachmentService {
             let paths: string[] = [];
             if (agent?.knowledgePaths) {
                 try {
-                    paths = JSON.parse(agent.knowledgePaths) as unknown as string[];
+                    const parsedPaths: unknown = JSON.parse(agent.knowledgePaths);
+                    paths = Array.isArray(parsedPaths)
+                        ? parsedPaths.filter((path): path is string => typeof path === 'string')
+                        : [];
                 } catch {
                     // 解析失败时使用空数组
                     paths = [];
@@ -511,8 +597,11 @@ export class AttachmentService {
      * @param attachments - 附件列表
      * @returns 格式化的上下文字符串
      */
-    buildAttachmentContext(attachments: AttachmentInfo[]): string {
-        const manifest = this.buildAttachmentManifest(attachments);
+    buildAttachmentContext(
+        attachments: AttachmentInfo[],
+        options: BuildAttachmentContextOptions = {}
+    ): string {
+        const manifest = this.buildAttachmentManifest(attachments, options);
         const documentAttachments = attachments.filter(
             a => a.type === 'document' && a.parsedContent
         );
@@ -537,7 +626,10 @@ export class AttachmentService {
         return '\n\n---\n\n' + sections.join('\n\n---\n\n') + '\n\n---\n\n';
     }
 
-    buildAttachmentManifest(attachments: AttachmentInfo[]): string {
+    buildAttachmentManifest(
+        attachments: AttachmentInfo[],
+        options: BuildAttachmentContextOptions = {}
+    ): string {
         if (attachments.length === 0) return '';
 
         const items = attachments
@@ -553,7 +645,11 @@ export class AttachmentService {
 
         if (!items.trim()) return '';
 
-        return translate('chat.attachmentManifestHeader', { items });
+        const headerKey: TranslationKey = options.mode === 'chat'
+            ? 'chat.chatAttachmentManifestHeader'
+            : 'chat.attachmentManifestHeader';
+
+        return translate(headerKey, { items });
     }
 }
 

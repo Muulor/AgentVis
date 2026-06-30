@@ -1418,8 +1418,14 @@ ${rules.trim()}
             }
         }
 
-        // 兜底：强制截断
-        return this.truncateToTokenBudget('(RAG evidence has been truncated)', maxTokens);
+        // 兜底：单条高相关证据也可能超预算，保留其截断预览，避免附件证据被整体替换为空占位。
+        const topEvidence = sorted[0];
+        if (!topEvidence || maxTokens <= 0) {
+            return this.truncateToTokenBudget('(RAG evidence has been truncated)', maxTokens);
+        }
+
+        logger.trace('[MasterBrainPrompt] RAG: 单条证据超预算，保留最高相关证据的截断预览');
+        return this.truncateToTokenBudget(this.formatRAG([topEvidence]), maxTokens);
     }
 
     // ═══════════════════════════════════════════════════════════════

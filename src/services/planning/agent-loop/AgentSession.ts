@@ -142,6 +142,22 @@ export class AgentSession {
     }
 
     /**
+     * 替换会话中的对话历史快照。
+     *
+     * UI 层会在每轮请求前从持久化消息重建历史内容，其中可能包含引用恢复、
+     * 历史附件路径提示等跨请求上下文。复用内存 Session 时必须同步这些增强内容。
+     */
+    replaceMessages(messages: AgentMessage[]): void {
+        this.messages = messages.map(message => ({
+            ...message,
+            ...(message.images ? { images: [...message.images] } : {}),
+            ...(message.toolCalls ? { toolCalls: [...message.toolCalls] } : {}),
+        }));
+        this.lastPreparedContext = null;
+        logger.trace(`[AgentSession] 已替换会话历史: ${this.messages.length} 条`);
+    }
+
+    /**
      * 获取消息数量
      */
     getMessageCount(): number {

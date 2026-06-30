@@ -368,6 +368,7 @@ widgets/
 hooks/
 ├── useAttachmentManager.ts       # 附件管理 Hook
 ├── useMessageActions.ts          # 消息操作逻辑 Hook
+├── chatAttachmentContext.ts      # Chat 模式附件上下文辅助函数
 ├── useChatSender.ts              # Chat 模式消息发送 Hook
 ├── useChatSenderPrompt.ts        # Chat 模式Prompt Hook
 ├── usePlanningMode.ts            # Planning 模式消息发送 Hook

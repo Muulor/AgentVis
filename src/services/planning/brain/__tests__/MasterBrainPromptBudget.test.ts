@@ -328,6 +328,7 @@ describe('MasterBrainPrompt 预算管理', () => {
 
             consoleSpy.mockRestore();
         });
+
     });
 
     // ═══════════════════════════════════════════════════════════
@@ -368,6 +369,37 @@ describe('MasterBrainPrompt 预算管理', () => {
             }
 
             consoleSpy.mockRestore();
+        });
+
+        it('单条超大附件证据超预算时应保留截断预览', () => {
+            const hugeAttachmentContent = [
+                'Attachment Manifest:',
+                '- 夜航西飞.md (document, md, 478KB)',
+                'Path: C:\\Users\\Muulo\\AppData\\Roaming\\com.agentvis.app\\deliverables\\Nano_Crew\\Luckily\\attachments\\夜航西飞.md',
+                '# 夜航西飞',
+                '序言',
+                '《夜航西飞》充满诱惑与神秘。',
+                '正文'.repeat(200000),
+            ].join('\n');
+
+            const input = createTestInput({
+                modelId: 'gemini-3-flash',
+                ragEvidence: [
+                    {
+                        source: 'attachment',
+                        content: hugeAttachmentContent,
+                        relevance: 1,
+                    },
+                ],
+            });
+            const prompt = builder.build(input);
+            const ragSection = prompt.split('[RAG_EVIDENCE]')[1]?.split('[TOOL_CATALOG]')[0] ?? '';
+
+            expect(ragSection).toContain('attachment');
+            expect(ragSection).toContain('夜航西飞.md');
+            expect(ragSection).toContain('# 夜航西飞');
+            expect(ragSection).toContain('... (truncated)');
+            expect(ragSection).not.toContain('(RAG evidence has been truncated)');
         });
     });
 

@@ -96,4 +96,62 @@ describe('AttachmentService document attachments', () => {
         expect(context).toContain('D:\\AgentVis\\attachments\\screenshot.png');
         expect(context).toContain('Markdown attachment content.');
     });
+
+    it('uses Chat-specific attachment guidance in Chat mode', () => {
+        const service = new AttachmentService();
+        const context = service.buildAttachmentContext(
+            [{
+                id: 'attachment-1',
+                fileName: 'night-flight.md',
+                fileExtension: 'md',
+                type: 'document',
+                size: 256,
+                localPath: 'D:\\AgentVis\\attachments\\night-flight.md',
+                originalPath: 'C:\\Users\\Muulo\\Downloads\\night-flight.md',
+                parsedContent: 'Markdown attachment content.',
+                createdAt: 1,
+            }],
+            { mode: 'chat' }
+        );
+
+        expect(context).toContain('Chat 模式');
+        expect(context).toContain('工作间中的完整附件');
+        expect(context).not.toContain('Sub-Agent');
+        expect(context).not.toContain('重新提供');
+    });
+
+    it('hydrates restored document attachments before context injection', async () => {
+        const localPath = 'D:\\AgentVis\\attachments\\flight-x.md';
+
+        invokeMock.mockImplementation(async (command: string, args: unknown) => {
+            if (command === 'file_read_content') {
+                expect(args).toEqual({ filePath: localPath });
+                return '# 夜航西飞\n\n一本关于飞行、记忆与成长的书。';
+            }
+
+            throw new Error(`Unexpected command: ${command}`);
+        });
+
+        const service = new AttachmentService();
+        const restoredAttachment = {
+            id: 'old-attachment',
+            fileName: 'flight-x.md',
+            fileExtension: 'md',
+            type: 'document' as const,
+            size: 489472,
+            localPath,
+            originalPath: localPath,
+            createdAt: 1,
+        };
+
+        const [hydratedAttachment] = await service.hydrateAttachmentsForContext(
+            [restoredAttachment],
+            'agent-1'
+        );
+        const context = service.buildAttachmentContext(hydratedAttachment ? [hydratedAttachment] : []);
+
+        expect(hydratedAttachment?.parsedContent).toContain('飞行、记忆与成长');
+        expect(context).toContain('flight-x.md');
+        expect(context).toContain('飞行、记忆与成长');
+    });
 });

@@ -81,6 +81,18 @@ function getAttachmentIdentity(attachment: AttachmentInfo): string {
         ?? `${attachment.fileName}:${attachment.fileExtension}:${attachment.size}`;
 }
 
+function generateAttachmentInstanceId(): string {
+    return crypto.randomUUID();
+}
+
+function cloneAttachmentForDraft(attachment: AttachmentInfo): AttachmentInfo {
+    return {
+        ...attachment,
+        id: generateAttachmentInstanceId(),
+        createdAt: Date.now(),
+    };
+}
+
 function isSameAttachmentPath(filePath: string, attachment: AttachmentInfo): boolean {
     const normalizedPath = normalizeAttachmentPath(filePath);
     if (!normalizedPath) return false;
@@ -338,7 +350,7 @@ export function useAttachmentManager(
 
     /**
      * 恢复附件列表（撤回消息后调用）
-     * 直接复用消息 metadata 中的 AttachmentInfo，避免重新复制/解析/索引同一文件
+     * 复用已去重的 localPath，同时为草稿生成新的附件实例 ID
      */
     const restoreAttachments = useCallback((attachments: AttachmentInfo[]) => {
         if (!contextId || attachments.length === 0) return;
@@ -352,7 +364,7 @@ export function useAttachmentManager(
             const identity = getAttachmentIdentity(attachment);
             if (knownIdentities.has(identity)) continue;
 
-            mergedAttachments.push(attachment);
+            mergedAttachments.push(cloneAttachmentForDraft(attachment));
             knownIdentities.add(identity);
         }
 
