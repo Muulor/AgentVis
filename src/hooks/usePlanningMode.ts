@@ -44,6 +44,10 @@ const PLANNING_CHECKPOINT_PERSIST_OBSERVATION_LIMIT = 12;
 const PLANNING_CHECKPOINT_PERSIST_MAX_CHARS = 4200;
 const PLANNING_CHECKPOINT_MB_MAX_CHARS = 1800;
 const PLANNING_CHECKPOINT_EVENT_MAX_CHARS = 1200;
+const HISTORICAL_ATTACHMENT_CONTEXT_MAX_TOKENS = 800;
+const HISTORICAL_ATTACHMENT_CONTEXT_CHARS_PER_TOKEN = 2.5;
+const HISTORICAL_ATTACHMENT_CONTEXT_MIN_CHARS = 320;
+const HISTORICAL_ATTACHMENT_CONTEXT_SAFETY_MARGIN = 120;
 
 function buildAttachmentReferences(attachments: AttachmentInfo[]): TaskAttachmentReference[] {
     return attachments
@@ -60,6 +64,106 @@ function buildAttachmentReferences(attachments: AttachmentInfo[]): TaskAttachmen
 type PlanningCheckpointStatus = 'running' | 'failed' | 'abandoned';
 type PlanningCheckpointTranslate = (key: TranslationKey, params?: TranslationParams) => string;
 type PlanningCheckpointThinkingData = Partial<Record<'analyzing' | 'planning' | 'decided', string>>;
+
+type HistoricalAttachmentContextItem = Pick<
+    AttachmentInfo,
+    'fileName' | 'fileExtension' | 'type' | 'localPath'
+> & Partial<Pick<AttachmentInfo, 'size' | 'parsedContent'>>;
+
+function getHistoricalMessageAttachments(metadata: Message['metadata']): HistoricalAttachmentContextItem[] {
+    if (!metadata) return [];
+
+    const attachments = (metadata as Record<string, unknown>).attachments;
+    if (!Array.isArray(attachments)) return [];
+
+    return attachments.flatMap((attachment): HistoricalAttachmentContextItem[] => {
+        if (!attachment || typeof attachment !== 'object') return [];
+
+        const record = attachment as Record<string, unknown>;
+        const type = record.type;
+        if (type !== 'document' && type !== 'image') return [];
+        if (
+            typeof record.fileName !== 'string'
+            || typeof record.fileExtension !== 'string'
+            || typeof record.localPath !== 'string'
+            || !record.localPath.trim()
+        ) {
+            return [];
+        }
+
+        return [{
+            fileName: record.fileName,
+            fileExtension: record.fileExtension,
+            type,
+            localPath: record.localPath,
+            size: typeof record.size === 'number' ? record.size : undefined,
+            parsedContent: typeof record.parsedContent === 'string' ? record.parsedContent : undefined,
+        }];
+    });
+}
+
+export function buildHistoricalAttachmentContext(
+    attachments: HistoricalAttachmentContextItem[],
+    userMessageContent: string,
+    translateText: PlanningCheckpointTranslate,
+    options: {
+        maxTokens?: number;
+        maxMessageChars?: number;
+    } = {}
+): string | undefined {
+    const validAttachments = attachments.filter(attachment => attachment.localPath.trim());
+    if (validAttachments.length === 0) return undefined;
+
+    const maxTokens = options.maxTokens ?? HISTORICAL_ATTACHMENT_CONTEXT_MAX_TOKENS;
+    const maxContextChars = Math.floor(maxTokens * HISTORICAL_ATTACHMENT_CONTEXT_CHARS_PER_TOKEN);
+    const maxMessageChars = options.maxMessageChars ?? PLANNING_CONSTANTS.MASTER_BRAIN_MAX_MESSAGE_CHARS;
+    const separatorChars = '\n\n'.length;
+    const availableChars = Math.min(
+        maxContextChars,
+        Math.max(
+            0,
+            maxMessageChars
+            - userMessageContent.length
+            - separatorChars
+            - HISTORICAL_ATTACHMENT_CONTEXT_SAFETY_MARGIN
+        )
+    );
+
+    if (availableChars < HISTORICAL_ATTACHMENT_CONTEXT_MIN_CHARS) return undefined;
+
+    const items = validAttachments
+        .map(attachment => translateText('chat.historicalAttachmentContextItem', {
+            fileName: attachment.fileName,
+            type: attachment.type,
+            extension: attachment.fileExtension,
+            size: Math.max(1, Math.round((attachment.size ?? 0) / 1024)),
+            path: attachment.localPath,
+        }))
+        .join('\n');
+
+    const header = translateText('chat.historicalAttachmentContextHeader', { items });
+    const contentBlocks = validAttachments
+        .filter(attachment => attachment.type === 'document' && attachment.parsedContent?.trim())
+        .map(attachment => translateText('chat.historicalAttachmentContentBlock', {
+            fileName: attachment.fileName,
+            content: attachment.parsedContent ?? '',
+        }));
+
+    const rawContext = [
+        header,
+        ...contentBlocks,
+    ].join('\n\n');
+
+    if (rawContext.length <= availableChars) {
+        return rawContext;
+    }
+
+    const notice = translateText('chat.historicalAttachmentContextTruncatedNotice', { maxTokens });
+    const contentBudget = Math.max(1, availableChars - notice.length - separatorChars);
+
+    return `${rawContext.slice(0, contentBudget).trimEnd()}\n\n${notice}`;
+}
+
 interface PlanningCheckpointObservationData {
     thinking?: string;
     transient?: boolean;
@@ -1160,6 +1264,15 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                             if (recoveredContext) {
                                 effectiveContent = `${recoveredContext}\n\n${effectiveContent}`;
                             }
+                        }
+
+                        const historicalAttachmentContext = buildHistoricalAttachmentContext(
+                            getHistoricalMessageAttachments(m.metadata),
+                            effectiveContent,
+                            t
+                        );
+                        if (historicalAttachmentContext) {
+                            effectiveContent = `${historicalAttachmentContext}\n\n${effectiveContent}`;
                         }
                     }
 

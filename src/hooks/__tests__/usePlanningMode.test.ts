@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    buildHistoricalAttachmentContext,
     buildPlanningCheckpointProgressText,
     getPlanningHistoryEffectiveContent,
     isPlanningCheckpointMessage,
@@ -11,6 +12,24 @@ import {
 const PERSIST_MARKER = '\n\nMB decision progress (system-injected context for the next decision)';
 
 describe('usePlanningMode helpers', () => {
+    const translate = (
+        key: string,
+        params?: Record<string, string | number | boolean | null | undefined>
+    ) => {
+        const values: Record<string, string> = {
+            'chat.historicalAttachmentContextHeader': [
+                '## Historical User Attachments',
+                'Files are still saved locally.',
+                String(params?.items ?? ''),
+            ].join('\n'),
+            'chat.historicalAttachmentContextItem': `- ${String(params?.fileName ?? '')} (${String(params?.type ?? '')}, .${String(params?.extension ?? '')}, ${String(params?.size ?? '')}KB): ${String(params?.path ?? '')}`,
+            'chat.historicalAttachmentContentBlock': `Historical attachment excerpt [${String(params?.fileName ?? '')}]:\n${String(params?.content ?? '')}`,
+            'chat.historicalAttachmentContextTruncatedNotice': `[Historical attachment context truncated to about ${String(params?.maxTokens ?? '')} tokens; dispatch SA to read the path.]`,
+        };
+
+        return values[key] ?? key;
+    };
+
     it('detects whether the original user message is still present', () => {
         const messages = [
             { id: 'user-1' },
@@ -52,6 +71,63 @@ describe('usePlanningMode helpers', () => {
         });
 
         expect(content).toBe('用户原始消息');
+    });
+
+    it('builds bounded historical attachment context with paths and excerpts', () => {
+        const context = buildHistoricalAttachmentContext(
+            [{
+                fileName: 'flight-x.md',
+                fileExtension: 'md',
+                type: 'document',
+                localPath: 'D:\\AgentVis\\attachments\\flight-x.md',
+                size: 489472,
+                parsedContent: '# 夜航西飞\n\n一本关于飞行与成长的书。',
+            }],
+            '这本书译者的读后感是什么',
+            translate
+        );
+
+        expect(context).toContain('Historical User Attachments');
+        expect(context).toContain('flight-x.md');
+        expect(context).toContain('D:\\AgentVis\\attachments\\flight-x.md');
+        expect(context).toContain('# 夜航西飞');
+    });
+
+    it('truncates large historical attachment context and keeps the read-path hint', () => {
+        const context = buildHistoricalAttachmentContext(
+            [{
+                fileName: 'flight-x.md',
+                fileExtension: 'md',
+                type: 'document',
+                localPath: 'D:\\AgentVis\\attachments\\flight-x.md',
+                size: 489472,
+                parsedContent: '正文'.repeat(1000),
+            }],
+            '继续分析这本书',
+            translate,
+            { maxTokens: 160 }
+        );
+
+        expect(context).toBeDefined();
+        expect(context).toContain('D:\\AgentVis\\attachments\\flight-x.md');
+        expect(context).toContain('Historical attachment context truncated');
+        expect(context!.length).toBeLessThanOrEqual(410);
+    });
+
+    it('omits historical attachment context when it would hide the original user message', () => {
+        const context = buildHistoricalAttachmentContext(
+            [{
+                fileName: 'large.md',
+                fileExtension: 'md',
+                type: 'document',
+                localPath: 'D:\\AgentVis\\attachments\\large.md',
+                parsedContent: 'content',
+            }],
+            'x'.repeat(4600),
+            translate
+        );
+
+        expect(context).toBeUndefined();
     });
 
     it('trims checkpoint text from the tail so latest progress survives', () => {
