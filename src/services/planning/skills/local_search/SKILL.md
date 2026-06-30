@@ -41,6 +41,11 @@ Searches a directory for matching text and returns file names, line numbers, and
 | searchPath | string | no | Search directory. Defaults to the workdir. |
 | isRegex | boolean | no | Whether `query` is a regular expression. Defaults to `false`. |
 | includes | string[] | no | Glob filters, such as `["*.ts"]`. |
+| caseInsensitive | boolean | no | Force case-insensitive matching. If omitted, smart-case is used. |
+| maxResults | number | no | Maximum matches to return. Defaults to 60 and is backend-capped. |
+| contextChars | number | no | Approximate characters per match snippet, centered on the match. Defaults to 220. |
+| maxMatchesPerFile | number | no | Maximum matches per file. Defaults to 20. |
+| maxOutputTokens | number | no | Approximate output token budget. Defaults to 6000 and is backend-capped. |
 
 ```json
 { "mode": "grep", "query": "indexToKnowledge", "includes": ["*.ts"] }
@@ -94,5 +99,6 @@ Locates a specified symbol in a file and returns its complete source code. Dot-s
 
 1. Prefer `outline` before broad full-text searching when file structure can narrow the search.
 2. Use `includes` with `grep` to limit file types and improve search efficiency.
-3. Results are limited to 50 items. Keep the search scope as precise as possible.
-4. `outline` and `symbol` require absolute paths.
+3. `grep` returns match-centered snippets and diagnostics. If `limitReached=true`, narrow `searchPath`, `includes`, or `query` before raising limits.
+4. `grep` uses smart-case by default: lowercase queries match case-insensitively; mixed/uppercase queries stay case-sensitive unless `caseInsensitive` is set.
+5. `outline` and `symbol` require absolute paths.

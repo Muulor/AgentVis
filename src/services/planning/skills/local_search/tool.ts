@@ -33,6 +33,34 @@ interface GrepMatch {
     content: string;
 }
 
+/** grep 诊断信息 */
+interface GrepDiagnostics {
+    scannedFiles: number;
+    matchedFiles: number;
+    skippedDirs: string[];
+    skippedBinaryFiles: number;
+    skippedLargeFiles: number;
+    skippedMinifiedFiles: number;
+    skippedGlobFiles: number;
+    unreadableFiles: number;
+    parseFailedFiles: number;
+    probableBinaryFiles: number;
+    resultLimitReached: boolean;
+    outputLimitReached: boolean;
+    perFileLimitReached: boolean;
+    maxResults: number;
+    maxMatchesPerFile: number;
+    contextChars: number;
+    maxOutputTokens: number;
+    caseInsensitive: boolean;
+}
+
+/** grep 返回体 */
+interface GrepSearchResult {
+    matches: GrepMatch[];
+    diagnostics: GrepDiagnostics;
+}
+
 /** find 结果条目 */
 interface FindResult {
     path: string;
@@ -230,6 +258,26 @@ const SCHEMA: ToolSchema = {
                 type: 'boolean',
                 description: '[grep] Whether to treat query as a regular expression. Defaults to false.',
             },
+            caseInsensitive: {
+                type: 'boolean',
+                description: '[grep] Force case-insensitive matching. If omitted, smart-case is used.',
+            },
+            maxResults: {
+                type: 'number',
+                description: '[grep] Maximum number of matches to return. Defaults to 60; hard-capped by the backend.',
+            },
+            contextChars: {
+                type: 'number',
+                description: '[grep] Approximate characters per match snippet, centered on the match. Defaults to 220.',
+            },
+            maxMatchesPerFile: {
+                type: 'number',
+                description: '[grep] Maximum matches per file. Defaults to 20.',
+            },
+            maxOutputTokens: {
+                type: 'number',
+                description: '[grep] Approximate output token budget. Defaults to 6000; hard-capped by the backend.',
+            },
             includes: {
                 type: 'array',
                 items: { type: 'string', description: 'Glob pattern.' },
@@ -341,25 +389,36 @@ class LocalSearchToolImpl implements Tool {
             params.isRegex as boolean | undefined
         );
 
-        const results = await invoke<GrepMatch[]>('code_grep', {
+        const result = await invoke<GrepSearchResult>('code_grep', {
             query: normalizedQuery,
             searchPath,
             isRegex: normalizedIsRegex,
             includes: params.includes as string[] | undefined,
+            caseInsensitive: (params.caseInsensitive ?? params.case_insensitive) as boolean | undefined,
+            maxResults: (params.maxResults ?? params.max_results) as number | undefined,
+            contextChars: (params.contextChars ?? params.context_chars) as number | undefined,
+            maxMatchesPerFile: (params.maxMatchesPerFile ?? params.max_matches_per_file) as number | undefined,
+            maxOutputTokens: (params.maxOutputTokens ?? params.max_output_tokens) as number | undefined,
         });
+        const { matches, diagnostics } = result;
 
-        context.onProgress?.(translate('tools.localSearch.grepProgress', { count: results.length }));
+        context.onProgress?.(translate('tools.localSearch.grepProgress', { count: matches.length }));
 
-        if (results.length === 0) {
-            return { success: true, content: translate('tools.localSearch.grepNoResults', { query }) };
+        if (matches.length === 0) {
+            return {
+                success: true,
+                content: translate('tools.localSearch.grepNoResults', { query }) +
+                    `\n${this.formatGrepDiagnostics(diagnostics)}`,
+                data: { mode: 'grep', matchCount: 0, diagnostics },
+            };
         }
 
         // 按文件分组格式化输出
-        const formatted = this.formatGrepResults(results, query);
+        const formatted = this.formatGrepResults(matches, query, diagnostics);
         return {
             success: true,
             content: formatted,
-            data: { mode: 'grep', matchCount: results.length },
+            data: { mode: 'grep', matchCount: matches.length, diagnostics },
         };
     }
 
@@ -514,7 +573,7 @@ class LocalSearchToolImpl implements Tool {
     // ==================== 格式化方法 ====================
 
     /** 格式化 grep 结果：按文件分组，显示行号和内容 */
-    private formatGrepResults(results: GrepMatch[], query: string): string {
+    private formatGrepResults(results: GrepMatch[], query: string, diagnostics: GrepDiagnostics): string {
         const grouped = new Map<string, GrepMatch[]>();
         for (const match of results) {
             const existing = grouped.get(match.file);
@@ -533,6 +592,48 @@ class LocalSearchToolImpl implements Tool {
                 lines.push(`  L${m.line}: ${m.content}`);
             }
             lines.push('');
+        }
+
+        lines.push(this.formatGrepDiagnostics(diagnostics));
+
+        return lines.join('\n');
+    }
+
+    /** 格式化 grep 诊断信息 */
+    private formatGrepDiagnostics(diagnostics: GrepDiagnostics): string {
+        const limitReached = diagnostics.resultLimitReached ||
+            diagnostics.outputLimitReached ||
+            diagnostics.perFileLimitReached;
+        const lines = [
+            translate('tools.localSearch.grepDiagnosticsHeader'),
+            translate('tools.localSearch.grepDiagnosticsSummary', {
+                scannedFiles: diagnostics.scannedFiles,
+                matchedFiles: diagnostics.matchedFiles,
+                skippedLarge: diagnostics.skippedLargeFiles,
+                skippedBinary: diagnostics.skippedBinaryFiles + diagnostics.probableBinaryFiles,
+                skippedGlob: diagnostics.skippedGlobFiles,
+                skippedMinified: diagnostics.skippedMinifiedFiles,
+                parseFailed: diagnostics.parseFailedFiles,
+                unreadable: diagnostics.unreadableFiles,
+                caseInsensitive: diagnostics.caseInsensitive,
+                limitReached,
+            }),
+            translate('tools.localSearch.grepDiagnosticsLimits', {
+                maxResults: diagnostics.maxResults,
+                maxMatchesPerFile: diagnostics.maxMatchesPerFile,
+                contextChars: diagnostics.contextChars,
+                maxOutputTokens: diagnostics.maxOutputTokens,
+            }),
+        ];
+
+        if (diagnostics.skippedDirs.length > 0) {
+            lines.push(translate('tools.localSearch.grepDiagnosticsSkippedDirs', {
+                dirs: diagnostics.skippedDirs.join(', '),
+            }));
+        }
+
+        if (limitReached) {
+            lines.push(translate('tools.localSearch.grepDiagnosticsLimitHint'));
         }
 
         return lines.join('\n');

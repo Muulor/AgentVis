@@ -4,6 +4,7 @@
 //! outline/symbol 模式使用 tree-sitter 进行真正的 AST 解析。
 
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::fs;
 
@@ -11,13 +12,37 @@ use crate::error::{AppResult, AppError};
 
 // ==================== 常量 ====================
 
-/// grep/find 结果数量上限（防止输出过大）
+/// find 结果数量上限（防止输出过大）
 const MAX_RESULTS: usize = 50;
+
+/// grep 默认结果数量上限。grep 结果包含 snippet 和诊断，需比 find 更注重上下文预算。
+const DEFAULT_GREP_MAX_RESULTS: usize = 60;
+
+/// grep 结果数量硬上限。调用方可以调高 maxResults，但不能超过此值。
+const HARD_GREP_MAX_RESULTS: usize = 150;
+
+/// grep 单文件默认最多返回的匹配数，避免单个日志/长文档吃满所有结果。
+const DEFAULT_GREP_MAX_MATCHES_PER_FILE: usize = 20;
+
+/// grep 单文件匹配数硬上限。
+const HARD_GREP_MAX_MATCHES_PER_FILE: usize = 50;
+
+/// grep 默认每条命中片段的字符预算（围绕首个命中点居中截取）。
+const DEFAULT_GREP_CONTEXT_CHARS: usize = 220;
+
+/// grep 每条命中片段字符预算硬上限。
+const HARD_GREP_CONTEXT_CHARS: usize = 400;
+
+/// grep 默认输出 token 预算，尽量落在 SA 工具输出 L1 压缩阈值内。
+const DEFAULT_GREP_OUTPUT_TOKEN_BUDGET: usize = 6000;
+
+/// grep 输出 token 预算硬上限。
+const HARD_GREP_OUTPUT_TOKEN_BUDGET: usize = 10000;
 
 /// grep 模式中，需要跳过的目录（不搜索这些目录）
 const SKIP_DIRS: &[&str] = &[
     "node_modules", ".git", "__pycache__", ".next", "dist", "build",
-    "target", ".svn", ".hg", "vite_preview", "attachments",
+    "target", ".svn", ".hg", "vite_preview",
 ];
 
 /// grep 模式中，需要跳过的二进制/大文件扩展名
@@ -27,13 +52,21 @@ const SKIP_EXTENSIONS: &[&str] = &[
     "zip", "tar", "gz", "rar", "7z",
     "exe", "dll", "so", "dylib",
     "woff", "woff2", "ttf", "eot",
-    "pdf", "docx", "xlsx", "pptx",
     "sqlite", "db",
 ];
 
-/// grep 模式中，跳过大文件的阈值（2MB）
+/// grep 模式中，跳过普通文本大文件的阈值（10MB）
 /// 防止 webpack bundle / minified 文件导致内存和正则匹配性能问题
-const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024;
+const MAX_TEXT_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// grep 模式中，允许解析搜索的文档大小上限（20MB）
+/// Office/PDF 文档通常比源码文件大，使用独立阈值避免被文本文件防御误伤。
+const MAX_DOCUMENT_FILE_SIZE: u64 = 20 * 1024 * 1024;
+
+/// grep 模式中，会通过 document_parser 提取文本后再搜索的文档扩展名
+const SEARCHABLE_DOCUMENT_EXTENSIONS: &[&str] = &[
+    "docx", "xlsx", "xls", "pptx", "pdf",
+];
 
 /// 需要跳过的压缩/打包文件后缀模式
 const SKIP_MIN_SUFFIXES: &[&str] = &[".min.js", ".min.css", ".bundle.js"];
@@ -48,8 +81,40 @@ pub struct GrepMatch {
     pub file: String,
     /// 行号（1-based）
     pub line: u32,
-    /// 匹配行的内容
+    /// 命中点附近的片段
     pub content: String,
+}
+
+/// grep 诊断信息，帮助 SA 区分“确实无结果”和“搜索被限制/跳过”。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrepDiagnostics {
+    pub scanned_files: u32,
+    pub matched_files: u32,
+    pub skipped_dirs: Vec<String>,
+    pub skipped_binary_files: u32,
+    pub skipped_large_files: u32,
+    pub skipped_minified_files: u32,
+    pub skipped_glob_files: u32,
+    pub unreadable_files: u32,
+    pub parse_failed_files: u32,
+    pub probable_binary_files: u32,
+    pub result_limit_reached: bool,
+    pub output_limit_reached: bool,
+    pub per_file_limit_reached: bool,
+    pub max_results: usize,
+    pub max_matches_per_file: usize,
+    pub context_chars: usize,
+    pub max_output_tokens: usize,
+    pub case_insensitive: bool,
+}
+
+/// grep 返回体：匹配项 + 诊断。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GrepSearchResult {
+    pub matches: Vec<GrepMatch>,
+    pub diagnostics: GrepDiagnostics,
 }
 
 /// find 模式的单条结果
@@ -100,21 +165,43 @@ pub async fn code_grep(
     search_path: String,
     is_regex: Option<bool>,
     includes: Option<Vec<String>>,
-) -> AppResult<Vec<GrepMatch>> {
+    max_results: Option<usize>,
+    context_chars: Option<usize>,
+    max_matches_per_file: Option<usize>,
+    case_insensitive: Option<bool>,
+    max_output_tokens: Option<usize>,
+) -> AppResult<GrepSearchResult> {
     let root = PathBuf::from(&search_path);
     if !root.exists() {
         return Err(AppError::NotFound(format!("Search path does not exist: {}", search_path)));
     }
 
     let use_regex = is_regex.unwrap_or(false);
+    let smart_case_insensitive = should_use_case_insensitive(&query, case_insensitive);
+    let max_results = clamp_limit(max_results, DEFAULT_GREP_MAX_RESULTS, HARD_GREP_MAX_RESULTS);
+    let context_chars = clamp_limit(context_chars, DEFAULT_GREP_CONTEXT_CHARS, HARD_GREP_CONTEXT_CHARS);
+    let max_matches_per_file = clamp_limit(
+        max_matches_per_file,
+        DEFAULT_GREP_MAX_MATCHES_PER_FILE,
+        HARD_GREP_MAX_MATCHES_PER_FILE,
+    );
+    let max_output_tokens = clamp_limit(
+        max_output_tokens,
+        DEFAULT_GREP_OUTPUT_TOKEN_BUDGET,
+        HARD_GREP_OUTPUT_TOKEN_BUDGET,
+    );
 
     // 构建正则或字面量匹配器
     let pattern = if use_regex {
-        regex::Regex::new(&query)
+        regex::RegexBuilder::new(&query)
+            .case_insensitive(smart_case_insensitive)
+            .build()
             .map_err(|e| AppError::Generic(format!("Invalid regular expression: {}", e)))?
     } else {
         // 对字面量文本做转义后构建正则
-        regex::Regex::new(&regex::escape(&query))
+        regex::RegexBuilder::new(&regex::escape(&query))
+            .case_insensitive(smart_case_insensitive)
+            .build()
             .map_err(|e| AppError::Generic(format!("Failed to build search pattern: {}", e)))?
     };
 
@@ -122,21 +209,39 @@ pub async fn code_grep(
     let glob_patterns = build_glob_patterns(&includes);
 
     let mut results: Vec<GrepMatch> = Vec::new();
+    let mut diagnostics = GrepDiagnostics {
+        max_results,
+        max_matches_per_file,
+        context_chars,
+        max_output_tokens,
+        case_insensitive: smart_case_insensitive,
+        ..Default::default()
+    };
+    let mut matched_files: HashSet<String> = HashSet::new();
+    let mut matches_per_file: HashMap<String, usize> = HashMap::new();
+    let mut emitted_tokens = 0usize;
 
     // 使用 walkdir 递归遍历
-    for entry in walkdir::WalkDir::new(&root)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| !should_skip_dir(e))
-    {
-        if results.len() >= MAX_RESULTS {
+    let mut walker = walkdir::WalkDir::new(&root).follow_links(false).into_iter();
+    'walk: while let Some(entry) = walker.next() {
+        if results.len() >= max_results {
+            diagnostics.result_limit_reached = true;
             break;
         }
 
         let entry = match entry {
             Ok(e) => e,
-            Err(_) => continue,
+            Err(_) => {
+                diagnostics.unreadable_files += 1;
+                continue;
+            }
         };
+
+        if entry.depth() > 0 && entry.file_type().is_dir() && should_skip_dir(&entry) {
+            record_skipped_dir(&mut diagnostics, entry.path());
+            walker.skip_current_dir();
+            continue;
+        }
 
         // 只处理文件
         if !entry.file_type().is_file() {
@@ -147,18 +252,27 @@ pub async fn code_grep(
 
         // 跳过二进制文件
         if should_skip_file(path) {
+            diagnostics.skipped_binary_files += 1;
             continue;
         }
 
         // glob 过滤
-        if !glob_patterns.is_empty() && !matches_any_glob(path, &glob_patterns) {
+        if !glob_patterns.is_empty() && !matches_any_glob(path, &root, &glob_patterns) {
+            diagnostics.skipped_glob_files += 1;
             continue;
         }
 
-        // 大文件防御：跳过超过 2MB 的文件（如 webpack bundle）
-        // 避免过大的内存开销和单行正则匹配极度卡顿
+        // 大文件防御：普通文本和可解析文档使用不同阈值。
+        // 避免 webpack bundle / minified 文件导致内存和正则匹配极度卡顿，
+        // 同时允许常见 Office/PDF 文档进入解析搜索流程。
         if let Ok(metadata) = fs::metadata(path) {
-            if metadata.len() > MAX_FILE_SIZE {
+            let max_size = if is_searchable_document(path) {
+                MAX_DOCUMENT_FILE_SIZE
+            } else {
+                MAX_TEXT_FILE_SIZE
+            };
+            if metadata.len() > max_size {
+                diagnostics.skipped_large_files += 1;
                 continue;
             }
         }
@@ -167,28 +281,68 @@ pub async fn code_grep(
         if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
             let file_name_lower = file_name.to_lowercase();
             if SKIP_MIN_SUFFIXES.iter().any(|suffix| file_name_lower.ends_with(suffix)) {
+                diagnostics.skipped_minified_files += 1;
                 continue;
             }
         }
 
-        // 读取文件内容并搜索
-        if let Ok(content) = fs::read_to_string(path) {
-            for (line_idx, line) in content.lines().enumerate() {
-                if results.len() >= MAX_RESULTS {
-                    break;
+        // 读取文件内容并搜索。Office/PDF 文档会先提取文本；普通文本支持 UTF-8/UTF-16/GBK 回退。
+        let content = match read_searchable_content(path).await {
+            Ok(content) => content,
+            Err(SearchContentSkip::Unreadable) => {
+                diagnostics.unreadable_files += 1;
+                continue;
+            }
+            Err(SearchContentSkip::ParseFailed) => {
+                diagnostics.parse_failed_files += 1;
+                continue;
+            }
+            Err(SearchContentSkip::ProbableBinary) => {
+                diagnostics.probable_binary_files += 1;
+                continue;
+            }
+        };
+        diagnostics.scanned_files += 1;
+
+        let file_key = path.to_string_lossy().to_string();
+        for (line_idx, line) in content.lines().enumerate() {
+            if results.len() >= max_results {
+                diagnostics.result_limit_reached = true;
+                break 'walk;
+            }
+
+            let current_file_matches = matches_per_file.get(&file_key).copied().unwrap_or(0);
+            if current_file_matches >= max_matches_per_file {
+                diagnostics.per_file_limit_reached = true;
+                break;
+            }
+
+            if let Some(first_match) = pattern.find(line) {
+                let snippet = build_match_snippet(line, first_match.start(), first_match.end(), context_chars);
+                let estimated_tokens = estimate_tokens(&snippet) + estimate_tokens(&file_key) + 16;
+                if !results.is_empty() && emitted_tokens + estimated_tokens > max_output_tokens {
+                    diagnostics.output_limit_reached = true;
+                    break 'walk;
                 }
-                if pattern.is_match(line) {
-                    results.push(GrepMatch {
-                        file: path.to_string_lossy().to_string(),
-                        line: (line_idx + 1) as u32,
-                        content: truncate_line(line, 200),
-                    });
-                }
+
+                emitted_tokens += estimated_tokens;
+                matched_files.insert(file_key.clone());
+                matches_per_file.insert(file_key.clone(), current_file_matches + 1);
+                results.push(GrepMatch {
+                    file: file_key.clone(),
+                    line: (line_idx + 1) as u32,
+                    content: snippet,
+                });
             }
         }
     }
 
-    Ok(results)
+    diagnostics.matched_files = matched_files.len() as u32;
+
+    Ok(GrepSearchResult {
+        matches: results,
+        diagnostics,
+    })
 }
 
 // ==================== Tauri 命令: code_find ====================
@@ -263,7 +417,7 @@ pub async fn code_find(
         }
 
         // 额外 glob 过滤
-        if !extra_globs.is_empty() && !matches_any_glob(entry.path(), &extra_globs) {
+        if !extra_globs.is_empty() && !matches_any_glob(entry.path(), &root, &extra_globs) {
             continue;
         }
 
@@ -886,6 +1040,16 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
     false
 }
 
+fn record_skipped_dir(diagnostics: &mut GrepDiagnostics, path: &Path) {
+    let name = path
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string());
+    if !diagnostics.skipped_dirs.iter().any(|existing| existing == &name) {
+        diagnostics.skipped_dirs.push(name);
+    }
+}
+
 /// 判断是否应该跳过某个文件（二进制/大文件）
 fn should_skip_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -893,6 +1057,267 @@ fn should_skip_file(path: &Path) -> bool {
         return SKIP_EXTENSIONS.iter().any(|skip| *skip == ext_lower.as_str());
     }
     false
+}
+
+fn extension_lower(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+}
+
+fn is_searchable_document(path: &Path) -> bool {
+    extension_lower(path)
+        .map(|ext| {
+            SEARCHABLE_DOCUMENT_EXTENSIONS
+                .iter()
+                .any(|candidate| *candidate == ext.as_str())
+        })
+        .unwrap_or(false)
+}
+
+enum SearchContentSkip {
+    Unreadable,
+    ParseFailed,
+    ProbableBinary,
+}
+
+async fn read_searchable_content(path: &Path) -> Result<String, SearchContentSkip> {
+    if let Some(ext) = extension_lower(path) {
+        let is_document = SEARCHABLE_DOCUMENT_EXTENSIONS
+            .iter()
+            .any(|candidate| *candidate == ext.as_str());
+        if is_document {
+            return read_document_content(path, &ext).await;
+        }
+    }
+
+    read_text_content(path)
+}
+
+async fn read_document_content(path: &Path, ext: &str) -> Result<String, SearchContentSkip> {
+    let file_path = path.to_string_lossy().to_string();
+    let parsed = match ext {
+        "docx" => super::document_parser::parse_docx(file_path.clone()).await,
+        "xlsx" | "xls" => super::document_parser::parse_xlsx(file_path.clone()).await,
+        "pptx" => super::document_parser::parse_pptx(file_path.clone()).await,
+        "pdf" => super::document_parser::parse_pdf(file_path.clone()).await,
+        _ => return Err(SearchContentSkip::ParseFailed),
+    };
+
+    match parsed {
+        Ok(content) => Ok(content),
+        Err(error) => {
+            log::debug!(
+                "[search] 文档解析失败，已跳过: {} - {}",
+                path.display(),
+                error
+            );
+            Err(SearchContentSkip::ParseFailed)
+        }
+    }
+}
+
+fn read_text_content(path: &Path) -> Result<String, SearchContentSkip> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            log::debug!(
+                "[search] 文本文件读取失败，已跳过: {} - {}",
+                path.display(),
+                error
+            );
+            return Err(SearchContentSkip::Unreadable);
+        }
+    };
+
+    decode_text_bytes(&bytes)
+}
+
+fn decode_text_bytes(bytes: &[u8]) -> Result<String, SearchContentSkip> {
+    if bytes.is_empty() {
+        return Ok(String::new());
+    }
+
+    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        return std::str::from_utf8(&bytes[3..])
+            .map(ToString::to_string)
+            .map_err(|_| SearchContentSkip::Unreadable);
+    }
+
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        let (decoded, _, _) = encoding_rs::UTF_16LE.decode(&bytes[2..]);
+        return Ok(decoded.into_owned());
+    }
+
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        let (decoded, _, _) = encoding_rs::UTF_16BE.decode(&bytes[2..]);
+        return Ok(decoded.into_owned());
+    }
+
+    if looks_like_binary(bytes) {
+        return Err(SearchContentSkip::ProbableBinary);
+    }
+
+    if let Ok(content) = std::str::from_utf8(bytes) {
+        return Ok(content.to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let (decoded, _, had_errors) = encoding_rs::GBK.decode(bytes);
+        if !had_errors {
+            return Ok(decoded.into_owned());
+        }
+    }
+
+    Ok(String::from_utf8_lossy(bytes).to_string())
+}
+
+fn looks_like_binary(bytes: &[u8]) -> bool {
+    let sample_len = bytes.len().min(4096);
+    if sample_len == 0 {
+        return false;
+    }
+
+    let nul_count = bytes[..sample_len].iter().filter(|byte| **byte == 0).count();
+    nul_count * 100 / sample_len > 5
+}
+
+fn clamp_limit(value: Option<usize>, default_value: usize, hard_limit: usize) -> usize {
+    value
+        .filter(|value| *value > 0)
+        .unwrap_or(default_value)
+        .min(hard_limit)
+}
+
+fn should_use_case_insensitive(query: &str, explicit: Option<bool>) -> bool {
+    if let Some(case_insensitive) = explicit {
+        return case_insensitive;
+    }
+
+    query
+        .chars()
+        .filter(|ch| ch.is_alphabetic())
+        .all(|ch| !ch.is_uppercase())
+}
+
+fn build_match_snippet(
+    line: &str,
+    match_start_byte: usize,
+    match_end_byte: usize,
+    context_chars: usize,
+) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    if chars.is_empty() {
+        return String::new();
+    }
+
+    let start_char = line[..match_start_byte].chars().count();
+    let end_char = line[..match_end_byte].chars().count();
+    let match_len = end_char.saturating_sub(start_char);
+
+    if chars.len() <= context_chars {
+        return highlight_char_range(&chars, start_char, end_char);
+    }
+
+    if match_len == 0 {
+        return centered_plain_snippet(&chars, start_char, context_chars);
+    }
+
+    if match_len >= context_chars {
+        let end = (start_char + context_chars).min(chars.len());
+        let mut snippet = String::new();
+        if start_char > 0 {
+            snippet.push_str("...");
+        }
+        snippet.push_str("[[");
+        snippet.extend(chars[start_char..end].iter());
+        snippet.push_str("]]");
+        if end < chars.len() {
+            snippet.push_str("...");
+        }
+        return snippet;
+    }
+
+    let context_budget = context_chars.saturating_sub(match_len);
+    let mut before = context_budget / 2;
+    let mut after = context_budget - before;
+    before = before.min(start_char);
+    after = after.min(chars.len().saturating_sub(end_char));
+
+    let unused_after = context_budget.saturating_sub(before + after);
+    if unused_after > 0 {
+        let extra_before = start_char.saturating_sub(before).min(unused_after);
+        before += extra_before;
+        let remaining = unused_after.saturating_sub(extra_before);
+        after += chars.len().saturating_sub(end_char + after).min(remaining);
+    }
+
+    let snippet_start = start_char.saturating_sub(before);
+    let snippet_end = (end_char + after).min(chars.len());
+    let mut snippet = String::new();
+    if snippet_start > 0 {
+        snippet.push_str("...");
+    }
+    snippet.extend(chars[snippet_start..start_char].iter());
+    snippet.push_str("[[");
+    snippet.extend(chars[start_char..end_char].iter());
+    snippet.push_str("]]");
+    snippet.extend(chars[end_char..snippet_end].iter());
+    if snippet_end < chars.len() {
+        snippet.push_str("...");
+    }
+    snippet
+}
+
+fn centered_plain_snippet(chars: &[char], anchor: usize, context_chars: usize) -> String {
+    let half = context_chars / 2;
+    let start = anchor.saturating_sub(half);
+    let end = (start + context_chars).min(chars.len());
+    let start = end.saturating_sub(context_chars);
+    let mut snippet = String::new();
+    if start > 0 {
+        snippet.push_str("...");
+    }
+    snippet.extend(chars[start..end].iter());
+    if end < chars.len() {
+        snippet.push_str("...");
+    }
+    snippet
+}
+
+fn highlight_char_range(chars: &[char], start: usize, end: usize) -> String {
+    if start >= end || start >= chars.len() {
+        return chars.iter().collect();
+    }
+
+    let end = end.min(chars.len());
+    let mut output = String::new();
+    output.extend(chars[..start].iter());
+    output.push_str("[[");
+    output.extend(chars[start..end].iter());
+    output.push_str("]]");
+    output.extend(chars[end..].iter());
+    output
+}
+
+fn estimate_tokens(text: &str) -> usize {
+    if text.is_empty() {
+        return 0;
+    }
+
+    let chinese_chars = text
+        .chars()
+        .filter(|ch| matches!(
+            *ch,
+            '\u{4E00}'..='\u{9FFF}' |
+            '\u{3400}'..='\u{4DBF}' |
+            '\u{F900}'..='\u{FAFF}'
+        ))
+        .count();
+    let other_chars = text.chars().count().saturating_sub(chinese_chars);
+
+    chinese_chars.saturating_mul(2).div_ceil(3) + other_chars.div_ceil(4)
 }
 
 /// 构建 glob 模式列表
@@ -907,9 +1332,187 @@ fn build_glob_patterns(includes: &Option<Vec<String>>) -> Vec<glob::Pattern> {
 }
 
 /// 检查文件名是否匹配任一 glob 模式
-fn matches_any_glob(path: &Path, patterns: &[glob::Pattern]) -> bool {
+fn matches_any_glob(path: &Path, root: &Path, patterns: &[glob::Pattern]) -> bool {
     if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
-        return patterns.iter().any(|p| p.matches(file_name));
+        if patterns.iter().any(|p| p.matches(file_name)) {
+            return true;
+        }
     }
-    false
+
+    let normalized_absolute = path.to_string_lossy().replace('\\', "/");
+    if patterns.iter().any(|p| p.matches(&normalized_absolute)) {
+        return true;
+    }
+
+    path.strip_prefix(root)
+        .ok()
+        .map(|relative| {
+            let normalized_relative = relative.to_string_lossy().replace('\\', "/");
+            patterns.iter().any(|p| p.matches(&normalized_relative))
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn searchable_documents_are_not_skipped_as_binary_files() {
+        for file_name in ["report.docx", "sheet.xlsx", "legacy.xls", "deck.pptx", "paper.pdf"] {
+            let path = Path::new(file_name);
+            assert!(is_searchable_document(path));
+            assert!(!should_skip_file(path));
+        }
+    }
+
+    #[tokio::test]
+    async fn grep_searches_markdown_inside_attachments_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "agentvis-local-search-attachments-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let attachments = root.join("attachments");
+        fs::create_dir_all(&attachments).expect("create attachments directory");
+        let file_path = attachments.join("flight-x.md");
+        fs::write(
+            &file_path,
+            "# 译后记\n\n陶立夏 上海，二〇一年十一月\n",
+        )
+        .expect("write markdown attachment");
+
+        let results = code_grep(
+            "译后记|陶立夏".to_string(),
+            root.to_string_lossy().to_string(),
+            Some(true),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("grep attachments markdown");
+
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(results.matches.len(), 2);
+        assert_eq!(results.diagnostics.scanned_files, 1);
+        assert!(results.matches.iter().any(|item| item.file.ends_with("flight-x.md") && item.line == 1));
+        assert!(results.matches.iter().any(|item| item.file.ends_with("flight-x.md") && item.line == 3));
+    }
+
+    #[tokio::test]
+    async fn grep_uses_smart_case_by_default() {
+        let root = std::env::temp_dir().join(format!(
+            "agentvis-local-search-smart-case-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&root).expect("create temp directory");
+        let file_path = root.join("note.md");
+        fs::write(&file_path, "Flight log\n").expect("write markdown");
+
+        let smart_case = code_grep(
+            "flight".to_string(),
+            root.to_string_lossy().to_string(),
+            Some(false),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("smart-case grep");
+        let case_sensitive = code_grep(
+            "flight".to_string(),
+            root.to_string_lossy().to_string(),
+            Some(false),
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            None,
+        )
+        .await
+        .expect("case-sensitive grep");
+
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(smart_case.matches.len(), 1);
+        assert!(smart_case.diagnostics.case_insensitive);
+        assert_eq!(case_sensitive.matches.len(), 0);
+        assert!(!case_sensitive.diagnostics.case_insensitive);
+    }
+
+    #[tokio::test]
+    async fn grep_returns_snippet_centered_on_match_and_matches_relative_glob() {
+        let root = std::env::temp_dir().join(format!(
+            "agentvis-local-search-snippet-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let docs = root.join("docs");
+        fs::create_dir_all(&docs).expect("create docs directory");
+        let long_prefix = "前".repeat(80);
+        let long_suffix = "后".repeat(80);
+        let file_path = docs.join("flight.md");
+        fs::write(
+            &file_path,
+            format!("{}译后记{}", long_prefix, long_suffix),
+        )
+        .expect("write markdown");
+
+        let results = code_grep(
+            "译后记".to_string(),
+            root.to_string_lossy().to_string(),
+            Some(false),
+            Some(vec!["docs/*.md".to_string()]),
+            None,
+            Some(30),
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect("grep centered snippet");
+
+        let _ = fs::remove_dir_all(&root);
+
+        assert_eq!(results.matches.len(), 1);
+        let snippet = &results.matches[0].content;
+        assert!(snippet.starts_with("..."));
+        assert!(snippet.ends_with("..."));
+        assert!(snippet.contains("[[译后记]]"));
+    }
+
+    #[test]
+    fn decode_text_bytes_supports_utf8_and_utf16_bom() {
+        assert_eq!(
+            decode_text_bytes("AgentVis 搜索".as_bytes()).ok().as_deref(),
+            Some("AgentVis 搜索")
+        );
+
+        let mut utf16le = vec![0xFF, 0xFE];
+        for unit in "中文搜索".encode_utf16() {
+            utf16le.extend_from_slice(&unit.to_le_bytes());
+        }
+        assert_eq!(decode_text_bytes(&utf16le).ok().as_deref(), Some("中文搜索"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn decode_text_bytes_supports_gbk_on_windows() {
+        let (encoded, _, had_errors) = encoding_rs::GBK.encode("中文搜索");
+        assert!(!had_errors);
+        assert_eq!(decode_text_bytes(&encoded).ok().as_deref(), Some("中文搜索"));
+    }
+
+    #[test]
+    fn decode_text_bytes_skips_probable_binary_content() {
+        let bytes = [0, 1, 2, 0, 3, 4, 0, 5, 6, 0, 7, 8, 0, 9, 10, 0];
+        assert!(matches!(decode_text_bytes(&bytes), Err(SearchContentSkip::ProbableBinary)));
+    }
 }
