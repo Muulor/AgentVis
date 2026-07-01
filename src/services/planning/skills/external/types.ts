@@ -278,5 +278,13 @@ export const NATIVE_SKILL_NAMES: ReadonlyArray<string> = [
     'file_write',
     'exec',
     'web_search',
+    'local_search',
+    'conversation_search',
+    'generate_image',
+    'cron',
+    'im_send',
+    // Legacy IM bridge names are kept reserved even though im_send is the public tool.
+    'feishu_send',
+    'slack_send',
     'external_skill_execute',
 ];

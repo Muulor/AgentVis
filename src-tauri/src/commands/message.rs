@@ -21,6 +21,14 @@ pub struct MessageItem {
     pub created_at: i64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageSearchResponse {
+    pub messages: Vec<MessageItem>,
+    pub has_more: bool,
+    pub next_offset: Option<i64>,
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ShortTermMemoryChangedEvent {
@@ -79,7 +87,83 @@ fn parse_role(role: &str) -> MessageRole {
     }
 }
 
+fn normalize_search_roles(roles: Option<Vec<String>>) -> Vec<String> {
+    let mut normalized: Vec<String> = roles
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|role| match role.to_ascii_lowercase().as_str() {
+            "user" => Some("user".to_string()),
+            "assistant" => Some("assistant".to_string()),
+            _ => None,
+        })
+        .collect();
+
+    normalized.sort();
+    normalized.dedup();
+
+    if normalized.is_empty() {
+        vec!["user".to_string(), "assistant".to_string()]
+    } else {
+        normalized
+    }
+}
+
+fn normalize_message_ids(ids: Vec<String>) -> Vec<String> {
+    let mut normalized: Vec<String> = Vec::new();
+    for id in ids {
+        let id = id.trim().to_string();
+        if !id.is_empty() && !normalized.contains(&id) {
+            normalized.push(id);
+        }
+        if normalized.len() >= 5 {
+            break;
+        }
+    }
+    normalized
+}
+
 /// 创建新消息
+fn normalize_history_order(order: Option<String>) -> bool {
+    matches!(
+        order
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
+        Some("asc") | Some("oldest") | Some("oldest_first")
+    )
+}
+
+fn normalize_time_bound(value: Option<i64>) -> Option<i64> {
+    value.filter(|timestamp| *timestamp >= 0)
+}
+
+fn messages_page_response(
+    mut messages: Vec<crate::db::models::Message>,
+    limit: i64,
+    offset: i64,
+) -> MessageSearchResponse {
+    let has_more = messages.len() > limit as usize;
+    if has_more {
+        messages.truncate(limit as usize);
+    }
+
+    let messages = messages.into_iter().map(|m| MessageItem {
+        id: m.id,
+        agent_id: m.agent_id,
+        role: m.role,
+        content: m.content,
+        metadata: m.metadata,
+        created_at: m.created_at,
+    }).collect();
+
+    MessageSearchResponse {
+        messages,
+        has_more,
+        next_offset: if has_more { Some(offset + limit) } else { None },
+    }
+}
+
 #[tauri::command]
 pub async fn message_create(
     state: State<'_, AppState>,
@@ -154,7 +238,109 @@ pub async fn message_list_by_agent(
     }).collect())
 }
 
-/// 获取指定 Agent 最近的 N 条消息
+/// Search one Agent's persisted conversation history.
+#[tauri::command]
+pub async fn message_search_agent_history(
+    state: State<'_, AppState>,
+    agent_id: String,
+    query: String,
+    roles: Option<Vec<String>>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    start_ts: Option<i64>,
+    end_ts: Option<i64>,
+) -> CommandResult<MessageSearchResponse> {
+    let query = query.trim().to_string();
+    if query.is_empty() {
+        return Ok(MessageSearchResponse {
+            messages: vec![],
+            has_more: false,
+            next_offset: None,
+        });
+    }
+
+    let db = state.db.lock().await;
+    let roles = normalize_search_roles(roles);
+    let limit = limit.unwrap_or(10).clamp(1, 50);
+    let offset = offset.unwrap_or(0).max(0);
+    let fetch_limit = limit + 1;
+    let messages = db
+        .message_repo()
+        .search_by_agent(
+            &agent_id,
+            &query,
+            &roles,
+            fetch_limit,
+            offset,
+            normalize_time_bound(start_ts),
+            normalize_time_bound(end_ts),
+        )
+        .await?;
+
+    Ok(messages_page_response(messages, limit, offset))
+}
+
+/// List one Agent's persisted conversation timeline.
+#[tauri::command]
+pub async fn message_timeline_agent_history(
+    state: State<'_, AppState>,
+    agent_id: String,
+    roles: Option<Vec<String>>,
+    order: Option<String>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    start_ts: Option<i64>,
+    end_ts: Option<i64>,
+) -> CommandResult<MessageSearchResponse> {
+    let db = state.db.lock().await;
+    let roles = normalize_search_roles(roles);
+    let limit = limit.unwrap_or(10).clamp(1, 50);
+    let offset = offset.unwrap_or(0).max(0);
+    let fetch_limit = limit + 1;
+    let messages = db
+        .message_repo()
+        .timeline_by_agent(
+            &agent_id,
+            &roles,
+            fetch_limit,
+            offset,
+            normalize_time_bound(start_ts),
+            normalize_time_bound(end_ts),
+            normalize_history_order(order),
+        )
+        .await?;
+
+    Ok(messages_page_response(messages, limit, offset))
+}
+
+/// Get full history messages for one Agent only.
+#[tauri::command]
+pub async fn message_get_agent_history_messages(
+    state: State<'_, AppState>,
+    agent_id: String,
+    ids: Vec<String>,
+) -> CommandResult<Vec<MessageItem>> {
+    let ids = normalize_message_ids(ids);
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let db = state.db.lock().await;
+    let messages = db
+        .message_repo()
+        .get_by_ids_for_agent(&agent_id, &ids)
+        .await?;
+
+    Ok(messages.into_iter().map(|m| MessageItem {
+        id: m.id,
+        agent_id: m.agent_id,
+        role: m.role,
+        content: m.content,
+        metadata: m.metadata,
+        created_at: m.created_at,
+    }).collect())
+}
+
 #[tauri::command]
 pub async fn message_get_recent(
     state: State<'_, AppState>,

@@ -38,6 +38,7 @@ export const TOOL_RISK_REGISTRY: Record<string, ToolRiskLevel> = {
     // 图像生成仅保存到 deliverables 目录，无不可逆副作用
     generate_image: 'low',
     local_search: 'low',
+    conversation_search: 'low',
     im_send: 'low',
     feishu_send: 'low',
     slack_send: 'low',

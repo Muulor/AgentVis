@@ -797,6 +797,9 @@ planning/
 │   ├── 📁 local_search/           # 本地搜索技能（grep/find/outline/symbol，tree-sitter AST）
 │   │   ├── SKILL.md              # 技能定义文档
 │   │   └── tool.ts               # 工具实现
+│   ├── 📁 conversation_search/    # 当前 Agent 历史对话检索技能（timeline / snippet 分页 / get 全文）
+│   │   ├── SKILL.md              # 技能定义文档
+│   │   └── tool.ts               # 工具实现
 │   │
 │   └── 📁 external/              # 外部技能包子系统
 │       ├── index.ts              # 模块导出索引

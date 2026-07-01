@@ -33,6 +33,7 @@ export { execTool } from '../skills/exec/tool';
 export { generateImageTool } from '../skills/generate_image/tool';
 export { cronTool } from '../skills/cron/tool';
 export { localSearchTool } from '../skills/local_search/tool';
+export { conversationSearchTool } from '../skills/conversation_search/tool';
 export { imSendTool } from '../skills/im_send/tool';
 export { feishuSendTool } from '../skills/feishu_send/tool';
 export { slackSendTool } from '../skills/slack_send/tool';
@@ -47,6 +48,7 @@ import { execTool } from '../skills/exec/tool';
 import { generateImageTool } from '../skills/generate_image/tool';
 import { cronTool } from '../skills/cron/tool';
 import { localSearchTool } from '../skills/local_search/tool';
+import { conversationSearchTool } from '../skills/conversation_search/tool';
 import { imSendTool } from '../skills/im_send/tool';
 import { externalSkillExecuteTool } from '../skills/external_skill_execute/tool';
 import { getLogger } from '@services/logger';
@@ -75,6 +77,7 @@ export function initializeTools(): void {
         generateImageTool,
         cronTool,
         localSearchTool,
+        conversationSearchTool,
         imSendTool, // 统一 IM 原生发送工具（飞书/Slack）
         externalSkillExecuteTool,
     ]);

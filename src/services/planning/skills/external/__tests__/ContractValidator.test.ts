@@ -859,6 +859,14 @@ describe('isNativeSkillConflict', () => {
         expect(isNativeSkillConflict('file_write')).toBe(true);
         expect(isNativeSkillConflict('exec')).toBe(true);
         expect(isNativeSkillConflict('web_search')).toBe(true);
+        expect(isNativeSkillConflict('local_search')).toBe(true);
+        expect(isNativeSkillConflict('conversation_search')).toBe(true);
+        expect(isNativeSkillConflict('generate_image')).toBe(true);
+        expect(isNativeSkillConflict('cron')).toBe(true);
+        expect(isNativeSkillConflict('im_send')).toBe(true);
+        expect(isNativeSkillConflict('feishu_send')).toBe(true);
+        expect(isNativeSkillConflict('slack_send')).toBe(true);
+        expect(isNativeSkillConflict('external_skill_execute')).toBe(true);
     });
 
     it('非 Native 名称不应冲突', () => {

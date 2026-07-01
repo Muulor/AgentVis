@@ -30,6 +30,10 @@ describe('TOOL_RISK_REGISTRY', () => {
         expect(TOOL_RISK_REGISTRY['web_search']).toBe('low');
     });
 
+    it('conversation_search should be low risk', () => {
+        expect(TOOL_RISK_REGISTRY['conversation_search']).toBe('low');
+    });
+
     it('应为 file_write 定义 medium 风险', () => {
         expect(TOOL_RISK_REGISTRY['file_write']).toBe('medium');
     });
@@ -62,6 +66,7 @@ describe('ToolRiskGuard', () => {
         it.each<[string, ToolRiskLevel]>([
             ['read', 'low'],
             ['web_search', 'low'],
+            ['conversation_search', 'low'],
             ['file_write', 'medium'],
             ['exec', 'high'],
             ['external_skill_execute', 'high'],

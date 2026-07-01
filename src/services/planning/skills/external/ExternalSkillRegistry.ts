@@ -271,17 +271,17 @@ export class ExternalSkillRegistryLoader {
     private async loadSingleSkillByEntry(
         entry: ExternalSkillEntry
     ): Promise<LoadedExternalSkill | null> {
-        // 验证技能名称格式
-        if (!isValidSkillName(entry.name)) {
-            throw new Error(
-                `Invalid skill name "${entry.name}" (only lowercase letters, numbers, and hyphens are allowed)`
-            );
-        }
-
         // 检查与 Native Skill 的名称冲突
         if (NATIVE_SKILL_NAMES.includes(entry.name)) {
             throw new Error(
                 `Skill name "${entry.name}" conflicts with a native skill`
+            );
+        }
+
+        // 验证技能名称格式
+        if (!isValidSkillName(entry.name)) {
+            throw new Error(
+                `Invalid skill name "${entry.name}" (only lowercase letters, numbers, and hyphens are allowed)`
             );
         }
 
@@ -319,6 +319,13 @@ export class ExternalSkillRegistryLoader {
             throw new Error('SKILL.md frontmatter is missing the description field');
         }
 
+        // 检查与 Native Skill 的名称冲突
+        if (NATIVE_SKILL_NAMES.includes(frontmatter.name)) {
+            throw new Error(
+                `Skill name "${frontmatter.name}" conflicts with a native skill`
+            );
+        }
+
         // 验证技能名称格式
         if (!isValidSkillName(frontmatter.name)) {
             throw new Error(
@@ -326,12 +333,6 @@ export class ExternalSkillRegistryLoader {
             );
         }
 
-        // 检查与 Native Skill 的名称冲突
-        if (NATIVE_SKILL_NAMES.includes(frontmatter.name)) {
-            throw new Error(
-                `Skill name "${frontmatter.name}" conflicts with a native skill`
-            );
-        }
         const agentvisNetwork = this.normalizeAgentVisNetwork(frontmatter.agentvisNetwork);
         const agentvisNetworkEntrypoints = this.normalizeAgentVisNetworkEntrypoints(
             frontmatter.agentvisNetworkEntrypoints

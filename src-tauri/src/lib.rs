@@ -59,7 +59,7 @@ use commands::{
     // Snapshot commands
     snapshot_create, snapshot_get, snapshot_list, snapshot_get_latest, snapshot_rollback, snapshot_delete, snapshot_cleanup, snapshot_count,
     // Message commands
-    message_create, message_update, message_list_by_agent, message_list_by_hub, message_get_recent, message_get_batch, message_get_after, message_get_before, message_count_by_agent, message_get_recent_hub, message_get_before_hub, message_count_by_hub, message_delete, message_retract_from, message_clear_by_agent,
+    message_create, message_update, message_list_by_agent, message_search_agent_history, message_timeline_agent_history, message_get_agent_history_messages, message_list_by_hub, message_get_recent, message_get_batch, message_get_after, message_get_before, message_count_by_agent, message_get_recent_hub, message_get_before_hub, message_count_by_hub, message_delete, message_retract_from, message_clear_by_agent,
     // File commands
     file_write_deliverable, file_read_content, file_list_deliverables, file_delete, save_clipboard_image, save_dropped_file,
     file_write_to_path, file_write_staged_tool_arg_to_path, file_create_backup, file_read_as_base64, file_read_image_downscaled_as_base64, file_copy_to_attachments, file_get_size, file_open_system,
@@ -380,6 +380,9 @@ pub fn run() {
             message_create,
             message_update,
             message_list_by_agent,
+            message_search_agent_history,
+            message_timeline_agent_history,
+            message_get_agent_history_messages,
             message_list_by_hub,
             message_get_recent,
             message_get_batch,

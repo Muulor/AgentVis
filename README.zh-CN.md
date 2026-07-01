@@ -4,7 +4,7 @@
 
 # AgentVis
 <p align="center">
-  <a href="https://agentvis.muulor.workers.dev/">官方网站</a> | <a href="https://agentvis-download-1318040347.cos.ap-beijing.myqcloud.com/AgentVis_0.3.4_x64-setup.exe">下载 Windows 版</a> | <a href="README.md">English README</a>
+  <a href="https://agentvis.muulor.workers.dev/">官方网站</a> | <a href="https://github.com/Muulor/AgentVis/releases/latest">下载 Windows 版</a> | <a href="README.md">English README</a>
 </p>
 <p align="center">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB">
@@ -72,7 +72,7 @@ AgentVis 是一个从零构建的本地 AI Agent 运行平台。它把 Agent 的
 
 当前发布版本主要面向 Windows。
 
-1. 下载并安装 [AgentVis Windows 安装包](https://agentvis-download-1318040347.cos.ap-beijing.myqcloud.com/AgentVis_0.3.4_x64-setup.exe)。
+1. 下载并安装 [AgentVis Windows 安装包](https://github.com/Muulor/AgentVis/releases/latest)。
 2. 首次进入后，按初始化引导配置 API Key、云端服务和预设技能依赖，创建 Hub 和 Agent 即可开始协作。
 
 完整上手流程见 [AgentVis 快速开始指南](docs/User%20Guide/quick_start.md)。

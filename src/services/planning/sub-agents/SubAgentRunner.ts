@@ -176,6 +176,39 @@ function formatLocalSearchTarget(args: Record<string, unknown>, compact = true):
     }
 }
 
+function formatConversationSearchTarget(args: Record<string, unknown>): string {
+    const mode = getFirstToolArg(args, 'mode') || 'search';
+    if (mode === 'get') {
+        const messageTarget = getFirstToolArg(args, 'messageId', 'message_id', 'messageIds', 'message_ids');
+        return `get${messageTarget ? ` ${messageTarget}` : ''}`;
+    }
+    if (mode === 'timeline') {
+        const order = getFirstToolArg(args, 'order');
+        const offset = getFirstToolArg(args, 'offset');
+        const startAt = getFirstToolArg(args, 'startAt', 'start_at');
+        const endAt = getFirstToolArg(args, 'endAt', 'end_at');
+        return [
+            'timeline',
+            order ? `order=${order}` : '',
+            startAt ? `startAt=${startAt}` : '',
+            endAt ? `endAt=${endAt}` : '',
+            offset ? `offset=${offset}` : '',
+        ].filter(Boolean).join(' ');
+    }
+
+    const query = quoteToolTargetValue(getFirstToolArg(args, 'query'), false);
+    const offset = getFirstToolArg(args, 'offset');
+    const startAt = getFirstToolArg(args, 'startAt', 'start_at');
+    const endAt = getFirstToolArg(args, 'endAt', 'end_at');
+    return [
+        'search',
+        query || '',
+        startAt ? `startAt=${startAt}` : '',
+        endAt ? `endAt=${endAt}` : '',
+        offset ? `offset=${offset}` : '',
+    ].filter(Boolean).join(' ');
+}
+
 function sanitizeToolCallIdPart(value: string): string {
     const sanitized = value
         .replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -338,6 +371,8 @@ function extractToolTarget(toolName: string, args: Record<string, unknown>, defa
         }
         case 'web_search':
             return buildObservationToolTarget(getFirstToolArg(args, 'query'));
+        case 'conversation_search':
+            return buildObservationToolTarget(formatConversationSearchTarget(args));
         case 'local_search':
             return buildObservationToolTarget(formatLocalSearchTarget(args, false));
         case 'generate_image':

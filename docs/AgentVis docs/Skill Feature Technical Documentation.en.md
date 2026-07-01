@@ -46,6 +46,7 @@ Skill
 |   +-- cron          Scheduled task management
 |   +-- generate_image Image generation
 |   +-- im_send       IM message sending (Feishu / Slack)
+|   +-- conversation_search  Search conversation history.
 |   +-- external_skill_execute Script Skill contract execution entrypoint
 |
 +-- External Skill                       <- User-installed or bundled package, loaded at runtime

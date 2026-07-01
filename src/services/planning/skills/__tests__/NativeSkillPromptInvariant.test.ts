@@ -48,6 +48,29 @@ describe('native skill prompt invariants', () => {
             ],
         },
         {
+            name: 'conversation_search',
+            path: '../conversation_search/SKILL.md',
+            requiredTokens: [
+                'name: conversation_search',
+                'behaviorHint=\'direct\'',
+                'current Agent only',
+                'mode: "timeline"',
+                'mode: "search"',
+                'mode: "get"',
+                'query',
+                'limit',
+                'offset',
+                'order',
+                'role',
+                'startAt',
+                'endAt',
+                'hasMore',
+                'nextOffset',
+                'messageId',
+                'messageIds',
+            ],
+        },
+        {
             name: 'web_search',
             path: '../web_search/SKILL.md',
             requiredTokens: [
@@ -213,6 +236,7 @@ describe('native skill prompt invariants', () => {
         const skillsWithJsonExamples = [
             { name: 'file_write', path: '../file_write/SKILL.md', count: 2 },
             { name: 'local_search', path: '../local_search/SKILL.md', count: 4 },
+            { name: 'conversation_search', path: '../conversation_search/SKILL.md', count: 7 },
             { name: 'cron', path: '../cron/SKILL.md', count: 5 },
             { name: 'im_send', path: '../im_send/SKILL.md', count: 3 },
             { name: 'feishu_send', path: '../feishu_send/SKILL.md', count: 3 },

@@ -3,7 +3,7 @@
 //! 提供消息实体的 CRUD 操作
 
 use chrono::Utc;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, QueryBuilder, Sqlite};
 
 use super::models::{Message, MessageRole};
 use crate::error::{AppError, AppResult};
@@ -11,6 +11,22 @@ use crate::error::{AppError, AppResult};
 /// Message Repository - 管理消息数据访问
 pub struct MessageRepository {
     pool: Pool<Sqlite>,
+}
+
+fn escape_like_pattern(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+
+    for ch in value.chars() {
+        match ch {
+            '%' | '_' | '\\' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+
+    escaped
 }
 
 impl MessageRepository {
@@ -140,6 +156,148 @@ impl MessageRepository {
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// Search messages for a single Agent only.
+    pub async fn search_by_agent(
+        &self,
+        agent_id: &str,
+        query: &str,
+        roles: &[String],
+        limit: i64,
+        offset: i64,
+        start_ts: Option<i64>,
+        end_ts: Option<i64>,
+    ) -> AppResult<Vec<Message>> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut normalized_roles: Vec<&str> = roles
+            .iter()
+            .map(|role| role.as_str())
+            .filter(|role| matches!(*role, "user" | "assistant"))
+            .collect();
+
+        if normalized_roles.is_empty() {
+            normalized_roles.push("user");
+            normalized_roles.push("assistant");
+        }
+
+        let pattern = format!("%{}%", escape_like_pattern(query));
+        let limit = limit.clamp(1, 100);
+        let offset = offset.max(0);
+
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT id, agent_id, role, content, metadata, created_at, deleted_at \
+             FROM messages \
+             WHERE agent_id = ",
+        );
+        builder.push_bind(agent_id);
+        builder.push(
+            " AND deleted_at IS NULL AND LOWER(\
+             CASE \
+             WHEN role = 'assistant' AND metadata IS NOT NULL AND json_valid(metadata) \
+             THEN COALESCE(json_extract(metadata, '$.persistContent'), content) \
+             ELSE content \
+             END\
+             ) LIKE LOWER(",
+        );
+        builder.push_bind(pattern);
+        builder.push(") ESCAPE '\\'");
+        if let Some(start_ts) = start_ts {
+            builder.push(" AND created_at >= ");
+            builder.push_bind(start_ts);
+        }
+        if let Some(end_ts) = end_ts {
+            builder.push(" AND created_at < ");
+            builder.push_bind(end_ts);
+        }
+        builder.push(" AND role IN (");
+        {
+            let mut separated = builder.separated(", ");
+            for role in normalized_roles {
+                separated.push_bind(role);
+            }
+        }
+        builder.push(") ORDER BY created_at DESC, id DESC LIMIT ");
+        builder.push_bind(limit);
+        builder.push(" OFFSET ");
+        builder.push_bind(offset);
+
+        let messages = builder
+            .build_query_as::<Message>()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages)
+    }
+
+    /// List messages for a single Agent by timeline.
+    pub async fn timeline_by_agent(
+        &self,
+        agent_id: &str,
+        roles: &[String],
+        limit: i64,
+        offset: i64,
+        start_ts: Option<i64>,
+        end_ts: Option<i64>,
+        ascending: bool,
+    ) -> AppResult<Vec<Message>> {
+        let mut normalized_roles: Vec<&str> = roles
+            .iter()
+            .map(|role| role.as_str())
+            .filter(|role| matches!(*role, "user" | "assistant"))
+            .collect();
+
+        if normalized_roles.is_empty() {
+            normalized_roles.push("user");
+            normalized_roles.push("assistant");
+        }
+
+        let limit = limit.clamp(1, 100);
+        let offset = offset.max(0);
+
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT id, agent_id, role, content, metadata, created_at, deleted_at \
+             FROM messages \
+             WHERE agent_id = ",
+        );
+        builder.push_bind(agent_id);
+        builder.push(" AND deleted_at IS NULL");
+        if let Some(start_ts) = start_ts {
+            builder.push(" AND created_at >= ");
+            builder.push_bind(start_ts);
+        }
+        if let Some(end_ts) = end_ts {
+            builder.push(" AND created_at < ");
+            builder.push_bind(end_ts);
+        }
+        builder.push(" AND role IN (");
+        {
+            let mut separated = builder.separated(", ");
+            for role in normalized_roles {
+                separated.push_bind(role);
+            }
+        }
+        if ascending {
+            builder.push(") ORDER BY created_at ASC, id ASC LIMIT ");
+        } else {
+            builder.push(") ORDER BY created_at DESC, id DESC LIMIT ");
+        }
+        builder.push_bind(limit);
+        builder.push(" OFFSET ");
+        builder.push_bind(offset);
+
+        let messages = builder
+            .build_query_as::<Message>()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
 
         Ok(messages)
     }
@@ -316,6 +474,46 @@ impl MessageRepository {
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
         
+        Ok(messages)
+    }
+
+    /// Get messages by IDs, scoped to one Agent only.
+    pub async fn get_by_ids_for_agent(
+        &self,
+        agent_id: &str,
+        ids: &[String],
+    ) -> AppResult<Vec<Message>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT id, agent_id, role, content, metadata, created_at, deleted_at \
+             FROM messages \
+             WHERE agent_id = ",
+        );
+        builder.push_bind(agent_id);
+        builder.push(" AND deleted_at IS NULL AND id IN (");
+        {
+            let mut separated = builder.separated(", ");
+            for id in ids {
+                separated.push_bind(id);
+            }
+        }
+        builder.push(")");
+
+        let mut messages = builder
+            .build_query_as::<Message>()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        messages.sort_by_key(|message| {
+            ids.iter()
+                .position(|id| id == &message.id)
+                .unwrap_or(usize::MAX)
+        });
+
         Ok(messages)
     }
 
@@ -651,6 +849,188 @@ mod tests {
         assert!(contents.contains(&"消息1"));
         assert!(contents.contains(&"消息2"));
         assert!(contents.contains(&"消息3"));
+    }
+
+    #[tokio::test]
+    async fn test_search_by_agent_scopes_to_agent_and_escapes_like() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        let other_agent = agent_repo.create(&hub.id, "其他 Agent").await.unwrap();
+
+        msg_repo
+            .create(&agent.id, MessageRole::User, "Automation Lane 用户反馈", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::Assistant, "automation lane 修复记录", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::User, "100% literal marker", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::User, "100x wildcard decoy", None)
+            .await
+            .unwrap();
+        let other_agent_message = msg_repo
+            .create(&other_agent.id, MessageRole::User, "Automation Lane other agent", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(
+                &agent.id,
+                MessageRole::Assistant,
+                "UI-only keyword from enhanced display",
+                Some(r#"{"persistContent":"Persistent-only evidence from rationale"}"#.to_string()),
+            )
+            .await
+            .unwrap();
+
+        let all_matches = msg_repo
+            .search_by_agent(&agent.id, "Automation Lane", &[], 10, 0, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(all_matches.len(), 2);
+        assert!(all_matches.iter().all(|message| message.agent_id == agent.id));
+
+        let second_page = msg_repo
+            .search_by_agent(&agent.id, "Automation Lane", &[], 1, 1, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(second_page.len(), 1);
+        assert_eq!(second_page[0].agent_id, agent.id);
+
+        let user_matches = msg_repo
+            .search_by_agent(&agent.id, "Automation Lane", &[String::from("user")], 10, 0, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(user_matches.len(), 1);
+        assert_eq!(user_matches[0].role, "user");
+
+        let literal_percent_matches = msg_repo
+            .search_by_agent(&agent.id, "100%", &[], 10, 0, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(literal_percent_matches.len(), 1);
+        assert_eq!(literal_percent_matches[0].content, "100% literal marker");
+
+        let persisted_content_matches = msg_repo
+            .search_by_agent(&agent.id, "Persistent-only", &[], 10, 0, None, None)
+            .await
+            .unwrap();
+
+        assert_eq!(persisted_content_matches.len(), 1);
+        assert_eq!(persisted_content_matches[0].role, "assistant");
+
+        let ui_only_matches = msg_repo
+            .search_by_agent(&agent.id, "UI-only", &[], 10, 0, None, None)
+            .await
+            .unwrap();
+
+        assert!(ui_only_matches.is_empty());
+
+        let scoped_full_messages = msg_repo
+            .get_by_ids_for_agent(
+                &agent.id,
+                &[other_agent_message.id.clone(), all_matches[0].id.clone()],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(scoped_full_messages.len(), 1);
+        assert_eq!(scoped_full_messages[0].agent_id, agent.id);
+    }
+
+    #[tokio::test]
+    async fn test_timeline_by_agent_filters_roles_time_and_order() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        let other_agent = agent_repo.create(&hub.id, "其他 Agent").await.unwrap();
+
+        let first_user = msg_repo
+            .create(&agent.id, MessageRole::User, "first user", None)
+            .await
+            .unwrap();
+        let assistant = msg_repo
+            .create(&agent.id, MessageRole::Assistant, "assistant", None)
+            .await
+            .unwrap();
+        let second_user = msg_repo
+            .create(&agent.id, MessageRole::User, "second user", None)
+            .await
+            .unwrap();
+        let other_user = msg_repo
+            .create(&other_agent.id, MessageRole::User, "other user", None)
+            .await
+            .unwrap();
+
+        msg_repo
+            .update_content_metadata(&first_user.id, &first_user.content, None, Some(1_000))
+            .await
+            .unwrap();
+        msg_repo
+            .update_content_metadata(&assistant.id, &assistant.content, None, Some(2_000))
+            .await
+            .unwrap();
+        msg_repo
+            .update_content_metadata(&second_user.id, &second_user.content, None, Some(3_000))
+            .await
+            .unwrap();
+        msg_repo
+            .update_content_metadata(&other_user.id, &other_user.content, None, Some(1_500))
+            .await
+            .unwrap();
+
+        let asc_user_timeline = msg_repo
+            .timeline_by_agent(
+                &agent.id,
+                &[String::from("user")],
+                10,
+                0,
+                Some(1_000),
+                Some(3_001),
+                true,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(asc_user_timeline.len(), 2);
+        assert_eq!(asc_user_timeline[0].id, first_user.id);
+        assert_eq!(asc_user_timeline[1].id, second_user.id);
+        assert!(asc_user_timeline.iter().all(|message| message.agent_id == agent.id));
+
+        let desc_second_page = msg_repo
+            .timeline_by_agent(
+                &agent.id,
+                &[String::from("user")],
+                1,
+                1,
+                Some(1_000),
+                Some(3_001),
+                false,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(desc_second_page.len(), 1);
+        assert_eq!(desc_second_page[0].id, first_user.id);
+
+        let narrow_timeline = msg_repo
+            .timeline_by_agent(&agent.id, &[], 10, 0, Some(1_500), Some(2_500), true)
+            .await
+            .unwrap();
+
+        assert_eq!(narrow_timeline.len(), 1);
+        assert_eq!(narrow_timeline[0].id, assistant.id);
     }
 
 

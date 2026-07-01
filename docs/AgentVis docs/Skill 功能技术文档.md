@@ -46,6 +46,7 @@ Skill
 │   ├── cron          定时任务管理
 │   ├── generate_image 图片生成
 │   ├── im_send       IM 消息发送（飞书 / Slack）
+│   ├── conversation_search  历史对话检索技能
 │   └── external_skill_execute Script Skill 合约执行入口
 │
 └── External Skill（外部技能）       ← 用户安装或随包部署，运行时加载

@@ -20,6 +20,7 @@ import {
     FilePenLine,
     Terminal,
     Search,
+    History,
     Loader,
     MessageSquare,
 } from 'lucide-react';
@@ -45,6 +46,7 @@ const TOOL_ICON_MAP: Record<string, typeof FileText> = {
     file_write: FilePenLine,
     exec: Terminal,
     web_search: Search,
+    conversation_search: History,
     generate_image: FileImage,
 };
 
@@ -54,6 +56,7 @@ const TOOL_LABEL_MAP: Record<string, string> = {
     file_write: 'Write',
     exec: 'Exec',
     web_search: 'Search',
+    conversation_search: 'History',
 };
 
 // ═══════════════════════════════════════════════════════════════
