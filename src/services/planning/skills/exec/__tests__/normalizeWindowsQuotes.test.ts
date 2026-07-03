@@ -16,6 +16,7 @@ import {
     normalizeSmartQuotes,
     normalizeSmartQuotesForWindowsCommand,
     normalizeInlineEvalCommandQuotes,
+    normalizeWindowsCommandLineBreaks,
 } from '../tool';
 
 describe('normalizeSmartQuotes', () => {
@@ -133,10 +134,9 @@ describe('normalizeWindowsQuotes — cmd.exe 场景', () => {
         expect(normalizeWindowsQuotes(input)).toBe(expected);
     });
 
-    it('非路径的普通文本单引号也应替换为双引号', () => {
-        // cmd.exe 本身不支持单引号，全量替换
+    it('echo 字面文本单引号应保持原样', () => {
         const input = "echo 'hello world'";
-        const expected = 'echo "hello world"';
+        const expected = "echo 'hello world'";
         expect(normalizeWindowsQuotes(input)).toBe(expected);
     });
 
@@ -173,9 +173,39 @@ describe('normalizeWindowsQuotes — cmd.exe 场景', () => {
     });
 
     it('不应替换 python -c 双引号代码内部的单引号字符串', () => {
-        const input = 'python -c “import base64; target=’http://127.0.0.1’; print(target.rstrip(’=’))”';
+        const input = 'python -c “import base64; target=‘http://127.0.0.1’; print(target.rstrip(‘=’))”';
         const result = normalizeWindowsQuotes(input);
         expect(result).toBe('python -c "import base64; target=\'http://127.0.0.1\'; print(target.rstrip(\'=\'))"');
+    });
+
+    it('不应把含内层双引号的 echo 单引号片段改写成嵌套双引号', () => {
+        const input = 'echo \'He said "hello"\'';
+        expect(normalizeWindowsQuotes(input)).toBe(input);
+    });
+
+    it('不应改写 echo 命令中普通单引号字面量', () => {
+        const input = 'echo mixed "double" and \'single\' quotes';
+        expect(normalizeWindowsQuotes(input)).toBe(input);
+    });
+
+    it('不应改写 for /f 命令替换语法中的单引号', () => {
+        const input = "for /f %i in ('echo nestedcmd') do echo %i";
+        expect(normalizeWindowsQuotes(input)).toBe(input);
+    });
+
+    it('不应改写带选项的 for /f 命令替换语法中的单引号', () => {
+        const input = 'for /f "delims=" %%i in (\'dir /b\') do echo %%i';
+        expect(normalizeWindowsQuotes(input)).toBe(input);
+    });
+
+    it('应修正单引号包裹的 python -c 代码参数', () => {
+        const input = 'python -c \'import os; print(os.getcwd())\'';
+        expect(normalizeWindowsQuotes(input)).toBe('python -c "import os; print(os.getcwd())"');
+    });
+
+    it('应转义单引号 inline eval 代码中的内层双引号', () => {
+        const input = 'node -e \'console.log("hello from node")\'';
+        expect(normalizeWindowsQuotes(input)).toBe('node -e "console.log(\\"hello from node\\")"');
     });
 
     it('不应破坏管道后 python -c 中的 JSON 字段单引号', () => {
@@ -190,16 +220,26 @@ describe('normalizeWindowsQuotes — cmd.exe 场景', () => {
 });
 
 describe('normalizeInlineEvalCommandQuotes', () => {
-    it('应仅保护 node -e 的代码参数外层双引号', () => {
+    it('不应再翻倍 node -e 的代码参数外层双引号', () => {
         const input = 'node -e "const net = require(\'net\'); console.log(\'connected\');"';
         const result = normalizeInlineEvalCommandQuotes(input);
-        expect(result).toBe('node -e ""const net = require(\'net\'); console.log(\'connected\');""');
+        expect(result).toBe(input);
     });
 
-    it('应仅保护 python -c 的代码参数外层双引号', () => {
+    it('不应再翻倍 python -c 的代码参数外层双引号', () => {
         const input = 'python -c "import base64; target=\'http://127.0.0.1\'; print(target)"';
         const result = normalizeInlineEvalCommandQuotes(input);
-        expect(result).toBe('python -c ""import base64; target=\'http://127.0.0.1\'; print(target)""');
+        expect(result).toBe(input);
+    });
+
+    it('应保持含空格 import 语句的 python -c 命令原样', () => {
+        const input = 'python -c "import os; print(os.getcwd())"';
+        expect(normalizeInlineEvalCommandQuotes(input)).toBe(input);
+    });
+
+    it('应保持分号后带空格的 node -e 命令原样', () => {
+        const input = 'node -e "console.log(\'a\'); console.log(\'b\')"';
+        expect(normalizeInlineEvalCommandQuotes(input)).toBe(input);
     });
 
     it('不应修改普通脚本路径和带空格参数', () => {
@@ -210,6 +250,38 @@ describe('normalizeInlineEvalCommandQuotes', () => {
     it('应支持管道后的 python -c', () => {
         const input = 'curl -s https://example.com | python -c "import sys; print(sys.stdin.read())"';
         const result = normalizeInlineEvalCommandQuotes(input);
-        expect(result).toBe('curl -s https://example.com | python -c ""import sys; print(sys.stdin.read())""');
+        expect(result).toBe(input);
+    });
+});
+
+describe('normalizeWindowsCommandLineBreaks', () => {
+    it('应将双引号外的多行命令转换为 cmd.exe 可执行的 & 分隔', () => {
+        const input = 'echo line1\necho line2\r\necho line3';
+        expect(normalizeWindowsCommandLineBreaks(input)).toBe('echo line1 & echo line2 & echo line3');
+    });
+
+    it('应保留 inline eval 双引号代码参数内部的换行', () => {
+        const input = 'python -c "print(\'a\')\nprint(\'b\')"';
+        expect(normalizeWindowsCommandLineBreaks(input)).toBe(input);
+    });
+
+    it('应识别 inline eval 中反斜杠转义的内层双引号', () => {
+        const input = 'node -e "console.log(\\"a\\")\nconsole.log(\\"b\\")"';
+        expect(normalizeWindowsCommandLineBreaks(input)).toBe(input);
+    });
+
+    it('不应在已显式续接的行尾追加额外分隔符', () => {
+        const input = 'echo line1 &&\necho line2';
+        expect(normalizeWindowsCommandLineBreaks(input)).toBe('echo line1 &&echo line2');
+    });
+
+    it('应保留 cmd 行尾 caret 续行语义', () => {
+        const input = 'echo hello ^\nworld';
+        expect(normalizeWindowsCommandLineBreaks(input)).toBe('echo hello world');
+    });
+
+    it('偶数个行尾 caret 不应被当作续行符', () => {
+        const input = 'echo caret ^^\necho next';
+        expect(normalizeWindowsCommandLineBreaks(input)).toBe('echo caret ^^ & echo next');
     });
 });

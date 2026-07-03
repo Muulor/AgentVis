@@ -10,7 +10,8 @@
  * - normalizeSmartQuotesForWindowsCommand: 修正命令分隔用的中文/排版弯引号，同时保留路径内的 Unicode 标点
  * - normalizeWindowsQuotes: 修正 LLM 生成的 Linux 风格单引号
  * - normalizePythonCommand: 将裸 python/python3 替换为 venv 路径
- * - normalizeInlineEvalCommandQuotes: 仅为 node -e / python -c 做 cmd.exe 内联代码引号保护
+ * - normalizeWindowsCommandLineBreaks: 将 cmd.exe 外层多行命令规范化为 & 分隔
+ * - normalizeInlineEvalCommandQuotes: 兼容旧调用点，不再翻倍 node -e / python -c 外层引号
  *
  * 安全注意事项：
  * - 所有命令执行需要用户授权
@@ -592,6 +593,53 @@ export function normalizeSmartQuotesForWindowsCommand(command: string): string {
     return normalizeInlineEvalSmartSingleQuotes(normalizedSingleDelimiters);
 }
 
+function currentCommandSegmentPrefix(command: string, quoteStart: number): string {
+    let segmentStart = 0;
+    for (let i = quoteStart - 1; i >= 0; i -= 1) {
+        const char = command.charAt(i);
+        if (char === '|' || char === '&') {
+            segmentStart = i + 1;
+            break;
+        }
+    }
+    return command.slice(segmentStart, quoteStart).trimStart();
+}
+
+function isEchoCommandContext(command: string, quoteStart: number): boolean {
+    return /^@?echo(?:\s|$|[.:])/i.test(currentCommandSegmentPrefix(command, quoteStart));
+}
+
+function isFindstrCommandContext(command: string, quoteStart: number): boolean {
+    return /\bfindstr(?:\.exe)?\b/i.test(currentCommandSegmentPrefix(command, quoteStart));
+}
+
+function isForFCommandSubstitutionContext(command: string, quoteStart: number): boolean {
+    return /(?:^|\s)@?for\s+\/f\b[\s\S]*\bin\s*\(\s*$/i
+        .test(currentCommandSegmentPrefix(command, quoteStart));
+}
+
+function isInlineEvalCodeArgumentContext(command: string, quoteStart: number): boolean {
+    return /\b(?:node|python3?(?:\.exe)?)\b[\s\S]*\s-(?:e|c)\s*$/i
+        .test(currentCommandSegmentPrefix(command, quoteStart));
+}
+
+function shouldReplaceSingleQuotedSegment(command: string, quoteStart: number, inner: string): boolean {
+    if (isInlineEvalCodeArgumentContext(command, quoteStart)) return true;
+    if (isForFCommandSubstitutionContext(command, quoteStart)) return false;
+    if (inner.includes('"') || isEchoCommandContext(command, quoteStart)) return false;
+    if (isFindstrCommandContext(command, quoteStart)) return true;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(inner)) return true;
+    if (/^(?:[a-z]:[\\/]|\\\\|\.{1,2}[\\/])/i.test(inner)) return true;
+    if (/[\\/]/.test(inner)) return true;
+    if (/[*?]/.test(inner)) return true;
+    return /\s/.test(inner);
+}
+
+function quoteForWindowsCmdArg(inner: string, escapeInnerDoubleQuotes = false): string {
+    const escaped = escapeInnerDoubleQuotes ? inner.replace(/"/g, '\\"') : inner;
+    return escaped.endsWith('\\') ? `"${escaped}\\"` : `"${escaped}"`;
+}
+
 function replaceSingleQuotedSegmentsOutsideDoubleQuotes(command: string): string {
     let result = '';
     let inDoubleQuotes = false;
@@ -611,10 +659,13 @@ function replaceSingleQuotedSegmentsOutsideDoubleQuotes(command: string): string
             const closingIndex = command.indexOf("'", index + 1);
             if (closingIndex > index) {
                 const inner = command.slice(index + 1, closingIndex);
-                if (inner.endsWith('\\')) {
-                    result += `"${inner}\\"`;
+                if (shouldReplaceSingleQuotedSegment(command, index, inner)) {
+                    result += quoteForWindowsCmdArg(
+                        inner,
+                        isInlineEvalCodeArgumentContext(command, index)
+                    );
                 } else {
-                    result += `"${inner}"`;
+                    result += command.slice(index, closingIndex + 1);
                 }
                 index = closingIndex + 1;
                 continue;
@@ -708,19 +759,93 @@ export function normalizePythonCommand(
 }
 
 /**
- * 保护 Windows cmd.exe 下的 node -e / python -c 内联代码参数
+ * 兼容旧版本的 node -e / python -c 内联代码规范化入口。
  *
- * shell_execute 的 Windows 后端会把命令嵌入 cmd /S /C "..."。普通脚本路径和普通参数
- * 继续沿用原命令语义；只有 -e/-c 的代码参数需要把包裹代码的双引号翻倍，避免 cmd.exe
- * 在传输层提前截断 JavaScript/Python 代码。
+ * 过去这里会把包裹代码的双引号翻倍，但 cmd /S /C + raw_arg 已能保留原始双引号；
+ * 翻倍会让 MSVCRT 把含空格的 inline eval 代码拆成多个 argv，导致 Python/Node 只执行片段。
  */
 export function normalizeInlineEvalCommandQuotes(command: string): string {
-    if (!command) return command;
+    return command;
+}
 
-    return command.replace(
-        /(^|[|&]\s*)((?:"[^"]*(?:node|python3?(?:\.exe)?)"|(?:node|python3?(?:\.exe)?))\s+-(?:e|c)\s+)"([^"\r\n]*)"/gi,
-        (_match, prefix: string, head: string, code: string) => `${prefix}${head}""${code}""`
-    );
+function hasTrailingLineContinuationCaret(value: string): boolean {
+    const trimmed = value.replace(/[ \t]+$/g, '');
+    let caretCount = 0;
+    for (let index = trimmed.length - 1; index >= 0 && trimmed.charAt(index) === '^'; index -= 1) {
+        caretCount += 1;
+    }
+    return caretCount % 2 === 1;
+}
+
+function isCaretEscaped(command: string, index: number): boolean {
+    let caretCount = 0;
+    for (let i = index - 1; i >= 0 && command.charAt(i) === '^'; i -= 1) {
+        caretCount += 1;
+    }
+    return caretCount % 2 === 1;
+}
+
+function isBackslashEscaped(command: string, index: number): boolean {
+    let backslashCount = 0;
+    for (let i = index - 1; i >= 0 && command.charAt(i) === '\\'; i -= 1) {
+        backslashCount += 1;
+    }
+    return backslashCount % 2 === 1;
+}
+
+export function normalizeWindowsCommandLineBreaks(command: string): string {
+    if (!/[\r\n]/.test(command)) return command;
+
+    let result = '';
+    let quote: '"' | "'" | null = null;
+    let pendingSeparator = false;
+
+    for (let index = 0; index < command.length; index += 1) {
+        const char = command.charAt(index);
+
+        if (char === '\r' || char === '\n') {
+            if (char === '\r' && command.charAt(index + 1) === '\n') {
+                index += 1;
+            }
+
+            if (quote) {
+                result += '\n';
+                continue;
+            }
+
+            const trimmedEnd = result.replace(/[ \t]+$/g, '');
+            if (hasTrailingLineContinuationCaret(trimmedEnd)) {
+                result = trimmedEnd.slice(0, -1);
+                pendingSeparator = false;
+                continue;
+            }
+            if (trimmedEnd && !/[&|]\s*$/.test(trimmedEnd)) {
+                result = trimmedEnd;
+                pendingSeparator = true;
+            } else {
+                result = trimmedEnd;
+            }
+            continue;
+        }
+
+        if (pendingSeparator) {
+            if (char === ' ' || char === '\t') {
+                continue;
+            }
+            result += ' & ';
+            pendingSeparator = false;
+        }
+
+        const escapedQuote = isCaretEscaped(command, index) ||
+            (char === '"' && isBackslashEscaped(command, index));
+        if ((char === '"' || char === "'") && !escapedQuote) {
+            quote = quote === char ? null : (quote ?? char);
+        }
+
+        result += char;
+    }
+
+    return result;
 }
 
 /**
@@ -810,6 +935,114 @@ const LINUX_COMMAND_HINTS: ReadonlyMap<string, TranslationKey> = new Map([
     ['realpath', 'tools.exec.hintRealpath'],
 ]);
 
+const CMD_NOT_RECOGNIZED_PATTERN =
+    /'([^']+)'+\s+(?:is not recognized as an internal or external command|不是内部或外部命令)/i;
+
+interface WindowsCommandToken {
+    value: string;
+    separator: boolean;
+}
+
+function tokenizeWindowsCommand(command: string): WindowsCommandToken[] {
+    const tokens: WindowsCommandToken[] = [];
+    let current = '';
+    let quote: '"' | "'" | null = null;
+
+    const pushCurrent = () => {
+        if (current.length > 0) {
+            tokens.push({ value: current, separator: false });
+            current = '';
+        }
+    };
+
+    for (let index = 0; index < command.length; index += 1) {
+        const char = command.charAt(index);
+        const escapedQuote = isCaretEscaped(command, index) ||
+            (char === '"' && isBackslashEscaped(command, index));
+
+        if (!quote && (char === '|' || char === '&') && !isCaretEscaped(command, index)) {
+            pushCurrent();
+            tokens.push({ value: char, separator: true });
+            continue;
+        }
+
+        if (!quote && /\s/.test(char)) {
+            pushCurrent();
+            continue;
+        }
+
+        if ((char === '"' || char === "'") && !escapedQuote) {
+            quote = quote === char ? null : (quote ?? char);
+            continue;
+        }
+
+        current += char;
+    }
+
+    pushCurrent();
+    return tokens;
+}
+
+function inlineEvalFlagForInterpreter(token: string): '-c' | '-e' | null {
+    const normalized = token.replace(/\//g, '\\').toLowerCase();
+    if (/(?:^|\\)python3?(?:\.exe)?$/.test(normalized)) {
+        return '-c';
+    }
+    if (/(?:^|\\)node(?:\.exe)?$/.test(normalized)) {
+        return '-e';
+    }
+    return null;
+}
+
+function containsInlineEvalCodeNewline(command: string): boolean {
+    const tokens = tokenizeWindowsCommand(command);
+
+    for (let index = 0; index < tokens.length; index += 1) {
+        const expectedFlag = inlineEvalFlagForInterpreter(tokens[index]?.value ?? '');
+        if (!expectedFlag) {
+            continue;
+        }
+
+        for (let cursor = index + 1; cursor < tokens.length; cursor += 1) {
+            const token = tokens[cursor];
+            if (!token || token.separator) {
+                break;
+            }
+            if (token.value.toLowerCase() !== expectedFlag) {
+                continue;
+            }
+
+            const codeToken = tokens[cursor + 1];
+            return Boolean(codeToken && !codeToken.separator && /[\r\n]/.test(codeToken.value));
+        }
+    }
+
+    return false;
+}
+
+function hasUnescapedCmdShellOperator(command: string): boolean {
+    let inDoubleQuotes = false;
+
+    for (let index = 0; index < command.length; index += 1) {
+        const char = command.charAt(index);
+        if (char === '"' && !isCaretEscaped(command, index) && !isBackslashEscaped(command, index)) {
+            inDoubleQuotes = !inDoubleQuotes;
+            continue;
+        }
+        if (!inDoubleQuotes && (char === '|' || char === '&') && !isCaretEscaped(command, index)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function extractNotRecognizedCommand(stderr: string): string | null {
+    const notRecognizedMatch = stderr.match(CMD_NOT_RECOGNIZED_PATTERN);
+    const commandName = notRecognizedMatch?.[1]?.toLowerCase().trim();
+    return commandName ?? null;
+}
+
 /**
  * 分析命令失败的 stderr，生成 Windows 环境下的修正提示
  *
@@ -830,13 +1063,8 @@ export function generateWindowsCommandHint(stderr: string, _command: string): st
     // 中文 Windows: 'head' 不是内部或外部命令，也不是可运行的程序或批处理文件。
     // 错误信息语言由系统 locale 决定，chcp 65001 只切换代码页而不改变语言，
     // 因此必须同时匹配两种语言，否则中文系统上提示永远不会注入。
-    const notRecognizedMatch = stderr.match(
-        /'([^']+)' (?:is not recognized as an internal or external command|不是内部或外部命令)/i
-    );
-
-    if (!notRecognizedMatch) return null;
-
-    const linuxCmd = (notRecognizedMatch[1] ?? '').toLowerCase().trim();
+    const linuxCmd = extractNotRecognizedCommand(stderr);
+    if (!linuxCmd) return null;
 
     // 第一层：精准匹配高频命令
     const specificHintKey = LINUX_COMMAND_HINTS.get(linuxCmd);
@@ -866,6 +1094,96 @@ const EXEC_TIMEOUT_PATTERN =
 const CARGO_TEST_COMMAND_PATTERN =
     /\bcargo(?:\.exe)?(?:\s+\+\S+)?\s+test\b/i;
 
+const CMD_SET_VARIABLE_PATTERN =
+    /\bset(?:\s+\/a)?\s+"?([A-Za-z_][A-Za-z0-9_]*)=/i;
+
+const CMD_DELAYED_EXPANSION_PATTERN =
+    /\bsetlocal\s+enabledelayedexpansion\b/i;
+
+const CMD_EXPLICIT_EXIT_PATTERN =
+    /\bsys\.exit\s*\(|\bprocess\.exit\s*\(|\bexit\s+(?:\/b\s*)?\d+\b/i;
+
+const CMD_ECHO_COMMAND_PATTERN =
+    /(^|[&|]\s*)(?:chcp\s+\d+\s*>nul\s*(?:&|&&)\s*)?@?echo(?:\s|$|[.:])/i;
+
+const UNICODE_REPLACEMENT_OUTPUT_PATTERN =
+    /(?:�|\?{2,})/;
+
+const CMD_LABEL_DRIVE_ERROR_PATTERN =
+    /(?:system cannot find the drive specified|系统找不到指定的驱动器)/i;
+
+const CMD_SET_PROMPT_PATTERN =
+    /\bset\s+\/p\b/i;
+
+function containsNonAscii(value: string): boolean {
+    for (const char of value) {
+        if (char.charCodeAt(0) > 0x7F) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function singleQuotedSegmentHasUnescapedShellOperator(inner: string): boolean {
+    for (let index = 0; index < inner.length; index += 1) {
+        const char = inner.charAt(index);
+        if ((char === '&' || char === '|') && !isCaretEscaped(inner, index)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function hasEchoSingleQuotedShellOperator(command: string): boolean {
+    let inDoubleQuotes = false;
+    let index = 0;
+
+    while (index < command.length) {
+        const char = command.charAt(index);
+        if (char === '"' && !isCaretEscaped(command, index) && !isBackslashEscaped(command, index)) {
+            inDoubleQuotes = !inDoubleQuotes;
+            index += 1;
+            continue;
+        }
+
+        if (char === "'" && !inDoubleQuotes) {
+            const closingIndex = command.indexOf("'", index + 1);
+            if (closingIndex > index) {
+                const inner = command.slice(index + 1, closingIndex);
+                if (
+                    isEchoCommandContext(command, index) &&
+                    !isForFCommandSubstitutionContext(command, index) &&
+                    singleQuotedSegmentHasUnescapedShellOperator(inner)
+                ) {
+                    return true;
+                }
+                index = closingIndex + 1;
+                continue;
+            }
+        }
+
+        index += 1;
+    }
+
+    return false;
+}
+
+function isRemCommentCommandWithOperator(command: string): boolean {
+    const trimmed = command.trimStart();
+    if (!/^@?rem(?:\s|$)/i.test(trimmed)) {
+        return false;
+    }
+    return hasUnescapedCmdShellOperator(trimmed);
+}
+
+function hasCmdDoubleColonLabel(command: string): boolean {
+    return /(?:^|[&|]\s*)::/.test(command);
+}
+
 export function generateFileReadPathFailureHint(command: string, output: string): string | null {
     if (!WINDOWS_FILE_READ_COMMAND_PATTERN.test(command)) {
         return null;
@@ -884,6 +1202,139 @@ export function generateMojibakeHint(command: string, output: string): string | 
         return null;
     }
     return translate('tools.exec.mojibakeHint');
+}
+
+export function generateInlineEvalNewlineHint(command: string): string | null {
+    if (!containsInlineEvalCodeNewline(command)) {
+        return null;
+    }
+    return translate('tools.exec.inlineEvalNewlineHint');
+}
+
+export function generateCmdVariableExpansionHint(command: string): string | null {
+    const setMatch = command.match(CMD_SET_VARIABLE_PATTERN);
+    if (setMatch?.[1]) {
+        const variableName = setMatch[1];
+        const setIndex = setMatch.index ?? 0;
+        const afterSet = command.slice(setIndex + setMatch[0].length);
+        const variableExpansionPattern = new RegExp(
+            `%{1,2}${escapeRegExp(variableName)}(?:%|[:~])`,
+            'i'
+        );
+        if (
+            /[&\r\n]/.test(afterSet) &&
+            variableExpansionPattern.test(afterSet)
+        ) {
+            return translate('tools.exec.cmdVariableExpansionHint');
+        }
+    }
+
+    if (CMD_DELAYED_EXPANSION_PATTERN.test(command) && /![A-Za-z_][A-Za-z0-9_]*!/.test(command)) {
+        return translate('tools.exec.cmdDelayedExpansionHint');
+    }
+
+    return null;
+}
+
+export function generateShellOperatorHint(command: string, stderr: string): string | null {
+    const unknownCommand = extractNotRecognizedCommand(stderr);
+    if (!unknownCommand || LINUX_COMMAND_HINTS.has(unknownCommand)) {
+        return null;
+    }
+    if (!hasUnescapedCmdShellOperator(command)) {
+        return null;
+    }
+    return translate('tools.exec.shellOperatorHint', { command: unknownCommand });
+}
+
+export function generateCmdSingleQuoteOperatorHint(command: string): string | null {
+    if (!hasEchoSingleQuotedShellOperator(command)) {
+        return null;
+    }
+    return translate('tools.exec.cmdSingleQuoteOperatorHint');
+}
+
+export function generateRemCommandHint(command: string): string | null {
+    if (!isRemCommentCommandWithOperator(command)) {
+        return null;
+    }
+    return translate('tools.exec.remCommandHint');
+}
+
+export function generateCmdLabelHint(command: string, output: string): string | null {
+    if (!hasCmdDoubleColonLabel(command) || !CMD_LABEL_DRIVE_ERROR_PATTERN.test(output)) {
+        return null;
+    }
+    return translate('tools.exec.cmdLabelHint');
+}
+
+export function generateCmdSetPromptHint(
+    command: string,
+    exitCode: number,
+    stderr: string
+): string | null {
+    if (!CMD_SET_PROMPT_PATTERN.test(command) || exitCode === 0 || stderr.trim()) {
+        return null;
+    }
+    return translate('tools.exec.cmdSetPromptHint');
+}
+
+export function generateUnicodeReplacementHint(command: string, output: string): string | null {
+    if (!containsNonAscii(command)) {
+        return null;
+    }
+    if (!CMD_ECHO_COMMAND_PATTERN.test(command)) {
+        return null;
+    }
+    if (!UNICODE_REPLACEMENT_OUTPUT_PATTERN.test(output)) {
+        return null;
+    }
+    return translate('tools.exec.unicodeReplacementHint');
+}
+
+export function generateSilentNonZeroExitHint(
+    command: string,
+    exitCode: number,
+    stdout: string,
+    stderr: string
+): string | null {
+    if (exitCode === 0 || stderr.trim() || CMD_EXPLICIT_EXIT_PATTERN.test(command)) {
+        return null;
+    }
+    if (/\bfindstr(?:\.exe)?\b/i.test(command)) {
+        return translate('tools.exec.findstrSilentExitHint');
+    }
+    if (!stdout.trim()) {
+        return translate('tools.exec.silentNonZeroExitHint', { exitCode });
+    }
+    return null;
+}
+
+function appendExecObservationHint(hints: string[], hint: string | null): void {
+    if (hint && !hints.includes(hint)) {
+        hints.push(hint);
+    }
+}
+
+export function collectExecObservationHints(
+    command: string,
+    exitCode: number,
+    stdout: string,
+    stderr: string
+): string[] {
+    const hints: string[] = [];
+    appendExecObservationHint(hints, generateInlineEvalNewlineHint(command));
+    appendExecObservationHint(hints, generateCmdVariableExpansionHint(command));
+    if (exitCode === 0) {
+        appendExecObservationHint(hints, generateCmdSingleQuoteOperatorHint(command));
+        appendExecObservationHint(hints, generateRemCommandHint(command));
+    }
+    appendExecObservationHint(hints, generateCmdLabelHint(command, `${stdout}\n${stderr}`));
+    appendExecObservationHint(hints, generateCmdSetPromptHint(command, exitCode, stderr));
+    appendExecObservationHint(hints, generateUnicodeReplacementHint(command, `${stdout}\n${stderr}`));
+    appendExecObservationHint(hints, generateMojibakeHint(command, `${stdout}\n${stderr}`));
+    appendExecObservationHint(hints, generateSilentNonZeroExitHint(command, exitCode, stdout, stderr));
+    return hints;
 }
 
 export function generateExecTimeoutGuidance(command: string, output: string): string | null {
@@ -1792,6 +2243,9 @@ class ExecToolImpl implements Tool {
         // 规范化 findstr 语法：LLM 经常混用 grep 的 \| OR 分隔符
         command = normalizeFindstrSyntax(command);
 
+        // 规范化 Windows 多行命令：cmd.exe 通过 /C 接收真实换行时只执行首行
+        command = normalizeWindowsCommandLineBreaks(command);
+
         // 规范化 Python 路径：将裸 python/python3 替换为 venv 路径
         // 解决 SA 偶发性不遵守 prompt 约束使用完整 venv 路径的问题
         if (context.venvPythonPath) {
@@ -2030,12 +2484,24 @@ class ExecToolImpl implements Tool {
                 content += `\n\n${translate('tools.exec.stderrLabel')}:\n${stderr}`;
             }
 
+            const observationHints = collectExecObservationHints(
+                command,
+                result.exitCode,
+                rawStdout,
+                rawStderr
+            );
+
             // 命令失败时注入修正提示 —— 帮助 Agent 在下一轮自我修正
             // 而非事前翻译（翻译难以保证语义正确性）
             if (!success) {
-                const hint = generateWindowsCommandHint(stderr, command);
-                if (hint) {
-                    content += `\n\n${hint}`;
+                const shellOperatorHint = generateShellOperatorHint(command, rawStderr);
+                if (shellOperatorHint) {
+                    content += `\n\n${shellOperatorHint}`;
+                } else {
+                    const hint = generateWindowsCommandHint(stderr, command);
+                    if (hint) {
+                        content += `\n\n${hint}`;
+                    }
                 }
                 const fileReadHint = generateFileReadPathFailureHint(command, `${rawStdout}\n${rawStderr}`);
                 if (fileReadHint) {
@@ -2062,11 +2528,10 @@ class ExecToolImpl implements Tool {
                 if (externalSkillSandboxHint) {
                     content += `\n\n${externalSkillSandboxHint}`;
                 }
-            } else {
-                const mojibakeHint = generateMojibakeHint(command, rawStdout);
-                if (mojibakeHint) {
-                    content += `\n\n${mojibakeHint}`;
-                }
+            }
+
+            for (const observationHint of observationHints) {
+                content += `\n\n${observationHint}`;
             }
 
             const autoImageContext = success
