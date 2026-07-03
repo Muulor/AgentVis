@@ -124,7 +124,7 @@ Build the Tauri installer:
 npm run tauri build
 ```
 
-Before Tauri packaging, AgentVis builds the Python runtime, frontend assets, and broker helper. The packaged resources include built-in Skills, embedded Python, a prebuilt Python runtime, the Node bundle, and broker binaries.
+Before Tauri packaging, AgentVis builds the Python runtime, frontend assets, and broker helper. The packaged resources include built-in Skills, native helper scripts, embedded Python, a prebuilt Python runtime, the Node bundle, and broker binaries.
 
 ## Security Model
 
@@ -181,6 +181,7 @@ AgentVis/
 |-- scripts/                    # Build and runtime helper scripts
 |-- src/                        # React + TypeScript frontend source
 |-- src-tauri/                  # Tauri + Rust backend source
+|-- src-tauri/native-scripts/   # Native command helper scripts
 |-- runtime-requirements-v1.txt # External Python runtime dependency list
 |-- package.json                # npm scripts and frontend dependencies
 |-- vite.config.ts              # Vite configuration

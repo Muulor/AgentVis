@@ -43,6 +43,7 @@
         ],
         "resources": {
             "skills-bundle/": "skills-bundle/",
+            "native-scripts/": "native-scripts/",
             "python-embed/": "python-embed/",
             "python-runtime/": "python-runtime/",
             "node-bundle/": "node-bundle/",

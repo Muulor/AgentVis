@@ -48,40 +48,67 @@ export function copyDirectorySync(sourceDir, destDir) {
 }
 
 export function syncTauriDevResources({ repoRoot = defaultRepoRoot } = {}) {
-  const sourceDir = join(repoRoot, 'src-tauri', 'skills-bundle')
+  const resources = [
+    {
+      name: 'skills-bundle',
+      sourceDir: join(repoRoot, 'src-tauri', 'skills-bundle'),
+    },
+    {
+      name: 'native-scripts',
+      sourceDir: join(repoRoot, 'src-tauri', 'native-scripts'),
+    },
+    {
+      name: 'python-runtime',
+      sourceDir: join(repoRoot, 'src-tauri', 'python-runtime'),
+    },
+  ]
   const targetRoot = join(repoRoot, 'src-tauri', 'target', 'debug')
-  const destDir = join(targetRoot, 'skills-bundle')
 
-  if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
-    throw new Error(`Source skills bundle was not found: ${sourceDir}`)
+  const syncedResources = []
+
+  for (const resource of resources) {
+    const { name, sourceDir } = resource
+    const destDir = join(targetRoot, name)
+
+    if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+      throw new Error(`Source Tauri dev resource was not found: ${sourceDir}`)
+    }
+
+    const resolvedTargetRoot = resolve(targetRoot)
+    const resolvedDestDir = resolve(destDir)
+    const relativeDest = relative(resolvedTargetRoot, resolvedDestDir)
+
+    if (
+      basename(resolvedDestDir) !== name ||
+      relativeDest === '' ||
+      relativeDest.startsWith('..') ||
+      isAbsolute(relativeDest)
+    ) {
+      throw new Error(`Refusing to replace unexpected Tauri dev resource path: ${resolvedDestDir}`)
+    }
+
+    mkdirSync(resolvedTargetRoot, { recursive: true })
+    rmSync(resolvedDestDir, { recursive: true, force: true })
+    copyDirectorySync(sourceDir, resolvedDestDir)
+    syncedResources.push({
+      name,
+      sourceDir,
+      destDir: resolvedDestDir,
+    })
   }
-
-  const resolvedTargetRoot = resolve(targetRoot)
-  const resolvedDestDir = resolve(destDir)
-  const relativeDest = relative(resolvedTargetRoot, resolvedDestDir)
-
-  if (
-    basename(resolvedDestDir) !== 'skills-bundle' ||
-    relativeDest === '' ||
-    relativeDest.startsWith('..') ||
-    isAbsolute(relativeDest)
-  ) {
-    throw new Error(`Refusing to replace unexpected Tauri dev resource path: ${resolvedDestDir}`)
-  }
-
-  mkdirSync(resolvedTargetRoot, { recursive: true })
-  rmSync(resolvedDestDir, { recursive: true, force: true })
-  copyDirectorySync(sourceDir, resolvedDestDir)
 
   return {
-    sourceDir,
-    targetRoot: resolvedTargetRoot,
-    destDir: resolvedDestDir,
+    sourceDir: syncedResources[0].sourceDir,
+    targetRoot: resolve(targetRoot),
+    destDir: syncedResources[0].destDir,
+    resources: syncedResources,
   }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {
-  const { sourceDir, destDir } = syncTauriDevResources()
+  const { resources } = syncTauriDevResources()
 
-  console.log(`Synced Tauri dev resource: ${sourceDir} -> ${destDir}`)
+  for (const { sourceDir, destDir } of resources) {
+    console.log(`Synced Tauri dev resource: ${sourceDir} -> ${destDir}`)
+  }
 }

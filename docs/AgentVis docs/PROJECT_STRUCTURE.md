@@ -946,6 +946,7 @@ src-tauri/
 ├── 📁 python-embed/              # 嵌入式 Python 原始资源与 bootstrap 工具
 ├── 📁 python-runtime/            # 预构建 Python runtime 压缩包与签名
 ├── 📁 skills-bundle/             # 内置外部 Skill 包资源
+├── 📁 native-scripts/            # 原生命令使用的内置 Python helper（如 DDGS 后备搜索）
 ├── 📁 target/                    # Rust 编译输出
 │
 └── 📁 src/                       # Rust 源代码
@@ -1008,11 +1009,18 @@ commands/
 ├── embedded_python_setup.rs      # 内嵌 Python 环境准备命令 (打包相关)
 ├── skills_bootstrap.rs           # 内嵌 skill 预安装包 (打包相关)
 ├── skill_install.rs              # GitHub 技能包下载安装命令（ZIP 下载+解压）
-├── web_search.rs                 # 网络搜索命令
+├── web_search.rs                 # 网络搜索命令（Tavily 优先，DDGS 后备）
 ├── search.rs                     # 代码搜索命令（grep/find/outline/symbol，tree-sitter AST 解析）
 ├── cron.rs                       # 定时任务 CRUD 命令（IPC 接口）
 ├── feishu.rs                     # 飞书 API 代理命令（token/发消息/更新卡片/HTTP 通用代理，绕 CORS）
 └── slack.rs                      # Slack HTTP API 代理命令
+```
+
+### 📁 src-tauri/native-scripts/ - 原生命令脚本资源
+```
+native-scripts/
+└── 📁 web-search/
+    └── ddgs_search.py            # DDGS 后备搜索 helper，复用 web-scraper 清洗逻辑并通过 Broker 代理出网
 ```
 
 ### 📁 src-tauri/src/bin/

@@ -8,7 +8,7 @@ requiresAuth: false
 
 # web_search Tool
 
-Retrieves web information through a search engine. Supports summaries and optional full page content.
+Retrieves web information through Tavily first and DDGS as a free fallback. Supports summaries and optional full page content.
 
 ## When To Use
 
@@ -35,17 +35,18 @@ Retrieves web information through a search engine. Supports summaries and option
 2. Keep search queries concise and keyword-focused.
 3. Summarize key information from returned results instead of copying results directly.
 4. Prefer `searchDepth: "basic"` for most cases that need concise information and answers.
-5. Use `"advanced"` only when more precise multi-snippet semantic results are needed.
-6. Enable `includeContent: true` only when full page content is required for analysis.
+5. Use `"advanced"` only when the first search is low-confidence or the query needs broader backend recall; it can be slower and is not always better for news or realtime facts.
+6. Enable `includeContent: true` only when full page content is required for analysis, preferably with `maxResults` set to `2` or `3`.
+7. Treat `WEB_SEARCH_PROVIDER provider=ddgs fallback=true` as a normal fallback result, not a failure.
 
 ## Search Mode Comparison
 
 | Mode | `searchDepth` | `includeContent` | Best For |
 | --- | --- | --- | --- |
 | Quick search | `"basic"` | `false` | Quickly retrieving summary information. |
-| Deep search | `"advanced"` | `false` | More precise multi-snippet results. |
-| Content fetch | `"basic"` | `true` | Analyzing complete page content. |
-| Deep plus content | `"advanced"` | `true` | Most comprehensive information gathering. |
+| Deep search | `"advanced"` | `false` | Broader backend recall for low-confidence or complex searches. |
+| Content fetch | `"basic"` | `true` | Reading selected pages after search; keep result count small. |
+| Deep plus content | `"advanced"` | `true` | Expensive fallback for difficult research tasks only. |
 
 ## Parameters
 
@@ -53,5 +54,5 @@ Retrieves web information through a search engine. Supports summaries and option
 | --- | --- | --- | --- |
 | query | string | yes | Search query. |
 | maxResults | number | no | Maximum number of results. Defaults to `5`. |
-| searchDepth | string | no | Search depth: `"basic"` or `"advanced"`. Defaults to `"basic"`. |
-| includeContent | boolean | no | Whether to fetch full page content. Defaults to `false`. |
+| searchDepth | string | no | Search depth: `"basic"` or `"advanced"`. `"advanced"` queries more backends and can be slower. Defaults to `"basic"`. |
+| includeContent | boolean | no | Whether to fetch full page content. Defaults to `false`; prefer small `maxResults`. |

@@ -329,7 +329,7 @@ export function CloudServiceSettings() {
         setTavilyTesting(true);
         setTavilyTestResult(null);
         try {
-            await invoke('web_search', { query: 'test', maxResults: 1 });
+            await invoke('web_search', { query: 'test', maxResults: 1, allowFallback: false });
             setTavilyTestResult('success');
             toast({ title: t('settings.cloud.providerConnectSuccess', { provider: 'Tavily' }), type: 'success' });
         } catch (error) {

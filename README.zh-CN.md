@@ -120,7 +120,7 @@ npm run build
 npm run tauri build
 ```
 
-Tauri 打包前会构建 Python runtime、前端产物和 broker helper。打包资源包含内置 Skills、嵌入式 Python、预构建 Python runtime、Node bundle 和 broker 二进制。
+Tauri 打包前会构建 Python runtime、前端产物和 broker helper。打包资源包含内置 Skills、native helper scripts、嵌入式 Python、预构建 Python runtime、Node bundle 和 broker 二进制。
 
 ## 安全模型
 

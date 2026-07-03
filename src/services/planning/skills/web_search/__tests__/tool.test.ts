@@ -36,6 +36,9 @@ describe('webSearchTool sandbox mode', () => {
             query: 'hermes agent github',
             answer: null,
             results: [],
+            provider: 'ddgs',
+            fallback_used: true,
+            diagnostics: [],
         });
 
         const result = await webSearchTool.execute(
@@ -44,11 +47,56 @@ describe('webSearchTool sandbox mode', () => {
         );
 
         expect(result.success).toBe(true);
+        expect(result.content).toContain('WEB_SEARCH_PROVIDER provider=ddgs fallback=true');
         expect(result.content).not.toContain('WEB_SEARCH_ERROR');
+        expect(result.data).toMatchObject({
+            provider: 'ddgs',
+            fallbackUsed: true,
+        });
         expect(mockInvoke).toHaveBeenCalledWith('web_search', expect.objectContaining({
             query: 'hermes agent github',
             sandboxMode: 'ControlledNetwork',
         }));
+    });
+
+    it('includes provider metadata for successful fallback results', async () => {
+        mockInvoke.mockResolvedValue({
+            query: 'agent frameworks',
+            answer: null,
+            provider: 'ddgs',
+            fallback_used: true,
+            diagnostics: [{ level: 'info', message: 'Tavily API key is not configured; using DDGS fallback.' }],
+            results: [{
+                title: 'Agent Frameworks',
+                url: 'https://example.com/agents',
+                content: 'A concise result summary.',
+                score: 0.8,
+                provider: 'ddgs',
+                source: 'bing',
+            }],
+        });
+
+        const result = await webSearchTool.execute(
+            { query: 'agent frameworks' },
+            { sandboxMode: 'ControlledNetwork' }
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('WEB_SEARCH_PROVIDER provider=ddgs fallback=true');
+        expect(result.content).toContain('### 1. **Agent Frameworks**');
+        expect(result.data).toMatchObject({
+            provider: 'ddgs',
+            fallbackUsed: true,
+            diagnostics: [{ level: 'info', message: expect.stringContaining('DDGS fallback') }],
+        });
+        expect(result.data?.results).toEqual([
+            expect.objectContaining({
+                title: 'Agent Frameworks',
+                url: 'https://example.com/agents',
+                provider: 'ddgs',
+                source: 'bing',
+            }),
+        ]);
     });
 
     it('returns concise retryable metadata for Tavily rate limit failures', async () => {
@@ -98,6 +146,23 @@ describe('webSearchTool sandbox mode', () => {
         expect(result.data?.error).toMatchObject({
             kind: 'timeout',
             retryable: true,
+            status: null,
+        });
+    });
+
+    it('returns concise metadata for DDGS runtime failures', async () => {
+        mockInvoke.mockRejectedValue('LLM API call failed: DDGS fallback returned error runtime_unavailable: no module named ddgs');
+
+        const result = await webSearchTool.execute(
+            { query: 'agent frameworks' },
+            { sandboxMode: 'ControlledNetwork' }
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.content).toContain('WEB_SEARCH_ERROR kind=runtime_unavailable retryable=false status=none');
+        expect(result.data?.error).toMatchObject({
+            kind: 'runtime_unavailable',
+            retryable: false,
             status: null,
         });
     });

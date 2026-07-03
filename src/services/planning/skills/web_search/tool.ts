@@ -41,11 +41,11 @@ const SCHEMA: ToolSchema = {
             },
             searchDepth: {
                 type: 'string',
-                description: 'Search depth: "basic" (default, faster) or "advanced" (deeper, returns more precise snippets and costs more credits).',
+                description: 'Search depth: "basic" (default, faster) or "advanced" (queries more backends, may be slower, useful for low-confidence or complex searches).',
             },
             includeContent: {
                 type: 'boolean',
-                description: 'Whether to fetch full page content in Markdown format. Defaults to false; when true, each result may include rawContent.',
+                description: 'Whether to fetch full page content in Markdown format. Defaults to false; best used with 2-3 results when page-level analysis is needed.',
             },
         },
         required: ['query'],
@@ -63,7 +63,9 @@ interface SearchResult {
     content: string;
     score: number;
     /** 页面清洁后的完整内容（仅 includeContent=true 时返回） */
-    raw_content: string | null;
+    raw_content?: string | null;
+    provider?: string | null;
+    source?: string | null;
 }
 
 /**
@@ -73,6 +75,9 @@ interface WebSearchResponse {
     results: SearchResult[];
     answer: string | null;
     query: string;
+    provider?: string;
+    fallback_used?: boolean;
+    diagnostics?: Array<{ level: string; message: string }>;
 }
 
 type WebSearchErrorKind =
@@ -86,6 +91,7 @@ type WebSearchErrorKind =
     | 'provider_error'
     | 'bad_request'
     | 'response_parse_failed'
+    | 'runtime_unavailable'
     | 'unknown';
 
 interface WebSearchErrorMeta {
@@ -107,7 +113,7 @@ function buildFailureContent(query: string, errorMessage: string, meta: WebSearc
 
 function classifyWebSearchError(errorMessage: string): WebSearchErrorMeta {
     const normalized = errorMessage.toLowerCase();
-    const status = parseTavilyStatus(errorMessage);
+    const status = parseProviderStatus(errorMessage);
 
     if (status != null) {
         if (status === 408) return { kind: 'timeout', retryable: true, status };
@@ -136,8 +142,24 @@ function classifyWebSearchError(errorMessage: string): WebSearchErrorMeta {
         || normalized.includes('deadline has elapsed')) {
         return { kind: 'timeout', retryable: true, status: null };
     }
-    if (normalized.includes('failed to parse tavily response')) {
+    if (normalized.includes('failed to parse tavily response')
+        || normalized.includes('failed to parse ddgs fallback response')) {
         return { kind: 'response_parse_failed', retryable: false, status: null };
+    }
+    if (normalized.includes('runtime_unavailable')
+        || normalized.includes('ddgs is not available')
+        || normalized.includes('no module named')) {
+        return { kind: 'runtime_unavailable', retryable: false, status: null };
+    }
+    if (normalized.includes('ddgs fallback returned error rate_limited')) {
+        return { kind: 'rate_limited', retryable: true, status: null };
+    }
+    if (normalized.includes('ddgs fallback returned error timeout')
+        || normalized.includes('ddgs fallback timed out')) {
+        return { kind: 'timeout', retryable: true, status: null };
+    }
+    if (normalized.includes('ddgs fallback returned error bad_request')) {
+        return { kind: 'bad_request', retryable: false, status: null };
     }
     if (normalized.includes('network broker rejected')
         || normalized.includes('operation forbidden')
@@ -148,15 +170,16 @@ function classifyWebSearchError(errorMessage: string): WebSearchErrorMeta {
         || normalized.includes('error sending request')
         || normalized.includes('connection refused')
         || normalized.includes('connection reset')
-        || normalized.includes('tcp connect error')) {
+        || normalized.includes('tcp connect error')
+        || normalized.includes('ddgs fallback returned error provider_error')) {
         return { kind: 'connection_failed', retryable: true, status: null };
     }
 
     return { kind: 'unknown', retryable: false, status: null };
 }
 
-function parseTavilyStatus(errorMessage: string): number | null {
-    const match = errorMessage.match(/Tavily API returned error\s+(\d{3})/i);
+function parseProviderStatus(errorMessage: string): number | null {
+    const match = errorMessage.match(/(?:Tavily API|DDGS fallback) returned error\s+(\d{3})/i);
     if (!match?.[1]) return null;
 
     const status = Number(match[1]);
@@ -184,7 +207,7 @@ function truncateRawContent(content: string, maxChars: number): string {
  * 格式化单条搜索结果（仅摘要模式）
  */
 function formatResultSummaryOnly(result: SearchResult, index: number): string {
-    return `${index + 1}. **${result.title}**\n   ${result.url}\n   ${result.content}`;
+    return `### ${index + 1}. **${result.title}**\n${result.url}\n${result.content}`;
 }
 
 /**
@@ -270,12 +293,24 @@ class WebSearchToolImpl implements Tool {
             });
 
             const results = response.results;
+            const provider = response.provider ?? 'unknown';
+            const fallbackUsed = response.fallback_used ?? false;
+            const providerMeta = translate('tools.webSearch.providerMeta', {
+                provider,
+                fallback: String(fallbackUsed),
+            });
 
             if (results.length === 0) {
                 return {
                     success: true,
-                    content: translate('tools.webSearch.noResults', { query }),
-                    data: { query, resultCount: 0 },
+                    content: `${providerMeta}\n${translate('tools.webSearch.noResults', { query })}`,
+                    data: {
+                        query,
+                        resultCount: 0,
+                        provider,
+                        fallbackUsed,
+                        diagnostics: response.diagnostics ?? [],
+                    },
                 };
             }
 
@@ -289,13 +324,13 @@ class WebSearchToolImpl implements Tool {
             const answerSection = response.answer
                 ? translate('tools.webSearch.aiSummary', { answer: response.answer })
                 : '';
-            const content = translate('tools.webSearch.resultsHeader', {
+            const content = `${providerMeta}\n${translate('tools.webSearch.resultsHeader', {
                 query,
                 mode: modeLabel,
                 count: results.length,
                 answerSection,
                 results: formattedResults,
-            });
+            })}`;
 
             return {
                 success: true,
@@ -305,10 +340,15 @@ class WebSearchToolImpl implements Tool {
                     resultCount: results.length,
                     searchDepth: searchDepth ?? 'basic',
                     includeContent: includeContent ?? false,
+                    provider,
+                    fallbackUsed,
+                    diagnostics: response.diagnostics ?? [],
                     results: results.map(r => ({
                         title: r.title,
                         url: r.url,
                         hasRawContent: !!r.raw_content,
+                        provider: r.provider ?? provider,
+                        source: r.source ?? null,
                     })),
                 },
             };
