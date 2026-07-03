@@ -96,6 +96,8 @@ use commands::{
     renderer_health_heartbeat,
     // Security Settings commands
     get_trash_bin_path, get_protected_paths, set_protected_paths,
+    trash_bin_list_entries, trash_bin_restore_entries, trash_bin_restore_batch,
+    trash_bin_delete_entries, trash_bin_delete_batch,
     // Cron commands (定时任务)
     cron_create, cron_list_by_agent, cron_list_all_enabled, cron_update, cron_delete,
     // Code Search commands (代码搜索)
@@ -475,6 +477,11 @@ pub fn run() {
             get_trash_bin_path,
             get_protected_paths,
             set_protected_paths,
+            trash_bin_list_entries,
+            trash_bin_restore_entries,
+            trash_bin_restore_batch,
+            trash_bin_delete_entries,
+            trash_bin_delete_batch,
             // Cron 命令 (定时任务)
             cron_create,
             cron_list_by_agent,

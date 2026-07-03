@@ -70,9 +70,9 @@ AgentVis allows Agents to read and write local files, run commands, and work on 
 
 ### 4.1 Custom Protected Paths and Trash Bin
 
-Go to "Settings -> General" to add custom protected paths. Protected paths receive additional safeguards during file operations and command execution, reducing the risk of accidentally deleting or changing important directories.
+Go to "Settings -> File Protection" to add custom protected paths. Protected paths receive additional safeguards during file operations and command execution, reducing the risk of accidentally deleting or changing important directories.
 
-Files deleted by Agents go into the AgentVis Trash Bin. You can also jump directly to the Trash Bin folder from "Settings -> General" to view and restore files. It is also useful to periodically clean up redundant screenshots or temporary files deleted after Agent tasks.
+Files deleted by the Agent will be moved to the AgentVis Trash Bin. You can also view and restore files from the Trash Bin directly via "Settings -> File Protection" or periodically clean up redundant screenshots and temporary files deleted after the Agent executes tasks.
 
 ### 4.2 Backup, Restore, and Migration
 

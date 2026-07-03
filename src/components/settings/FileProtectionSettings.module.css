@@ -1,0 +1,382 @@
+/**
+ * FileProtectionSettings 样式
+ */
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    --blocked-cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E") 8 8, not-allowed;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sectionHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sectionTitle {
+    font-size: var(--font-size-base, 14px);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sectionIcon {
+    flex-shrink: 0;
+    opacity: 0.75;
+}
+
+.hint {
+    font-size: var(--font-size-xs, 12px);
+    color: var(--color-text-tertiary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.pathDisplay {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+}
+
+.pathText,
+.pathRowText,
+.entryPath,
+.entryMeta span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pathText {
+    flex: 1;
+    font-size: var(--font-size-sm, 13px);
+    font-family: var(--font-family-mono);
+    color: var(--color-text-primary);
+}
+
+.trashToolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.toolbarActions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.selectAllControl {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+}
+
+.selectAllControl[data-disabled='true'] {
+    opacity: 0.55;
+    cursor: var(--blocked-cursor);
+}
+
+.selectAllControl input,
+.entryCheckbox {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--color-accent-primary);
+    flex-shrink: 0;
+}
+
+.selectAllControl input:disabled,
+.entryCheckbox:disabled {
+    cursor: var(--blocked-cursor);
+}
+
+.trashList,
+.pathList {
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+    overflow: hidden;
+}
+
+.trashRow {
+    display: grid;
+    grid-template-columns: 16px 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--color-bg-secondary);
+    transition: background-color 0.12s;
+}
+
+.trashRow:not(:last-child),
+.pathRow:not(:last-child) {
+    border-bottom: 1px solid var(--color-border-primary);
+}
+
+.trashRow:hover,
+.pathRow:hover {
+    background: var(--color-bg-tertiary);
+}
+
+.trashRow[data-disabled='true'] {
+    opacity: 0.72;
+}
+
+.entryIcon {
+    display: inline-flex;
+    color: var(--color-text-secondary);
+}
+
+.entryMain {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.entryTitleLine {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.entryName {
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm, 13px);
+    font-weight: var(--font-weight-medium, 500);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.entryPath {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs, 12px);
+    font-family: var(--font-family-mono);
+}
+
+.entryMeta {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-xs, 12px);
+}
+
+.warningBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.warningBadge {
+    color: #b45309;
+    background: rgba(180, 83, 9, 0.12);
+}
+
+.entryActions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+}
+
+.openButton,
+.primaryButton,
+.secondaryButton,
+.addButton,
+.iconButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+    white-space: nowrap;
+}
+
+.openButton,
+.secondaryButton,
+.addButton {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+}
+
+.openButton,
+.primaryButton,
+.secondaryButton,
+.addButton {
+    min-height: 30px;
+    padding: 5px 10px;
+    font-size: var(--font-size-xs, 12px);
+}
+
+.primaryButton {
+    border-color: var(--color-accent-primary);
+    background: var(--color-accent-primary);
+    color: #ffffff;
+}
+
+.primaryButton:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-accent-primary) 88%, #000000);
+}
+
+.openButton:hover:not(:disabled),
+.secondaryButton:hover:not(:disabled),
+.addButton:hover:not(:disabled),
+.iconButton:hover:not(:disabled) {
+    border-color: var(--color-accent-primary);
+    color: var(--color-accent-primary);
+    background: rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.08);
+}
+
+.dangerButton:hover:not(:disabled) {
+    border-color: #dc2626;
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+}
+
+.openButton:disabled,
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.addButton:disabled,
+.iconButton:disabled {
+    opacity: 0.45;
+    cursor: var(--blocked-cursor);
+}
+
+.iconButton {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.pathRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--color-bg-secondary);
+}
+
+.pathRowText {
+    flex: 1;
+    font-size: var(--font-size-sm, 13px);
+    font-family: var(--font-family-mono);
+    color: var(--color-text-primary);
+}
+
+.removeButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    border-radius: var(--radius-sm, 4px);
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s;
+    flex-shrink: 0;
+}
+
+.removeButton:hover:not(:disabled) {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+}
+
+.removeButton:disabled {
+    opacity: 0.35;
+    cursor: var(--blocked-cursor);
+}
+
+.emptyHint,
+.loadingHint {
+    padding: 18px 14px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm, 13px);
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-primary);
+    border-radius: var(--radius-md, 6px);
+}
+
+.spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.spinIcon {
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 760px) {
+    .trashToolbar,
+    .sectionHeader {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .trashRow {
+        grid-template-columns: 16px 20px minmax(0, 1fr);
+    }
+
+    .entryActions {
+        grid-column: 3;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .toolbarActions {
+        justify-content: flex-start;
+    }
+}

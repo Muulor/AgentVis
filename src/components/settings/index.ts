@@ -8,3 +8,4 @@ export { ApiKeySettings } from './ApiKeySettings';
 export { ModelSettings } from './ModelSettings';
 export { CloudServiceSettings } from './CloudServiceSettings';
 export { DataSettings } from './DataSettings';
+export { FileProtectionSettings } from './FileProtectionSettings';

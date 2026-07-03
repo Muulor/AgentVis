@@ -2,18 +2,19 @@
  * SettingsModal - 设置面板主组件
  *
  * 640px 宽度模态框，左侧导航标签 + 右侧设置内容分栏布局
- * 包含：常规、API 密钥、模型、云端服务、数据 五个标签页
+ * 包含：常规、API 密钥、模型、云端服务、数据、技能、文件保护、安全审计、IM 通道。
  */
 
 import { useState, useCallback, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { FolderCog, MessagesSquare, ShieldCheck } from 'lucide-react';
+import { FolderCog, FolderLock, MessagesSquare, ShieldCheck } from 'lucide-react';
 import { GeneralSettings } from './GeneralSettings';
 import { ApiKeySettings } from './ApiKeySettings';
 import { ModelSettings } from './ModelSettings';
 import { CloudServiceSettings } from './CloudServiceSettings';
 import { DataSettings } from './DataSettings';
 import { SkillSettings } from './SkillSettings';
+import { FileProtectionSettings } from './FileProtectionSettings';
 import { ImChannelSettings } from './ImChannelSettings';
 import { SandboxAuditSettings } from './SandboxAuditSettings';
 import { TextContextMenu, useTextContextMenu } from '@components/ui';
@@ -32,7 +33,7 @@ interface SettingsModalProps {
 }
 
 /** 设置标签页类型 */
-export type SettingsTab = 'general' | 'apiKeys' | 'model' | 'cloudService' | 'data' | 'skills' | 'audit' | 'imChannel';
+export type SettingsTab = 'general' | 'apiKeys' | 'model' | 'cloudService' | 'data' | 'skills' | 'fileProtection' | 'audit' | 'imChannel';
 
 /** 标签页配置 */
 const TABS: { id: SettingsTab; labelKey: TranslationKey; icon: React.ReactNode }[] = [
@@ -92,6 +93,11 @@ const TABS: { id: SettingsTab; labelKey: TranslationKey; icon: React.ReactNode }
                 <path d="M11.5 10v4M9.5 12h4" />
             </svg>
         ),
+    },
+    {
+        id: 'fileProtection',
+        labelKey: 'settings.tabs.fileProtection',
+        icon: <FolderLock size={16} strokeWidth={1.5} />,
     },
     {
         id: 'audit',
@@ -160,6 +166,8 @@ export function SettingsModal({ isOpen, onClose, initialTab = 'general' }: Setti
                 return <DataSettings />;
             case 'skills':
                 return <SkillSettings />;
+            case 'fileProtection':
+                return <FileProtectionSettings />;
             case 'audit':
                 return <SandboxAuditSettings />;
             case 'imChannel':

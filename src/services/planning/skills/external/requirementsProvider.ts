@@ -53,6 +53,19 @@ function extractErrorMessage(error: unknown): string {
     return String(error);
 }
 
+/**
+ * 直接删除应用内部维护目录，不经过 shell_execute。
+ *
+ * 这些目录是 AgentVis 自身的 runtime/cache 产物，删除行为不代表 Agent 操作；
+ * 直接走 fs.remove 可避免污染 Agent Trash Bin 的用户语义。
+ */
+async function removeInternalDirectory(path: string): Promise<void> {
+    const { exists, remove } = await import('@tauri-apps/plugin-fs');
+    if (await exists(path)) {
+        await remove(path, { recursive: true });
+    }
+}
+
 // ==================== Requirements 解析 ====================
 
 /**
@@ -163,16 +176,8 @@ export async function performEnvironmentSetup(): Promise<void> {
         if (shouldCleanupPreviousVenv) {
             logger.trace('[requirementsProvider] 检测到残留错误状态，清理旧 runtime');
             try {
-                const { invoke } = await import('@tauri-apps/api/core');
                 const runtimePath = await join(appData, RUNTIME_RELATIVE_PATH);
-                await invoke('shell_execute', {
-                    command: `rmdir /s /q "${runtimePath}"`,
-                    workdir: null,
-                    timeoutSecs: 30,
-                    background: false,
-                    subjectType: 'installer',
-                    subjectId: 'python-runtime-cleanup',
-                });
+                await removeInternalDirectory(runtimePath);
                 logger.trace('[requirementsProvider] 残留 runtime 已清理');
             } catch (cleanupErr) {
                 // 清理失败不阻断流程，ensureReady 可能仍然能正常工作
@@ -300,19 +305,11 @@ export async function performEnvironmentRebuild(): Promise<void> {
 
     try {
         // 删除现有 runtime
-        const { invoke } = await import('@tauri-apps/api/core');
         const { appDataDir, join } = await import('@tauri-apps/api/path');
         const appData = await appDataDir();
         const runtimePath = await join(appData, RUNTIME_RELATIVE_PATH);
 
-        await invoke('shell_execute', {
-            command: `rmdir /s /q "${runtimePath}"`,
-            workdir: null,
-            timeoutSecs: 30,
-            background: false,
-            subjectType: 'installer',
-            subjectId: 'python-runtime-rebuild',
-        });
+        await removeInternalDirectory(runtimePath);
         logger.trace('[requirementsProvider] 旧 runtime 已删除');
     } catch (deleteError) {
         // 删除失败不中断流程，ensureReady 会检测 runtime 是否存在并决定是否重建

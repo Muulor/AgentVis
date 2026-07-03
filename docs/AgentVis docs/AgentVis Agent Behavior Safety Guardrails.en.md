@@ -457,7 +457,7 @@ Trash Bin triggers after the command passes `validate_command_safety_with_workdi
          v
 [try_intercept_delete()]            <- Trash Bin soft-delete interception
    +-- Parse success -> move to Trash Bin -> return opaque success message to Agent
-   +-- Parse failure (complex command) -> fall back and continue normal OS execution
+   +-- Delete/cleanup intent exists but target cannot be safely parsed -> fail closed; do not enter OS execution
 ```
 
 In `restricted` mode, the "parse success" branch above must also satisfy that the target path belongs to allowed roots; otherwise the host-side move is not performed.
@@ -475,8 +475,11 @@ In `restricted` mode, the "parse success" branch above must also satisfy that th
 | Nested `cmd /c "del ..."` | `cmd /c "del file.txt"` |
 | Piped delete | `Get-ChildItem *.log \| Remove-Item` |
 | Wildcard glob | `del C:\project\*.webp` (expanded and moved one by one) |
+| PowerShell wildcard | `Remove-Item -Path "$env:APPDATA\com.agentvis.app\deliverables\Team\Agent\*"` |
+| PowerShell variable wildcard | `$target='C:\project'; Remove-Item -LiteralPath $target\* -Recurse -Force` |
+| `Get-ChildItem` loop delete | `foreach ($item in Get-ChildItem $dir) { Remove-Item -LiteralPath $item.FullName -Recurse -Force }` |
 
-For complex commands that cannot be parsed, such as multi-level pipeline chains and compound conditional statements, the system falls back to the normal execution flow and does not intercept.
+For complex commands whose text already shows delete/cleanup intent but whose target path cannot be safely reconstructed by the Trash Bin parser, such as multi-level pipeline chains, unresolved variables, .NET `Delete()` calls, `robocopy /purge`, or `git clean`, the system **fails closed**. It blocks execution and asks the Agent to use an explicitly supported delete form. This nudges the Agent toward `Remove-Item`, `del`, or `rmdir`, where soft delete can reliably catch the operation instead of letting it bypass Trash Bin and reach the OS.
 
 ### 5.3 Opaque Success Feedback (Preventing Secondary Cleanup)
 
@@ -488,7 +491,7 @@ Deleted successfully.
 
 This message enters the SA tool-call result directly. Its purpose is not to explain soft-delete details to the Agent, but to let the Agent treat the current deletion task as complete, avoiding continued searches for `Agent_Trash_Bin` and secondary deletion of Trash Bin copies.
 
-Complete recovery information is still stored in `trash_manifest.json` and internal logs for display to users or later security UI; by default, the Agent should not receive these paths.
+Complete recovery information is still stored in `trash_manifest.json` and internal logs for display to users through the "Settings -> File Protection" Agent Trash UI; by default, the Agent should not receive these paths.
 
 ### 5.4 Trash Bin Storage Structure
 
@@ -502,9 +505,20 @@ Complete recovery information is still stored in `trash_manifest.json` and inter
 
 **manifest.json** records complete metadata for each deletion: original path, Trash Bin path, deletion time, triggering command, and whether the target was a directory.
 
-### 5.5 Automatic Expiration Cleanup
+### 5.5 User Recovery and Manual Cleanup
 
-On application startup, the manifest is scanned automatically. Entries **older than 30 days** are physically deleted and removed from the manifest. Files accidentally deleted in the short term can be recovered during this period by manually moving them back to their original paths.
+The **Agent Trash** area under "Settings -> File Protection" reads the manifest and exposes user-side recovery and cleanup actions:
+
+- **Select Trash entries**: users select one or more entries and then run "Restore Selected" or "Clean Selected".
+- **Batch selection**: when one delete command creates multiple entries, the row-level "Batch" button only adds the same batch to the selection. It does not directly restore or clean.
+- **Restore Selected**: moves Trash Bin copies back to their original paths and removes successfully restored records from the manifest. If the original path already exists, the record stays and the UI reports a conflict; if the Trash copy is already missing, the stale manifest record is pruned.
+- **Clean Selected**: permanently deletes the Trash Bin copy and removes the manifest record. Failed deletes remain in the manifest. Before cleanup, the backend verifies that `trashPath` is inside `Agent_Trash_Bin`, preventing user-side cleanup from deleting paths outside the Trash Bin.
+
+These actions are user-facing and do not require the Agent to execute recovery commands, so internal Trash Bin paths remain hidden from the Agent.
+
+### 5.6 Automatic Expiration Cleanup
+
+On application startup, the manifest is scanned automatically. Entries **older than 30 days** are physically deleted and removed from the manifest; the manifest is written back after cleanup. Files accidentally deleted in the short term can be recovered or manually cleaned through the File Protection UI.
 
 ---
 
@@ -564,7 +578,7 @@ User request
   +--> parse success (del/rmdir/Remove-Item...)
   |     -> move to Agent_Trash_Bin
   |     -> return opaque success message (Agent does not know Trash Bin path) -- no OS del call
-  +--> parse failure (complex format) -> fall back and continue
+  +--> delete/cleanup intent exists but parsing fails -> fail closed
   |
   v
 OS executes command
@@ -589,6 +603,6 @@ OS executes command
 
 Custom protected paths are globally cached through `RwLock`. After the first IO, cache hits are used. When the UI updates protected directories, `reload_custom_protected_paths()` refreshes immediately, balancing performance and realtime behavior.
 
-### Trash Bin Fallback Strategy
+### Trash Bin Fail-Closed Strategy
 
-For complex formats that the command parser cannot recognize, such as nested multi-level pipelines and script fragments with conditional checks, Trash Bin falls back instead of blocking and lets the command continue into OS execution. This avoids breaking the Agent's normal workflow while preserving the reliability of the fallback mechanism. Fallback scenarios are usually cases where the Agent is running more complex scripts, and the `validate_script_content()` script-content scanning layer still applies.
+For complex formats that look like delete/cleanup operations but cannot be safely resolved to target paths, such as nested multi-level pipelines, unresolved variables, script-level `.Delete()` calls, `git clean`, or `robocopy /purge`, Trash Bin fails closed instead of falling back to OS execution. The returned message asks the Agent to use a supported explicit delete command, making a retry more likely to be intercepted by soft delete. Commands with no delete intent continue through the normal execution path.

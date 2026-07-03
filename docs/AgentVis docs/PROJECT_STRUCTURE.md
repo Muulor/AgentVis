@@ -314,6 +314,8 @@ settings/
 ├── SkillSettings.module.css      # 技能管理样式
 ├── SkillAuditModal.tsx           # 技能包安全审查弹窗
 ├── SkillAuditModal.module.css    # 审查弹窗样式
+├── FileProtectionSettings.tsx       # 文件保护设置
+├── FileProtectionSettings.module.css  # 文件保护设置样式
 ├── SandboxAuditSettings.tsx      # 沙箱审计事件诊断
 ├── SandboxAuditSettings.module.css   # 沙箱审计事件诊断样式
 ├── UpdateSettings.tsx            # 应用版本检测设置区

@@ -10,8 +10,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
+use tauri::Manager;
 
-use crate::error::AppError;
+use crate::error::{AppError, CommandResult};
 
 // fs2 用于文件排他锁，保证 manifest 并发写入安全
 use fs2::FileExt;
@@ -27,6 +28,8 @@ const MANIFEST_FILE: &str = "trash_manifest.json";
 /// 默认保留天数
 const DEFAULT_RETENTION_DAYS: u64 = 30;
 const DELETE_SUCCESS_OBSERVATION: &str = "Deleted successfully.";
+const DELETE_UNSAFE_BLOCK_MESSAGE: &str =
+    "Safety block: delete-like command could not be safely moved to Agent Trash Bin. Use a direct supported delete command with explicit paths, such as Remove-Item, del, or rmdir.";
 const SANDBOX_DELETE_BLOCK_MESSAGE: &str =
     "Sandbox block: delete target is outside the OfflineIsolated sandbox filesystem scope.";
 
@@ -48,8 +51,58 @@ struct TrashEntry {
     deleted_at: String,
     /// 原始命令
     command: String,
+    /// 同一次删除命令对应的批次 ID
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    batch_id: Option<String>,
     /// 是否为目录
     is_directory: bool,
+}
+
+/// Trash Bin 条目列表项
+///
+/// 提供给设置页「文件保护」Tab 展示最近可恢复删除记录。
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashEntryInfo {
+    pub id: String,
+    pub original_path: String,
+    pub trash_path: String,
+    pub deleted_at: String,
+    pub command: String,
+    pub batch_id: String,
+    pub is_directory: bool,
+    pub original_exists: bool,
+    pub trash_exists: bool,
+}
+
+/// Trash Bin 恢复问题
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRestoreIssue {
+    pub id: String,
+    pub original_path: String,
+    pub trash_path: String,
+    pub reason: String,
+}
+
+/// Trash Bin 恢复结果
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRestoreResult {
+    pub restored_count: usize,
+    pub restored: Vec<String>,
+    pub conflicts: Vec<TrashRestoreIssue>,
+    pub missing: Vec<TrashRestoreIssue>,
+}
+
+/// Trash Bin 永久清理结果
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashDeleteResult {
+    pub deleted_count: usize,
+    pub deleted: Vec<String>,
+    pub missing: Vec<TrashRestoreIssue>,
+    pub failed: Vec<TrashRestoreIssue>,
 }
 
 // ==================== 路径辅助函数 ====================
@@ -108,18 +161,52 @@ fn generate_trash_path(app_data_dir: &Path, original_path: &str) -> PathBuf {
     get_trash_bin_dir(app_data_dir).join(name)
 }
 
+fn generate_batch_id() -> String {
+    format!(
+        "{}_{}",
+        chrono::Local::now().format("%Y%m%d%H%M%S"),
+        uuid::Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap_or("0000")
+    )
+}
+
+fn app_data_dir_from_handle(app_handle: &tauri::AppHandle) -> PathBuf {
+    app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+}
+
+fn trash_entry_info(entry: &TrashEntry) -> TrashEntryInfo {
+    let original_path = Path::new(&entry.original_path);
+    let trash_path = Path::new(&entry.trash_path);
+
+    TrashEntryInfo {
+        id: entry.id.clone(),
+        original_path: entry.original_path.clone(),
+        trash_path: entry.trash_path.clone(),
+        deleted_at: entry.deleted_at.clone(),
+        command: entry.command.clone(),
+        batch_id: entry.batch_id.clone().unwrap_or_else(|| entry.id.clone()),
+        is_directory: entry.is_directory,
+        original_exists: original_path.exists(),
+        trash_exists: trash_path.exists(),
+    }
+}
+
 // ==================== Manifest 管理 ====================
 
 /// 读取 manifest
 fn read_manifest(app_data_dir: &Path) -> Vec<TrashEntry> {
     let path = get_manifest_path(app_data_dir);
     match std::fs::read_to_string(&path) {
-        Ok(content) => {
-            serde_json::from_str(&content).unwrap_or_else(|e| {
-                log::warn!("[TrashBin] manifest 解析失败: {}", e);
-                Vec::new()
-            })
-        }
+        Ok(content) => serde_json::from_str(&content).unwrap_or_else(|e| {
+            log::warn!("[TrashBin] manifest 解析失败: {}", e);
+            Vec::new()
+        }),
         Err(_) => Vec::new(),
     }
 }
@@ -148,8 +235,9 @@ fn append_to_manifest(app_data_dir: &Path, entry: TrashEntry) -> Result<(), AppE
 
     // 确保 manifest 所在目录存在
     if let Some(parent) = manifest_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| AppError::FileSystem(format!("Failed to create Trash Bin directory: {}", e)))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::FileSystem(format!("Failed to create Trash Bin directory: {}", e))
+        })?;
     }
 
     // 打开或创建 manifest 文件
@@ -162,8 +250,9 @@ fn append_to_manifest(app_data_dir: &Path, entry: TrashEntry) -> Result<(), AppE
         .map_err(|e| AppError::FileSystem(format!("Failed to open manifest: {}", e)))?;
 
     // 获取排他锁（阻塞等待其他进程/线程释放）
-    file.lock_exclusive()
-        .map_err(|e| AppError::FileSystem(format!("Failed to acquire exclusive manifest lock: {}", e)))?;
+    file.lock_exclusive().map_err(|e| {
+        AppError::FileSystem(format!("Failed to acquire exclusive manifest lock: {}", e))
+    })?;
 
     // 通过同一句柄读取现有数据（不能用 std::fs::read_to_string，会另开句柄触发 os error 33）
     let mut content = String::new();
@@ -197,6 +286,304 @@ fn append_to_manifest(app_data_dir: &Path, entry: TrashEntry) -> Result<(), AppE
     Ok(())
 }
 
+fn with_locked_manifest<R, F>(app_data_dir: &Path, mutate: F) -> Result<R, AppError>
+where
+    F: FnOnce(&mut Vec<TrashEntry>) -> Result<R, AppError>,
+{
+    use std::io::{Read, Seek, Write};
+
+    let manifest_path = get_manifest_path(app_data_dir);
+    if let Some(parent) = manifest_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::FileSystem(format!("Failed to create Trash Bin directory: {}", e))
+        })?;
+    }
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&manifest_path)
+        .map_err(|e| AppError::FileSystem(format!("Failed to open manifest: {}", e)))?;
+
+    file.lock_exclusive().map_err(|e| {
+        AppError::FileSystem(format!("Failed to acquire exclusive manifest lock: {}", e))
+    })?;
+
+    let mut content = String::new();
+    file.read_to_string(&mut content).unwrap_or_default();
+
+    let mut entries: Vec<TrashEntry> = if content.trim().is_empty() {
+        Vec::new()
+    } else {
+        serde_json::from_str(&content).unwrap_or_else(|e| {
+            log::warn!("[TrashBin] manifest 解析失败: {}", e);
+            Vec::new()
+        })
+    };
+
+    let result = mutate(&mut entries)?;
+
+    let new_content = serde_json::to_string_pretty(&entries)
+        .map_err(|e| AppError::Generic(format!("Failed to serialize manifest: {}", e)))?;
+    file.seek(std::io::SeekFrom::Start(0))
+        .map_err(|e| AppError::FileSystem(format!("Failed to seek manifest: {}", e)))?;
+    file.set_len(0)
+        .map_err(|e| AppError::FileSystem(format!("Failed to truncate manifest: {}", e)))?;
+    file.write_all(new_content.as_bytes())
+        .map_err(|e| AppError::FileSystem(format!("Failed to write manifest: {}", e)))?;
+    file.flush()
+        .map_err(|e| AppError::FileSystem(format!("Failed to flush manifest: {}", e)))?;
+
+    Ok(result)
+}
+
+fn restore_issue(entry: &TrashEntry, reason: impl Into<String>) -> TrashRestoreIssue {
+    TrashRestoreIssue {
+        id: entry.id.clone(),
+        original_path: entry.original_path.clone(),
+        trash_path: entry.trash_path.clone(),
+        reason: reason.into(),
+    }
+}
+
+fn restore_from_trash(source: &Path, destination: &Path) -> Result<(), AppError> {
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::FileSystem(format!("Failed to create restore parent directory: {}", e))
+        })?;
+    }
+
+    if std::fs::rename(source, destination).is_ok() {
+        return Ok(());
+    }
+
+    if source.is_dir() {
+        copy_dir_recursive(source, destination)?;
+        std::fs::remove_dir_all(source).map_err(|e| {
+            AppError::FileSystem(format!(
+                "Failed to remove restored Trash Bin directory: {}",
+                e
+            ))
+        })?;
+    } else {
+        std::fs::copy(source, destination)
+            .map_err(|e| AppError::FileSystem(format!("Failed to restore file: {}", e)))?;
+        std::fs::remove_file(source).map_err(|e| {
+            AppError::FileSystem(format!("Failed to remove restored Trash Bin file: {}", e))
+        })?;
+    }
+
+    Ok(())
+}
+
+fn restore_entries_matching<F>(
+    app_data_dir: &Path,
+    predicate: F,
+) -> Result<TrashRestoreResult, AppError>
+where
+    F: Fn(&TrashEntry) -> bool,
+{
+    with_locked_manifest(app_data_dir, |entries| {
+        let mut result = TrashRestoreResult {
+            restored_count: 0,
+            restored: Vec::new(),
+            conflicts: Vec::new(),
+            missing: Vec::new(),
+        };
+        let mut completed_ids = std::collections::HashSet::new();
+
+        for entry in entries.iter() {
+            if !predicate(entry) {
+                continue;
+            }
+
+            let trash_path = Path::new(&entry.trash_path);
+            let original_path = Path::new(&entry.original_path);
+
+            if !trash_path.exists() {
+                result.missing.push(restore_issue(entry, "trash_missing"));
+                completed_ids.insert(entry.id.clone());
+                continue;
+            }
+
+            if original_path.exists() {
+                result
+                    .conflicts
+                    .push(restore_issue(entry, "original_exists"));
+                continue;
+            }
+
+            match restore_from_trash(trash_path, original_path) {
+                Ok(()) => {
+                    result.restored_count += 1;
+                    result.restored.push(entry.original_path.clone());
+                    completed_ids.insert(entry.id.clone());
+                }
+                Err(error) => {
+                    result
+                        .conflicts
+                        .push(restore_issue(entry, format!("restore_failed: {}", error)));
+                }
+            }
+        }
+
+        if !completed_ids.is_empty() {
+            entries.retain(|entry| !completed_ids.contains(&entry.id));
+        }
+
+        Ok(result)
+    })
+}
+
+fn delete_trash_path(app_data_dir: &Path, entry: &TrashEntry) -> Result<(), AppError> {
+    let trash_path = Path::new(&entry.trash_path);
+    let trash_root = normalize_path_lexically(&get_trash_bin_dir(app_data_dir));
+    let normalized_trash_path = normalize_path_lexically(trash_path);
+    if !normalized_trash_path.starts_with(&trash_root) {
+        return Err(AppError::Forbidden(
+            "Trash Bin clean rejected a path outside Agent_Trash_Bin.".to_string(),
+        ));
+    }
+
+    if !trash_path.exists() {
+        return Ok(());
+    }
+
+    if trash_path.is_dir() {
+        std::fs::remove_dir_all(trash_path).map_err(|e| {
+            AppError::FileSystem(format!("Failed to delete Trash Bin directory: {}", e))
+        })?;
+    } else {
+        std::fs::remove_file(trash_path)
+            .map_err(|e| AppError::FileSystem(format!("Failed to delete Trash Bin file: {}", e)))?;
+    }
+
+    Ok(())
+}
+
+fn delete_entries_matching<F>(
+    app_data_dir: &Path,
+    predicate: F,
+) -> Result<TrashDeleteResult, AppError>
+where
+    F: Fn(&TrashEntry) -> bool,
+{
+    with_locked_manifest(app_data_dir, |entries| {
+        let mut result = TrashDeleteResult {
+            deleted_count: 0,
+            deleted: Vec::new(),
+            missing: Vec::new(),
+            failed: Vec::new(),
+        };
+        let mut completed_ids = std::collections::HashSet::new();
+
+        for entry in entries.iter() {
+            if !predicate(entry) {
+                continue;
+            }
+
+            let trash_path = Path::new(&entry.trash_path);
+            if !trash_path.exists() {
+                result.missing.push(restore_issue(entry, "trash_missing"));
+                completed_ids.insert(entry.id.clone());
+                continue;
+            }
+
+            match delete_trash_path(app_data_dir, entry) {
+                Ok(()) => {
+                    result.deleted_count += 1;
+                    result.deleted.push(entry.original_path.clone());
+                    completed_ids.insert(entry.id.clone());
+                }
+                Err(error) => {
+                    result
+                        .failed
+                        .push(restore_issue(entry, format!("delete_failed: {}", error)));
+                }
+            }
+        }
+
+        if !completed_ids.is_empty() {
+            entries.retain(|entry| !completed_ids.contains(&entry.id));
+        }
+
+        Ok(result)
+    })
+}
+
+/// 列出当前可追踪的 Agent Trash Bin 条目
+#[tauri::command]
+pub async fn trash_bin_list_entries(
+    app_handle: tauri::AppHandle,
+) -> CommandResult<Vec<TrashEntryInfo>> {
+    let app_data_dir = app_data_dir_from_handle(&app_handle);
+    let trash_dir = get_trash_bin_dir(&app_data_dir);
+    if !trash_dir.exists() {
+        std::fs::create_dir_all(&trash_dir).map_err(|e| {
+            AppError::FileSystem(format!("Failed to create Trash Bin directory: {}", e))
+        })?;
+    }
+
+    let mut entries: Vec<TrashEntryInfo> = read_manifest(&app_data_dir)
+        .iter()
+        .map(trash_entry_info)
+        .collect();
+    entries.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at));
+    Ok(entries)
+}
+
+/// 按条目 ID 恢复 Trash Bin 文件，并同步更新 manifest
+#[tauri::command]
+pub async fn trash_bin_restore_entries(
+    app_handle: tauri::AppHandle,
+    ids: Vec<String>,
+) -> CommandResult<TrashRestoreResult> {
+    let app_data_dir = app_data_dir_from_handle(&app_handle);
+    let id_set: std::collections::HashSet<String> = ids.into_iter().collect();
+
+    restore_entries_matching(&app_data_dir, |entry| id_set.contains(&entry.id))
+}
+
+/// 按批次恢复同一次删除命令产生的 Trash Bin 条目
+#[tauri::command]
+pub async fn trash_bin_restore_batch(
+    app_handle: tauri::AppHandle,
+    batch_id: String,
+) -> CommandResult<TrashRestoreResult> {
+    let app_data_dir = app_data_dir_from_handle(&app_handle);
+
+    restore_entries_matching(&app_data_dir, |entry| {
+        entry.batch_id.as_deref().unwrap_or(&entry.id) == batch_id
+    })
+}
+
+/// 按条目 ID 永久清理 Trash Bin 文件，并同步更新 manifest
+#[tauri::command]
+pub async fn trash_bin_delete_entries(
+    app_handle: tauri::AppHandle,
+    ids: Vec<String>,
+) -> CommandResult<TrashDeleteResult> {
+    let app_data_dir = app_data_dir_from_handle(&app_handle);
+    let id_set: std::collections::HashSet<String> = ids.into_iter().collect();
+
+    delete_entries_matching(&app_data_dir, |entry| id_set.contains(&entry.id))
+}
+
+/// 按批次永久清理同一次删除命令产生的 Trash Bin 条目
+#[tauri::command]
+pub async fn trash_bin_delete_batch(
+    app_handle: tauri::AppHandle,
+    batch_id: String,
+) -> CommandResult<TrashDeleteResult> {
+    let app_data_dir = app_data_dir_from_handle(&app_handle);
+
+    delete_entries_matching(&app_data_dir, |entry| {
+        entry.batch_id.as_deref().unwrap_or(&entry.id) == batch_id
+    })
+}
+
 // ==================== 命令解析 ====================
 
 /// 从删除命令中提取目标路径
@@ -211,14 +598,22 @@ fn append_to_manifest(app_data_dir: &Path, entry: TrashEntry) -> Result<(), AppE
 /// - `Get-ChildItem *.log | Remove-Item` (管道删除)
 ///
 /// 返回 None 表示无法解析（复杂格式），应回退正常执行
+#[cfg(test)]
 fn extract_delete_target(command: &str) -> Option<(String, bool)> {
+    extract_delete_target_with_workdir(command, None)
+}
+
+fn extract_delete_target_with_workdir(
+    command: &str,
+    workdir: Option<&Path>,
+) -> Option<(String, bool)> {
     let trimmed = command.trim();
     let lower = trimmed.to_lowercase();
 
     // PowerShell Remove-Item 及其别名（ri/rm）优先匹配（在链式检查之前）
     // 原因：PowerShell -Command 内的 ; 是 PS 语句分隔符，不应被视为 CMD 管道链
-    if lower.contains("remove-item") || contains_ps_delete_alias(&lower) {
-        return extract_powershell_remove_item_target(trimmed);
+    if contains_powershell_delete_command(&lower) {
+        return extract_powershell_remove_item_target(trimmed, workdir);
     }
 
     // 管道删除模式：Get-ChildItem *.ext | Remove-Item
@@ -229,12 +624,16 @@ fn extract_delete_target(command: &str) -> Option<(String, bool)> {
 
     // cmd /c 嵌套：提取内部命令并递归解析
     if let Some(inner) = extract_cmd_c_inner(&lower, trimmed) {
-        return extract_delete_target(&inner);
+        return extract_delete_target_with_workdir(&inner, workdir);
     }
 
     // CMD 命令的链式操作符检查（&&, ||, |, ;）
     // 仅对 del/rmdir/erase 等 CMD 命令应用
-    if trimmed.contains("&&") || trimmed.contains("||") || trimmed.contains('|') || trimmed.contains(';') {
+    if trimmed.contains("&&")
+        || trimmed.contains("||")
+        || trimmed.contains('|')
+        || trimmed.contains(';')
+    {
         return None;
     }
 
@@ -266,7 +665,11 @@ fn extract_cmd_delete_targets(command: &str) -> Option<(Vec<String>, bool)> {
         return None;
     }
 
-    if trimmed.contains("&&") || trimmed.contains("||") || trimmed.contains('|') || trimmed.contains(';') {
+    if trimmed.contains("&&")
+        || trimmed.contains("||")
+        || trimmed.contains('|')
+        || trimmed.contains(';')
+    {
         return None;
     }
 
@@ -330,15 +733,12 @@ fn split_shell_like_paths(input: &str) -> Vec<String> {
 ///
 /// Agent 偶尔使用 PS 内置别名而非全名。
 /// 仅在 powershell -Command 上下文中匹配，避免误判 Unix 的 rm 命令。
-fn contains_ps_delete_alias(lower: &str) -> bool {
-    // 必须是 PowerShell 上下文
-    if !lower.contains("powershell") {
+fn contains_powershell_delete_command(lower: &str) -> bool {
+    if !(lower.contains("powershell") || lower.contains("pwsh")) {
         return false;
     }
-    // 检测 PS 别名：ri / rm（作为独立 token）
-    // 使用空格边界检测，避免匹配 "trim" 等单词中的 "ri"/"rm"
-    lower.contains(" ri ") || lower.contains(" ri '") || lower.contains(" ri \"")
-        || lower.contains(" rm ") || lower.contains(" rm '") || lower.contains(" rm \"")
+
+    find_ps_delete_command(lower).is_some()
 }
 
 /// 提取管道删除目标：`Get-ChildItem *.ext | Remove-Item`
@@ -361,7 +761,13 @@ fn extract_pipe_delete_target(lower: &str, original: &str) -> Option<(String, bo
         || after_pipe == "ri"
         || after_pipe == "rm"
         || after_pipe.starts_with("del ")
-        || after_pipe == "del";
+        || after_pipe == "del"
+        || after_pipe.starts_with("erase ")
+        || after_pipe == "erase"
+        || after_pipe.starts_with("rd ")
+        || after_pipe == "rd"
+        || after_pipe.starts_with("rmdir ")
+        || after_pipe == "rmdir";
 
     if !has_delete_after_pipe {
         return None;
@@ -389,10 +795,7 @@ fn extract_pipe_delete_target(lower: &str, original: &str) -> Option<(String, bo
     }
 
     // 清理引号
-    let clean = path
-        .trim_matches('\'')
-        .trim_matches('"')
-        .trim();
+    let clean = path.trim_matches('\'').trim_matches('"').trim();
 
     if clean.is_empty() {
         return None;
@@ -412,7 +815,8 @@ fn extract_cmd_c_inner(lower: &str, original: &str) -> Option<String> {
         if lower.starts_with(pattern) {
             let inner = &original[pattern.len()..];
             // 去除外层引号
-            let inner = inner.trim()
+            let inner = inner
+                .trim()
                 .trim_end_matches('"')
                 .trim_end_matches('\'')
                 .trim();
@@ -488,16 +892,35 @@ fn extract_path_after_flags(command: &str) -> Option<String> {
 /// 设计要点：
 /// - 先截断分号后的内容（PS 语句分隔符，如 `; if ($?) {...}`）
 /// - 支持 `\'path\'` / `'path'` / `"path"` 三种引号模式
-fn extract_powershell_remove_item_target(command: &str) -> Option<(String, bool)> {
-    let (paths, is_directory) = extract_powershell_remove_item_targets(command)?;
+fn extract_powershell_remove_item_target(
+    command: &str,
+    workdir: Option<&Path>,
+) -> Option<(String, bool)> {
+    let (paths, is_directory) = extract_powershell_remove_item_targets(command, workdir)?;
     paths.into_iter().next().map(|path| (path, is_directory))
 }
 
-fn extract_powershell_remove_item_targets(command: &str) -> Option<(Vec<String>, bool)> {
-    let lower = command.to_lowercase();
+fn extract_powershell_remove_item_targets(
+    command: &str,
+    workdir: Option<&Path>,
+) -> Option<(Vec<String>, bool)> {
+    extract_powershell_remove_item_targets_with_app_data_dir(command, workdir, None)
+}
 
-    // 查找删除命令位置：优先 remove-item，然后尝试别名 ri/rm
-    let (cmd_end_pos, _cmd_name) = find_ps_delete_command(&lower)?;
+fn extract_powershell_remove_item_targets_with_app_data_dir(
+    command: &str,
+    workdir: Option<&Path>,
+    app_data_dir: Option<&Path>,
+) -> Option<(Vec<String>, bool)> {
+    let lower = command.to_lowercase();
+    if !is_powershell_delete_parse_context(&lower) {
+        return None;
+    }
+
+    let variables = extract_powershell_variable_assignments(command, workdir, app_data_dir);
+
+    // 查找删除命令位置：优先 remove-item，然后尝试别名 ri/rm/del/erase/rd/rmdir
+    let (cmd_end_pos, cmd_name) = find_ps_delete_command(&lower)?;
     let after_ri = &command[cmd_end_pos..];
     let after_ri = after_ri.trim();
 
@@ -509,7 +932,7 @@ fn extract_powershell_remove_item_targets(command: &str) -> Option<(Vec<String>,
     };
     let effective = effective.trim();
 
-    let is_directory = lower.contains("-recurse");
+    let is_directory = lower.contains("-recurse") || matches!(cmd_name, "rmdir" | "rd");
 
     // 从 effective 中提取路径（跳过 -Flag 参数）
     // Agent 常用格式: \'C:\Users\Admin\Pictures\log.txt\' -Force
@@ -520,6 +943,15 @@ fn extract_powershell_remove_item_targets(command: &str) -> Option<(Vec<String>,
     // 但需要特殊处理引号包裹的路径（可能含空格）
 
     let paths = extract_paths_from_ps_args(effective);
+    let paths = resolve_powershell_path_expressions(paths, &variables);
+    let paths = if paths
+        .iter()
+        .any(|path| is_powershell_pipeline_item_path(path))
+    {
+        extract_powershell_foreach_fullname_patterns(command, &variables).unwrap_or(paths)
+    } else {
+        paths
+    };
 
     if paths.is_empty() {
         return None;
@@ -527,32 +959,449 @@ fn extract_powershell_remove_item_targets(command: &str) -> Option<(Vec<String>,
     Some((paths, is_directory))
 }
 
+fn is_powershell_delete_parse_context(lower: &str) -> bool {
+    let trimmed = lower.trim_start();
+    lower.contains("powershell")
+        || lower.contains("pwsh")
+        || starts_with_command(trimmed, "remove-item")
+        || starts_with_command(trimmed, "ri")
+}
+
+fn is_powershell_pipeline_item_path(path: &str) -> bool {
+    let normalized = path.trim().to_ascii_lowercase();
+    normalized == "$_.fullname"
+        || normalized == "$psitem.fullname"
+        || (normalized.starts_with('$') && normalized.ends_with(".fullname"))
+}
+
+fn infer_appdata_parent_dir(app_data_dir: &Path) -> Option<PathBuf> {
+    app_data_dir.parent().map(|parent| parent.to_path_buf())
+}
+
+fn extract_powershell_variable_assignments(
+    command: &str,
+    workdir: Option<&Path>,
+    app_data_dir: Option<&Path>,
+) -> std::collections::HashMap<String, String> {
+    let chars: Vec<char> = command.chars().collect();
+    let mut assignments = std::collections::HashMap::new();
+    if let Some(workdir) = workdir {
+        assignments.insert(
+            "env:workdir".to_string(),
+            workdir.to_string_lossy().to_string(),
+        );
+    }
+    if let Some(app_data_dir) = app_data_dir.and_then(infer_appdata_parent_dir) {
+        assignments.insert(
+            "env:appdata".to_string(),
+            app_data_dir.to_string_lossy().to_string(),
+        );
+    }
+    for name in [
+        "APPDATA",
+        "LOCALAPPDATA",
+        "USERPROFILE",
+        "HOME",
+        "TEMP",
+        "TMP",
+    ] {
+        if let Some(value) = std::env::var_os(name) {
+            assignments
+                .entry(format!("env:{}", name.to_ascii_lowercase()))
+                .or_insert_with(|| value.to_string_lossy().to_string());
+        }
+    }
+    let mut index = 0usize;
+
+    while index < chars.len() {
+        if chars[index] != '$' {
+            index += 1;
+            continue;
+        }
+
+        let name_start = index + 1;
+        let mut name_end = name_start;
+        while name_end < chars.len()
+            && (chars[name_end].is_ascii_alphanumeric() || chars[name_end] == '_')
+        {
+            name_end += 1;
+        }
+
+        if name_end == name_start {
+            index += 1;
+            continue;
+        }
+
+        let mut cursor = name_end;
+        while cursor < chars.len() && chars[cursor].is_whitespace() {
+            cursor += 1;
+        }
+        if cursor >= chars.len() || chars[cursor] != '=' {
+            index = name_end;
+            continue;
+        }
+        cursor += 1;
+        while cursor < chars.len() && chars[cursor].is_whitespace() {
+            cursor += 1;
+        }
+        let name: String = chars[name_start..name_end]
+            .iter()
+            .collect::<String>()
+            .to_ascii_lowercase();
+
+        if is_quote_char(chars[cursor]) {
+            let quote = chars[cursor];
+            cursor += 1;
+            let value_start = cursor;
+            while cursor < chars.len() && !quotes_match(chars[cursor], quote) {
+                cursor += 1;
+            }
+            if cursor >= chars.len() {
+                break;
+            }
+
+            let raw_value: String = chars[value_start..cursor].iter().collect();
+            let value = resolve_powershell_path_expression(&raw_value, &assignments);
+            assignments.insert(name, value);
+            index = cursor + 1;
+            continue;
+        }
+
+        let value_start = cursor;
+        while cursor < chars.len()
+            && !chars[cursor].is_whitespace()
+            && chars[cursor] != ';'
+            && chars[cursor] != '}'
+        {
+            cursor += 1;
+        }
+
+        if value_start == cursor {
+            index = cursor + 1;
+            continue;
+        }
+
+        let raw_value: String = chars[value_start..cursor].iter().collect();
+        let value = resolve_powershell_path_expression(&raw_value, &assignments);
+        if value != raw_value
+            || raw_value.contains('\\')
+            || raw_value.contains('/')
+            || raw_value.contains(':')
+            || raw_value.starts_with('.')
+        {
+            assignments.insert(name, value);
+        }
+        index = cursor + 1;
+    }
+
+    assignments
+}
+
+fn resolve_powershell_path_expressions(
+    paths: Vec<String>,
+    variables: &std::collections::HashMap<String, String>,
+) -> Vec<String> {
+    paths
+        .into_iter()
+        .map(|path| resolve_powershell_path_expression(&path, variables))
+        .collect()
+}
+
+fn resolve_powershell_path_expression(
+    path: &str,
+    variables: &std::collections::HashMap<String, String>,
+) -> String {
+    let mut resolved = path.trim().to_string();
+
+    for (name, value) in variables {
+        let bare = format!("${}", name);
+        let braced = format!("${{{}}}", name);
+        resolved = replace_case_insensitive(&resolved, &braced, value);
+        resolved = replace_case_insensitive(&resolved, &bare, value);
+    }
+
+    resolved
+}
+
+fn contains_unresolved_powershell_variable(path: &str) -> bool {
+    let trimmed = path.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    lower.contains("$env:")
+        || lower.contains("${env:")
+        || trimmed.starts_with('$')
+        || trimmed.starts_with("${")
+}
+
+fn replace_case_insensitive(input: &str, needle: &str, replacement: &str) -> String {
+    if needle.is_empty() {
+        return input.to_string();
+    }
+
+    let lower_input = input.to_ascii_lowercase();
+    let lower_needle = needle.to_ascii_lowercase();
+    let mut output = String::new();
+    let mut search_start = 0usize;
+
+    while let Some(relative_pos) = lower_input[search_start..].find(&lower_needle) {
+        let pos = search_start + relative_pos;
+        output.push_str(&input[search_start..pos]);
+        output.push_str(replacement);
+        search_start = pos + needle.len();
+    }
+
+    output.push_str(&input[search_start..]);
+    output
+}
+
+fn extract_powershell_foreach_fullname_patterns(
+    command: &str,
+    variables: &std::collections::HashMap<String, String>,
+) -> Option<Vec<String>> {
+    let lower = command.to_ascii_lowercase();
+    let has_foreach = lower.contains("foreach-object")
+        || lower.contains("foreach ")
+        || lower.contains("foreach(");
+    if !has_foreach || !lower.contains(".fullname") || !lower.contains("remove-item") {
+        return None;
+    }
+
+    let mut patterns = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut search_start = 0usize;
+
+    while let Some(relative_pos) = lower[search_start..].find("get-childitem") {
+        let pos = search_start + relative_pos;
+        let args_start = pos + "get-childitem".len();
+        let rest = &command[args_start..];
+        let segment_end = rest
+            .find('|')
+            .or_else(|| rest.find(';'))
+            .unwrap_or(rest.len());
+        let segment = &rest[..segment_end];
+        let paths =
+            resolve_powershell_path_expressions(extract_paths_from_ps_args(segment), variables);
+
+        for path in paths {
+            if path.contains('$') {
+                continue;
+            }
+            let pattern = join_glob_child_pattern(&path);
+            if seen.insert(pattern.clone()) {
+                patterns.push(pattern);
+            }
+        }
+
+        search_start = args_start;
+    }
+
+    if patterns.is_empty() {
+        None
+    } else {
+        Some(patterns)
+    }
+}
+
+fn join_glob_child_pattern(path: &str) -> String {
+    let trimmed = path.trim_end_matches(['\\', '/']);
+    if trimmed.is_empty() {
+        "*".to_string()
+    } else if trimmed.contains('/') && !trimmed.contains('\\') {
+        format!("{}/*", trimmed)
+    } else {
+        format!("{}\\*", trimmed)
+    }
+}
+
 /// 在命令字符串中查找 PS 删除命令（remove-item / ri / rm）的位置
 ///
 /// 返回 (命令结束位置, 命令名) 或 None
 /// 优先匹配 remove-item，然后尝试别名 ri / rm（需要词边界）
 fn find_ps_delete_command(lower: &str) -> Option<(usize, &str)> {
-    // 优先匹配完整名
-    if let Some(pos) = lower.find("remove-item") {
-        return Some((pos + "remove-item".len(), "remove-item"));
-    }
-
-    // 匹配别名 ri（需要前后边界：空格/引号/行首）
-    for (alias, alias_len) in [(" ri ", 4usize), (" ri '", 4), (" ri \"", 4)] {
-        if let Some(pos) = lower.find(alias) {
-            // +1 跳过前导空格，+ alias_len-1 到 alias 末尾（不含尾随字符）
-            return Some((pos + alias_len - 1, "ri"));
-        }
-    }
-
-    // 匹配别名 rm（同样需要边界）
-    for (alias, alias_len) in [(" rm ", 4usize), (" rm '", 4), (" rm \"", 4)] {
-        if let Some(pos) = lower.find(alias) {
-            return Some((pos + alias_len - 1, "rm"));
+    for command_name in ["remove-item", "rmdir", "erase", "del", "rd", "ri", "rm"] {
+        if let Some(pos) = find_command_token(lower, command_name) {
+            return Some((pos + command_name.len(), command_name));
         }
     }
 
     None
+}
+
+fn find_command_token(input: &str, command_name: &str) -> Option<usize> {
+    for (pos, _) in input.match_indices(command_name) {
+        if is_command_token_boundary_before(input, pos)
+            && is_command_token_boundary_after(input, pos + command_name.len())
+        {
+            return Some(pos);
+        }
+    }
+
+    None
+}
+
+fn is_command_token_boundary_before(input: &str, pos: usize) -> bool {
+    if pos == 0 {
+        return true;
+    }
+
+    input[..pos]
+        .chars()
+        .next_back()
+        .map(|ch| {
+            ch.is_whitespace()
+                || matches!(
+                    ch,
+                    '"' | '\'' | '“' | '”' | '‘' | '’' | ';' | '|' | '&' | '{' | '('
+                )
+        })
+        .unwrap_or(true)
+}
+
+fn is_command_token_boundary_after(input: &str, pos: usize) -> bool {
+    if pos >= input.len() {
+        return true;
+    }
+
+    input[pos..]
+        .chars()
+        .next()
+        .map(|ch| {
+            ch.is_whitespace()
+                || matches!(
+                    ch,
+                    '"' | '\'' | '“' | '”' | '‘' | '’' | ';' | '|' | '&' | '}' | ')'
+                )
+        })
+        .unwrap_or(true)
+}
+
+fn has_unhandled_delete_intent(command: &str) -> bool {
+    let lower = command.to_ascii_lowercase();
+    let lower = lower.replace('`', "");
+
+    contains_unhandled_powershell_delete_api(&lower)
+        || contains_runtime_delete_api(&lower)
+        || contains_unix_delete_command(&lower)
+        || contains_git_cleanup_delete(&lower)
+        || contains_robocopy_mirror_delete(&lower)
+        || contains_cmd_loop_delete(&lower)
+}
+
+fn contains_unhandled_powershell_delete_api(lower: &str) -> bool {
+    if !(lower.contains("powershell") || lower.contains("pwsh")) {
+        return false;
+    }
+
+    [
+        "[system.io.file]::delete",
+        "[io.file]::delete",
+        "[system.io.directory]::delete",
+        "[io.directory]::delete",
+        ".delete(",
+    ]
+    .iter()
+    .any(|pattern| lower.contains(pattern))
+}
+
+fn contains_runtime_delete_api(lower: &str) -> bool {
+    let python_delete = (lower.contains("python") || lower.contains("py -"))
+        && [
+            "shutil.rmtree",
+            "os.remove(",
+            "os.unlink(",
+            ".unlink(",
+            ".rmdir(",
+        ]
+        .iter()
+        .any(|pattern| lower.contains(pattern));
+    if python_delete {
+        return true;
+    }
+
+    (lower.contains("node") || lower.contains("bun ") || lower.contains("deno "))
+        && [
+            "rmsync(",
+            "rmdirsync(",
+            "unlinksync(",
+            "fs.promises.rm",
+            "fs.promises.rmdir",
+            "fs.promises.unlink",
+            ".rm(",
+            ".rmdir(",
+            ".unlink(",
+        ]
+        .iter()
+        .any(|pattern| lower.contains(pattern))
+}
+
+fn contains_unix_delete_command(lower: &str) -> bool {
+    let trimmed = lower.trim_start();
+    trimmed.starts_with("rm ")
+        || trimmed == "rm"
+        || trimmed.starts_with("unlink ")
+        || trimmed == "unlink"
+        || starts_with_command(trimmed, "rm")
+        || starts_with_command(trimmed, "unlink")
+        || starts_with_command(trimmed, "shred")
+        || command_chain_contains(lower, "rm")
+        || command_chain_contains(lower, "unlink")
+        || lower.contains("find ") && (lower.contains(" -delete") || lower.contains(" -exec rm"))
+        || (lower.contains("bash") || lower.contains("wsl") || lower.contains("sh -c"))
+            && (lower.contains("rm -") || lower.contains(" rm ") || lower.contains("unlink "))
+}
+
+fn contains_git_cleanup_delete(lower: &str) -> bool {
+    if lower.contains("git reset") && lower.contains("--hard") {
+        return true;
+    }
+
+    lower.contains("git clean")
+        && !(lower.contains(" --dry-run")
+            || lower.contains(" -n")
+            || lower.contains(" -nd")
+            || lower.contains(" -dn"))
+}
+
+fn contains_robocopy_mirror_delete(lower: &str) -> bool {
+    lower.contains("robocopy") && (has_slash_flag(lower, "mir") || has_slash_flag(lower, "purge"))
+}
+
+fn contains_cmd_loop_delete(lower: &str) -> bool {
+    (starts_with_command(lower.trim_start(), "for") || lower.contains(" for "))
+        && (find_command_token(lower, "del").is_some()
+            || find_command_token(lower, "erase").is_some()
+            || find_command_token(lower, "rmdir").is_some()
+            || find_command_token(lower, "rd").is_some())
+        || lower.contains("forfiles")
+            && (find_command_token(lower, "del").is_some()
+                || find_command_token(lower, "erase").is_some()
+                || find_command_token(lower, "rmdir").is_some()
+                || find_command_token(lower, "rd").is_some())
+}
+
+fn starts_with_command(input: &str, command_name: &str) -> bool {
+    input.starts_with(command_name) && is_command_token_boundary_after(input, command_name.len())
+}
+
+fn command_chain_contains(input: &str, command_name: &str) -> bool {
+    for separator in ["&&", "||", ";", "|"] {
+        let needle = format!("{} {}", separator, command_name);
+        if let Some(pos) = input.find(&needle) {
+            let command_pos = pos + separator.len() + 1;
+            if is_command_token_boundary_after(input, command_pos + command_name.len()) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn has_slash_flag(input: &str, flag: &str) -> bool {
+    let needle = format!("/{}", flag);
+    input.match_indices(&needle).any(|(pos, _)| {
+        is_command_token_boundary_before(input, pos)
+            && is_command_token_boundary_after(input, pos + needle.len())
+    })
 }
 
 /// 从 PowerShell Remove-Item 的参数部分提取路径列表
@@ -657,9 +1506,7 @@ fn is_quote_char(ch: char) -> bool {
 }
 
 fn quotes_match(ch: char, quote: char) -> bool {
-    ch == quote
-        || (quote == '“' && ch == '”')
-        || (quote == '‘' && ch == '’')
+    ch == quote || (quote == '“' && ch == '”') || (quote == '‘' && ch == '’')
 }
 
 /// 跳过 PowerShell 参数字符串中的所有 -flag 前缀
@@ -691,17 +1538,12 @@ fn skip_ps_flags(s: &str) -> &str {
 /// 将文件/目录移动到 Trash Bin
 ///
 /// 优先使用 rename（同卷零开销），跨卷时拷贝后删除。
-fn move_to_trash(
-    source: &Path,
-    trash_path: &Path,
-    is_directory: bool,
-) -> Result<(), AppError> {
+fn move_to_trash(source: &Path, trash_path: &Path, is_directory: bool) -> Result<(), AppError> {
     // 确保 Trash Bin 目录存在
     if let Some(parent) = trash_path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| AppError::FileSystem(format!(
-                "Failed to create Trash Bin directory: {}", e
-            )))?;
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AppError::FileSystem(format!("Failed to create Trash Bin directory: {}", e))
+        })?;
     }
 
     // 尝试 rename（同卷移动）
@@ -715,29 +1557,22 @@ fn move_to_trash(
             return Ok(());
         }
         Err(e) => {
-            log::debug!(
-                "[TrashBin] rename 失败 (可能跨卷): {}，尝试 copy+remove",
-                e
-            );
+            log::debug!("[TrashBin] rename 失败 (可能跨卷): {}，尝试 copy+remove", e);
         }
     }
 
     // 跨卷: 拷贝后删除源
     if is_directory {
         copy_dir_recursive(source, trash_path)?;
-        std::fs::remove_dir_all(source)
-            .map_err(|e| AppError::FileSystem(format!(
-                "Failed to remove source directory: {}", e
-            )))?;
+        std::fs::remove_dir_all(source).map_err(|e| {
+            AppError::FileSystem(format!("Failed to remove source directory: {}", e))
+        })?;
     } else {
-        std::fs::copy(source, trash_path)
-            .map_err(|e| AppError::FileSystem(format!(
-                "Failed to copy file across volumes: {}", e
-            )))?;
+        std::fs::copy(source, trash_path).map_err(|e| {
+            AppError::FileSystem(format!("Failed to copy file across volumes: {}", e))
+        })?;
         std::fs::remove_file(source)
-            .map_err(|e| AppError::FileSystem(format!(
-                "Failed to remove source file: {}", e
-            )))?;
+            .map_err(|e| AppError::FileSystem(format!("Failed to remove source file: {}", e)))?;
     }
 
     log::info!(
@@ -765,12 +1600,9 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), AppError> {
         if src_path.is_dir() {
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
-            std::fs::copy(&src_path, &dst_path)
-                .map_err(|e| AppError::FileSystem(format!(
-                    "Failed to copy file {}: {}",
-                    src_path.display(),
-                    e
-                )))?;
+            std::fs::copy(&src_path, &dst_path).map_err(|e| {
+                AppError::FileSystem(format!("Failed to copy file {}: {}", src_path.display(), e))
+            })?;
         }
     }
 
@@ -864,14 +1696,15 @@ fn resolve_delete_path(target: &str, workdir: Option<&Path>) -> PathBuf {
 /// 返回用户可见的反馈消息
 fn trash_single_item(
     target_path: &Path,
-    is_directory: bool,
+    _is_directory: bool,
     command: &str,
     app_data_dir: &Path,
+    batch_id: &str,
 ) -> Result<String, AppError> {
     let target_path_str = target_path.to_string_lossy().to_string();
 
-    // 校正目录标志
-    let is_directory = is_directory || target_path.is_dir();
+    // 以真实文件系统类型为准，避免 `Remove-Item file -Recurse` 被误记为目录。
+    let is_directory = target_path.is_dir();
 
     // 生成回收站路径
     let trash_path = generate_trash_path(app_data_dir, &target_path_str);
@@ -884,12 +1717,17 @@ fn trash_single_item(
         id: format!(
             "{}_{}",
             chrono::Local::now().format("%Y%m%d%H%M%S"),
-            uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("0000")
+            uuid::Uuid::new_v4()
+                .to_string()
+                .split('-')
+                .next()
+                .unwrap_or("0000")
         ),
         original_path: target_path_str.to_string(),
         trash_path: trash_path.to_string_lossy().to_string(),
         deleted_at: chrono::Local::now().to_rfc3339(),
         command: command.to_string(),
+        batch_id: Some(batch_id.to_string()),
         is_directory,
     };
     append_to_manifest(app_data_dir, entry)?;
@@ -944,18 +1782,43 @@ pub fn try_intercept_delete_scoped(
     workdir: Option<&Path>,
     allowed_roots: Option<&[PathBuf]>,
 ) -> Result<Option<String>, AppError> {
-    if let Some((target_paths, is_directory)) = extract_powershell_remove_item_targets(command) {
-        if target_paths.len() > 1 {
-            return handle_multi_delete(
-                &target_paths,
-                is_directory,
-                command,
-                app_data_dir,
-                workdir,
-                allowed_roots,
-            );
-        }
-    }
+    let extracted_powershell_targets = extract_powershell_remove_item_targets_with_app_data_dir(
+        command,
+        workdir,
+        Some(app_data_dir),
+    );
+
+    let powershell_single_target =
+        if let Some((target_paths, is_directory)) = extracted_powershell_targets {
+            if target_paths
+                .iter()
+                .any(|path| contains_unresolved_powershell_variable(path))
+            {
+                log::warn!(
+                    "[TrashBin] blocked delete command with unresolved PowerShell variable: {}",
+                    command
+                );
+                return Err(AppError::Forbidden(DELETE_UNSAFE_BLOCK_MESSAGE.to_string()));
+            }
+
+            if target_paths.len() > 1 {
+                return handle_multi_delete(
+                    &target_paths,
+                    is_directory,
+                    command,
+                    app_data_dir,
+                    workdir,
+                    allowed_roots,
+                );
+            }
+
+            match target_paths.into_iter().next() {
+                Some(target_path) => Some((target_path, is_directory)),
+                None => None,
+            }
+        } else {
+            None
+        };
 
     if let Some((target_paths, is_directory)) = extract_cmd_delete_targets(command) {
         if target_paths.len() > 1 {
@@ -970,11 +1833,32 @@ pub fn try_intercept_delete_scoped(
         }
     }
 
-    // 1. 尝试从命令中提取删除目标
-    let (target_path_str, is_directory) = match extract_delete_target(command) {
+    if powershell_single_target.is_none() && has_unhandled_delete_intent(command) {
+        log::warn!(
+            "[TrashBin] blocked unhandled delete-like command: {}",
+            command
+        );
+        return Err(AppError::Forbidden(DELETE_UNSAFE_BLOCK_MESSAGE.to_string()));
+    }
+
+    let (target_path_str, is_directory) = match powershell_single_target {
         Some(result) => result,
-        None => return Ok(None),
+        None => {
+            // 1. 尝试从命令中提取删除目标
+            match extract_delete_target_with_workdir(command, workdir) {
+                Some(result) => result,
+                None => return Ok(None),
+            }
+        }
     };
+
+    if contains_unresolved_powershell_variable(&target_path_str) {
+        log::warn!(
+            "[TrashBin] blocked delete command with unresolved target variable: {}",
+            command
+        );
+        return Err(AppError::Forbidden(DELETE_UNSAFE_BLOCK_MESSAGE.to_string()));
+    }
 
     // 2. 通配符路径 → glob 展开后批量移动
     if is_glob_pattern(&target_path_str) {
@@ -995,7 +1879,8 @@ pub fn try_intercept_delete_scoped(
         return Ok(None);
     }
 
-    let detail = trash_single_item(&target_path, is_directory, command, app_data_dir)?;
+    let batch_id = generate_batch_id();
+    let detail = trash_single_item(&target_path, is_directory, command, app_data_dir, &batch_id)?;
     log_intercepted_delete(&[detail], 0);
     Ok(Some(opaque_delete_success_observation()))
 }
@@ -1052,10 +1937,11 @@ fn handle_multi_delete(
     let mut moved_details: Vec<String> = Vec::new();
     let mut failed_count: u32 = 0;
 
+    let batch_id = generate_batch_id();
     for path in &expanded_paths {
         let path_str = path.to_string_lossy().to_string();
         let is_dir = is_directory || path.is_dir();
-        match trash_single_item(path, is_dir, command, app_data_dir) {
+        match trash_single_item(path, is_dir, command, app_data_dir, &batch_id) {
             Ok(detail) => moved_details.push(detail),
             Err(e) => {
                 log::warn!("[TrashBin] 移动失败 {}: {}", path_str, e);
@@ -1105,7 +1991,10 @@ fn handle_glob_delete(
 
     // 无匹配文件 → 不拦截
     if matched_paths.is_empty() {
-        log::debug!("[TrashBin] glob 模式 '{}' 未匹配到任何文件，跳过拦截", pattern);
+        log::debug!(
+            "[TrashBin] glob 模式 '{}' 未匹配到任何文件，跳过拦截",
+            pattern
+        );
         return Ok(None);
     }
 
@@ -1119,10 +2008,11 @@ fn handle_glob_delete(
     let mut moved_details: Vec<String> = Vec::new();
     let mut failed_count: u32 = 0;
 
+    let batch_id = generate_batch_id();
     for matched_path in &matched_paths {
         let path_str = matched_path.to_string_lossy().to_string();
         let is_dir = matched_path.is_dir();
-        match trash_single_item(matched_path, is_dir, command, app_data_dir) {
+        match trash_single_item(matched_path, is_dir, command, app_data_dir, &batch_id) {
             Ok(detail) => moved_details.push(detail),
             Err(e) => {
                 log::warn!("[TrashBin] 移动失败 {}: {}", path_str, e);
@@ -1180,15 +2070,13 @@ pub fn cleanup_expired_items(app_data_dir: &Path) -> Result<u32, AppError> {
                 Ok(()) => {
                     log::debug!(
                         "[TrashBin] 清理过期条目: {} (已保留 {} 天)",
-                        entry.original_path, DEFAULT_RETENTION_DAYS
+                        entry.original_path,
+                        DEFAULT_RETENTION_DAYS
                     );
                     cleaned += 1;
                 }
                 Err(e) => {
-                    log::warn!(
-                        "[TrashBin] 清理失败 {}: {}",
-                        entry.trash_path, e
-                    );
+                    log::warn!("[TrashBin] 清理失败 {}: {}", entry.trash_path, e);
                     return true; // 删除失败则保留记录
                 }
             }
@@ -1249,9 +2137,8 @@ mod tests {
 
     #[test]
     fn test_extract_remove_item_simple() {
-        let result = extract_delete_target(
-            "powershell -Command \"Remove-Item 'C:\\data\\file.txt'\""
-        );
+        let result =
+            extract_delete_target("powershell -Command \"Remove-Item 'C:\\data\\file.txt'\"");
         assert!(result.is_some());
         let (path, _) = result.unwrap();
         assert_eq!(path, "C:\\data\\file.txt");
@@ -1260,12 +2147,37 @@ mod tests {
     #[test]
     fn test_extract_remove_item_recurse() {
         let result = extract_delete_target(
-            "powershell -Command \"Remove-Item 'C:\\data\\dir' -Recurse -Force\""
+            "powershell -Command \"Remove-Item 'C:\\data\\dir' -Recurse -Force\"",
         );
         assert!(result.is_some());
         let (path, is_dir) = result.unwrap();
         assert_eq!(path, "C:\\data\\dir");
         assert!(is_dir);
+    }
+
+    #[test]
+    fn test_extract_powershell_delete_aliases() {
+        let result = extract_delete_target(r#"powershell -Command "del 'C:\data\file.txt'""#);
+        assert_eq!(result, Some(("C:\\data\\file.txt".to_string(), false)));
+
+        let result = extract_delete_target(r#"powershell -Command "rmdir 'C:\data\old_dir'""#);
+        assert_eq!(result, Some(("C:\\data\\old_dir".to_string(), true)));
+    }
+
+    #[test]
+    fn test_extract_remove_itemproperty_is_not_file_delete() {
+        let result = extract_delete_target(
+            r#"powershell -Command "Remove-ItemProperty -Path HKCU:\Software\Test -Name Foo""#,
+        );
+        assert!(result.is_none());
+        assert!(!has_unhandled_delete_intent(
+            r#"powershell -Command "Remove-ItemProperty -Path HKCU:\Software\Test -Name Foo""#
+        ));
+    }
+
+    #[test]
+    fn test_detects_unix_rm_delete_intent() {
+        assert!(has_unhandled_delete_intent("rm -rf build"));
     }
 
     #[test]
@@ -1302,7 +2214,7 @@ mod tests {
     #[test]
     fn test_extract_del_with_multiple_quoted_targets() {
         let result = extract_cmd_delete_targets(
-            "del /f \"C:\\data\\step0.png\" \"C:\\data\\step1.png\" \"C:\\data\\step2.png\""
+            "del /f \"C:\\data\\step0.png\" \"C:\\data\\step1.png\" \"C:\\data\\step2.png\"",
         );
         assert_eq!(
             result,
@@ -1320,7 +2232,8 @@ mod tests {
     #[test]
     fn test_extract_remove_item_with_multiple_targets() {
         let result = extract_powershell_remove_item_targets(
-            "powershell -Command \"Remove-Item 'C:\\data\\observe.png','C:\\data\\wechat.png','C:\\data\\verify.png' -Force -ErrorAction SilentlyContinue\""
+            "powershell -Command \"Remove-Item 'C:\\data\\observe.png','C:\\data\\wechat.png','C:\\data\\verify.png' -Force -ErrorAction SilentlyContinue\"",
+            None,
         );
         assert_eq!(
             result,
@@ -1338,7 +2251,8 @@ mod tests {
     #[test]
     fn test_extract_remove_item_with_path_flag_and_curly_quotes() {
         let result = extract_powershell_remove_item_targets(
-            "powershell -Command “Remove-Item -Path ’C:\\data\\one.png’,’C:\\data\\two.png’ -Force”"
+            "powershell -Command “Remove-Item -Path ’C:\\data\\one.png’,’C:\\data\\two.png’ -Force”",
+            None,
         );
         assert_eq!(
             result,
@@ -1355,6 +2269,73 @@ mod tests {
     // ── Manifest 与路径编码 ──
 
     #[test]
+    fn test_extract_remove_item_with_variable_wildcard() {
+        let result = extract_powershell_remove_item_targets(
+            "powershell -NoProfile -Command \"$target = 'C:\\data\\project'; Remove-Item -LiteralPath $target\\* -Recurse -Force\"",
+            None,
+        );
+        assert_eq!(
+            result,
+            Some((vec!["C:\\data\\project\\*".to_string()], true))
+        );
+    }
+
+    #[test]
+    fn test_extract_foreach_fullname_delete_with_variable_target() {
+        let result = extract_powershell_remove_item_targets(
+            "powershell -NoProfile -Command \"$target = 'C:\\data\\project'; Get-ChildItem -LiteralPath $target -Force | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }\"",
+            None,
+        );
+        assert_eq!(
+            result,
+            Some((vec!["C:\\data\\project\\*".to_string()], true))
+        );
+    }
+
+    #[test]
+    fn test_extract_remove_item_with_env_workdir_wildcard() {
+        let workdir = PathBuf::from("C:\\data\\project");
+        let result = extract_powershell_remove_item_targets(
+            r#"powershell -NoProfile -Command "$dir = $env:WORKDIR; Remove-Item -Path "$dir\*" -Recurse -Force""#,
+            Some(&workdir),
+        );
+        assert_eq!(
+            result,
+            Some((vec!["C:\\data\\project\\*".to_string()], true))
+        );
+    }
+
+    #[test]
+    fn test_extract_remove_item_with_env_appdata_wildcard() {
+        let app_data_dir = PathBuf::from("C:\\Users\\Tester\\AppData\\Roaming\\com.agentvis.app");
+        let result = extract_powershell_remove_item_targets_with_app_data_dir(
+            r#"powershell -NoProfile -Command "Remove-Item -Path "$env:APPDATA\com.agentvis.app\deliverables\Test_Team\Tester7\*" -Recurse -Force""#,
+            None,
+            Some(&app_data_dir),
+        );
+        assert_eq!(
+            result,
+            Some((
+                vec!["C:\\Users\\Tester\\AppData\\Roaming\\com.agentvis.app\\deliverables\\Test_Team\\Tester7\\*".to_string()],
+                true,
+            ))
+        );
+    }
+
+    #[test]
+    fn test_extract_foreach_named_item_fullname_with_env_workdir() {
+        let workdir = PathBuf::from("C:\\data\\project");
+        let result = extract_powershell_remove_item_targets(
+            "powershell -NoProfile -Command \"$dir = $env:WORKDIR; $items = Get-ChildItem -Path $dir; foreach ($item in $items) { if ($item.PSIsContainer) { Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction SilentlyContinue } else { Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue } }\"",
+            Some(&workdir),
+        );
+        assert_eq!(
+            result,
+            Some((vec!["C:\\data\\project\\*".to_string()], true))
+        );
+    }
+
+    #[test]
     fn test_encode_path() {
         assert_eq!(
             encode_path_for_filename("C:\\Users\\Admin\\file.txt"),
@@ -1365,6 +2346,7 @@ mod tests {
     #[test]
     fn test_manifest_roundtrip() {
         let dir = std::env::temp_dir().join("agentvis_trash_test_manifest");
+        let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::create_dir_all(get_trash_bin_dir(&dir));
 
         let entry = TrashEntry {
@@ -1376,6 +2358,7 @@ mod tests {
                 .to_string(),
             deleted_at: chrono::Local::now().to_rfc3339(),
             command: "del C:\\data\\file.txt".to_string(),
+            batch_id: Some("batch_001".to_string()),
             is_directory: false,
         };
 
@@ -1409,6 +2392,91 @@ mod tests {
         let result = try_intercept_delete("git status", &dir, None);
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_intercept_powershell_alias_delete_moves_file() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_ps_alias_del");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&workdir);
+
+        let test_file = workdir.join("alias_delete_me.txt");
+        std::fs::write(&test_file, "test content").unwrap();
+
+        let cmd = format!(
+            "powershell -Command \"del '{}'\"",
+            test_file.to_string_lossy()
+        );
+        let result = try_intercept_delete(&cmd, &app_dir, Some(&workdir));
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(!test_file.exists());
+        assert_eq!(read_manifest(&app_dir).len(), 1);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_unhandled_dotnet_delete_fails_closed() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_dotnet_delete_block");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&workdir);
+
+        let test_file = workdir.join("dotnet_delete_me.txt");
+        std::fs::write(&test_file, "test content").unwrap();
+        let cmd = format!(
+            "powershell -Command \"[System.IO.File]::Delete('{}')\"",
+            test_file.to_string_lossy()
+        );
+
+        let result = try_intercept_delete(&cmd, &app_dir, Some(&workdir));
+
+        assert!(matches!(result, Err(AppError::Forbidden(_))));
+        assert!(test_file.exists(), "blocked delete API must not touch file");
+        assert!(read_manifest(&app_dir).is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_unhandled_cleanup_commands_fail_closed() {
+        let app_dir = std::env::temp_dir().join("agentvis_trash_test_cleanup_blocks");
+        let _ = std::fs::remove_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&app_dir);
+
+        for command in [
+            "git clean -fdx",
+            "git reset --hard HEAD",
+            "python -c \"import shutil; shutil.rmtree('build')\"",
+            "node -e \"require('fs').rmSync('build', { recursive: true, force: true })\"",
+            "rm -rf build",
+            "robocopy empty target /MIR",
+        ] {
+            let result = try_intercept_delete(command, &app_dir, Some(&app_dir));
+            assert!(
+                matches!(result, Err(AppError::Forbidden(_))),
+                "expected fail-closed block for {command}"
+            );
+        }
+
+        assert!(
+            try_intercept_delete("git clean -ndx", &app_dir, Some(&app_dir))
+                .unwrap()
+                .is_none()
+        );
+        assert!(read_manifest(&app_dir).is_empty());
+
+        let _ = std::fs::remove_dir_all(&app_dir);
     }
 
     #[test]
@@ -1450,6 +2518,278 @@ mod tests {
     }
 
     #[test]
+    fn test_restore_entry_moves_file_back_and_updates_manifest() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_restore_entry");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&workdir);
+
+        let test_file = workdir.join("restore_me.txt");
+        std::fs::write(&test_file, "restore content").unwrap();
+
+        let result = try_intercept_delete("del restore_me.txt", &app_dir, Some(&workdir));
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(!test_file.exists());
+
+        let entries = read_manifest(&app_dir);
+        assert_eq!(entries.len(), 1);
+        let entry_id = entries[0].id.clone();
+        let trash_path = PathBuf::from(&entries[0].trash_path);
+        assert!(trash_path.exists());
+
+        let restore = restore_entries_matching(&app_dir, |entry| entry.id == entry_id).unwrap();
+        assert_eq!(restore.restored_count, 1);
+        assert!(restore.conflicts.is_empty());
+        assert!(restore.missing.is_empty());
+        assert!(test_file.exists());
+        assert_eq!(
+            std::fs::read_to_string(&test_file).unwrap(),
+            "restore content"
+        );
+        assert!(!trash_path.exists());
+        assert!(read_manifest(&app_dir).is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_delete_entry_removes_trash_file_and_updates_manifest() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_delete_entry");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&workdir);
+
+        let test_file = workdir.join("discard_me.txt");
+        std::fs::write(&test_file, "discard content").unwrap();
+
+        let result = try_intercept_delete("del discard_me.txt", &app_dir, Some(&workdir));
+        assert!(result.is_ok());
+        assert!(!test_file.exists());
+
+        let entries = read_manifest(&app_dir);
+        assert_eq!(entries.len(), 1);
+        let entry_id = entries[0].id.clone();
+        let trash_path = PathBuf::from(&entries[0].trash_path);
+        assert!(trash_path.exists());
+
+        let delete = delete_entries_matching(&app_dir, |entry| entry.id == entry_id).unwrap();
+        assert_eq!(delete.deleted_count, 1);
+        assert!(delete.missing.is_empty());
+        assert!(delete.failed.is_empty());
+        assert!(!trash_path.exists());
+        assert!(read_manifest(&app_dir).is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_intercept_powershell_variable_wildcard_moves_children() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_ps_var_wildcard");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let nested = workdir.join("nested");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&nested);
+
+        let first = workdir.join("first.txt");
+        let second = nested.join("second.txt");
+        std::fs::write(&first, "first").unwrap();
+        std::fs::write(&second, "second").unwrap();
+
+        let cmd = format!(
+            "powershell -NoProfile -Command \"$target = '{}'; Remove-Item -LiteralPath $target\\* -Recurse -Force -ErrorAction SilentlyContinue\"",
+            workdir.to_string_lossy()
+        );
+        let result = try_intercept_delete(&cmd, &app_dir, Some(&workdir));
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(
+            workdir.exists(),
+            "wildcard delete should preserve the parent directory"
+        );
+        assert!(!first.exists());
+        assert!(!nested.exists());
+        assert_eq!(read_manifest(&app_dir).len(), 2);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_intercept_powershell_foreach_fullname_moves_children() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_ps_foreach_fullname");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&workdir);
+
+        let first = workdir.join("first.txt");
+        let second = workdir.join("second.txt");
+        std::fs::write(&first, "first").unwrap();
+        std::fs::write(&second, "second").unwrap();
+
+        let cmd = format!(
+            "powershell -NoProfile -Command \"$target = '{}'; Get-ChildItem -LiteralPath $target -Force | ForEach-Object {{ Remove-Item -LiteralPath $_.FullName -Recurse -Force }}\"",
+            workdir.to_string_lossy()
+        );
+        let result = try_intercept_delete(&cmd, &app_dir, Some(&workdir));
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(
+            workdir.exists(),
+            "foreach child delete should preserve the parent directory"
+        );
+        assert!(!first.exists());
+        assert!(!second.exists());
+        assert_eq!(read_manifest(&app_dir).len(), 2);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_intercept_powershell_env_workdir_wildcard_moves_children() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_ps_env_workdir_wildcard");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let nested = workdir.join("nested");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&nested);
+
+        let first = workdir.join("first.txt");
+        let second = nested.join("second.txt");
+        std::fs::write(&first, "first").unwrap();
+        std::fs::write(&second, "second").unwrap();
+
+        let cmd = r#"powershell -NoProfile -Command "$dir = $env:WORKDIR; Remove-Item -Path "$dir\*" -Recurse -Force -ErrorAction SilentlyContinue""#;
+        let result = try_intercept_delete(cmd, &app_dir, Some(&workdir));
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(
+            workdir.exists(),
+            "env workdir wildcard delete should preserve the parent directory"
+        );
+        assert!(!first.exists());
+        assert!(!nested.exists());
+        assert_eq!(read_manifest(&app_dir).len(), 2);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_intercept_powershell_env_appdata_wildcard_moves_children() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_ps_env_appdata_wildcard");
+        let roaming = base.join("roaming");
+        let app_dir = roaming.join("com.agentvis.app");
+        let workdir = app_dir
+            .join("deliverables")
+            .join("Test_Team")
+            .join("Tester7");
+        let nested = workdir.join("nested");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&nested);
+
+        let first = workdir.join("first.txt");
+        let second = nested.join("second.txt");
+        std::fs::write(&first, "first").unwrap();
+        std::fs::write(&second, "second").unwrap();
+
+        let cmd = r#"powershell -NoProfile -Command "Remove-Item -Path "$env:APPDATA\com.agentvis.app\deliverables\Test_Team\Tester7\*" -Recurse -Force""#;
+        let result = try_intercept_delete(cmd, &app_dir, Some(&workdir));
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(
+            workdir.exists(),
+            "env APPDATA wildcard delete should preserve the parent directory"
+        );
+        assert!(!first.exists());
+        assert!(!nested.exists());
+        assert_eq!(read_manifest(&app_dir).len(), 2);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_unresolved_powershell_delete_variable_fails_closed() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_unresolved_ps_env");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&workdir);
+
+        let test_file = workdir.join("keep_me.txt");
+        std::fs::write(&test_file, "test content").unwrap();
+
+        let cmd = r#"powershell -NoProfile -Command "Remove-Item -Path "$env:AGENTVIS_UNKNOWN_DELETE_ROOT\*" -Recurse -Force""#;
+        let result = try_intercept_delete(cmd, &app_dir, Some(&workdir));
+
+        assert!(matches!(result, Err(AppError::Forbidden(_))));
+        assert!(test_file.exists());
+        assert!(read_manifest(&app_dir).is_empty());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn test_intercept_powershell_env_workdir_foreach_moves_children() {
+        let base = std::env::temp_dir().join("agentvis_trash_test_ps_env_workdir_foreach");
+        let app_dir = base.join("app");
+        let workdir = base.join("work");
+        let nested = workdir.join("nested");
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&app_dir);
+        let _ = std::fs::create_dir_all(&nested);
+
+        let first = workdir.join("first.txt");
+        let second = nested.join("second.txt");
+        std::fs::write(&first, "first").unwrap();
+        std::fs::write(&second, "second").unwrap();
+
+        let cmd = r#"powershell -NoProfile -Command "$dir = $env:WORKDIR; $items = Get-ChildItem -Path $dir; $fileCount = 0; $dirCount = 0; foreach ($item in $items) { if ($item.PSIsContainer) { $subFiles = (Get-ChildItem -LiteralPath $item.FullName -Recurse -File).Count; $subDirs = (Get-ChildItem -LiteralPath $item.FullName -Recurse -Directory).Count; $fileCount += $subFiles; $dirCount += ($subDirs + 1); Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction SilentlyContinue } else { $fileCount += 1; Remove-Item -LiteralPath $item.FullName -Force -ErrorAction SilentlyContinue } }; Write-Host ('Deleted files: ' + $fileCount); Write-Host ('Deleted directories (incl. subdirs): ' + $dirCount)""#;
+        let result = try_intercept_delete(cmd, &app_dir, Some(&workdir));
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
+        assert!(
+            workdir.exists(),
+            "env workdir foreach delete should preserve the parent directory"
+        );
+        assert!(!first.exists());
+        assert!(!nested.exists());
+        assert_eq!(read_manifest(&app_dir).len(), 2);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn test_intercept_relative_file_uses_workdir() {
         let base = std::env::temp_dir().join("agentvis_trash_test_relative_workdir");
         let app_dir = base.join("app");
@@ -1461,11 +2801,7 @@ mod tests {
         let test_file = workdir.join("relative_delete_me.txt");
         std::fs::write(&test_file, "test content").unwrap();
 
-        let result = try_intercept_delete(
-            "del relative_delete_me.txt",
-            &app_dir,
-            Some(&workdir),
-        );
+        let result = try_intercept_delete("del relative_delete_me.txt", &app_dir, Some(&workdir));
 
         assert!(result.is_ok());
         let msg = result.unwrap();
@@ -1509,7 +2845,10 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Some(DELETE_SUCCESS_OBSERVATION.to_string()));
+        assert_eq!(
+            result.unwrap(),
+            Some(DELETE_SUCCESS_OBSERVATION.to_string())
+        );
         assert!(!test_file.exists(), "allowed root target should be moved");
         assert_eq!(read_manifest(&app_dir).len(), 1);
 
@@ -1532,12 +2871,8 @@ mod tests {
         let allowed_roots = vec![workdir.clone()];
         let cmd = format!("del {}", outside_file.to_string_lossy());
 
-        let result = try_intercept_delete_scoped(
-            &cmd,
-            &app_dir,
-            Some(&workdir),
-            Some(&allowed_roots),
-        );
+        let result =
+            try_intercept_delete_scoped(&cmd, &app_dir, Some(&workdir), Some(&allowed_roots));
 
         assert!(matches!(result, Err(AppError::Forbidden(_))));
         assert!(
@@ -1571,16 +2906,15 @@ mod tests {
             outside_file.to_string_lossy()
         );
 
-        let result = try_intercept_delete_scoped(
-            &cmd,
-            &app_dir,
-            Some(&workdir),
-            Some(&allowed_roots),
-        );
+        let result =
+            try_intercept_delete_scoped(&cmd, &app_dir, Some(&workdir), Some(&allowed_roots));
 
         assert!(matches!(result, Err(AppError::Forbidden(_))));
         assert!(inside_file.exists(), "mixed delete should fail closed");
-        assert!(outside_file.exists(), "outside target must remain untouched");
+        assert!(
+            outside_file.exists(),
+            "outside target must remain untouched"
+        );
         assert!(read_manifest(&app_dir).is_empty());
 
         let _ = std::fs::remove_dir_all(&base);

@@ -1136,21 +1136,10 @@ export async function copySkillPackageToPackagesDir(sourcePath: string): Promise
  */
 export async function removeSkillPackage(packagePath: string): Promise<void> {
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
-
-        const removeCommand = isWindows
-            ? `rmdir /s /q "${packagePath}"`
-            : `rm -rf "${packagePath}"`;
-
-        await invoke('shell_execute', {
-            command: removeCommand,
-            workdir: null,
-            timeoutSecs: 15,
-            background: false,
-            subjectType: 'installer',
-            subjectId: 'external-skill-cleanup',
-        });
+        const { exists, remove } = await import('@tauri-apps/plugin-fs');
+        if (await exists(packagePath)) {
+            await remove(packagePath, { recursive: true });
+        }
 
         logger.debug(`[ExternalSkillBootstrap] 已删除技能包: ${packagePath}`);
     } catch (error) {

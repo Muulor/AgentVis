@@ -53,6 +53,7 @@ pub use memory_trigger::*;
 pub use network_broker::*;
 pub use data_management::*;
 pub use shell::*;
+pub use trash_bin::*;
 pub use skill_install::*;
 pub use security_settings::*;
 pub use cron::*;
