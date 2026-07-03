@@ -380,7 +380,7 @@ export const zhCN = {
         execTimeoutLimit: '已等待 / 超时上限: {elapsed} / {timeout} 秒',
         expandToolTarget: '展开完整内容',
         collapseToolTarget: '收起完整内容',
-        subAgentSlowDecisionNotice: '等待模型决策中（已等待 {seconds} 秒）...',
+        subAgentSlowDecisionNotice: '等待模型决策或生成工具参数中（已等待 {seconds} 秒）...',
         subAgentToolCallProgress: '正在生成 {tool} 写入内容（已接收约 {kb} KB）...',
         subAgentEmptyDecisionRetry: '模型在 {seconds} 秒后返回空决策，正在用更强约束重试。',
         subAgentTextOnlyDecisionRetry: 'Sub-Agent 连续 {count} 步只输出文字且未调用工具，已提醒下一步必须调用工具或完成交接。',

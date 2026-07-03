@@ -382,7 +382,7 @@ export const enUS = {
         execTimeoutLimit: 'Elapsed / timeout: {elapsed} / {timeout}s',
         expandToolTarget: 'Expand full content',
         collapseToolTarget: 'Collapse full content',
-        subAgentSlowDecisionNotice: 'Waiting for model decision ({seconds}s elapsed)...',
+        subAgentSlowDecisionNotice: 'Waiting for model decision or tool arguments ({seconds}s elapsed)...',
         subAgentToolCallProgress: 'Generating {tool} write content (~{kb} KB received)...',
         subAgentEmptyDecisionRetry: 'Model returned an empty decision after {seconds}s. Retrying with stricter instructions.',
         subAgentTextOnlyDecisionRetry: 'Sub-Agent returned text without tool calls for {count} consecutive steps. Reminding it to call a tool or hand off on the next step.',

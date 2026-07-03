@@ -8,7 +8,10 @@ use super::http_client::{get_client, get_streaming_client, stream_idle_timeout, 
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
-use super::types::{ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk};
+use super::types::{
+    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
+    ToolCallProgressCallback, ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
+};
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
 use crate::text_utils::safe_truncate;
@@ -486,6 +489,43 @@ impl GeminiAdapter {
         }
     }
 
+    fn emit_tool_call_progress_for_parts(
+        parts: &[GeminiPart],
+        base_index: usize,
+        name_mapping: &std::collections::HashMap<String, String>,
+        progress_callback: Option<&ToolCallProgressCallback>,
+    ) {
+        let Some(callback) = progress_callback else {
+            return;
+        };
+
+        for (offset, part) in parts.iter().enumerate() {
+            let Some(function_call) = part.function_call.as_ref() else {
+                continue;
+            };
+            let original_name = name_mapping
+                .get(&function_call.name)
+                .cloned()
+                .unwrap_or_else(|| function_call.name.clone());
+            if original_name != "file_write" {
+                continue;
+            }
+
+            let arg_bytes = serde_json::to_string(&function_call.args)
+                .map(|args| args.len())
+                .unwrap_or(0);
+            if arg_bytes < TOOL_CALL_PROGRESS_MIN_BYTES {
+                continue;
+            }
+
+            callback(ToolCallStreamProgress {
+                index: base_index + offset,
+                tool_name: original_name,
+                arg_bytes,
+            });
+        }
+    }
+
     /// 带工具的聊天请求（非流式）
     pub async fn chat_with_tools(
         &self,
@@ -578,7 +618,7 @@ impl GeminiAdapter {
     pub async fn chat_stream_with_tools(
         &self,
         request: super::types::ToolChatRequest,
-        _progress_callback: Option<super::types::ToolCallProgressCallback>,
+        progress_callback: Option<super::types::ToolCallProgressCallback>,
     ) -> AppResult<super::types::ToolChatResponse> {
         use eventsource_stream::Eventsource;
         use futures::StreamExt;
@@ -661,7 +701,14 @@ impl GeminiAdapter {
                         Ok(chunk) => {
                             if let Some(candidate) = chunk.candidates.first() {
                                 if let Some(content) = candidate.content.as_ref() {
-                                    all_parts.extend(content.parts.clone());
+                                    let parts = content.parts.clone();
+                                    Self::emit_tool_call_progress_for_parts(
+                                        &parts,
+                                        all_parts.len(),
+                                        &name_mapping,
+                                        progress_callback.as_ref(),
+                                    );
+                                    all_parts.extend(parts);
                                 }
                             }
                             // 提取 usage 数据
