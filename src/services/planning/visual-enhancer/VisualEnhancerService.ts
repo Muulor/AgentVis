@@ -15,6 +15,7 @@ import {
     buildVisualEnhancerSystemPrompt,
     buildVisualEnhancerUserPrompt,
 } from './VisualEnhancerPrompt';
+import { removeDuplicateWidgetHeadings } from './VisualEnhancerPostProcess';
 
 const logger = getLogger('VisualEnhancerService');
 
@@ -208,12 +209,13 @@ export async function enhance(
         // 使用流式调用（llm_chat_stream）替代非流式（llm_chat）
         // 原因：火山引擎等 provider 的非流式接口对大 payload 有超时问题，
         // 系统中 MB/SA/Chat 模式均使用流式调用规避此问题。
-        const enhancedContent = await collectStreamResponse(
+        const rawEnhancedContent = await collectStreamResponse(
             messages,
             options,
             options.onStreamDelta,
             timeoutMs,
         );
+        const enhancedContent = removeDuplicateWidgetHeadings(rawEnhancedContent);
 
         logger.trace('[VisualEnhancer] 流式 LLM 调用完成', {
             elapsed: `${Date.now() - startTime}ms`,

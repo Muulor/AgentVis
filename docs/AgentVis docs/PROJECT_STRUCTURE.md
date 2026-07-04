@@ -842,6 +842,7 @@ planning/
 │   ├── index.ts                  # 模块导出索引
 │   ├── stripVisualCodeBlocks.ts  # 可视化代码块剥离工具
 │   ├── VisualEnhancerService.ts  # 可视化增强主服务
+│   ├── VisualEnhancerPostProcess.ts  #可视化增强结果后处理
 │   └── VisualEnhancerPrompt.ts   # 可视化增强 Prompt 模板
 │
 └── 📁 utils/                     # 规划工具函数

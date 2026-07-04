@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    fixFlowchartDanglingPipeLabelLinks,
     fixFlowchartRedundantPipeLabelLinkTails,
     fixFlowchartReservedNodeIds,
     fixFlowchartUnsafeSubgraphTitles,
@@ -82,6 +83,48 @@ describe('fixFlowchartRedundantPipeLabelLinkTails', () => {
 
         expect(fixFlowchartRedundantPipeLabelLinkTails(flowchart)).toBe(flowchart);
         expect(fixFlowchartRedundantPipeLabelLinkTails(sequence)).toBe(sequence);
+    });
+});
+
+describe('fixFlowchartDanglingPipeLabelLinks', () => {
+    it('turns a final dangling pipe-label edge into a generated target node', () => {
+        const check = '\u2705';
+        const code = `flowchart LR
+    step7 -->|${check} manifest cleared| step8["8. Record Agent Log"]
+    step8 -->|${check} wrote Agent-Log/2026-07-03_agent-log.md|`;
+
+        const fixed = fixFlowchartDanglingPipeLabelLinks(code);
+
+        expect(fixed).toContain(`step8 --> flowchart_auto_node_1["${check} wrote Agent-Log/2026-07-03_agent-log.md"]`);
+        expect(fixed).not.toContain('step8 -->|');
+    });
+
+    it('keeps valid pipe-label edges untouched', () => {
+        const code = `flowchart LR
+    A -->|done| B
+    B ---|next| C`;
+
+        expect(fixFlowchartDanglingPipeLabelLinks(code)).toBe(code);
+    });
+
+    it('avoids generated target node id collisions', () => {
+        const code = `flowchart LR
+    flowchart_auto_node_1["Existing"]
+    A -->|done|`;
+
+        const fixed = fixFlowchartDanglingPipeLabelLinks(code);
+
+        expect(fixed).toContain('A --> flowchart_auto_node_2["done"]');
+    });
+
+    it('does not rewrite text inside node labels or non-flowchart diagrams', () => {
+        const flowchart = `flowchart LR
+    A["literal -->|done|"] --> B`;
+        const sequence = `sequenceDiagram
+    Alice->>Bob: A -->|done|`;
+
+        expect(fixFlowchartDanglingPipeLabelLinks(flowchart)).toBe(flowchart);
+        expect(fixFlowchartDanglingPipeLabelLinks(sequence)).toBe(sequence);
     });
 });
 

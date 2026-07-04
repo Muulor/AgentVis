@@ -123,6 +123,8 @@ export const enUS = {
             loopUnit: 'rounds',
             resetLoopTitle: 'Reset to default ({max} rounds)',
             resetDefault: 'Reset Default',
+            visualEnhancement: 'Planning Visual Enhancement',
+            visualEnhancementHint: 'In Planning mode, the final response uses combined heuristic metrics to decide whether to call the LLM to upgrade the content into ECharts, Mermaid, or interactive components. When disabled, this step is skipped to directly show the Agent\'s original response, delivering faster performance.',
             sandboxMode: 'Sandbox Permission',
             sandboxModes: {
                 LocalAudit: {

@@ -61,6 +61,7 @@ export interface Agent {
     mbRules?: string;
     saRules?: string;
     chatRules?: string;
+    visualEnhancementEnabled?: boolean;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
     createdAt: number;
     updatedAt: number;

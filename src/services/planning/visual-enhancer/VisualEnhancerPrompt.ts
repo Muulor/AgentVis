@@ -99,6 +99,8 @@ Gauge example:
 Use a \`\`\`mermaid code block for processes, hierarchy, relationships, and sequence-like structures.
 The system applies the Mermaid visual theme. Prioritize a clear structure and avoid hand-written \`style\`, \`classDef\`, or complex HTML.
 Keep node labels concise. Use \`<br>\` for long labels. Prefer \`flowchart LR\` for process relationships and \`flowchart TB\` for hierarchy or decomposition.
+Every flowchart edge must have a source and target node. Never end a line with a dangling edge label such as \`A -->|done|\`; use a final node such as \`A --> B["done"]\` or omit the edge label.
+Avoid emoji, Markdown bold, code spans, and HTML in Mermaid edge labels. Put status markers and detailed result text inside node labels instead.
 For complex systems, use subgraph sections or grouping to preserve structure and reduce crossing edges. If the relationship graph is too dense, split it into an overview plus a focused detail diagram.
 When a sequence diagram would require too many participants, prefer a flowchart or split the scene.
 
@@ -189,6 +191,7 @@ Remember to respect the original text; fabricating facts or data for the sake of
 If the original report offers no potential for visual enhancement, output the text word-for-word exactly as it is.
 Output the complete enhanced content directly. Do not include explanations or meta text such as "Here is the enhanced version".
 When an interactive component fully represents a short list or section, do not repeat the same items/titles again as plain Markdown; keep any surrounding prose complementary rather than duplicative.
+Do not place a Markdown heading immediately before a widget if it repeats the widget's \`title\`. For example, do not output \`### Task Overview\` followed by a widget-chart block whose JSON title is also \`"Task Overview"\`.
 Preserve the original paragraph breaks and hierarchy. Keep the report natural to read, with interactive components embedded between prose sections where they add value.`;
 }
 

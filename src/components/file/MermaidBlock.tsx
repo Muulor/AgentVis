@@ -26,6 +26,7 @@ import {
     type MermaidDiagramType,
 } from './MermaidVisualTheme';
 import {
+    fixFlowchartDanglingPipeLabelLinks,
     fixFlowchartRedundantPipeLabelLinkTails,
     fixFlowchartReservedNodeIds,
     fixFlowchartUnsafeSubgraphTitles,
@@ -214,9 +215,10 @@ function sanitizeMermaidCode(code: string): string {
     const ganttFixed = fixGanttDateFormat(structFixed);
     const reservedIdFixed = fixFlowchartReservedNodeIds(ganttFixed);
     const flowchartLinkFixed = fixFlowchartRedundantPipeLabelLinkTails(reservedIdFixed);
+    const danglingLinkFixed = fixFlowchartDanglingPipeLabelLinks(flowchartLinkFixed);
 
     // Pass 1.7：注释掉 flowchart 中无效的 "NodeId : 描述" 行
-    return commentOutFlowchartDescriptions(flowchartLinkFixed);
+    return commentOutFlowchartDescriptions(danglingLinkFixed);
 }
 
 

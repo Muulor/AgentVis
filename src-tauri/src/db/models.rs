@@ -51,6 +51,7 @@ pub struct Agent {
     pub chat_rules: Option<String>,         // Chat 模式专属 rules 文本
     pub knowledge_paths: Option<String>,    // JSON 数组存储多个文件路径
     pub auto_index_deliverables: Option<bool>, // 交付物是否自动索引到知识库，默认 true
+    pub visual_enhancement_enabled: Option<bool>, // Planning 最终回复是否启用可视化增强，默认 true
     pub pinned_skills: Option<String>,      // 精准命中技能列表（JSON 数组）
     pub planning_loop_budget: Option<i32>,  // MB 最大决策轮次，NULL 时使用全局默认值
     pub project_path: Option<String>,       // 用户关联的外部项目路径（用户授权后 Agent 具有全权限）
@@ -82,6 +83,7 @@ impl Agent {
             chat_rules: None,
             knowledge_paths: None,
             auto_index_deliverables: None, // 默认由数据库 DEFAULT 1 控制
+            visual_enhancement_enabled: Some(true),
             pinned_skills: None,
             planning_loop_budget: None, // NULL 表示使用全局默认值
             project_path: None,         // NULL 表示未关联外部项目
@@ -300,6 +302,7 @@ pub struct AgentUpdate {
     pub chat_rules: Option<String>,
     pub knowledge_paths: Option<String>,       // JSON 数组
     pub auto_index_deliverables: Option<bool>, // 交付物自动索引开关
+    pub visual_enhancement_enabled: Option<bool>, // Planning 最终回复可视化增强开关
     pub pinned_skills: Option<String>,         // 精准命中技能列表（JSON 数组）
     pub planning_loop_budget: Option<i32>,     // MB 最大决策轮次，None 表示保持原值
     pub project_path: Option<String>,          // 外部项目路径，空字符串表示清除，None 表示保持原值

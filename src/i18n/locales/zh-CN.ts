@@ -121,6 +121,8 @@ export const zhCN = {
             loopUnit: '轮',
             resetLoopTitle: '恢复默认（{max} 轮）',
             resetDefault: '恢复默认',
+            visualEnhancement: 'Planning 可视化增强',
+            visualEnhancementHint: 'Planning模式的最终回复使用启发式指标组合来判断是否调用一次LLM将内容增强为 ECharts、Mermaid 或交互组件。关闭后将跳过此步骤，直接展示 Agent 原始的回复内容，获得更快的响应。',
             sandboxMode: '沙箱权限',
             sandboxModes: {
                 LocalAudit: {

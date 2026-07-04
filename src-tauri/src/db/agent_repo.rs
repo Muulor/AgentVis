@@ -46,8 +46,8 @@ impl AgentRepository {
         sqlx::query(
             r#"
             INSERT INTO agents (id, hub_id, name, sort_order, avatar_color, avatar, model_provider, model_name,
-                               mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&agent.id)
@@ -65,6 +65,7 @@ impl AgentRepository {
         .bind(&agent.chat_rules)
         .bind(&agent.knowledge_paths)
         .bind(agent.auto_index_deliverables)
+        .bind(agent.visual_enhancement_enabled)
         .bind(&agent.pinned_skills)
         .bind(agent.planning_loop_budget)
         .bind(&agent.project_path)
@@ -92,7 +93,7 @@ impl AgentRepository {
         let agent: Option<Agent> = sqlx::query_as(
             r#"
             SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name,
-                   mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
+                   mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
             FROM agents
             WHERE id = ? AND deleted_at IS NULL
             "#,
@@ -116,7 +117,7 @@ impl AgentRepository {
         let agents: Vec<Agent> = sqlx::query_as(
             r#"
             SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name,
-                   mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
+                   mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
             FROM agents
             WHERE hub_id = ? AND deleted_at IS NULL
             ORDER BY sort_order ASC, created_at DESC
@@ -138,7 +139,7 @@ impl AgentRepository {
         let agents: Vec<Agent> = sqlx::query_as(
             r#"
             SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name,
-                   mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
+                   mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
             FROM agents
             WHERE deleted_at IS NULL
             ORDER BY hub_id ASC, sort_order ASC, created_at DESC
@@ -224,6 +225,9 @@ impl AgentRepository {
         let new_auto_index = update
             .auto_index_deliverables
             .or(agent.auto_index_deliverables);
+        let new_visual_enhancement_enabled = update
+            .visual_enhancement_enabled
+            .or(agent.visual_enhancement_enabled);
         // pinned_skills: 空字符串清除，Some 非空设置，None 保持原值
         let new_pinned_skills = match &update.pinned_skills {
             Some(s) if s.is_empty() => None, // 空字符串清除精准命中
@@ -262,7 +266,7 @@ impl AgentRepository {
             r#"
             UPDATE agents 
             SET name = ?, avatar_color = ?, avatar = ?, model_provider = ?, model_name = ?,
-                mb_rules_file_path = ?, sa_rules_file_path = ?, mb_rules = ?, sa_rules = ?, chat_rules = ?, knowledge_paths = ?, auto_index_deliverables = ?, pinned_skills = ?, planning_loop_budget = ?, project_path = ?, sandbox_mode = ?, sub_agent_safety_footer_enabled = ?, sub_agent_safety_footer_text = ?, updated_at = ?
+                mb_rules_file_path = ?, sa_rules_file_path = ?, mb_rules = ?, sa_rules = ?, chat_rules = ?, knowledge_paths = ?, auto_index_deliverables = ?, visual_enhancement_enabled = ?, pinned_skills = ?, planning_loop_budget = ?, project_path = ?, sandbox_mode = ?, sub_agent_safety_footer_enabled = ?, sub_agent_safety_footer_text = ?, updated_at = ?
             WHERE id = ? AND deleted_at IS NULL
             "#,
         )
@@ -278,6 +282,7 @@ impl AgentRepository {
         .bind(&new_chat_rules)
         .bind(&new_knowledge_paths)
         .bind(new_auto_index)
+        .bind(new_visual_enhancement_enabled)
         .bind(&new_pinned_skills)
         .bind(new_planning_loop_budget)
         .bind(&new_project_path)
@@ -340,7 +345,7 @@ impl AgentRepository {
         // 先验证 Agent 存在
         let existing: Option<Agent> = sqlx::query_as(
             "SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name, \
-                    mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at \
+                    mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at \
              FROM agents WHERE id = ?"
         )
         .bind(id)

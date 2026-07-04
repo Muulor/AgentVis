@@ -436,6 +436,7 @@ export interface UsePlanningModeOptions {
         /** 精准命中技能（JSON 数组字符串，如 '["skill1","skill2"]'） */
         pinnedSkills?: string;
         sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
+        visualEnhancementEnabled?: boolean;
         subAgentSafetyFooterEnabled?: boolean;
         subAgentSafetyFooterText?: string;
     };
@@ -459,6 +460,7 @@ export interface ExecutePlanningOptions {
         /** 精准命中技能（JSON 数组字符串） */
         pinnedSkills?: string;
         sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
+        visualEnhancementEnabled?: boolean;
         subAgentSafetyFooterEnabled?: boolean;
         subAgentSafetyFooterText?: string;
     };
@@ -773,6 +775,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     modelName: mentionedAgent.modelName,
                     pinnedSkills: mentionedAgent.pinnedSkills,
                     sandboxMode: mentionedAgent.sandboxMode,
+                    visualEnhancementEnabled: mentionedAgent.visualEnhancementEnabled,
                     subAgentSafetyFooterEnabled: mentionedAgent.subAgentSafetyFooterEnabled,
                     subAgentSafetyFooterText: mentionedAgent.subAgentSafetyFooterText,
                 }
@@ -1105,6 +1108,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             let projectPath: string | undefined;
             let sandboxMode: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork' =
                 effectiveAgentConfig.sandboxMode ?? 'LocalAudit';
+            let visualEnhancementEnabled = effectiveAgentConfig.visualEnhancementEnabled !== false;
             let subAgentSafetyFooterEnabled = effectiveAgentConfig.subAgentSafetyFooterEnabled === true;
             let subAgentSafetyFooterText = effectiveAgentConfig.subAgentSafetyFooterText;
             try {
@@ -1127,6 +1131,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     projectPath = currentAgent.projectPath;
                 }
                 sandboxMode = currentAgent?.sandboxMode ?? sandboxMode;
+                if (currentAgent) {
+                    visualEnhancementEnabled = currentAgent.visualEnhancementEnabled !== false;
+                }
                 subAgentSafetyFooterEnabled = currentAgent?.subAgentSafetyFooterEnabled === true;
                 subAgentSafetyFooterText = currentAgent?.subAgentSafetyFooterText ?? subAgentSafetyFooterText;
             } catch (avatarError) {
@@ -1568,7 +1575,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             // MB 输出纯文本 response 后，调用轻量级 LLM 将内容增强为带有
             // Widget/ECharts/Mermaid 交互格式的版本。增强失败时安全降级为原始内容。
             // cancelled 场景跳过增强：中断恢复消息无需美化，且节省一次 LLM 调用
-            const shouldEnhance = result.terminationReason !== 'cancelled';
+            const shouldEnhance = result.terminationReason !== 'cancelled' && visualEnhancementEnabled;
             let finalContent = result.content;
             let visualEnhanced = false;
             if (shouldEnhance) try {

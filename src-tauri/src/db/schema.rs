@@ -41,6 +41,7 @@ pub async fn initialize_schema(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
             sa_rules TEXT,
             chat_rules TEXT,
             knowledge_paths TEXT,
+            visual_enhancement_enabled INTEGER DEFAULT 1,
             sandbox_mode TEXT DEFAULT 'LocalAudit',
             sub_agent_safety_footer_enabled INTEGER DEFAULT 0,
             sub_agent_safety_footer_text TEXT,
@@ -182,6 +183,21 @@ pub async fn initialize_schema(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
             .execute(pool)
             .await?;
         log::info!("数据库迁移: 已添加 agents.auto_index_deliverables 列");
+    }
+
+    // 数据库迁移：为现有 agents 表添加 Planning 最终回复可视化增强开关
+    // 默认开启，保持旧版本 Agent 的既有体验；用户可在 Agent 设置中关闭以节省后处理 token。
+    let visual_enhancement_columns: Vec<(String,)> = sqlx::query_as(
+        "SELECT name FROM pragma_table_info('agents') WHERE name = 'visual_enhancement_enabled'",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    if visual_enhancement_columns.is_empty() {
+        sqlx::query("ALTER TABLE agents ADD COLUMN visual_enhancement_enabled INTEGER DEFAULT 1")
+            .execute(pool)
+            .await?;
+        log::info!("数据库迁移: 已添加 agents.visual_enhancement_enabled 列");
     }
 
     // 数据库迁移：为现有 agents 表添加 mb_rules_file_path 列

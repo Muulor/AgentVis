@@ -394,6 +394,7 @@ export function AgentChatView() {
             modelName: currentAgent.modelName ?? undefined,
             pinnedSkills: currentAgent.pinnedSkills ?? undefined,
             sandboxMode: currentAgent.sandboxMode ?? undefined,
+            visualEnhancementEnabled: currentAgent.visualEnhancementEnabled ?? undefined,
             subAgentSafetyFooterEnabled: currentAgent.subAgentSafetyFooterEnabled ?? undefined,
             subAgentSafetyFooterText: currentAgent.subAgentSafetyFooterText ?? undefined,
         } : undefined,

@@ -1,6 +1,7 @@
 const FLOWCHART_RESERVED_NODE_IDS = ['style', 'class', 'classDef', 'click', 'linkStyle'];
 const FLOWCHART_RESERVED_NODE_ID_SET = new Set<string>(FLOWCHART_RESERVED_NODE_IDS);
 const FLOWCHART_GENERATED_SUBGRAPH_ID_PREFIX = 'subgraph_auto_';
+const FLOWCHART_GENERATED_NODE_ID_PREFIX = 'flowchart_auto_node_';
 const FLOWCHART_SAFE_SUBGRAPH_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/;
 
 interface FlowchartOperatorMatch {
@@ -29,6 +30,22 @@ export function fixFlowchartRedundantPipeLabelLinkTails(code: string): string {
     return code
         .split('\n')
         .map((line) => fixRedundantPipeLabelLinkTailInLine(line))
+        .join('\n');
+}
+
+export function fixFlowchartDanglingPipeLabelLinks(code: string): string {
+    if (!isFlowchartLike(code)) return code;
+
+    const lines = code.split('\n');
+    const usedIds = collectFlowchartDeclarationIds(lines);
+    let nextIdIndex = 1;
+
+    return lines
+        .map((line) => {
+            const fixed = fixDanglingPipeLabelLinkInLine(line, usedIds, nextIdIndex);
+            nextIdIndex = fixed.nextIndex;
+            return fixed.line;
+        })
         .join('\n');
 }
 
@@ -178,12 +195,35 @@ function makeUniqueFlowchartSubgraphId(
     usedIds: Set<string>,
     startIndex: number
 ): { id: string; nextIndex: number } {
+    return makeUniqueFlowchartGeneratedId(
+        usedIds,
+        FLOWCHART_GENERATED_SUBGRAPH_ID_PREFIX,
+        startIndex
+    );
+}
+
+function makeUniqueFlowchartNodeId(
+    usedIds: Set<string>,
+    startIndex: number
+): { id: string; nextIndex: number } {
+    return makeUniqueFlowchartGeneratedId(
+        usedIds,
+        FLOWCHART_GENERATED_NODE_ID_PREFIX,
+        startIndex
+    );
+}
+
+function makeUniqueFlowchartGeneratedId(
+    usedIds: Set<string>,
+    prefix: string,
+    startIndex: number
+): { id: string; nextIndex: number } {
     let index = startIndex;
-    let id = `${FLOWCHART_GENERATED_SUBGRAPH_ID_PREFIX}${index}`;
+    let id = `${prefix}${index}`;
 
     while (usedIds.has(id)) {
         index += 1;
-        id = `${FLOWCHART_GENERATED_SUBGRAPH_ID_PREFIX}${index}`;
+        id = `${prefix}${index}`;
     }
 
     usedIds.add(id);
@@ -310,6 +350,91 @@ function readRedundantPipeLabelTailFix(
     return {
         text: line.slice(index, tailStart),
         nextIndex,
+    };
+}
+
+function fixDanglingPipeLabelLinkInLine(
+    line: string,
+    usedIds: Set<string>,
+    nextIdIndex: number
+): { line: string; nextIndex: number } {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('%%')) {
+        return { line, nextIndex: nextIdIndex };
+    }
+
+    let index = 0;
+    let quote: '"' | "'" | null = null;
+    const labelStack: string[] = [];
+
+    while (index < line.length) {
+        const char = line.charAt(index);
+
+        if (quote) {
+            if (char === quote && line.charAt(index - 1) !== '\\') quote = null;
+            index += 1;
+            continue;
+        }
+
+        if (char === '"' || char === "'") {
+            quote = char;
+            index += 1;
+            continue;
+        }
+
+        const expectedClose = labelStack[labelStack.length - 1];
+        if (expectedClose && char === expectedClose) {
+            labelStack.pop();
+            index += 1;
+            continue;
+        }
+
+        if (expectedClose) {
+            index += 1;
+            continue;
+        }
+
+        const fixed = readDanglingPipeLabelLinkFix(line, index, usedIds, nextIdIndex);
+        if (fixed) return fixed;
+
+        const labelEnd = getLabelEnd(char);
+        if (labelEnd) {
+            labelStack.push(labelEnd);
+        }
+
+        index += 1;
+    }
+
+    return { line, nextIndex: nextIdIndex };
+}
+
+function readDanglingPipeLabelLinkFix(
+    line: string,
+    index: number,
+    usedIds: Set<string>,
+    nextIdIndex: number
+): { line: string; nextIndex: number } | null {
+    const prefixOperator = readCompletePipeLabelOperatorAt(line, index);
+    if (!prefixOperator) return null;
+
+    const labelStart = skipInlineWhitespace(line, index + prefixOperator.value.length);
+    if (line.charAt(labelStart) !== '|') return null;
+
+    const labelEnd = findClosingPipe(line, labelStart + 1);
+    if (labelEnd === -1) return null;
+
+    const tail = line.slice(labelEnd + 1).trim();
+    const trailingSemicolon = tail === ';';
+    if (tail.length > 0 && !trailingSemicolon) return null;
+
+    const generated = makeUniqueFlowchartNodeId(usedIds, nextIdIndex);
+    const label = line.slice(labelStart + 1, labelEnd).trim();
+    const sanitizedLabel = sanitizeFlowchartFallbackLabel(label);
+    const prefix = line.slice(0, index + prefixOperator.value.length).trimEnd();
+
+    return {
+        line: `${prefix} ${generated.id}["${sanitizedLabel}"]${trailingSemicolon ? ';' : ''}`,
+        nextIndex: generated.nextIndex,
     };
 }
 

@@ -28,6 +28,7 @@ pub struct AgentItem {
     pub chat_rules: Option<String>,
     pub knowledge_paths: Option<String>,
     pub auto_index_deliverables: Option<bool>,
+    pub visual_enhancement_enabled: Option<bool>,
     pub pinned_skills: Option<String>,
     pub planning_loop_budget: Option<i32>, // MB 最大决策轮次，NULL 表示使用全局默认
     pub project_path: Option<String>,      // 用户关联的外部项目路径
@@ -56,6 +57,7 @@ impl From<Agent> for AgentItem {
             chat_rules: agent.chat_rules,
             knowledge_paths: agent.knowledge_paths,
             auto_index_deliverables: agent.auto_index_deliverables,
+            visual_enhancement_enabled: agent.visual_enhancement_enabled,
             pinned_skills: agent.pinned_skills,
             planning_loop_budget: agent.planning_loop_budget,
             project_path: agent.project_path,
@@ -90,6 +92,7 @@ pub struct UpdateAgentRequest {
     pub chat_rules: Option<String>,
     pub knowledge_paths: Option<String>,
     pub auto_index_deliverables: Option<bool>,
+    pub visual_enhancement_enabled: Option<bool>,
     pub pinned_skills: Option<String>,
     pub planning_loop_budget: Option<i32>, // 0 为哨兵值（重置为 NULL）
     pub project_path: Option<String>,      // 空字符串 = 清除绑定，None = 保持原值
@@ -190,6 +193,7 @@ pub async fn agent_update(
         chat_rules: request.chat_rules,
         knowledge_paths: request.knowledge_paths,
         auto_index_deliverables: request.auto_index_deliverables,
+        visual_enhancement_enabled: request.visual_enhancement_enabled,
         pinned_skills: request.pinned_skills,
         planning_loop_budget: request.planning_loop_budget, // 0 = 重置为 NULL，>0 = 设置值，None = 保持原值
         project_path: request.project_path,                 // 空字符串 = 清除绑定，None = 保持原值

@@ -78,6 +78,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
 
     // 交付物自动同步开关
     const [autoIndexDeliverables, setAutoIndexDeliverables] = useState(true);
+    const [visualEnhancementEnabled, setVisualEnhancementEnabled] = useState(true);
 
     // per-agent MB 决策轮次（null 表示使用全局默认）
     const [planningLoopBudget, setPlanningLoopBudget] = useState<number | null>(null);
@@ -165,6 +166,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
             }
             // 初始化交付物自动同步开关（默认 true）
             setAutoIndexDeliverables(agent.autoIndexDeliverables !== false);
+            setVisualEnhancementEnabled(agent.visualEnhancementEnabled !== false);
             // 重置多选模式
             setIsSelectMode(false);
             setSelectedPaths(new Set());
@@ -287,6 +289,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                 request.planning_loop_budget = 0;
             }
             request.sandbox_mode = sandboxMode;
+            request.visual_enhancement_enabled = visualEnhancementEnabled;
             request.sub_agent_safety_footer_enabled = subAgentSafetyFooterEnabled;
             const safetyFooterTextForSave = normalizeSafetyFooterBodyText(subAgentSafetyFooterText);
             request.sub_agent_safety_footer_text = safetyFooterTextForSave;
@@ -371,6 +374,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                 // per-agent 决策轮次：null 表示已重置为全局默认
                 planningLoopBudget: planningLoopBudget,
                 sandboxMode,
+                visualEnhancementEnabled,
                 subAgentSafetyFooterEnabled,
                 subAgentSafetyFooterText: safetyFooterTextForSave,
             });
@@ -381,7 +385,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
         } finally {
             setIsSaving(false);
         }
-    }, [agentId, agent, name, avatar, mbRules, saRules, chatRules, knowledgePaths, pinnedSkillsEnabled, pinnedSkillNames, pinnedSkillsMaxCount, planningLoopBudget, sandboxMode, subAgentSafetyFooterEnabled, subAgentSafetyFooterText, updateAgent, onClose, t]);
+    }, [agentId, agent, name, avatar, mbRules, saRules, chatRules, knowledgePaths, pinnedSkillsEnabled, pinnedSkillNames, pinnedSkillsMaxCount, planningLoopBudget, sandboxMode, visualEnhancementEnabled, subAgentSafetyFooterEnabled, subAgentSafetyFooterText, updateAgent, onClose, t]);
 
     // ===== 确认删除知识库文件（立即删除索引和更新后端）=====
     const handleConfirmDeleteKnowledge = useCallback(async () => {
@@ -856,6 +860,24 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                                         {t('agent.settings.resetDefault')}
                                     </button>
                                 )}
+                            </div>
+
+                            <div className={styles.toggleRow} style={{ marginTop: 16 }}>
+                                <div className={styles.toggleInfo}>
+                                    <span className={styles.toggleLabel}>{t('agent.settings.visualEnhancement')}</span>
+                                    <p className={styles.toggleHint}>
+                                        {t('agent.settings.visualEnhancementHint')}
+                                    </p>
+                                </div>
+                                <label className={styles.toggleSwitch}>
+                                    <input
+                                        type="checkbox"
+                                        checked={visualEnhancementEnabled}
+                                        onChange={(e) => setVisualEnhancementEnabled(e.target.checked)}
+                                        aria-label={t('agent.settings.visualEnhancement')}
+                                    />
+                                    <span className={styles.toggleSlider} />
+                                </label>
                             </div>
                         </div>
                     )}

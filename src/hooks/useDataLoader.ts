@@ -67,6 +67,7 @@ interface AgentItem {
     saRules: string | null;
     chatRules: string | null;
     knowledgePaths: string | null;
+    visualEnhancementEnabled?: boolean | null;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork' | null;
     createdAt: number;
     updatedAt: number;
