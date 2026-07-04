@@ -13,6 +13,8 @@ import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './Shell.module.css';
 
+const COLLAPSED_LEFT_PANEL_WIDTH = 76;
+
 /**
  * Node.js 模板预热安装
  *
@@ -164,7 +166,7 @@ export function Shell() {
     }, []);
 
     // 计算右栏最大宽度：容器宽度 - 左栏宽度 - 最小中栏宽度(400px) - 拖拽手柄(8px)
-    const actualLeftWidth = isLeftPanelCollapsed ? 48 : leftPanelWidth;
+    const actualLeftWidth = isLeftPanelCollapsed ? COLLAPSED_LEFT_PANEL_WIDTH : leftPanelWidth;
     const rightPanelMaxWidth = Math.max(200, containerWidth - actualLeftWidth - 400 - 8);
 
     // 当窗口缩小导致右栏超出最大宽度时，自动调整右栏宽度
@@ -227,6 +229,7 @@ export function Shell() {
                 {/* 左栏 */}
                 <aside
                     className={leftPanelClass}
+                    data-collapsed={isLeftPanelCollapsed}
                     style={{ width: actualLeftWidth }}
                 >
                     <LeftPanel />

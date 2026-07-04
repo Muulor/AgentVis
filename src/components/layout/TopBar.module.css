@@ -14,7 +14,7 @@
 .tabs {
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
     flex: 1;
     min-width: 0;
     /* 允许标签页区域内点击 */

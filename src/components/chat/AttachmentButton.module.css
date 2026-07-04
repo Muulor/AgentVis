@@ -11,18 +11,20 @@
     width: 32px;
     height: 28px;
     padding: 0;
-    border: 1px solid var(--color-border-default);
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
-    background-color: var(--color-bg-secondary);
+    background-color: transparent;
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
 
-.button:hover:not(:disabled) {
+.button:hover:not(:disabled),
+.button:focus-visible:not(:disabled) {
     border-color: var(--color-border-hover);
-    background-color: var(--color-bg-tertiary);
+    background-color: var(--color-bg-primary);
     color: var(--color-text-primary);
+    outline: none;
 }
 
 .button:active:not(:disabled) {

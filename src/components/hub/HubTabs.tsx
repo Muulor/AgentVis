@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { MessageSquareText, Plus } from 'lucide-react';
 import { useHubStore } from '@stores/hubStore';
 import { useAgentStore } from '@stores/agentStore';
 import { useChatStore } from '@stores/chatStore';
@@ -18,11 +18,6 @@ type DropPlacement = 'before' | 'after';
 function getHorizontalDropPlacement(event: React.DragEvent<HTMLElement>): DropPlacement {
     const rect = event.currentTarget.getBoundingClientRect();
     return event.clientX > rect.left + rect.width / 2 ? 'after' : 'before';
-}
-
-function getVerticalDropPlacement(event: React.DragEvent<HTMLElement>): DropPlacement {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return event.clientY > rect.top + rect.height / 2 ? 'after' : 'before';
 }
 
 function moveItemNearTarget<T extends { id: string }>(
@@ -49,18 +44,13 @@ function moveItemNearTarget<T extends { id: string }>(
 }
 
 /**
- * Hub 标签页标签数量阈值
- * 超过此数量后，额外标签将显示在"更多"下拉菜单中
- */
-const MAX_VISIBLE_TABS = 10;
-
-/**
  * HubTabs 组件
  *
  * 顶部Hub标签页切换组件，支持：
  * - 动态渲染Hub列表
  * - 点击切换当前Hub
- * - 超过5个时显示"更多"下拉菜单
+ * - hover/focus 时展开横向 Hub 轨道
+ * - 鼠标滚轮横向浏览更多 Hub
  * - 右键上下文菜单
  * - 新建Hub按钮
  */
@@ -76,7 +66,9 @@ export function HubTabs() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [draggedHubId, setDraggedHubId] = useState<string | null>(null);
     const [dragOverHubId, setDragOverHubId] = useState<string | null>(null);
-    const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
+    const railRef = useRef<HTMLDivElement>(null);
+    const activeHubRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => {
         const handleOpenCreate = () => setIsCreateModalOpen(true);
@@ -119,26 +111,56 @@ export function HubTabs() {
         return unreadHubs;
     }, [agentHubMap, currentHubId, messagesByAgent, lastReadByAgent]);
 
-    // 可见标签和更多标签
-    const visibleHubs = hubs.slice(0, MAX_VISIBLE_TABS);
-    const moreHubs = hubs.slice(MAX_VISIBLE_TABS);
-
-
-    // 切换 Agent ID 的 action（切换 Hub 时需要清空 Agent 选中态）
+    // 切换 Agent ID 的 action（点击 Hub 标签进入 Hub 讨论区）
     const setCurrentAgentId = useAgentStore((state) => state.setCurrentAgentId);
 
-    // 切换Hub
+    const currentHub = useMemo(
+        () => hubs.find((hub) => hub.id === currentHubId) ?? hubs[0],
+        [currentHubId, hubs],
+    );
+
+    // 展开时将当前 Hub 尽量居中，便于快速扫视左右相邻 Hub
+    useEffect(() => {
+        if (!isExpanded || !currentHubId) return;
+
+        const centerActiveHub = (behavior: ScrollBehavior) => {
+            const rail = railRef.current;
+            const activeHub = activeHubRef.current;
+            if (!rail || !activeHub) return;
+
+            const targetLeft = activeHub.offsetLeft + activeHub.offsetWidth / 2 - rail.clientWidth / 2;
+            rail.scrollTo({
+                left: Math.max(0, targetLeft),
+                behavior,
+            });
+        };
+
+        const frameId = window.requestAnimationFrame(() => centerActiveHub('auto'));
+        let delayedFrameId = 0;
+        const timeoutId = window.setTimeout(() => {
+            delayedFrameId = window.requestAnimationFrame(() => centerActiveHub('smooth'));
+        }, 240);
+
+        return () => {
+            window.cancelAnimationFrame(frameId);
+            window.cancelAnimationFrame(delayedFrameId);
+            window.clearTimeout(timeoutId);
+        };
+    }, [currentHubId, hubs.length, isExpanded]);
+
+    // 切换Hub，并将中栏切回该 Hub 的讨论区
     const handleTabClick = useCallback(
         (hubId: string) => {
-            // 切换到不同 Hub 时清除 Agent 选中态，否则 RightPanel 的 contextId
-            // 仍指向旧 Agent，导致文件预览/Diff 面板残留（截图复现的 Bug）
-            if (hubId !== currentHubId) {
-                setCurrentAgentId(null);
-            }
+            setCurrentAgentId(null);
             setCurrentHubId(hubId);
         },
-        [currentHubId, setCurrentHubId, setCurrentAgentId]
+        [setCurrentHubId, setCurrentAgentId]
     );
+
+    const handleCurrentHubClick = useCallback(() => {
+        if (!currentHub) return;
+        handleTabClick(currentHub.id);
+    }, [currentHub, handleTabClick]);
 
     // 右键菜单
     const handleContextMenu = useCallback((event: React.MouseEvent, hubId: string) => {
@@ -147,11 +169,6 @@ export function HubTabs() {
         setContextMenuHubId(hubId);
         setContextMenuPosition({ x: event.clientX, y: event.clientY });
     }, []);
-
-    const handleDropdownContextMenu = useCallback((event: React.MouseEvent, hubId: string) => {
-        setIsMoreMenuOpen(false);
-        handleContextMenu(event, hubId);
-    }, [handleContextMenu]);
 
     // 关闭右键菜单
     const handleCloseContextMenu = useCallback(() => {
@@ -198,7 +215,6 @@ export function HubTabs() {
         const previousHubs = hubs;
         const orderedIds = nextHubs.map((hub) => hub.id);
         reorderHubs(orderedIds);
-        setIsMoreMenuOpen(false);
 
         try {
             await invoke('hub_reorder', { request: { orderedIds } });
@@ -213,78 +229,102 @@ export function HubTabs() {
         setDragOverHubId(null);
     }, []);
 
+    // 在展开轨道上将纵向滚轮映射为横向滚动，适配普通鼠标和触控板
+    const handleRailWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+        if (!isExpanded) return;
+
+        const rail = railRef.current;
+        if (!rail || rail.scrollWidth <= rail.clientWidth) return;
+
+        const delta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+        if (delta === 0) return;
+
+        event.preventDefault();
+        rail.scrollLeft += delta;
+    }, [isExpanded]);
+
+    const handleBlur = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+        const nextTarget = event.relatedTarget;
+        if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+        setIsExpanded(false);
+    }, []);
+
     return (
         <>
             <div className={styles.tabs}>
-                {/* 可见标签 */}
-                {visibleHubs.map((hub) => (
+                <div className={styles.hubActions}>
                     <button
-                        key={hub.id}
-                        className={styles.tab}
-                        data-active={hub.id === currentHubId}
-                        data-dragging={draggedHubId === hub.id}
-                        data-drag-over={dragOverHubId === hub.id}
-                        draggable
-                        title={hub.name}
-                        onClick={() => handleTabClick(hub.id)}
-                        onContextMenu={(e) => handleContextMenu(e, hub.id)}
-                        onDragStart={(e) => handleHubDragStart(e, hub.id)}
-                        onDragOver={(e) => handleHubDragOver(e, hub.id)}
-                        onDragLeave={() => handleHubDragLeave(hub.id)}
-                        onDrop={(e) => { void handleHubDrop(e, hub.id, getHorizontalDropPlacement(e)); }}
-                        onDragEnd={handleHubDragEnd}
+                        className={styles.hubActionButton}
+                        onClick={handleCurrentHubClick}
+                        disabled={!currentHub}
+                        aria-label={t('hub.tabs.openDiscussion')}
                     >
-                        <span className={styles.tabLabel}>{hub.name}</span>
-                        {/* 未读 Agent 消息小圆点：当前 hub 非激活态且有任意 agent 未读时显示 */}
-                        {hubUnreadSet.has(hub.id) && <span className={styles.unreadDot} aria-label={t('hub.tabs.unread')} />}
+                        <MessageSquareText size={17} strokeWidth={1.6} />
                     </button>
-                ))}
+                    <button
+                        className={styles.hubActionButton}
+                        onClick={() => setIsCreateModalOpen(true)}
+                        aria-label={t('hub.tabs.newHub')}
+                    >
+                        <Plus size={17} strokeWidth={1.7} />
+                    </button>
+                </div>
 
-                {/* 更多下拉菜单 */}
-                {moreHubs.length > 0 && (
-                    <DropdownMenu.Root open={isMoreMenuOpen} onOpenChange={setIsMoreMenuOpen} modal={false}>
-                        <DropdownMenu.Trigger asChild>
-                            <button className={styles.moreDropdown}>
-                                {t('hub.tabs.more', { count: moreHubs.length })}
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginLeft: 4 }}>
+                {hubs.length > 0 && (
+                    <div
+                        className={styles.switcher}
+                        data-expanded={isExpanded}
+                        onMouseEnter={() => setIsExpanded(true)}
+                        onMouseLeave={() => setIsExpanded(false)}
+                        onFocusCapture={() => setIsExpanded(true)}
+                        onBlurCapture={handleBlur}
+                    >
+                        {currentHub && (
+                            <button
+                                className={styles.currentHub}
+                                title={currentHub.name}
+                                onClick={handleCurrentHubClick}
+                                onContextMenu={(e) => handleContextMenu(e, currentHub.id)}
+                                aria-expanded={isExpanded}
+                            >
+                                <span className={styles.currentHubLabel}>{currentHub.name}</span>
+                                <svg className={styles.currentHubChevron} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                                     <path d="M3 4.5l3 3 3-3" />
                                 </svg>
                             </button>
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Portal>
-                            <DropdownMenu.Content className={styles.dropdownContent} sideOffset={4}>
-                                {moreHubs.map((hub) => (
-                                    <DropdownMenu.Item
-                                        key={hub.id}
-                                        className={styles.dropdownItem}
-                                        data-dragging={draggedHubId === hub.id}
-                                        data-drag-over={dragOverHubId === hub.id}
-                                        draggable
-                                        title={hub.name}
-                                        onSelect={() => handleTabClick(hub.id)}
-                                        onContextMenu={(e) => handleDropdownContextMenu(e, hub.id)}
-                                        onDragStart={(e) => handleHubDragStart(e, hub.id)}
-                                        onDragOver={(e) => handleHubDragOver(e, hub.id)}
-                                        onDragLeave={() => handleHubDragLeave(hub.id)}
-                                        onDrop={(e) => { void handleHubDrop(e, hub.id, getVerticalDropPlacement(e)); }}
-                                        onDragEnd={handleHubDragEnd}
-                                    >
-                                        <span className={styles.dropdownLabel}>{hub.name}</span>
-                                        {/* 折叠在更多菜单中的 hub 同样需要展示未读指示 */}
-                                        {hubUnreadSet.has(hub.id) && <span className={styles.dropdownUnreadDot} aria-label={t('hub.tabs.unread')} />}
-                                    </DropdownMenu.Item>
-                                ))}
-                            </DropdownMenu.Content>
-                        </DropdownMenu.Portal>
-                    </DropdownMenu.Root>
-                )}
+                        )}
 
-                {/* 新建Hub按钮 */}
-                <button className={styles.newTab} onClick={() => setIsCreateModalOpen(true)} aria-label={t('hub.tabs.newHub')}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M8 3v10M3 8h10" />
-                    </svg>
-                </button>
+                        <div
+                            ref={railRef}
+                            className={styles.rail}
+                            onWheel={handleRailWheel}
+                        >
+                            {hubs.map((hub) => (
+                                <button
+                                    key={hub.id}
+                                    ref={hub.id === currentHubId ? activeHubRef : undefined}
+                                    className={styles.tab}
+                                    data-active={hub.id === currentHubId}
+                                    data-dragging={draggedHubId === hub.id}
+                                    data-drag-over={dragOverHubId === hub.id}
+                                    draggable
+                                    title={hub.name}
+                                    onClick={() => handleTabClick(hub.id)}
+                                    onContextMenu={(e) => handleContextMenu(e, hub.id)}
+                                    onDragStart={(e) => handleHubDragStart(e, hub.id)}
+                                    onDragOver={(e) => handleHubDragOver(e, hub.id)}
+                                    onDragLeave={() => handleHubDragLeave(hub.id)}
+                                    onDrop={(e) => { void handleHubDrop(e, hub.id, getHorizontalDropPlacement(e)); }}
+                                    onDragEnd={handleHubDragEnd}
+                                >
+                                    <span className={styles.tabLabel}>{hub.name}</span>
+                                    {/* 未读 Agent 消息小圆点：当前 hub 非激活态且有任意 agent 未读时显示 */}
+                                    {hubUnreadSet.has(hub.id) && <span className={styles.unreadDot} aria-label={t('hub.tabs.unread')} />}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* 创建Hub弹窗 */}

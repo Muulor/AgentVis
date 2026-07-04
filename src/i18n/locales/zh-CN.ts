@@ -251,6 +251,7 @@ export const zhCN = {
             closeHub: '关闭 {name}',
             more: '更多 ({count})',
             newHub: '新建 Hub',
+            openDiscussion: '进入当前 Hub 讨论区',
         },
         context: {
             renameFailedLog: '重命名Hub失败:',
@@ -259,6 +260,7 @@ export const zhCN = {
             deleteDescription: '确定要删除 Hub "{name}" 吗？该 Hub 下的所有 Agent 及其聊天记录、记忆和知识库数据将被永久删除，此操作不可撤销。',
         },
         chat: {
+            discussionTitle: '{name} 讨论区',
             selectHub: '请先选择或创建一个 Hub',
             agentNotFoundTitle: '找不到 Agent',
             agentNotFoundDescription: '没有找到名为 "{name}" 的 Agent',

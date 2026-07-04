@@ -35,22 +35,6 @@ import { getMessageQuoteContent } from '@utils/quoteContent';
 const logger = getLogger('AgentChatView');
 
 /**
- * 根据名称生成颜色
- */
-function getAvatarColor(name: string): string {
-    const colors = [
-        '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B',
-        '#EF4444', '#EC4899', '#06B6D4', '#84CC16',
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % colors.length;
-    return colors[index] ?? '#666';
-}
-
-/**
  * 清理文件夹名称（移除不安全字符，与 FileList 保持一致）
  */
 function sanitizeFolderName(name: string): string {
@@ -132,7 +116,7 @@ function getMessageAttachments(message: UIMessage) {
  * AgentChatView 组件
  *
  * Agent对话视图，支持：
- * - 标题区显示Agent名称、模型信息、设置入口
+ * - 标题区显示模型选择器、搜索与设置入口
  * - 对话历史区（使用 ChatHistory 组件）
  * - 输入区（使用 ChatInput 组件）
  * - 模式选择器（Planning/Chat）
@@ -705,12 +689,6 @@ export function AgentChatView() {
         return unsubscribe;
     }, [currentAgentId]);
 
-    // 头像颜色
-    const avatarColor = useMemo(
-        () => (currentAgent ? getAvatarColor(currentAgent.name) : '#666'),
-        [currentAgent]
-    );
-
     // 获取引用列表（同 Hub 下所有引用均对当前 Agent 可见）
     const pendingQuotes = useMemo(() => {
         if (!currentAgentId || !currentAgent) return [];
@@ -1025,46 +1003,25 @@ export function AgentChatView() {
                 {/* 标题区 */}
                 <div className={styles.header}>
                     <div className={styles.titleArea}>
-                        <div
-                            className={styles.avatar}
-                            style={currentAgent.avatar
-                                ? { borderColor: avatarColor }
-                                : { backgroundColor: avatarColor }
-                            }
-                            data-has-image={!!currentAgent.avatar}
-                        >
-                            {currentAgent.avatar ? (
-                                <img
-                                    src={`data:image/webp;base64,${currentAgent.avatar}`}
-                                    alt={currentAgent.name}
-                                    className={styles.avatarImg}
-                                />
-                            ) : (
-                                currentAgent.name.charAt(0).toUpperCase()
-                            )}
-                        </div>
-                        <div className={styles.titleContent}>
-                            <h1 className={styles.title}>{currentAgent.name}</h1>
-                            <AgentModelSelector
-                                provider={currentAgent.modelProvider}
-                                model={currentAgent.modelName}
-                                onSelect={async (provider, model) => {
-                                    if (!currentAgentId) return;
-                                    // 更新 Store
-                                    updateAgent(currentAgentId, { modelProvider: provider, modelName: model });
-                                    // 持久化到后端
-                                    try {
-                                        await invoke('agent_update', {
-                                            id: currentAgentId,
-                                            request: { model_provider: provider, model_name: model },
-                                        });
-                                        logger.trace('[AgentChatView] 模型配置已保存:', provider, model);
-                                    } catch (error) {
-                                        logger.error('[AgentChatView] 保存模型配置失败:', error);
-                                    }
-                                }}
-                            />
-                        </div>
+                        <AgentModelSelector
+                            provider={currentAgent.modelProvider}
+                            model={currentAgent.modelName}
+                            onSelect={async (provider, model) => {
+                                if (!currentAgentId) return;
+                                // 更新 Store
+                                updateAgent(currentAgentId, { modelProvider: provider, modelName: model });
+                                // 持久化到后端
+                                try {
+                                    await invoke('agent_update', {
+                                        id: currentAgentId,
+                                        request: { model_provider: provider, model_name: model },
+                                    });
+                                    logger.trace('[AgentChatView] 模型配置已保存:', provider, model);
+                                } catch (error) {
+                                    logger.error('[AgentChatView] 保存模型配置失败:', error);
+                                }
+                            }}
+                        />
                     </div>
                     <div className={styles.headerActions}>
                         <button

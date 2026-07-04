@@ -3,7 +3,11 @@
     flex-direction: column;
     height: 100%;
     min-width: 0;
+    box-sizing: border-box;
     overflow: hidden;
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-xl);
 }
 
 /* 拖拽分隔条时禁用文字选中，避免干扰 */

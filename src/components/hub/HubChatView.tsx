@@ -780,7 +780,9 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
                             <path d="M4 4h12v10H6l-2 2V4z" />
                         </svg>
                     </div>
-                    <h1 className={styles.title}>{currentHub.name}</h1>
+                    <h1 className={styles.title}>
+                        {t('hub.chat.discussionTitle', { name: currentHub.name })}
+                    </h1>
                 </div>
                 <button
                     className={styles.searchBtn}

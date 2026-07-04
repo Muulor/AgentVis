@@ -253,6 +253,7 @@ export const enUS = {
             closeHub: 'Close {name}',
             more: 'More ({count})',
             newHub: 'New Hub',
+            openDiscussion: 'Open current Hub discussion',
         },
         context: {
             renameFailedLog: 'Failed to rename Hub:',
@@ -261,6 +262,7 @@ export const enUS = {
             deleteDescription: 'Delete Hub "{name}"? All Agents in this Hub and their chats, memories, and knowledge base data will be permanently deleted. This cannot be undone.',
         },
         chat: {
+            discussionTitle: '{name} Discussion',
             selectHub: 'Select or create a Hub first',
             agentNotFoundTitle: 'Agent Not Found',
             agentNotFoundDescription: 'No Agent named "{name}" was found',

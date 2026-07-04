@@ -3,7 +3,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { useUIStore } from '@stores/uiStore';
 import { useHubStore } from '@stores/hubStore';
 import { useAgentStore } from '@stores/agentStore';
-import { HubNavItem } from '@components/hub';
 import { AgentNavItem, AgentCreateModal } from '@components/agent';
 import { OPEN_AGENT_CREATE_EVENT } from '@components/onboarding/onboardingEvents';
 import { getLogger } from '@services/logger';
@@ -45,7 +44,7 @@ function moveItemNearTarget<T extends { id: string }>(
 /**
  * LeftPanel 左栏导航
  *
- * 显示 Hub 讨论区入口和 Agent 列表
+ * 显示当前 Hub 下的 Agent 列表
  */
 export function LeftPanel() {
     const { t } = useI18n();
@@ -132,11 +131,13 @@ export function LeftPanel() {
     return (
         <>
             <nav className={styles.leftPanel} data-collapsed={isCollapsed}>
-                {/* Hub 讨论区入口 - 使用 HubNavItem 组件 */}
-                <HubNavItem />
-
-                {/* 分隔线 */}
-                <div className={styles.divider} />
+                {/* 新建 Agent 按钮 */}
+                <button className={styles.addAgent} onClick={handleAddAgent}>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M10 5v10M5 10h10" />
+                    </svg>
+                    {!isCollapsed && <span>{t('layout.newAgent')}</span>}
+                </button>
 
                 {/* Agent 列表 - 动态渲染 */}
                 <div className={styles.agentList}>
@@ -156,14 +157,6 @@ export function LeftPanel() {
                         />
                     ))}
                 </div>
-
-                {/* 新建 Agent 按钮 */}
-                <button className={styles.addAgent} onClick={handleAddAgent}>
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M10 5v10M5 10h10" />
-                    </svg>
-                    {!isCollapsed && <span>{t('layout.newAgent')}</span>}
-                </button>
             </nav>
 
             {/* 创建Agent弹窗 */}

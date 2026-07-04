@@ -1636,6 +1636,7 @@ export const ChatInput = memo(function ChatInput({
                 </div>
             )}
 
+            <div className={styles.composer}>
             {/* 输入框容器 - 拖放事件只在这里触发 */}
             <div
                 className={cx(styles.inputWrapper, isDragOver && styles.dragActive)}
@@ -1829,26 +1830,6 @@ export const ChatInput = memo(function ChatInput({
                         </div>
                     )}
                 </div>
-                {isStreaming ? (
-                    // 流式输出中：显示停止按钮
-                    <button
-                        className={cx(styles.sendBtn, styles.stopBtn)}
-                        onClick={onStop}
-                        aria-label={t('chat.stopOutput')}
-                    >
-                        <Square size={16} fill="currentColor" />
-                    </button>
-                ) : (
-                    // 非流式：显示发送按钮
-                    <button
-                        className={styles.sendBtn}
-                        onClick={handleSend}
-                        disabled={!canSend}
-                        aria-label={t('chat.sendMessage')}
-                    >
-                        <ArrowBigRightDash size={18} />
-                    </button>
-                )}
             </div>
 
             {/* 工具栏 */}
@@ -1875,7 +1856,30 @@ export const ChatInput = memo(function ChatInput({
                         />
                     )}
                 </div>
-                <span className={styles.shortcutHint}>{t('chat.sendShortcut')}</span>
+                <div className={styles.toolbarRight}>
+                    <span className={styles.shortcutHint}>{t('chat.sendShortcut')}</span>
+                    {isStreaming ? (
+                        // 流式输出中：显示停止按钮
+                        <button
+                            className={cx(styles.sendBtn, styles.stopBtn)}
+                            onClick={onStop}
+                            aria-label={t('chat.stopOutput')}
+                        >
+                            <Square size={16} fill="currentColor" />
+                        </button>
+                    ) : (
+                        // 非流式：显示发送按钮
+                        <button
+                            className={styles.sendBtn}
+                            onClick={handleSend}
+                            disabled={!canSend}
+                            aria-label={t('chat.sendMessage')}
+                        >
+                            <ArrowBigRightDash size={18} />
+                        </button>
+                    )}
+                </div>
+            </div>
             </div>
         </div>
     );

@@ -100,7 +100,7 @@ export const useUIStore = create<UIState>((set, get) => {
         // 初始状态
         themePreference: initialPreference,
         theme: initialTheme,
-        leftPanelWidth: 280,
+        leftPanelWidth: 200,
         rightPanelWidth: 400,
         isLeftPanelCollapsed: false,
         isRightPanelVisible: true,

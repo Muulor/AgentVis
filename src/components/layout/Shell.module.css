@@ -15,8 +15,13 @@
 
 .leftPanel {
     flex-shrink: 0;
-    background-color: var(--color-bg-secondary);
-    overflow-y: auto;
+    box-sizing: border-box;
+    background-color: var(--color-bg-primary);
+    overflow: hidden;
+}
+
+.leftPanel[data-collapsed='true'] {
+    border-right: none;
 }
 
 /* 仅在非拖拽状态下才应用过渡效果 */
@@ -34,7 +39,9 @@
 
 .rightPanel {
     flex-shrink: 0;
-    background-color: var(--color-bg-secondary);
+    box-sizing: border-box;
+    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-xs);
+    background-color: var(--color-bg-primary);
     overflow: hidden;
     min-width: 0;
 }
@@ -54,9 +61,25 @@
  * 右栏 handle（位于右栏左侧）：透明，显示中栏背景，不产生额外色块
  */
 .leftResizeHandle {
-    background-color: var(--color-bg-secondary);
+    background-color: transparent;
+}
+
+.leftResizeHandle::after {
+    background-color: transparent;
+}
+
+.leftResizeHandle:hover::after {
+    background-color: var(--color-border-hover);
 }
 
 .rightResizeHandle {
     background-color: transparent;
+}
+
+.rightResizeHandle::after {
+    background-color: transparent;
+}
+
+.rightResizeHandle:hover::after {
+    background-color: var(--color-border-hover);
 }
