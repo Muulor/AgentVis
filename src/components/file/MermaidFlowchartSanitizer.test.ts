@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     fixFlowchartDanglingPipeLabelLinks,
+    fixFlowchartPseudoSubgraphNodeDeclarations,
     fixFlowchartRedundantPipeLabelLinkTails,
     fixFlowchartReservedNodeIds,
     fixFlowchartUnsafeSubgraphTitles,
@@ -125,6 +126,49 @@ describe('fixFlowchartDanglingPipeLabelLinks', () => {
 
         expect(fixFlowchartDanglingPipeLabelLinks(flowchart)).toBe(flowchart);
         expect(fixFlowchartDanglingPipeLabelLinks(sequence)).toBe(sequence);
+    });
+});
+
+describe('fixFlowchartPseudoSubgraphNodeDeclarations', () => {
+    it('turns unmatched VisualEnhancer SubGraph layer declarations into regular nodes', () => {
+        const code = `flowchart LR
+    SubGraph Frontend["Frontend / TUI Layer"]
+    SubGraph Backend["Backend Layer"]
+    SubGraph Tools["Tooling & Infra"]
+
+    Frontend -- "Interacts with" --> Backend
+    Backend -- "Utilizes" --> Tools
+
+    classDef layer fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    class Frontend,Backend,Tools layer;`;
+
+        const fixed = fixFlowchartPseudoSubgraphNodeDeclarations(code);
+
+        expect(fixed).toContain('Frontend["Frontend / TUI Layer"]');
+        expect(fixed).toContain('Backend["Backend Layer"]');
+        expect(fixed).toContain('Tools["Tooling & Infra"]');
+        expect(fixed).not.toContain('SubGraph Frontend');
+        expect(fixed).toContain('class Frontend,Backend,Tools layer;');
+    });
+
+    it('normalizes mixed-case subgraph keywords when a matching end exists', () => {
+        const code = `flowchart TB
+SubGraph Frontend["Frontend"]
+    A[OK]
+end`;
+
+        const fixed = fixFlowchartPseudoSubgraphNodeDeclarations(code);
+
+        expect(fixed).toContain('subgraph Frontend["Frontend"]');
+        expect(fixed).toContain('    A[OK]');
+        expect(fixed).toContain('end');
+    });
+
+    it('does not rewrite non-flowchart diagrams', () => {
+        const code = `sequenceDiagram
+    Alice->>Bob: SubGraph Frontend["Frontend"]`;
+
+        expect(fixFlowchartPseudoSubgraphNodeDeclarations(code)).toBe(code);
     });
 });
 

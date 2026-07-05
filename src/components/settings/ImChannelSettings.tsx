@@ -16,6 +16,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { v4 as uuidv4 } from 'uuid';
 import { ExternalLink } from 'lucide-react';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useImChannelStore, getBotConnectionState } from '@stores/imChannelStore';
 import { useHubStore } from '@stores/hubStore';
 import {
@@ -657,28 +658,37 @@ export function ImChannelSettings() {
                     <div>
                         <div className={styles.serviceTitleRow}>
                             <h4 className={styles.serviceName}>{title}</h4>
-                            <button
-                                className={styles.externalLinkButton}
-                                onClick={() => void openExternalUrl(PLATFORM_APP_URLS[platform])}
-                                title={openAppTitle}
-                                aria-label={openAppTitle}
-                            >
-                                <ExternalLink size={14} />
-                            </button>
+                            <Tooltip content={openAppTitle}>
+                                <button
+                                    className={styles.externalLinkButton}
+                                    onClick={() => void openExternalUrl(PLATFORM_APP_URLS[platform])}
+                                    aria-label={openAppTitle}
+                                >
+                                    <ExternalLink size={14} />
+                                </button>
+                            </Tooltip>
                         </div>
                         <p className={styles.serviceDesc}>{description}</p>
                     </div>
-                    <button
-                        id={`im-add-${platform}-bot-button`}
-                        className={styles.addBotButton}
-                        onClick={() => handleAddBot(platform)}
-                        disabled={platformAtLimit}
-                        title={platformAtLimit
+                    <Tooltip
+                        content={platformAtLimit
                             ? t('settings.im.maxBotsTitle', { count: MAX_BOT_COUNT })
                             : t('settings.im.addBotTitle')}
                     >
-                        {addLabel}
-                    </button>
+                        <span className={styles.tooltipButtonWrap}>
+                            <button
+                                id={`im-add-${platform}-bot-button`}
+                                className={styles.addBotButton}
+                                onClick={() => handleAddBot(platform)}
+                                disabled={platformAtLimit}
+                                aria-label={platformAtLimit
+                                    ? t('settings.im.maxBotsTitle', { count: MAX_BOT_COUNT })
+                                    : t('settings.im.addBotTitle')}
+                            >
+                                {addLabel}
+                            </button>
+                        </span>
+                    </Tooltip>
                 </div>
 
                 <div className={styles.botList}>
@@ -860,14 +870,16 @@ function BotCard({
                             {t('settings.im.disconnect')}
                         </button>
                     )}
-                    <button
-                        id={`im-delete-btn-${botConfig.botId}`}
-                        className={styles.deleteBotButton}
-                        onClick={onDelete}
-                        title={t('settings.im.deleteBotTitle')}
-                    >
-                        {t('common.delete')}
-                    </button>
+                    <Tooltip content={t('settings.im.deleteBotTitle')}>
+                        <button
+                            id={`im-delete-btn-${botConfig.botId}`}
+                            className={styles.deleteBotButton}
+                            onClick={onDelete}
+                            aria-label={t('settings.im.deleteBotTitle')}
+                        >
+                            {t('common.delete')}
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 

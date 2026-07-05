@@ -11,6 +11,7 @@ import styles from './FactCard.module.css';
 import type { CategoryDisplayConfig, FactCardProps } from './types';
 import { CATEGORY_DISPLAY_MAP } from './types';
 import type { LongTermFactCategory } from '@services/memory/types';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 
@@ -81,31 +82,34 @@ export function FactCard({
             {/* 操作按钮 */}
             <div className={styles.actions}>
                 {sourceMessageId && onJump && (
-                    <button
-                        className={styles.actionBtn}
-                        onClick={() => onJump(sourceMessageId)}
-                        title={t('memory.jumpOriginal')}
-                    >
-                        {t('memory.jump')}
-                    </button>
+                    <Tooltip content={t('memory.jumpOriginal')}>
+                        <button
+                            className={styles.actionBtn}
+                            onClick={() => onJump(sourceMessageId)}
+                        >
+                            {t('memory.jump')}
+                        </button>
+                    </Tooltip>
                 )}
                 {onEdit && (
-                    <button
-                        className={styles.actionBtn}
-                        onClick={() => onEdit(id)}
-                        title={t('memory.editFact')}
-                    >
-                        {t('common.edit')}
-                    </button>
+                    <Tooltip content={t('memory.editFact')}>
+                        <button
+                            className={styles.actionBtn}
+                            onClick={() => onEdit(id)}
+                        >
+                            {t('common.edit')}
+                        </button>
+                    </Tooltip>
                 )}
                 {onDelete && (
-                    <button
-                        className={cx(styles.actionBtn, styles.danger)}
-                        onClick={() => onDelete(id)}
-                        title={t('memory.deleteFact')}
-                    >
-                        {t('common.delete')}
-                    </button>
+                    <Tooltip content={t('memory.deleteFact')}>
+                        <button
+                            className={cx(styles.actionBtn, styles.danger)}
+                            onClick={() => onDelete(id)}
+                        >
+                            {t('common.delete')}
+                        </button>
+                    </Tooltip>
                 )}
             </div>
         </div>

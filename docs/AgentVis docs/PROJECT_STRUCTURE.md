@@ -130,6 +130,8 @@ chat/
 ├── MessageActions.module.css     # 操作按钮样式
 ├── MessageBubble.tsx             # 消息气泡组件（支持多选模式、多文件项目预览收集）
 ├── MessageBubble.module.css      # 消息气泡样式（含 multiFilePreviewBtn）
+├── PlanningTraceDetails.tsx      # Planning 持久化执行详情轻量收纳组件
+├── PlanningTraceDetails.module.css # Planning 执行详情收纳样式
 ├── ModeSelector.tsx              # 模式选择器（普通/规划）
 ├── ModeSelector.module.css       # 模式选择器样式
 ├── MultiSelectBar.tsx            # 多选浮动操作栏（批量复制/引用/删除）
@@ -344,6 +346,8 @@ ui/
 ├── TextContextMenu.module.css
 ├── Toast.tsx                     # 提示消息组件
 ├── Toast.module.css              # 提示样式
+├── Tooltip.tsx                   # 统一悬浮提示组件
+├── Tooltip.module.css            # 悬浮提示样式
 └── index.ts                      # 模块导出索引
 ```
 

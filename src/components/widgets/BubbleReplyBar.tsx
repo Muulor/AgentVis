@@ -15,6 +15,7 @@ import { Send, RotateCcw, MessageSquareDashed } from 'lucide-react';
 import { useWidgetStore, type WidgetSelectionSnapshot } from '@stores/widgetStore';
 import { normalizeWidgetTitle } from '@stores/widgetSubmissionRecovery';
 import { getLogger } from '@services/logger';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n, type Language } from '@/i18n';
 import styles from './BubbleReplyBar.module.css';
@@ -210,14 +211,15 @@ export const BubbleReplyBar = memo(function BubbleReplyBar({
                         <MessageSquareDashed size={14} />
                         {t('widgets.replied')}
                     </span>
-                    <button
-                        className={styles.reselectBtn}
-                        onClick={handleReselect}
-                        title={t('widgets.reselectTitle')}
-                    >
-                        <RotateCcw size={13} />
-                        {t('widgets.reselect')}
-                    </button>
+                    <Tooltip content={t('widgets.reselectTitle')}>
+                        <button
+                            className={styles.reselectBtn}
+                            onClick={handleReselect}
+                        >
+                            <RotateCcw size={13} />
+                            {t('widgets.reselect')}
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
         );
@@ -260,14 +262,18 @@ export const BubbleReplyBar = memo(function BubbleReplyBar({
                         }
                     }}
                 />
-                <button
-                    className={cx(styles.confirmBtn, ((!hasSelections && !extraText.trim()) || isDispatching) && styles.confirmBtnDisabled)}
-                    onClick={handleConfirm}
+                <Tooltip
+                    content={t('widgets.confirmReplyTitle')}
                     disabled={(!hasSelections && !extraText.trim()) || isDispatching}
-                    title={t('widgets.confirmReplyTitle')}
                 >
-                    <Send size={15} />
-                </button>
+                    <button
+                        className={cx(styles.confirmBtn, ((!hasSelections && !extraText.trim()) || isDispatching) && styles.confirmBtnDisabled)}
+                        onClick={handleConfirm}
+                        disabled={(!hasSelections && !extraText.trim()) || isDispatching}
+                    >
+                        <Send size={15} />
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 提示文字 */}

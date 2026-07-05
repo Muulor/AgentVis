@@ -6,6 +6,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getProviders, getModelsByProvider, getModelDisplayName } from '@/config/modelRegistry';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './AgentModelSelector.module.css';
@@ -60,25 +61,28 @@ export function AgentModelSelector({ provider, model, onSelect }: AgentModelSele
     return (
         <div className={styles.container} ref={containerRef}>
             {/* 触发器 */}
-            <button
-                className={styles.trigger}
-                onClick={() => setIsOpen(!isOpen)}
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
-            >
-                <span className={styles.modelName}>{getDisplayName()}</span>
-                <svg
-                    className={cx(styles.chevron, isOpen && styles.chevronOpen)}
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
+            <Tooltip content={t('agent.selectModel')}>
+                <button
+                    className={styles.trigger}
+                    onClick={() => setIsOpen(!isOpen)}
+                    aria-haspopup="listbox"
+                    aria-expanded={isOpen}
+                    aria-label={t('agent.selectModel')}
                 >
-                    <path d="M3 4.5l3 3 3-3" />
-                </svg>
-            </button>
+                    <span className={styles.modelName}>{getDisplayName()}</span>
+                    <svg
+                        className={cx(styles.chevron, isOpen && styles.chevronOpen)}
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                    >
+                        <path d="M3 4.5l3 3 3-3" />
+                    </svg>
+                </button>
+            </Tooltip>
 
             {/* 下拉菜单 */}
             {isOpen && (

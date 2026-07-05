@@ -21,6 +21,7 @@
     background-color: transparent;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
@@ -52,6 +53,7 @@
     /* 使用微妙的主题色背景标识已关联状态 */
     background-color: rgba(59, 130, 246, 0.08);
     font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     color: var(--color-action-primary);
     max-width: 180px;
     cursor: default;

@@ -18,6 +18,7 @@ import { FolderOpen, RefreshCw, Loader2, ChevronLeft, ChevronRight, ChevronRight
 import { FileItem, type FileItemData } from './FileItem';
 import { useToast } from '../ui/Toast';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Tooltip } from '@components/ui/Tooltip';
 import { usePreviewStore } from '@stores/previewStore';
 import styles from './FileList.module.css';
 import { getLogger } from '@services/logger';
@@ -815,66 +816,77 @@ export function FileList({ agentId, hubName, agentName, rootDir, selectedFileId,
             {/* 导航栏：后退/前进按钮 + 面包屑 + 刷新 */}
             <div className={styles.header}>
                 <div className={styles.navButtons}>
-                    <button
-                        className={styles.navBtn}
-                        onClick={goBack}
-                        disabled={!canGoBack}
-                        title={t('common.back')}
-                    >
-                        <ChevronLeft size={14} />
-                    </button>
-                    <button
-                        className={styles.navBtn}
-                        onClick={goForward}
-                        disabled={!canGoForward}
-                        title={t('common.forward')}
-                    >
-                        <ChevronRight size={14} />
-                    </button>
+                    <Tooltip content={t('common.back')}>
+                        <button
+                            className={styles.navBtn}
+                            onClick={goBack}
+                            disabled={!canGoBack}
+                            aria-label={t('common.back')}
+                        >
+                            <ChevronLeft size={14} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip content={t('common.forward')}>
+                        <button
+                            className={styles.navBtn}
+                            onClick={goForward}
+                            disabled={!canGoForward}
+                            aria-label={t('common.forward')}
+                        >
+                            <ChevronRight size={14} />
+                        </button>
+                    </Tooltip>
                 </div>
 
                 <div className={styles.breadcrumb}>
-                    <button
-                        className={cx(styles.breadcrumbItem, currentPath === '' && styles.breadcrumbActive)}
-                        onClick={() => navigateToBreadcrumb(-1)}
-                        title={t('file.rootDirectory')}
-                    >
-                        <Home size={12} />
-                    </button>
+                    <Tooltip content={t('file.rootDirectory')}>
+                        <button
+                            className={cx(styles.breadcrumbItem, currentPath === '' && styles.breadcrumbActive)}
+                            onClick={() => navigateToBreadcrumb(-1)}
+                            aria-label={t('file.rootDirectory')}
+                        >
+                            <Home size={12} />
+                        </button>
+                    </Tooltip>
                     {breadcrumbSegments.map((segment, index) => (
                         <span key={index} className={styles.breadcrumbGroup}>
                             <BreadcrumbSep size={10} className={styles.breadcrumbSeparator} />
-                            <button
-                                className={cx(styles.breadcrumbItem, index === breadcrumbSegments.length - 1 && styles.breadcrumbActive)}
-                                onClick={() => navigateToBreadcrumb(index)}
-                                title={segment}
-                            >
-                                {segment}
-                            </button>
+                            <Tooltip content={segment}>
+                                <button
+                                    className={cx(styles.breadcrumbItem, index === breadcrumbSegments.length - 1 && styles.breadcrumbActive)}
+                                    onClick={() => navigateToBreadcrumb(index)}
+                                >
+                                    {segment}
+                                </button>
+                            </Tooltip>
                         </span>
                     ))}
                 </div>
 
-                <button
-                    className={styles.refreshBtn}
-                    onClick={() => loadDirectory(currentPath)}
-                    disabled={isLoading}
-                    title={t('file.refreshList')}
-                >
-                    <RefreshCw size={14} className={isLoading ? styles.spinning : ''} />
-                </button>
+                <Tooltip content={t('file.refreshList')}>
+                    <button
+                        className={styles.refreshBtn}
+                        onClick={() => loadDirectory(currentPath)}
+                        disabled={isLoading}
+                        aria-label={t('file.refreshList')}
+                    >
+                        <RefreshCw size={14} className={isLoading ? styles.spinning : ''} />
+                    </button>
+                </Tooltip>
 
                 {/* run project preview button: only shown in deliverables mode (not project dir) 
                  * and when current dir has previewable files */}
                 {!rootDir && entries.some(e => !e.isDirectory && isPreviewableFile(e.fileName)) && (
-                    <button
-                        className={styles.previewBtn}
-                        onClick={handleRunPreview}
-                        disabled={isStartingPreview}
-                        title="Run Vite Preview"
-                    >
-                        <Play size={14} />
-                    </button>
+                    <Tooltip content={t('file.projectPreview')}>
+                        <button
+                            className={styles.previewBtn}
+                            onClick={handleRunPreview}
+                            disabled={isStartingPreview}
+                            aria-label={t('file.projectPreview')}
+                        >
+                            <Play size={14} />
+                        </button>
+                    </Tooltip>
                 )}
             </div>
 

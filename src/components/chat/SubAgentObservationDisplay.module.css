@@ -13,6 +13,14 @@
     overflow: hidden;
 }
 
+.embedded {
+    margin-bottom: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
 .header {
     display: flex;
     align-items: center;
@@ -33,7 +41,7 @@
 }
 
 .headerIcon {
-    color: var(--color-action-primary, #3B82F6);
+    color: var(--color-action-primary, #339CFF);
     flex-shrink: 0;
 }
 
@@ -61,6 +69,11 @@
     padding: 8px 12px 12px;
 }
 
+.embedded .contentContainer {
+    gap: 5px;
+    padding: 0;
+}
+
 /* 工具行为指示器 */
 .toolAction {
     display: flex;
@@ -71,6 +84,12 @@
     background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
     font-size: var(--font-size-sm, 12px);
     color: var(--color-text-primary, #E5E7EB);
+}
+
+.embedded .toolAction {
+    padding: 3px 0;
+    border-radius: 0;
+    background: transparent;
 }
 
 .toolActionExpanded {
@@ -176,6 +195,12 @@
     word-break: break-word;
 }
 
+.embedded .resultCard {
+    padding: 6px 0 6px 10px;
+    background: transparent;
+    border-left-color: var(--color-success, #34D399);
+}
+
 /* 覆盖 MarkdownRenderer 的默认间距，适配紧凑卡片场景 */
 .resultCard p {
     margin: 0.2em 0;
@@ -221,6 +246,12 @@
     background-color: rgba(251, 191, 36, 0.06);
     border: 1px solid rgba(251, 191, 36, 0.2);
     font-size: var(--font-size-sm, 12px);
+}
+
+.embedded .interventionAction {
+    padding: 3px 0;
+    border: none;
+    background: transparent;
 }
 
 .interventionIcon {

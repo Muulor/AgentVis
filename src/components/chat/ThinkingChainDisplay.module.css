@@ -12,6 +12,14 @@
     overflow: hidden;
 }
 
+.embedded {
+    margin-bottom: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
 .header {
     display: flex;
     align-items: center;
@@ -32,7 +40,7 @@
 }
 
 .headerIcon {
-    color: var(--color-primary);
+    color: var(--color-action-primary);
     flex-shrink: 0;
 }
 
@@ -54,14 +62,26 @@
     padding: 8px 12px 12px;
 }
 
+.embedded .stepsContainer {
+    gap: 8px;
+    padding: 0;
+}
+
 /* 单个步骤项 - 与 ThinkingChainSection 一致 */
 .stepItem {
     display: flex;
     gap: 8px;
     padding: 8px;
     border-radius: 6px;
-    border-left: 2px solid var(--color-success);
+    border-left: 2px solid transparent;
     opacity: 0.85;
+}
+
+.embedded .stepItem {
+    padding: 4px 0 4px 10px;
+    border-left-color: transparent;
+    border-radius: 0;
+    opacity: 1;
 }
 
 /* 步骤指示器（左侧勾选图标） */
@@ -76,8 +96,19 @@
     background: var(--color-success);
 }
 
+.embedded .stepIndicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--color-success);
+    background: transparent;
+}
+
 .checkIcon {
     color: white;
+}
+
+.embedded .checkIcon {
+    color: var(--color-success);
 }
 
 /* 步骤内容区域 */
@@ -89,4 +120,10 @@
     color: var(--color-text-secondary);
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+.embedded .stepContent {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--color-text-secondary);
 }

@@ -29,6 +29,7 @@ import { useFSMVisualizationStore } from '@stores/fsmVisualizationStore';
 import type { SubAgentObservationEvent } from '@/services/planning/agent-loop/types';
 import { extractJsonFromText } from '@/services/memory/utils/JsonParser';
 import { MarkdownRenderer } from '@components/file/MarkdownRenderer';
+import { Tooltip } from '@components/ui/Tooltip';
 import { HitlInterventionBar } from './HitlInterventionBar';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -246,15 +247,16 @@ function ToolActionIndicator({ action, animatePending }: ToolActionIndicatorProp
                         {displayedTarget}
                     </span>
                     {canExpand && (
-                        <button
-                            type="button"
-                            className={styles.toolTargetToggle}
-                            onClick={toggleExpanded}
-                            aria-label={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}
-                            title={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}
-                        >
-                            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                        </button>
+                        <Tooltip content={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}>
+                            <button
+                                type="button"
+                                className={styles.toolTargetToggle}
+                                onClick={toggleExpanded}
+                                aria-label={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}
+                            >
+                                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                            </button>
+                        </Tooltip>
                     )}
                 </>
             )}

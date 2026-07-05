@@ -259,7 +259,7 @@
     /* 使用语义化 token，同时支持浅色和深色主题 */
     background-color: var(--color-bg-secondary);
     border-radius: var(--radius-sm);
-    border-left: 2px solid var(--color-action-primary);
+    border-left: none;
     font-size: var(--font-size-xs);
 }
 

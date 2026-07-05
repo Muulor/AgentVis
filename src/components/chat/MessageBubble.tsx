@@ -17,8 +17,7 @@ import { wrapSvgInHtml } from '@services/preview/templateInference';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 
-import { ThinkingChainDisplay } from './ThinkingChainDisplay';
-import { SubAgentObservationDisplay } from './SubAgentObservationDisplay';
+import { PlanningTraceDetails } from './PlanningTraceDetails';
 import { AttachmentCard } from './AttachmentCard';
 import { MarkdownRenderer } from '../file/MarkdownRenderer';
 import { BubbleReplyBar } from '../widgets/BubbleReplyBar';
@@ -694,17 +693,14 @@ export const MessageBubble = memo(function MessageBubble({
                     <QuotedFromBlock quotes={message.quotedFrom} />
                 )}
 
-                {/* 思维链显示（Agent 消息，Planning 模式下显示持久化数据） */}
-                {!isUser && message.metadata?.mode === 'planning' && Boolean(message.metadata.thinkingChain) && (
-                    <ThinkingChainDisplay
-                        data={message.metadata.thinkingChain as { analyzing: string; planning: string; decided: string }}
-                        steps={message.metadata.thinkingSteps as Array<{ stepNumber: number; analyzing: string; planning: string; decided: string }> | undefined}
+                {/* Planning 执行详情（持久化后用轻量分隔线收纳） */}
+                {!isUser && message.metadata?.mode === 'planning' && (
+                    <PlanningTraceDetails
+                        thinkingChain={message.metadata.thinkingChain as { analyzing: string; planning: string; decided: string } | undefined}
+                        thinkingSteps={message.metadata.thinkingSteps as Array<{ stepNumber: number; analyzing: string; planning: string; decided: string }> | undefined}
+                        subAgentObservations={message.metadata.subAgentObservations as import('@/services/planning/agent-loop/types').SubAgentObservationEvent[] | undefined}
+                        completedAt={createdAt}
                     />
-                )}
-
-                {/* Sub-Agent 观测数据（持久化后静态展示） */}
-                {!isUser && message.metadata?.mode === 'planning' && Boolean(message.metadata.subAgentObservations) && (
-                    <SubAgentObservationDisplay data={message.metadata.subAgentObservations as import('@/services/planning/agent-loop/types').SubAgentObservationEvent[]} />
                 )}
 
                 {/* 消息内容 */}

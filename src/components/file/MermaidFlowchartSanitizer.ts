@@ -9,6 +9,13 @@ interface FlowchartOperatorMatch {
     kind: string;
 }
 
+interface FlowchartSubgraphOpenLine {
+    indent: string;
+    keyword: string;
+    rest: string;
+    suffix: string;
+}
+
 export function fixFlowchartReservedNodeIds(code: string): string {
     if (!isFlowchartLike(code)) return code;
 
@@ -47,6 +54,31 @@ export function fixFlowchartDanglingPipeLabelLinks(code: string): string {
             return fixed.line;
         })
         .join('\n');
+}
+
+export function fixFlowchartPseudoSubgraphNodeDeclarations(code: string): string {
+    if (!isFlowchartLike(code)) return code;
+
+    const lines = code.split('\n');
+    const matchedOpenLines = collectMatchedFlowchartSubgraphOpenLines(lines);
+
+    const fixedLines = lines.map((line, index) => {
+        const subgraphOpen = parseFlowchartSubgraphOpenLine(line);
+        if (!subgraphOpen) return line;
+
+        if (matchedOpenLines.has(index)) {
+            if (subgraphOpen.keyword === 'subgraph') return line;
+
+            return `${subgraphOpen.indent}subgraph ${subgraphOpen.rest}${subgraphOpen.suffix}`;
+        }
+
+        const nodeDeclaration = readPseudoSubgraphNodeDeclaration(subgraphOpen.rest);
+        if (!nodeDeclaration) return line;
+
+        return `${subgraphOpen.indent}${nodeDeclaration}${subgraphOpen.suffix}`;
+    });
+
+    return fixedLines.join('\n');
 }
 
 export function fixFlowchartUnsafeSubgraphTitles(code: string): string {
@@ -111,6 +143,47 @@ function isFlowchartLike(code: string): boolean {
         .find((line) => line.length > 0 && !line.startsWith('%%'));
 
     return firstContentLine ? /^(flowchart|graph)\b/i.test(firstContentLine) : false;
+}
+
+function collectMatchedFlowchartSubgraphOpenLines(lines: string[]): Set<number> {
+    const openLineStack: number[] = [];
+    const matchedOpenLines = new Set<number>();
+
+    lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('%%')) return;
+
+        if (parseFlowchartSubgraphOpenLine(line)) {
+            openLineStack.push(index);
+            return;
+        }
+
+        if (/^end\s*;?\s*$/i.test(trimmed)) {
+            const openLineIndex = openLineStack.pop();
+            if (openLineIndex !== undefined) matchedOpenLines.add(openLineIndex);
+        }
+    });
+
+    return matchedOpenLines;
+}
+
+function parseFlowchartSubgraphOpenLine(line: string): FlowchartSubgraphOpenLine | null {
+    const match = /^(\s*)(subgraph)\s+(.+?)(\s*;?\s*)$/i.exec(line);
+    if (match?.[1] === undefined || !match[2] || !match[3] || match[4] === undefined) return null;
+
+    return {
+        indent: match[1],
+        keyword: match[2],
+        rest: match[3],
+        suffix: match[4],
+    };
+}
+
+function readPseudoSubgraphNodeDeclaration(rest: string): string | null {
+    const match = /^([A-Za-z][A-Za-z0-9_]*)\s*((?:\[[^\n]+\]|\([^\n]+\)|\{[^\n]+}))$/.exec(rest.trim());
+    if (!match?.[1] || !match[2]) return null;
+
+    return `${match[1]}${match[2]}`;
 }
 
 function collectFlowchartDeclarationIds(lines: string[]): Set<string> {

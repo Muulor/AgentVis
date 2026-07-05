@@ -11,3 +11,4 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { FileRevertDialog } from './FileRevertDialog';
 export type { DiffRecord } from './FileRevertDialog';
 export { TextContextMenu, useTextContextMenu } from './TextContextMenu';
+export { Tooltip, TooltipProvider } from './Tooltip';

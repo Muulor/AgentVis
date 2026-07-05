@@ -26,6 +26,7 @@ import {
 import type { SubAgentObservationEvent } from '@/services/planning/agent-loop/types';
 import { extractJsonFromText } from '@/services/memory/utils/JsonParser';
 import { MarkdownRenderer } from '@components/file/MarkdownRenderer';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import { useExpandableToolTarget } from './useExpandableToolTarget';
@@ -38,6 +39,12 @@ import styles from './SubAgentObservationDisplay.module.css';
 interface SubAgentObservationDisplayProps {
     /** 持久化的观测数据数组 */
     data: SubAgentObservationEvent[];
+    /** 是否默认展开 */
+    defaultExpanded?: boolean;
+    /** 是否展示自身标题栏；嵌入汇总行时会隐藏标题栏 */
+    showHeader?: boolean;
+    /** 额外样式类名 */
+    className?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -201,9 +208,12 @@ function groupObservationsIntoSteps(observations: SubAgentObservationEvent[]): O
  */
 export const SubAgentObservationDisplay = memo(function SubAgentObservationDisplay({
     data,
+    defaultExpanded = false,
+    showHeader = true,
+    className,
 }: SubAgentObservationDisplayProps) {
     const { t } = useI18n();
-    const [isExpanded, setIsExpanded] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
     // 将扁平 observations 分组为步骤（去重 thinking 文字）
     const steps = useMemo(
@@ -215,26 +225,31 @@ export const SubAgentObservationDisplay = memo(function SubAgentObservationDispl
         return null;
     }
 
+    const showContent = showHeader ? isExpanded : true;
+
     return (
-        <div className={styles.container}>
+        <div className={cx(styles.container, !showHeader && styles.embedded, className)}>
             {/* 标题栏（可点击折叠） */}
-            <button
-                className={styles.header}
-                onClick={() => setIsExpanded(!isExpanded)}
-                type="button"
-            >
-                <Loader size={10} className={styles.headerIcon} />
-                <span className={styles.headerTitle}>Sub-Agent</span>
-                {steps.length > 0 && (
-                    <span className={styles.stepCount}>{t('chat.stepCount', { count: steps.length })}</span>
-                )}
-                <span className={styles.toggle}>
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </span>
-            </button>
+            {showHeader && (
+                <button
+                    className={styles.header}
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    type="button"
+                    aria-expanded={isExpanded}
+                >
+                    <Loader size={10} className={styles.headerIcon} />
+                    <span className={styles.headerTitle}>{t('chat.subAgentTrace')}</span>
+                    {steps.length > 0 && (
+                        <span className={styles.stepCount}>{t('chat.stepCount', { count: steps.length })}</span>
+                    )}
+                    <span className={styles.toggle}>
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                </button>
+            )}
 
             {/* 折叠内容 */}
-            {isExpanded && (
+            {showContent && (
                 <div className={styles.contentContainer}>
                     {steps.map((step, index) => (
                         <StaticStepItem
@@ -347,12 +362,14 @@ function StaticStepItem({ step }: StaticStepItemProps) {
  * 与实时版 UserInterventionIndicator 风格一致，使用 MessageSquare icon + "User" 标题。
  */
 function StaticUserInterventionIndicator({ message }: { message: string }) {
+    const { t } = useI18n();
+
     return (
         <div className={styles.interventionAction}>
             <span className={styles.interventionIcon}>
                 <MessageSquare size={13} />
             </span>
-            <span className={styles.interventionLabel}>User</span>
+            <span className={styles.interventionLabel}>{t('chat.userLabel')}</span>
             <span className={styles.interventionMessage}>{message}</span>
         </div>
     );
@@ -400,15 +417,16 @@ function StaticToolAction({ action }: StaticToolActionProps) {
                         {displayedTarget}
                     </span>
                     {canExpand && (
-                        <button
-                            type="button"
-                            className={styles.toolTargetToggle}
-                            onClick={toggleExpanded}
-                            aria-label={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}
-                            title={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}
-                        >
-                            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                        </button>
+                        <Tooltip content={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}>
+                            <button
+                                type="button"
+                                className={styles.toolTargetToggle}
+                                onClick={toggleExpanded}
+                                aria-label={isExpanded ? t('chat.collapseToolTarget') : t('chat.expandToolTarget')}
+                            >
+                                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                            </button>
+                        </Tooltip>
                     )}
                 </>
             )}

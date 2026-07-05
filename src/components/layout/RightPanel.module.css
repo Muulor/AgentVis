@@ -1,4 +1,7 @@
 .rightPanel {
+    --right-panel-divider-inset: var(--spacing-lg);
+    --right-panel-divider-color: var(--color-border-default);
+
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -10,17 +13,37 @@
     border-radius: var(--radius-xl);
 }
 
+.diffModePanel {
+    background-color: var(--color-bg-primary);
+}
+
+.rightPanel :global([role="separator"][aria-orientation="vertical"])::after {
+    left: var(--right-panel-divider-inset);
+    right: var(--right-panel-divider-inset);
+    width: auto;
+}
+
 /* 拖拽分隔条时禁用文字选中，避免干扰 */
 .resizing {
     user-select: none;
 }
 
 .header {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--color-border-default);
+}
+
+.header::after {
+    content: '';
+    position: absolute;
+    right: var(--right-panel-divider-inset);
+    bottom: 0;
+    left: var(--right-panel-divider-inset);
+    height: 1px;
+    background: var(--right-panel-divider-color);
 }
 
 .title {
@@ -163,13 +186,23 @@
 }
 
 .previewHeader {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
     background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--color-border-default);
     flex-shrink: 0;
+}
+
+.previewHeader::after {
+    content: '';
+    position: absolute;
+    right: var(--right-panel-divider-inset);
+    bottom: 0;
+    left: var(--right-panel-divider-inset);
+    height: 1px;
+    background: var(--right-panel-divider-color);
 }
 
 .previewFileName {
@@ -278,16 +311,17 @@
     overflow: hidden;
     position: relative;
     min-height: 0;
+    background: var(--color-bg-primary);
 }
 
 /* Diff 工具栏 */
 .diffToolbar {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     padding: 8px 12px;
-    background: var(--color-bg-tertiary);
-    border-bottom: 1px solid var(--color-border-default);
+    background: var(--color-bg-primary);
     flex-shrink: 0;
 }
 
@@ -352,12 +386,12 @@
 /* ==================== 多文件标签页 ==================== */
 
 .fileTabBar {
+    position: relative;
     /* block + nowrap 是横向滚动的经典可靠模式（flex 容器在 WebView 下 overflow-x 不触发滚动） */
     display: block;
     white-space: nowrap;
     padding: 0 4px;
-    background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--color-border-default);
+    background: var(--color-bg-primary);
     flex-shrink: 0;
     overflow-x: auto;
     scrollbar-width: none;
@@ -425,17 +459,37 @@
 /* ==================== 待发送附件列表 ==================== */
 
 .attachmentListContainer {
+    position: relative;
     flex-shrink: 0;
-    border-bottom: 1px solid var(--color-border-default);
     background: var(--color-bg-secondary);
 }
 
+.attachmentListContainer::after {
+    content: '';
+    position: absolute;
+    right: var(--right-panel-divider-inset);
+    bottom: 0;
+    left: var(--right-panel-divider-inset);
+    height: 1px;
+    background: var(--right-panel-divider-color);
+}
+
 .attachmentListHeader {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--color-border-default);
+}
+
+.attachmentListHeader::after {
+    content: '';
+    position: absolute;
+    right: var(--right-panel-divider-inset);
+    bottom: 0;
+    left: var(--right-panel-divider-inset);
+    height: 1px;
+    background: var(--right-panel-divider-color);
 }
 
 .attachmentListTitle {
@@ -507,6 +561,7 @@
 /* 审批已完成（normal 模式）时，在文件区顶部显示弱提示条，给用户补救通道 */
 
 .historyAccessBar {
+    position: relative;
     display: flex;
     align-items: center;
     /* 不换行：hint 靠左紧凑，chips 容器横向滚动 */
@@ -514,10 +569,19 @@
     gap: 6px;
     padding: 6px 12px;
     background: var(--color-bg-tertiary);
-    border-bottom: 1px solid var(--color-border-default);
     flex-shrink: 0;
     min-height: 34px;
     overflow: hidden;
+}
+
+.historyAccessBar::after {
+    content: '';
+    position: absolute;
+    right: var(--right-panel-divider-inset);
+    bottom: 0;
+    left: var(--right-panel-divider-inset);
+    height: 1px;
+    background: var(--right-panel-divider-color);
 }
 
 .historyAccessHint {
@@ -602,4 +666,4 @@
     background: var(--color-primary-muted, rgba(99, 102, 241, 0.12));
     border-color: var(--color-primary);
     color: var(--color-primary);
-}
+}

@@ -17,6 +17,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, MessageSquare, Pause, Clock } from 'lucide-react';
 import { useHitlStore } from '@stores/hitlStore';
 import { useI18n } from '@/i18n';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { getElapsedExecTimeoutSeconds } from '@/services/planning/utils/ExecTimeoutObservation';
 import styles from './HitlInterventionBar.module.css';
@@ -155,15 +156,16 @@ export function HitlInterventionBar({
                             </span>
                         </div>
                     )}
-                    <button
-                        className={styles.pauseBtn}
-                        onClick={handlePause}
-                        title={t('chat.hitlPauseTitle')}
-                        aria-label={t('chat.hitlPauseAria')}
-                    >
-                        <Pause size={12} />
-                        <span>{t('chat.hitlPause')}</span>
-                    </button>
+                    <Tooltip content={t('chat.hitlPauseTitle')}>
+                        <button
+                            className={styles.pauseBtn}
+                            onClick={handlePause}
+                            aria-label={t('chat.hitlPauseAria')}
+                        >
+                            <Pause size={12} />
+                            <span>{t('chat.hitlPause')}</span>
+                        </button>
+                    </Tooltip>
                 </div>
             )}
 
@@ -207,25 +209,27 @@ export function HitlInterventionBar({
                     <div className={styles.actionRow}>
                         {/* 右侧：继续 / 发送并继续 */}
                         <div className={styles.resumeGroup}>
-                            <button
-                                className={styles.resumeBtn}
-                                onClick={handleResumeOnly}
-                                title={t('chat.hitlResumeTitle')}
-                                aria-label={t('chat.hitlResume')}
-                            >
-                                <Play size={11} />
-                                <span>{t('chat.hitlResume')}</span>
-                            </button>
-                            {inputValue.trim() && (
+                            <Tooltip content={t('chat.hitlResumeTitle')}>
                                 <button
-                                    className={styles.sendResumeBtn}
-                                    onClick={handleSendAndResume}
-                                    title={t('chat.hitlSendResumeTitle')}
-                                    aria-label={t('chat.hitlSendResume')}
+                                    className={styles.resumeBtn}
+                                    onClick={handleResumeOnly}
+                                    aria-label={t('chat.hitlResume')}
                                 >
-                                    <MessageSquare size={11} />
-                                    <span>{t('chat.hitlSendResume')}</span>
+                                    <Play size={11} />
+                                    <span>{t('chat.hitlResume')}</span>
                                 </button>
+                            </Tooltip>
+                            {inputValue.trim() && (
+                                <Tooltip content={t('chat.hitlSendResumeTitle')}>
+                                    <button
+                                        className={styles.sendResumeBtn}
+                                        onClick={handleSendAndResume}
+                                        aria-label={t('chat.hitlSendResume')}
+                                    >
+                                        <MessageSquare size={11} />
+                                        <span>{t('chat.hitlSendResume')}</span>
+                                    </button>
+                                </Tooltip>
                             )}
                         </div>
                     </div>

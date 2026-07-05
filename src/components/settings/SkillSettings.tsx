@@ -15,6 +15,7 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { useToast } from '@components/ui/Toast';
+import { Tooltip } from '@components/ui/Tooltip';
 import { invoke } from '@tauri-apps/api/core';
 import {
     FolderInput,
@@ -123,6 +124,34 @@ function formatPostInstallFailureMessage(
 
     const detail = output.trim().slice(0, 200);
     return `${t('settings.skills.operationFailed')}: ${detail || t('settings.skills.unknownError')}`;
+}
+
+function getDependencyActionTitle(
+    isChecking: boolean,
+    isInstalling: boolean,
+    isInstalled: boolean,
+    isError: boolean,
+    t: TFunction
+): string {
+    if (isChecking) return t('settings.skills.checkingDependencyTitle');
+    if (isInstalling) return t('settings.skills.installingDependencyTitle');
+    if (isInstalled) return t('settings.skills.dependencyInstalledTitle');
+    if (isError) return t('settings.skills.retryInstallTitle');
+    return t('settings.skills.installDependencyTitle');
+}
+
+function getPostInstallActionTitle(
+    isChecking: boolean,
+    isInstalling: boolean,
+    isInstalled: boolean,
+    isError: boolean,
+    t: TFunction
+): string {
+    if (isChecking) return t('settings.skills.checkingCommandTitle');
+    if (isInstalling) return t('settings.skills.executingCommandTitle');
+    if (isInstalled) return t('settings.skills.postInstallCompletedTitle');
+    if (isError) return t('settings.skills.retryCommandTitle');
+    return t('settings.skills.executeCommandTitle');
 }
 
 async function createPackageListFiles() {
@@ -793,20 +822,24 @@ function SkillListSection() {
                                             <span className={styles.skillName}>{skill.name}</span>
                                             <span className={styles.skillModeBadge}>{skill.mode}</span>
                                         </div>
-                                        <p className={styles.skillDescription} title={skill.description}>{skill.description}</p>
+                                        <Tooltip content={skill.description} multiline side="bottom" align="start">
+                                            <p className={styles.skillDescription}>{skill.description}</p>
+                                        </Tooltip>
                                     </div>
 
                                     {/* 启用/禁用开关 */}
-                                    <button
-                                        className={cx(styles.skillToggle, !skill.enabled && styles.skillToggleOff)}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleSkillEnabled(skill.name);
-                                        }}
-                                        title={skill.enabled ? t('settings.skills.disableTitle') : t('settings.skills.enableTitle')}
-                                    >
-                                        <Power size={14} />
-                                    </button>
+                                    <Tooltip content={skill.enabled ? t('settings.skills.disableTitle') : t('settings.skills.enableTitle')}>
+                                        <button
+                                            className={cx(styles.skillToggle, !skill.enabled && styles.skillToggleOff)}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleSkillEnabled(skill.name);
+                                            }}
+                                            aria-label={skill.enabled ? t('settings.skills.disableTitle') : t('settings.skills.enableTitle')}
+                                        >
+                                            <Power size={14} />
+                                        </button>
+                                    </Tooltip>
 
                                     {/* 折叠/展开图标 */}
                                     <div className={styles.collapseToggle}>
@@ -853,38 +886,45 @@ function SkillListSection() {
                                                             </div>
                                                             <div className={styles.depActions}>
                                                                 {/* 复制按钮 */}
-                                                                <button
-                                                                    className={styles.copyButton}
-                                                                    onClick={(e) => { e.stopPropagation(); void copyText(cmd, copyKey); }}
-                                                                    title={t('settings.skills.copyInstallCommand')}
-                                                                >
-                                                                    {copiedKey === copyKey ? (
-                                                                        <CheckCircle size={12} />
-                                                                    ) : (
-                                                                        <Copy size={12} />
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={t('settings.skills.copyInstallCommand')}>
+                                                                    <button
+                                                                        className={styles.copyButton}
+                                                                        onClick={(e) => { e.stopPropagation(); void copyText(cmd, copyKey); }}
+                                                                        aria-label={t('settings.skills.copyInstallCommand')}
+                                                                    >
+                                                                        {copiedKey === copyKey ? (
+                                                                            <CheckCircle size={12} />
+                                                                        ) : (
+                                                                            <Copy size={12} />
+                                                                        )}
+                                                                    </button>
+                                                                </Tooltip>
                                                                 {/* 安装状态 pill 按钮 */}
-                                                                <button
-                                                                    className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
-                                                                        : isError ? styles.installPillError
-                                                                            : isBusy ? styles.installPillBusy
-                                                                                : undefined)}
-                                                                    onClick={(e) => { e.stopPropagation(); void installNpm(pkg); }}
-                                                                    disabled={isBusy || isInstalled}
-                                                                >
-                                                                    {isChecking ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
-                                                                    ) : isInstalling ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
-                                                                    ) : isInstalled ? (
-                                                                        <><CheckCircle size={10} /> {t('common.installed')}</>
-                                                                    ) : isError ? (
-                                                                        <><RotateCw size={10} /> {t('common.retry')}</>
-                                                                    ) : (
-                                                                        <><Download size={10} /> {t('common.install')}</>
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}>
+                                                                    <span className={styles.tooltipButtonWrap}>
+                                                                        <button
+                                                                            className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
+                                                                                : isError ? styles.installPillError
+                                                                                    : isBusy ? styles.installPillBusy
+                                                                                        : undefined)}
+                                                                            onClick={(e) => { e.stopPropagation(); void installNpm(pkg); }}
+                                                                            disabled={isBusy || isInstalled}
+                                                                            aria-label={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}
+                                                                        >
+                                                                            {isChecking ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
+                                                                            ) : isInstalling ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
+                                                                            ) : isInstalled ? (
+                                                                                <><CheckCircle size={10} /> {t('common.installed')}</>
+                                                                            ) : isError ? (
+                                                                                <><RotateCw size={10} /> {t('common.retry')}</>
+                                                                            ) : (
+                                                                                <><Download size={10} /> {t('common.install')}</>
+                                                                            )}
+                                                                        </button>
+                                                                    </span>
+                                                                </Tooltip>
                                                             </div>
                                                             {/* 错误消息 */}
                                                             {isError && installStatus.message && (
@@ -921,38 +961,45 @@ function SkillListSection() {
                                                                 <code className={styles.depCommand}>{command}</code>
                                                             </div>
                                                             <div className={styles.depActions}>
-                                                                <button
-                                                                    className={styles.copyButton}
-                                                                    onClick={(e) => { e.stopPropagation(); void copyText(command, copyKey); }}
-                                                                    title={t('settings.skills.copyCommand')}
-                                                                >
-                                                                    {copiedKey === copyKey ? (
-                                                                        <CheckCircle size={12} />
-                                                                    ) : (
-                                                                        <Copy size={12} />
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={t('settings.skills.copyCommand')}>
+                                                                    <button
+                                                                        className={styles.copyButton}
+                                                                        onClick={(e) => { e.stopPropagation(); void copyText(command, copyKey); }}
+                                                                        aria-label={t('settings.skills.copyCommand')}
+                                                                    >
+                                                                        {copiedKey === copyKey ? (
+                                                                            <CheckCircle size={12} />
+                                                                        ) : (
+                                                                            <Copy size={12} />
+                                                                        )}
+                                                                    </button>
+                                                                </Tooltip>
                                                                 {/* 执行按钮 */}
-                                                                <button
-                                                                    className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
-                                                                        : isError ? styles.installPillError
-                                                                            : isBusy ? styles.installPillBusy
-                                                                                : undefined)}
-                                                                    onClick={(e) => { e.stopPropagation(); void runPostInstallCmd(command); }}
-                                                                    disabled={isBusy || isInstalled}
-                                                                >
-                                                                    {isChecking ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
-                                                                    ) : isInstalling ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.executing')}</>
-                                                                    ) : isInstalled ? (
-                                                                        <><CheckCircle size={10} /> {t('common.completed')}</>
-                                                                    ) : isError ? (
-                                                                        <><RotateCw size={10} /> {t('common.retry')}</>
-                                                                    ) : (
-                                                                        <><Download size={10} /> {t('common.execute')}</>
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={getPostInstallActionTitle(isChecking, isInstalling, isInstalled, isError, t)}>
+                                                                    <span className={styles.tooltipButtonWrap}>
+                                                                        <button
+                                                                            className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
+                                                                                : isError ? styles.installPillError
+                                                                                    : isBusy ? styles.installPillBusy
+                                                                                        : undefined)}
+                                                                            onClick={(e) => { e.stopPropagation(); void runPostInstallCmd(command); }}
+                                                                            disabled={isBusy || isInstalled}
+                                                                            aria-label={getPostInstallActionTitle(isChecking, isInstalling, isInstalled, isError, t)}
+                                                                        >
+                                                                            {isChecking ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
+                                                                            ) : isInstalling ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.executing')}</>
+                                                                            ) : isInstalled ? (
+                                                                                <><CheckCircle size={10} /> {t('common.completed')}</>
+                                                                            ) : isError ? (
+                                                                                <><RotateCw size={10} /> {t('common.retry')}</>
+                                                                            ) : (
+                                                                                <><Download size={10} /> {t('common.execute')}</>
+                                                                            )}
+                                                                        </button>
+                                                                    </span>
+                                                                </Tooltip>
                                                             </div>
                                                             {/* 错误消息 */}
                                                             {isError && installStatus.message && (
@@ -990,37 +1037,44 @@ function SkillListSection() {
                                                                 <code className={styles.depCommand}>{cmd}</code>
                                                             </div>
                                                             <div className={styles.depActions}>
-                                                                <button
-                                                                    className={styles.copyButton}
-                                                                    onClick={(e) => { e.stopPropagation(); void copyText(cmd, copyKey); }}
-                                                                    title={t('settings.skills.copyInstallCommand')}
-                                                                >
-                                                                    {copiedKey === copyKey ? (
-                                                                        <CheckCircle size={12} />
-                                                                    ) : (
-                                                                        <Copy size={12} />
-                                                                    )}
-                                                                </button>
-                                                                <button
-                                                                    className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
-                                                                        : isError ? styles.installPillError
-                                                                            : isBusy ? styles.installPillBusy
-                                                                                : undefined)}
-                                                                    onClick={(e) => { e.stopPropagation(); void installCargo(pkg); }}
-                                                                    disabled={isBusy || isInstalled}
-                                                                >
-                                                                    {isChecking ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
-                                                                    ) : isInstalling ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
-                                                                    ) : isInstalled ? (
-                                                                        <><CheckCircle size={10} /> {t('common.installed')}</>
-                                                                    ) : isError ? (
-                                                                        <><RotateCw size={10} /> {t('common.retry')}</>
-                                                                    ) : (
-                                                                        <><Download size={10} /> {t('common.install')}</>
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={t('settings.skills.copyInstallCommand')}>
+                                                                    <button
+                                                                        className={styles.copyButton}
+                                                                        onClick={(e) => { e.stopPropagation(); void copyText(cmd, copyKey); }}
+                                                                        aria-label={t('settings.skills.copyInstallCommand')}
+                                                                    >
+                                                                        {copiedKey === copyKey ? (
+                                                                            <CheckCircle size={12} />
+                                                                        ) : (
+                                                                            <Copy size={12} />
+                                                                        )}
+                                                                    </button>
+                                                                </Tooltip>
+                                                                <Tooltip content={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}>
+                                                                    <span className={styles.tooltipButtonWrap}>
+                                                                        <button
+                                                                            className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
+                                                                                : isError ? styles.installPillError
+                                                                                    : isBusy ? styles.installPillBusy
+                                                                                        : undefined)}
+                                                                            onClick={(e) => { e.stopPropagation(); void installCargo(pkg); }}
+                                                                            disabled={isBusy || isInstalled}
+                                                                            aria-label={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}
+                                                                        >
+                                                                            {isChecking ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
+                                                                            ) : isInstalling ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
+                                                                            ) : isInstalled ? (
+                                                                                <><CheckCircle size={10} /> {t('common.installed')}</>
+                                                                            ) : isError ? (
+                                                                                <><RotateCw size={10} /> {t('common.retry')}</>
+                                                                            ) : (
+                                                                                <><Download size={10} /> {t('common.install')}</>
+                                                                            )}
+                                                                        </button>
+                                                                    </span>
+                                                                </Tooltip>
                                                             </div>
                                                             {isError && installStatus.message && (
                                                                 <div className={cx(styles.depMessage, installStatus.isNetworkError ? styles.depMessageNetwork : styles.depMessageError)}>
@@ -1057,37 +1111,44 @@ function SkillListSection() {
                                                                 <code className={styles.depCommand}>{cmd}</code>
                                                             </div>
                                                             <div className={styles.depActions}>
-                                                                <button
-                                                                    className={styles.copyButton}
-                                                                    onClick={(e) => { e.stopPropagation(); void copyText(cmd, copyKey); }}
-                                                                    title={t('settings.skills.copyInstallCommand')}
-                                                                >
-                                                                    {copiedKey === copyKey ? (
-                                                                        <CheckCircle size={12} />
-                                                                    ) : (
-                                                                        <Copy size={12} />
-                                                                    )}
-                                                                </button>
-                                                                <button
-                                                                    className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
-                                                                        : isError ? styles.installPillError
-                                                                            : isBusy ? styles.installPillBusy
-                                                                                : undefined)}
-                                                                    onClick={(e) => { e.stopPropagation(); void installGo(pkg); }}
-                                                                    disabled={isBusy || isInstalled}
-                                                                >
-                                                                    {isChecking ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
-                                                                    ) : isInstalling ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
-                                                                    ) : isInstalled ? (
-                                                                        <><CheckCircle size={10} /> {t('common.installed')}</>
-                                                                    ) : isError ? (
-                                                                        <><RotateCw size={10} /> {t('common.retry')}</>
-                                                                    ) : (
-                                                                        <><Download size={10} /> {t('common.install')}</>
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={t('settings.skills.copyInstallCommand')}>
+                                                                    <button
+                                                                        className={styles.copyButton}
+                                                                        onClick={(e) => { e.stopPropagation(); void copyText(cmd, copyKey); }}
+                                                                        aria-label={t('settings.skills.copyInstallCommand')}
+                                                                    >
+                                                                        {copiedKey === copyKey ? (
+                                                                            <CheckCircle size={12} />
+                                                                        ) : (
+                                                                            <Copy size={12} />
+                                                                        )}
+                                                                    </button>
+                                                                </Tooltip>
+                                                                <Tooltip content={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}>
+                                                                    <span className={styles.tooltipButtonWrap}>
+                                                                        <button
+                                                                            className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
+                                                                                : isError ? styles.installPillError
+                                                                                    : isBusy ? styles.installPillBusy
+                                                                                        : undefined)}
+                                                                            onClick={(e) => { e.stopPropagation(); void installGo(pkg); }}
+                                                                            disabled={isBusy || isInstalled}
+                                                                            aria-label={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}
+                                                                        >
+                                                                            {isChecking ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
+                                                                            ) : isInstalling ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
+                                                                            ) : isInstalled ? (
+                                                                                <><CheckCircle size={10} /> {t('common.installed')}</>
+                                                                            ) : isError ? (
+                                                                                <><RotateCw size={10} /> {t('common.retry')}</>
+                                                                            ) : (
+                                                                                <><Download size={10} /> {t('common.install')}</>
+                                                                            )}
+                                                                        </button>
+                                                                    </span>
+                                                                </Tooltip>
                                                             </div>
                                                             {isError && installStatus.message && (
                                                                 <div className={cx(styles.depMessage, installStatus.isNetworkError ? styles.depMessageNetwork : styles.depMessageError)}>
@@ -1132,38 +1193,45 @@ function SkillListSection() {
                                                             </div>
                                                             <div className={styles.depActions}>
                                                                 {/* 复制按钮 */}
-                                                                <button
-                                                                    className={styles.copyButton}
-                                                                    onClick={(e) => { e.stopPropagation(); void copyText(installCmd, copyKey); }}
-                                                                    title={t('settings.skills.copyInstallCommand')}
-                                                                >
-                                                                    {copiedKey === copyKey ? (
-                                                                        <CheckCircle size={12} />
-                                                                    ) : (
-                                                                        <Copy size={12} />
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={t('settings.skills.copyInstallCommand')}>
+                                                                    <button
+                                                                        className={styles.copyButton}
+                                                                        onClick={(e) => { e.stopPropagation(); void copyText(installCmd, copyKey); }}
+                                                                        aria-label={t('settings.skills.copyInstallCommand')}
+                                                                    >
+                                                                        {copiedKey === copyKey ? (
+                                                                            <CheckCircle size={12} />
+                                                                        ) : (
+                                                                            <Copy size={12} />
+                                                                        )}
+                                                                    </button>
+                                                                </Tooltip>
                                                                 {/* 安装状态 pill 按钮 */}
-                                                                <button
-                                                                    className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
-                                                                        : isError ? styles.installPillError
-                                                                            : isBusy ? styles.installPillBusy
-                                                                                : undefined)}
-                                                                    onClick={(e) => { e.stopPropagation(); void installSysTool(tool, platform); }}
-                                                                    disabled={isBusy || isInstalled}
-                                                                >
-                                                                    {isChecking ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
-                                                                    ) : isInstalling ? (
-                                                                        <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
-                                                                    ) : isInstalled ? (
-                                                                        <><CheckCircle size={10} /> {t('common.installed')}</>
-                                                                    ) : isError ? (
-                                                                        <><RotateCw size={10} /> {t('common.retry')}</>
-                                                                    ) : (
-                                                                        <><Download size={10} /> {t('common.install')}</>
-                                                                    )}
-                                                                </button>
+                                                                <Tooltip content={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}>
+                                                                    <span className={styles.tooltipButtonWrap}>
+                                                                        <button
+                                                                            className={cx(styles.installPill, isInstalled ? styles.installPillSuccess
+                                                                                : isError ? styles.installPillError
+                                                                                    : isBusy ? styles.installPillBusy
+                                                                                        : undefined)}
+                                                                            onClick={(e) => { e.stopPropagation(); void installSysTool(tool, platform); }}
+                                                                            disabled={isBusy || isInstalled}
+                                                                            aria-label={getDependencyActionTitle(isChecking, isInstalling, isInstalled, isError, t)}
+                                                                        >
+                                                                            {isChecking ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.checking')}</>
+                                                                            ) : isInstalling ? (
+                                                                                <><Loader2 size={10} className={styles.spinning} /> {t('common.installing')}</>
+                                                                            ) : isInstalled ? (
+                                                                                <><CheckCircle size={10} /> {t('common.installed')}</>
+                                                                            ) : isError ? (
+                                                                                <><RotateCw size={10} /> {t('common.retry')}</>
+                                                                            ) : (
+                                                                                <><Download size={10} /> {t('common.install')}</>
+                                                                            )}
+                                                                        </button>
+                                                                    </span>
+                                                                </Tooltip>
                                                             </div>
                                                             {/* 错误消息（支持换行和可点击 URL） */}
                                                             {isError && installStatus.message && (
@@ -1179,27 +1247,31 @@ function SkillListSection() {
 
                                         {/* 安装依赖按钮 */}
                                         {skill.dependencyStatus === 'pending' && (
-                                            <button
-                                                className={styles.installDepsButton}
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {t('settings.skills.installDeps')}
-                                            </button>
+                                            <Tooltip content={t('settings.skills.installDeps')}>
+                                                <button
+                                                    className={styles.installDepsButton}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    {t('settings.skills.installDeps')}
+                                                </button>
+                                            </Tooltip>
                                         )}
 
                                         {/* 技能操作按钮 */}
                                         <div className={styles.skillExpandedActions}>
-                                            <button
-                                                className={styles.openSkillButton}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    void handleOpenSkillFolder(skill.packagePath);
-                                                }}
-                                                title={t('settings.skills.openSkillFolderTitle')}
-                                            >
-                                                <FolderOpen size={12} />
-                                                {t('common.open')}
-                                            </button>
+                                            <Tooltip content={t('settings.skills.openSkillFolderTitle')}>
+                                                <button
+                                                    className={styles.openSkillButton}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        void handleOpenSkillFolder(skill.packagePath);
+                                                    }}
+                                                    aria-label={t('settings.skills.openSkillFolderTitle')}
+                                                >
+                                                    <FolderOpen size={12} />
+                                                    {t('common.open')}
+                                                </button>
+                                            </Tooltip>
                                             <button
                                                 className={styles.deleteSkillButton}
                                                 onClick={(e) => {

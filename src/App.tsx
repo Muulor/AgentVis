@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from 'react';
 import { Shell } from '@components/layout/Shell';
 import { ToastProvider } from '@components/ui/Toast';
+import { TooltipProvider } from '@components/ui/Tooltip';
 import { ImageLightbox } from '@components/chat/ImageLightbox';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { NetworkDirectAuthorizationDialog } from '@components/security/NetworkDirectAuthorizationDialog';
@@ -335,36 +336,38 @@ function App() {
     const hasNext = lightboxIndex < lightboxImages.length - 1;
 
     return (
-        <ToastProvider>
-            <Shell />
-            <NetworkDirectAuthorizationDialog />
-            <NetworkUploadAuthorizationDialog />
-            {/* 窗口关闭确认弹窗（Agent 任务进行中时） */}
-            <ConfirmDialog
-                open={showCloseConfirm}
-                onClose={handleCancelClose}
-                onConfirm={handleConfirmClose}
-                title={t('app.closeConfirm.title')}
-                description={t('app.closeConfirm.description')}
-                confirmText={t('app.closeConfirm.confirm')}
-                cancelText={t('app.closeConfirm.cancel')}
-                variant="warning"
-            />
-            {/* 图片 Lightbox 模态框（全局层级） */}
-            {lightboxImage && (
-                <ImageLightbox
-                    src={getImageSrc(lightboxImage)}
-                    fileName={lightboxImage.fileName}
-                    onClose={closeImageLightbox}
-                    hasPrev={hasPrev}
-                    hasNext={hasNext}
-                    onPrev={goToPrevImage}
-                    onNext={goToNextImage}
-                    currentIndex={lightboxIndex}
-                    totalCount={lightboxImages.length}
+        <TooltipProvider>
+            <ToastProvider>
+                <Shell />
+                <NetworkDirectAuthorizationDialog />
+                <NetworkUploadAuthorizationDialog />
+                {/* 窗口关闭确认弹窗（Agent 任务进行中时） */}
+                <ConfirmDialog
+                    open={showCloseConfirm}
+                    onClose={handleCancelClose}
+                    onConfirm={handleConfirmClose}
+                    title={t('app.closeConfirm.title')}
+                    description={t('app.closeConfirm.description')}
+                    confirmText={t('app.closeConfirm.confirm')}
+                    cancelText={t('app.closeConfirm.cancel')}
+                    variant="warning"
                 />
-            )}
-        </ToastProvider>
+                {/* 图片 Lightbox 模态框（全局层级） */}
+                {lightboxImage && (
+                    <ImageLightbox
+                        src={getImageSrc(lightboxImage)}
+                        fileName={lightboxImage.fileName}
+                        onClose={closeImageLightbox}
+                        hasPrev={hasPrev}
+                        hasNext={hasNext}
+                        onPrev={goToPrevImage}
+                        onNext={goToNextImage}
+                        currentIndex={lightboxIndex}
+                        totalCount={lightboxImages.length}
+                    />
+                )}
+            </ToastProvider>
+        </TooltipProvider>
     );
 }
 

@@ -6,6 +6,7 @@
  */
 
 import { Check, X } from 'lucide-react';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useI18n } from '@/i18n';
 import styles from './DiffActions.module.css';
 import type { ApplyStatus } from '../../services/fast-apply/types';
@@ -61,24 +62,26 @@ export function DiffActions({
     // pending 状态：显示 Accept/Reject 按钮
     return (
         <div className={styles.container}>
-            <button
-                className={styles.acceptBtn}
-                onClick={onAccept}
-                disabled={isProcessing}
-                title={t('diff.acceptChange')}
-                aria-label={t('diff.acceptChange')}
-            >
-                <Check size={14} />
-            </button>
-            <button
-                className={styles.rejectBtn}
-                onClick={onReject}
-                disabled={isProcessing}
-                title={t('diff.rejectChange')}
-                aria-label={t('diff.rejectChange')}
-            >
-                <X size={14} />
-            </button>
+            <Tooltip content={t('diff.acceptChange')}>
+                <button
+                    className={styles.acceptBtn}
+                    onClick={onAccept}
+                    disabled={isProcessing}
+                    aria-label={t('diff.acceptChange')}
+                >
+                    <Check size={14} />
+                </button>
+            </Tooltip>
+            <Tooltip content={t('diff.rejectChange')}>
+                <button
+                    className={styles.rejectBtn}
+                    onClick={onReject}
+                    disabled={isProcessing}
+                    aria-label={t('diff.rejectChange')}
+                >
+                    <X size={14} />
+                </button>
+            </Tooltip>
         </div>
     );
 }

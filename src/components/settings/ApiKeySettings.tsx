@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '@components/ui/Toast';
+import { Tooltip } from '@components/ui/Tooltip';
 import { notifySetupStatusChanged } from '@components/onboarding/onboardingEvents';
 import { useSettingsStore } from '@stores/settingsStore';
 import { getProviders } from '@/config/modelRegistry';
@@ -158,16 +159,17 @@ export function ApiKeySettings() {
                     <div className={styles.providerHeader}>
                         <h3 className={styles.providerName}>{provider.name}</h3>
                         {provider.apiKeyUrl && (
-                            <button
-                                className={styles.externalLinkButton}
-                                onClick={() => {
-                                    if (provider.apiKeyUrl) void openExternalUrl(provider.apiKeyUrl);
-                                }}
-                                title={t('settings.apiKeys.getApiKeyTitle')}
-                                aria-label={t('settings.apiKeys.getProviderApiKeyAria', { provider: provider.name })}
-                            >
-                                <ExternalLink size={14} />
-                            </button>
+                            <Tooltip content={t('settings.apiKeys.getApiKeyTitle')}>
+                                <button
+                                    className={styles.externalLinkButton}
+                                    onClick={() => {
+                                        if (provider.apiKeyUrl) void openExternalUrl(provider.apiKeyUrl);
+                                    }}
+                                    aria-label={t('settings.apiKeys.getProviderApiKeyAria', { provider: provider.name })}
+                                >
+                                    <ExternalLink size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                         {apiKeyStatus[provider.id] && (
                             <span className={styles.configuredBadge}>{t('common.configured')}</span>

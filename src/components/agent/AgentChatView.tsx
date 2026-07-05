@@ -21,6 +21,7 @@ import { shouldStartImTask } from '@services/im-channel/ImTaskBridge';
 
 import { AgentSettingsModal } from './AgentSettingsModal';
 import { AgentModelSelector } from './AgentModelSelector';
+import { Tooltip } from '@components/ui/Tooltip';
 import { FileRevertDialog } from '@components/ui';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { useI18n } from '@/i18n';
@@ -1024,21 +1025,24 @@ export function AgentChatView() {
                         />
                     </div>
                     <div className={styles.headerActions}>
-                        <button
-                            className={styles.searchBtn}
-                            onClick={handleToggleSearch}
-                            aria-label={t('agent.chat.searchAria')}
-                            title={t('agent.chat.searchTitle')}
-                        >
-                            <Search size={18} />
-                        </button>
-                        <button
-                            className={styles.settingsBtn}
-                            onClick={() => setIsSettingsOpen(true)}
-                            aria-label={t('agent.chat.settingsAria')}
-                        >
-                            <UserRoundCog size={20} strokeWidth={1.5} />
-                        </button>
+                        <Tooltip content={t('agent.chat.searchTitle')}>
+                            <button
+                                className={styles.searchBtn}
+                                onClick={handleToggleSearch}
+                                aria-label={t('agent.chat.searchAria')}
+                            >
+                                <Search size={18} />
+                            </button>
+                        </Tooltip>
+                        <Tooltip content={t('agent.chat.settingsAria')}>
+                            <button
+                                className={styles.settingsBtn}
+                                onClick={() => setIsSettingsOpen(true)}
+                                aria-label={t('agent.chat.settingsAria')}
+                            >
+                                <UserRoundCog size={20} strokeWidth={1.5} />
+                            </button>
+                        </Tooltip>
                     </div>
                 </div>
 

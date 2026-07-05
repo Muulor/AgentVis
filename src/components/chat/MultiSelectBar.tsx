@@ -9,6 +9,7 @@
 
 import { memo } from 'react';
 import { Copy, Quote, Trash2, X, CheckSquare } from 'lucide-react';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './MultiSelectBar.module.css';
@@ -51,53 +52,57 @@ export const MultiSelectBar = memo(function MultiSelectBar({
 
             {/* 操作按钮 */}
             <div className={styles.actions}>
-                <button
-                    className={styles.actionBtn}
-                    onClick={onCopy}
-                    disabled={selectedCount === 0}
-                    title={t('common.copy')}
-                    aria-label={t('chat.copySelected')}
-                >
-                    <Copy size={15} />
-                    <span>{t('common.copy')}</span>
-                </button>
+                <Tooltip content={t('common.copy')} disabled={selectedCount === 0}>
+                    <button
+                        className={styles.actionBtn}
+                        onClick={onCopy}
+                        disabled={selectedCount === 0}
+                        aria-label={t('chat.copySelected')}
+                    >
+                        <Copy size={15} />
+                        <span>{t('common.copy')}</span>
+                    </button>
+                </Tooltip>
 
-                <button
-                    className={styles.actionBtn}
-                    onClick={onQuote}
-                    disabled={selectedCount === 0}
-                    title={t('common.quote')}
-                    aria-label={t('chat.quoteSelected')}
-                >
-                    <Quote size={15} />
-                    <span>{t('common.quote')}</span>
-                </button>
+                <Tooltip content={t('common.quote')} disabled={selectedCount === 0}>
+                    <button
+                        className={styles.actionBtn}
+                        onClick={onQuote}
+                        disabled={selectedCount === 0}
+                        aria-label={t('chat.quoteSelected')}
+                    >
+                        <Quote size={15} />
+                        <span>{t('common.quote')}</span>
+                    </button>
+                </Tooltip>
 
-                <button
-                    className={cx(styles.actionBtn, styles.dangerBtn)}
-                    onClick={onDelete}
-                    disabled={selectedCount === 0}
-                    title={t('common.delete')}
-                    aria-label={t('chat.deleteSelected')}
-                >
-                    <Trash2 size={15} />
-                    <span>{t('common.delete')}</span>
-                </button>
+                <Tooltip content={t('common.delete')} disabled={selectedCount === 0}>
+                    <button
+                        className={cx(styles.actionBtn, styles.dangerBtn)}
+                        onClick={onDelete}
+                        disabled={selectedCount === 0}
+                        aria-label={t('chat.deleteSelected')}
+                    >
+                        <Trash2 size={15} />
+                        <span>{t('common.delete')}</span>
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 分隔线 */}
             <div className={styles.divider} />
 
             {/* 取消按钮 */}
-            <button
-                className={styles.cancelBtn}
-                onClick={onCancel}
-                title={t('chat.cancelMultiSelect')}
-                aria-label={t('chat.cancelMultiSelect')}
-            >
-                <X size={15} />
-                <span>{t('common.cancel')}</span>
-            </button>
+            <Tooltip content={t('chat.cancelMultiSelect')}>
+                <button
+                    className={styles.cancelBtn}
+                    onClick={onCancel}
+                    aria-label={t('chat.cancelMultiSelect')}
+                >
+                    <X size={15} />
+                    <span>{t('common.cancel')}</span>
+                </button>
+            </Tooltip>
         </div>
     );
 });

@@ -10,6 +10,7 @@ import { useI18n, type Language } from '@/i18n';
 import styles from './SnapshotHistory.module.css';
 import { DiffViewer } from './DiffViewer';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Tooltip } from '@components/ui/Tooltip';
 import { RotateCcw } from 'lucide-react';
 import { cx } from '@utils/classNames';
 import type { DocumentSnapshot } from '../../services/fast-apply/types';
@@ -180,12 +181,11 @@ function SnapshotItem({
                         )}
                     </span>
                 )}
-                <span
-                    className={styles.itemTime}
-                    title={formatRelativeTime(snapshot.timestamp, t)}
-                >
-                    {formatExactTime(snapshot.timestamp, language)}
-                </span>
+                <Tooltip content={formatRelativeTime(snapshot.timestamp, t)}>
+                    <span className={styles.itemTime}>
+                        {formatExactTime(snapshot.timestamp, language)}
+                    </span>
+                </Tooltip>
             </div>
 
             {snapshot.description && (
@@ -202,20 +202,23 @@ function SnapshotItem({
                     >
                         {t('diff.preview')}
                     </button>
-                    <button
-                        className={styles.rollbackBtn}
-                        onClick={() => onRollback(snapshot)}
-                    >
-                        {t('diff.rollback')}
-                    </button>
-                    {onDelete && (
+                    <Tooltip content={t('diff.rollback')}>
                         <button
-                            className={styles.deleteBtn}
-                            onClick={() => onDelete(snapshot)}
-                            title={t('diff.deleteVersionTitle')}
+                            className={styles.rollbackBtn}
+                            onClick={() => onRollback(snapshot)}
                         >
-                            {t('common.delete')}
+                            {t('diff.rollback')}
                         </button>
+                    </Tooltip>
+                    {onDelete && (
+                        <Tooltip content={t('diff.deleteVersionTitle')}>
+                            <button
+                                className={styles.deleteBtn}
+                                onClick={() => onDelete(snapshot)}
+                            >
+                                {t('common.delete')}
+                            </button>
+                        </Tooltip>
                     )}
                 </div>
             )}

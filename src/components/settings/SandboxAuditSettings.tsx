@@ -15,6 +15,7 @@ import type {
     SandboxAuditGuardMode,
     SandboxAuditSource,
 } from '@/types';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useI18n, type TranslationKey } from '@/i18n';
 import { cx } from '@utils/classNames';
 import styles from './SandboxAuditSettings.module.css';
@@ -427,16 +428,19 @@ export function SandboxAuditSettings() {
                     <h2 className={styles.title}>{t('settings.audit.title')}</h2>
                     <p className={styles.description}>{t('settings.audit.description')}</p>
                 </div>
-                <button
-                    type="button"
-                    className={styles.refreshButton}
-                    onClick={() => void loadEvents()}
-                    disabled={isLoading}
-                    title={t('settings.audit.refresh')}
-                    aria-label={t('settings.audit.refresh')}
-                >
-                    <RefreshCw size={16} strokeWidth={1.8} />
-                </button>
+                <Tooltip content={t('settings.audit.refresh')}>
+                    <span className={styles.tooltipButtonWrap}>
+                        <button
+                            type="button"
+                            className={styles.refreshButton}
+                            onClick={() => void loadEvents()}
+                            disabled={isLoading}
+                            aria-label={t('settings.audit.refresh')}
+                        >
+                            <RefreshCw size={16} strokeWidth={1.8} />
+                        </button>
+                    </span>
+                </Tooltip>
             </div>
 
             <div className={styles.summaryGrid}>
@@ -512,31 +516,33 @@ export function SandboxAuditSettings() {
                 <div className={styles.filterSecondaryRow}>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.reason')}</span>
-                        <select
-                            value={reasonFilter}
-                            onChange={(event) => setReasonFilter(event.target.value as ReasonFilter)}
-                            title={reasonFilter === 'all' ? t('settings.audit.filters.all') : reasonFilter}
-                        >
-                            {REASON_FILTER_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                    {option === 'all' ? t('settings.audit.filters.all') : option}
-                                </option>
-                            ))}
-                        </select>
+                        <Tooltip content={reasonFilter === 'all' ? t('settings.audit.filters.all') : reasonFilter}>
+                            <select
+                                value={reasonFilter}
+                                onChange={(event) => setReasonFilter(event.target.value as ReasonFilter)}
+                            >
+                                {REASON_FILTER_OPTIONS.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option === 'all' ? t('settings.audit.filters.all') : option}
+                                    </option>
+                                ))}
+                            </select>
+                        </Tooltip>
                     </label>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.guardMode')}</span>
-                        <select
-                            value={guardModeFilter}
-                            onChange={(event) => setGuardModeFilter(event.target.value as GuardModeFilter)}
-                            title={guardModeFilter === 'all' ? t('settings.audit.filters.all') : guardModeFilter}
-                        >
-                            {GUARD_MODE_FILTER_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                    {option === 'all' ? t('settings.audit.filters.all') : option}
-                                </option>
-                            ))}
-                        </select>
+                        <Tooltip content={guardModeFilter === 'all' ? t('settings.audit.filters.all') : guardModeFilter}>
+                            <select
+                                value={guardModeFilter}
+                                onChange={(event) => setGuardModeFilter(event.target.value as GuardModeFilter)}
+                            >
+                                {GUARD_MODE_FILTER_OPTIONS.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option === 'all' ? t('settings.audit.filters.all') : option}
+                                    </option>
+                                ))}
+                            </select>
+                        </Tooltip>
                     </label>
                 </div>
                 <div className={styles.filterTertiaryRow}>
@@ -556,16 +562,19 @@ export function SandboxAuditSettings() {
                             placeholder={t('settings.audit.filters.subjectIdPlaceholder')}
                         />
                     </label>
-                    <button
-                        type="button"
-                        className={styles.clearButton}
-                        onClick={clearFilters}
-                        disabled={!hasActiveFilters}
-                        title={t('settings.audit.filters.clear')}
-                        aria-label={t('settings.audit.filters.clear')}
-                    >
-                        <X size={15} strokeWidth={1.8} />
-                    </button>
+                    <Tooltip content={t('settings.audit.filters.clear')}>
+                        <span className={styles.tooltipButtonWrap}>
+                            <button
+                                type="button"
+                                className={styles.clearButton}
+                                onClick={clearFilters}
+                                disabled={!hasActiveFilters}
+                                aria-label={t('settings.audit.filters.clear')}
+                            >
+                                <X size={15} strokeWidth={1.8} />
+                            </button>
+                        </span>
+                    </Tooltip>
                 </div>
             </div>
 
@@ -603,25 +612,27 @@ export function SandboxAuditSettings() {
                                 </div>
                                 <div className={styles.eventBody}>
                                     <div className={styles.eventTitle}>
-                                        <span className={styles.eventTarget} title={eventTarget(event)}>
-                                            {eventTarget(event)}
-                                        </span>
+                                        <Tooltip content={eventTarget(event)}>
+                                            <span className={styles.eventTarget}>
+                                                {eventTarget(event)}
+                                            </span>
+                                        </Tooltip>
                                     </div>
-                                    <div className={styles.eventReason} title={event.blockedReason ?? event.reason}>
-                                        {event.blockedReason ?? event.reason}
-                                    </div>
+                                    <Tooltip content={event.blockedReason ?? event.reason}>
+                                        <div className={styles.eventReason}>
+                                            {event.blockedReason ?? event.reason}
+                                        </div>
+                                    </Tooltip>
                                     {(() => {
                                         const auditSignals = buildAuditSignals(event);
                                         return auditSignals.length > 0 ? (
                                             <div className={styles.eventSignals}>
                                                 {auditSignals.map((signal) => (
-                                                    <span
-                                                        key={`${signal.label}:${signal.value}`}
-                                                        className={styles.eventSignal}
-                                                        title={`${t(signal.label)}: ${signal.value}`}
-                                                    >
-                                                        {t(signal.label)}: {signal.value}
-                                                    </span>
+                                                    <Tooltip key={`${signal.label}:${signal.value}`} content={`${t(signal.label)}: ${signal.value}`}>
+                                                        <span className={styles.eventSignal}>
+                                                            {t(signal.label)}: {signal.value}
+                                                        </span>
+                                                    </Tooltip>
                                                 ))}
                                             </div>
                                         ) : null;

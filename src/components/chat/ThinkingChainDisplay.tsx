@@ -11,6 +11,8 @@
 
 import { useState, useMemo } from 'react';
 import { BrainCog, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { useI18n } from '@/i18n';
+import { cx } from '@utils/classNames';
 import styles from './ThinkingChainDisplay.module.css';
 
 /** 旧版思维链数据类型（三个阶段的累积字符串） */
@@ -21,7 +23,7 @@ export interface ThinkingChainData {
 }
 
 /** 新版持久化步骤（从 fsmVisualizationStore.ThinkingStep 序列化而来） */
-interface PersistedThinkingStep {
+export interface PersistedThinkingStep {
     stepNumber: number;
     analyzing: string;
     planning: string;
@@ -33,6 +35,12 @@ interface ThinkingChainDisplayProps {
     data: ThinkingChainData;
     /** 新版步骤数组（优先使用，顺序可靠） */
     steps?: PersistedThinkingStep[];
+    /** 是否默认展开 */
+    defaultExpanded?: boolean;
+    /** 是否展示自身标题栏；嵌入汇总行时会隐藏标题栏 */
+    showHeader?: boolean;
+    /** 额外样式类名 */
+    className?: string;
 }
 
 /** 单个步骤的合并内容 */
@@ -99,8 +107,15 @@ function parseStepsFromLegacy(data: ThinkingChainData): StepContent[] {
 /**
  * 静态思维链显示组件
  */
-export function ThinkingChainDisplay({ data, steps: persistedSteps }: ThinkingChainDisplayProps) {
-    const [isExpanded, setIsExpanded] = useState(false);
+export function ThinkingChainDisplay({
+    data,
+    steps: persistedSteps,
+    defaultExpanded = false,
+    showHeader = true,
+    className,
+}: ThinkingChainDisplayProps) {
+    const { t } = useI18n();
+    const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
     // 优先使用新版步骤数组，回退到旧版解析
     const steps = useMemo(() => {
@@ -114,23 +129,28 @@ export function ThinkingChainDisplay({ data, steps: persistedSteps }: ThinkingCh
         return null;
     }
 
+    const showContent = showHeader ? isExpanded : true;
+
     return (
-        <div className={styles.container}>
+        <div className={cx(styles.container, !showHeader && styles.embedded, className)}>
             {/* 标题栏（可点击折叠） */}
-            <button
-                className={styles.header}
-                onClick={() => setIsExpanded(!isExpanded)}
-                type="button"
-            >
-                <BrainCog size={10} className={styles.headerIcon} />
-                <span className={styles.headerTitle}>Thought</span>
-                <span className={styles.toggle}>
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </span>
-            </button>
+            {showHeader && (
+                <button
+                    className={styles.header}
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    type="button"
+                    aria-expanded={isExpanded}
+                >
+                    <BrainCog size={10} className={styles.headerIcon} />
+                    <span className={styles.headerTitle}>{t('chat.masterBrainThought')}</span>
+                    <span className={styles.toggle}>
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                </button>
+            )}
 
             {/* 折叠内容 - 按步显示 */}
-            {isExpanded && (
+            {showContent && (
                 <div className={styles.stepsContainer}>
                     {steps.map((step) => (
                         <div key={step.stepNumber} className={styles.stepItem}>

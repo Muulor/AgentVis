@@ -69,6 +69,7 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
+    border-left: 2px solid transparent;
     background-color: var(--color-bg-secondary);
     border-radius: 4px;
     font-size: var(--font-size-sm);
@@ -81,12 +82,12 @@
 
 /* 用户消息 */
 .messageItem[data-role="user"] {
-    border-left: 2px solid var(--color-status-info);
+    border-left-color: transparent;
 }
 
 /* Agent 消息 */
 .messageItem[data-role="assistant"] {
-    border-left: 2px solid var(--color-status-success);
+    border-left-color: transparent;
 }
 
 /* 轮次编号 */

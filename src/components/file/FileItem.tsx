@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { FileText, FileCode, File, Folder } from 'lucide-react';
 import { FileContextMenu } from './FileContextMenu';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './FileItem.module.css';
@@ -124,9 +125,11 @@ export function FileItem({
                     {getFileIcon(file.fileName, file.isDirectory)}
                 </div>
                 <div className={styles.info}>
-                    <span className={styles.name} title={file.fileName}>
-                        {file.fileName}
-                    </span>
+                    <Tooltip content={file.fileName}>
+                        <span className={styles.name}>
+                            {file.fileName}
+                        </span>
+                    </Tooltip>
                     <span className={styles.meta}>
                         {file.isDirectory ? t('file.folder') : formatFileSize(file.size)} · {formatTime(file.createdAt, language)}
                     </span>

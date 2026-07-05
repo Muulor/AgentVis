@@ -11,6 +11,7 @@ import { FullFileDiffViewer, SnapshotHistory } from '../diff';
 import { FileList, FilePreview, type FileItemData } from '../file';
 import { LivePreviewPanel } from '../file/LivePreviewPanel';
 import { ResizeHandle } from '../ui/ResizeHandle';
+import { Tooltip } from '@components/ui/Tooltip';
 import { Undo2, Redo2, Maximize2, Minimize2 } from 'lucide-react';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
@@ -422,17 +423,18 @@ export function RightPanel() {
                     <span className={styles.historyAccessHint}>
                         {t('layout.historyHint')}
                     </span>
-                    <button
-                        id="history-access-btn"
-                        className={styles.historyAccessBtn}
-                        onClick={() => {
-                            const completedDiffFile = completedDiffFiles[0];
-                            if (completedDiffFile) handleOpenFileHistory(completedDiffFile.documentId);
-                        }}
-                        title={t('layout.historyTitle')}
-                    >
-                        Review
-                    </button>
+                    <Tooltip content={t('layout.historyTitle')}>
+                        <button
+                            id="history-access-btn"
+                            className={styles.historyAccessBtn}
+                            onClick={() => {
+                                const completedDiffFile = completedDiffFiles[0];
+                                if (completedDiffFile) handleOpenFileHistory(completedDiffFile.documentId);
+                            }}
+                        >
+                            Review
+                        </button>
+                    </Tooltip>
                 </div>
             )}
             {completedDiffFiles.length > 1 && (
@@ -440,14 +442,17 @@ export function RightPanel() {
                     <span className={styles.historyAccessHint}>{t('layout.filesChanged')}</span>
                     <div className={styles.historyFileChips}>
                         {completedDiffFiles.map((file) => (
-                            <button
+                            <Tooltip
                                 key={file.documentId}
-                                className={styles.historyFileChip}
-                                onClick={() => handleOpenFileHistory(file.documentId)}
-                                title={t('layout.fileHistoryTitle', { file: file.documentId })}
+                                content={t('layout.fileHistoryTitle', { file: file.documentId })}
                             >
-                                {file.fileName}
-                            </button>
+                                <button
+                                    className={styles.historyFileChip}
+                                    onClick={() => handleOpenFileHistory(file.documentId)}
+                                >
+                                    {file.fileName}
+                                </button>
+                            </Tooltip>
                         ))}
                     </div>
                 </div>
@@ -457,6 +462,7 @@ export function RightPanel() {
                 <div className={styles.attachmentListContainer}>
                     <div className={styles.attachmentListHeader}>
                         <span className={styles.attachmentListTitle}>{t('layout.attachmentsTitle', { count: currentAttachments.length })}</span>
+                        <Tooltip content={t('layout.clearAttachments')}>
                         <button
                             className={styles.attachmentClearBtn}
                             onClick={() => {
@@ -466,30 +472,31 @@ export function RightPanel() {
                                 setSelectedFile(null);
                                 setPreviewContent('');
                             }}
-                            title={t('layout.clearAttachments')}
+                            aria-label={t('layout.clearAttachments')}
                         >
                             ×
                         </button>
+                        </Tooltip>
                     </div>
                     <div className={styles.attachmentList}>
                         {currentAttachments.map(att => (
-                            <div
-                                key={att.id}
-                                className={cx(styles.attachmentItem, selectedFile?.id === att.id && styles.attachmentItemSelected)}
-                                onClick={() => {
-                                    if (att.type === 'document') {
-                                        setDocumentPreview(att);
-                                    }
-                                }}
-                                title={att.fileName}
-                            >
-                                <span className={styles.attachmentIcon}>
-                                    {att.type === 'image' ? '🖼️' : '📄'}
-                                </span>
-                                <span className={styles.attachmentName}>
-                                    {att.fileName.length > 20 ? att.fileName.slice(0, 17) + '...' : att.fileName}
-                                </span>
-                            </div>
+                            <Tooltip key={att.id} content={att.fileName}>
+                                <div
+                                    className={cx(styles.attachmentItem, selectedFile?.id === att.id && styles.attachmentItemSelected)}
+                                    onClick={() => {
+                                        if (att.type === 'document') {
+                                            setDocumentPreview(att);
+                                        }
+                                    }}
+                                >
+                                    <span className={styles.attachmentIcon}>
+                                        {att.type === 'image' ? '🖼️' : '📄'}
+                                    </span>
+                                    <span className={styles.attachmentName}>
+                                        {att.fileName.length > 20 ? att.fileName.slice(0, 17) + '...' : att.fileName}
+                                    </span>
+                                </div>
+                            </Tooltip>
                         ))}
                     </div>
                 </div>
@@ -537,14 +544,17 @@ export function RightPanel() {
                         <span className={styles.previewFileName}>{selectedFile.fileName}</span>
                         <div className={styles.previewHeaderActions}>
                             {/* 全屏切换按钮 */}
-                            <button
-                                className={styles.previewIconBtn}
-                                onClick={handleToggleFilePreviewFullscreen}
-                                title={isFilePreviewFullscreen ? t('layout.fullscreenExit') : t('layout.fullscreenPreview')}
-                            >
-                                {isFilePreviewFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                            </button>
+                            <Tooltip content={isFilePreviewFullscreen ? t('layout.fullscreenExit') : t('layout.fullscreenPreview')}>
+                                <button
+                                    className={styles.previewIconBtn}
+                                    onClick={handleToggleFilePreviewFullscreen}
+                                    aria-label={isFilePreviewFullscreen ? t('layout.fullscreenExit') : t('layout.fullscreenPreview')}
+                                >
+                                    {isFilePreviewFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                                </button>
+                            </Tooltip>
                             {/* 关闭预览按钮 */}
+                            <Tooltip content={t('layout.closePreview')}>
                             <button
                                 className={styles.previewCloseBtn}
                                 onClick={() => {
@@ -552,10 +562,11 @@ export function RightPanel() {
                                     setSelectedFile(null);
                                     setPreviewContent('');
                                 }}
-                                title={t('layout.closePreview')}
+                                aria-label={t('layout.closePreview')}
                             >
                                 ×
                             </button>
+                            </Tooltip>
                         </div>
                     </div>
                 )}
@@ -665,37 +676,42 @@ export function RightPanel() {
             {/* 工具栏 */}
             <div className={styles.diffToolbar}>
                 {/* Undo/Redo 按钮 */}
-                <button
-                    className={styles.toolbarBtn}
-                    onClick={() => contextId && undo(contextId)}
-                    disabled={!contextId || !canUndo(contextId)}
-                    title={t('layout.undo')}
-                >
-                    <Undo2 size={16} />
-                </button>
-                <button
-                    className={styles.toolbarBtn}
-                    onClick={() => contextId && redo(contextId)}
-                    disabled={!contextId || !canRedo(contextId)}
-                    title={t('layout.redo')}
-                >
-                    <Redo2 size={16} />
-                </button>
+                <Tooltip content={t('layout.undo')}>
+                    <button
+                        className={styles.toolbarBtn}
+                        onClick={() => contextId && undo(contextId)}
+                        disabled={!contextId || !canUndo(contextId)}
+                        aria-label={t('layout.undo')}
+                    >
+                        <Undo2 size={16} />
+                    </button>
+                </Tooltip>
+                <Tooltip content={t('layout.redo')}>
+                    <button
+                        className={styles.toolbarBtn}
+                        onClick={() => contextId && redo(contextId)}
+                        disabled={!contextId || !canRedo(contextId)}
+                        aria-label={t('layout.redo')}
+                    >
+                        <Redo2 size={16} />
+                    </button>
+                </Tooltip>
 
                 <div className={styles.toolbarDivider} />
 
                 {/* 历史版本按钮 */}
-                <button
-                    className={styles.historyBtn}
-                    onClick={toggleSnapshotPanel}
-                    title={t('layout.viewHistory')}
-                >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <circle cx="8" cy="8" r="6" />
-                        <path d="M8 5v3l2 2" />
-                    </svg>
-                    {t('layout.historyVersions')}
-                </button>
+                <Tooltip content={t('layout.viewHistory')}>
+                    <button
+                        className={styles.historyBtn}
+                        onClick={toggleSnapshotPanel}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <circle cx="8" cy="8" r="6" />
+                            <path d="M8 5v3l2 2" />
+                        </svg>
+                        {t('layout.historyVersions')}
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 多文件标签页（仅在文件数 > 1 时显示） */}
@@ -706,18 +722,18 @@ export function RightPanel() {
                     className={styles.fileTabBar}
                 >
                     {fileList.map((file) => (
-                        <button
-                            key={file.documentId}
-                            data-diff-doc-id={file.documentId}
-                            className={cx(styles.fileTab, file.documentId === diffState.activeFileId && styles.fileTabActive)}
-                            onClick={() => contextId && selectFile(contextId, file.documentId)}
-                            title={file.documentId}
-                        >
-                            <span className={styles.fileTabName}>{file.fileName}</span>
-                            {file.pendingCount > 0 && (
-                                <span className={styles.fileTabBadge}>{file.pendingCount}</span>
-                            )}
-                        </button>
+                        <Tooltip key={file.documentId} content={file.documentId}>
+                            <button
+                                data-diff-doc-id={file.documentId}
+                                className={cx(styles.fileTab, file.documentId === diffState.activeFileId && styles.fileTabActive)}
+                                onClick={() => contextId && selectFile(contextId, file.documentId)}
+                            >
+                                <span className={styles.fileTabName}>{file.fileName}</span>
+                                {file.pendingCount > 0 && (
+                                    <span className={styles.fileTabBadge}>{file.pendingCount}</span>
+                                )}
+                            </button>
+                        </Tooltip>
                     ))}
                 </div>
             )}
@@ -740,6 +756,7 @@ export function RightPanel() {
     // 渲染快照历史面板
     const renderSnapshotPanel = () => (
         <SnapshotHistory
+            key={`${contextId}:${diffState.documentId ?? ''}`}
             snapshots={snapshots}
             currentContent={currentContent}
             fileName={fileName}
@@ -758,8 +775,10 @@ export function RightPanel() {
         />
     );
 
+    const isDiffModePanel = mode === 'diff' && !isPreviewActive && !isSnapshotPanelOpen;
+
     return (
-        <div className={cx(styles.rightPanel, isResizing && styles.resizing)}>
+        <div className={cx(styles.rightPanel, isDiffModePanel && styles.diffModePanel, isResizing && styles.resizing)}>
             {/* 头部 */}
             <header className={styles.header}>
                 <h2 className={styles.title}>

@@ -4,6 +4,7 @@
 
 export { ChatHistory } from './ChatHistory';
 export { MessageBubble } from './MessageBubble';
+export { PlanningTraceDetails } from './PlanningTraceDetails';
 export { StreamingMessage } from './StreamingMessage';
 export { MessageActions } from './MessageActions';
 export { ChatInput, type ChatInputRestoreDraft, type ChatInputSendOptions } from './ChatInput';

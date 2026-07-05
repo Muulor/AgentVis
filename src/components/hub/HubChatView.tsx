@@ -15,6 +15,7 @@ import { usePlanningMode } from '@/hooks/usePlanningMode';
 import { ChatHistory, ChatInput, ChatSearchBar, type ChatInputRestoreDraft } from '@components/chat';
 import { buildWidgetUndoRetractionPlan } from '@components/widgets/widgetUndo';
 import { collectWidgetBubbleSubmissions } from '@stores/widgetSubmissionRecovery';
+import { Tooltip } from '@components/ui/Tooltip';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { SetupChecklist, type SetupChecklistState } from '@components/onboarding/SetupChecklist';
 import { useI18n } from '@/i18n';
@@ -784,14 +785,15 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
                         {t('hub.chat.discussionTitle', { name: currentHub.name })}
                     </h1>
                 </div>
-                <button
-                    className={styles.searchBtn}
-                    onClick={handleToggleSearch}
-                    aria-label={t('chat.searchAria')}
-                    title={t('agent.chat.searchTitle')}
-                >
-                    <Search size={18} />
-                </button>
+                <Tooltip content={t('agent.chat.searchTitle')}>
+                    <button
+                        className={styles.searchBtn}
+                        onClick={handleToggleSearch}
+                        aria-label={t('chat.searchAria')}
+                    >
+                        <Search size={18} />
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 搜索栏 - 直接紧贴 header 底部渲染 */}

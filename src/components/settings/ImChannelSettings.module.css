@@ -83,6 +83,12 @@
     gap: 12px;
 }
 
+.tooltipButtonWrap {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
 .addBotButton {
     display: flex;
     align-items: center;

@@ -12,6 +12,7 @@ import styles from './CodeHighlight.module.css';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
+import { Tooltip } from '@components/ui/Tooltip';
 
 const logger = getLogger('CodeHighlight');
 
@@ -109,37 +110,40 @@ export const CodeHighlight = memo(function CodeHighlight({
                     )}
                 </span>
                 {canPreview && (
-                    <button
-                        className={styles.previewBtn}
-                        onClick={() => onPreview(code.trim(), normalizedLang)}
-                        title={t('file.livePreview')}
-                        aria-label={t('file.livePreview')}
-                    >
-                        <Play size={14} />
-                    </button>
+                    <Tooltip content={t('file.livePreview')}>
+                        <button
+                            className={styles.previewBtn}
+                            onClick={() => onPreview(code.trim(), normalizedLang)}
+                            aria-label={t('file.livePreview')}
+                        >
+                            <Play size={14} />
+                        </button>
+                    </Tooltip>
                 )}
                 {canProjectPreview && (
-                    <button
-                        className={styles.projectPreviewBtn}
-                        onClick={() => onProjectPreview(code.trim(), normalizedLang)}
-                        title={t('file.projectPreview')}
-                        aria-label={t('file.projectPreview')}
-                    >
-                        <Layers size={14} />
-                    </button>
+                    <Tooltip content={t('file.projectPreview')}>
+                        <button
+                            className={styles.projectPreviewBtn}
+                            onClick={() => onProjectPreview(code.trim(), normalizedLang)}
+                            aria-label={t('file.projectPreview')}
+                        >
+                            <Layers size={14} />
+                        </button>
+                    </Tooltip>
                 )}
-                <button
-                    className={styles.copyBtn}
-                    onClick={handleCopy}
-                    title={copied ? t('file.copied') : t('file.copyCode')}
-                    aria-label={t('file.copyCode')}
-                >
-                    {copied ? (
-                        <Check size={14} className={styles.copyIconSuccess} />
-                    ) : (
-                        <Copy size={14} />
-                    )}
-                </button>
+                <Tooltip content={copied ? t('file.copied') : t('file.copyCode')}>
+                    <button
+                        className={styles.copyBtn}
+                        onClick={handleCopy}
+                        aria-label={t('file.copyCode')}
+                    >
+                        {copied ? (
+                            <Check size={14} className={styles.copyIconSuccess} />
+                        ) : (
+                            <Copy size={14} />
+                        )}
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 代码区域（可折叠） */}

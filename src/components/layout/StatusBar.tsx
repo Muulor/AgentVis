@@ -15,6 +15,7 @@ import { useSettingsStore } from '@stores/settingsStore';
 import { useStatusStore } from '@stores/statusStore';
 import { useImChannelStore } from '@stores/imChannelStore';
 import { getModelDisplayName, getProviderDisplayName } from '@/config/modelRegistry';
+import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 
@@ -211,47 +212,49 @@ export function StatusBar() {
     return (
         <footer className={styles.statusBar}>
             {/* 第一类目：模型状态 */}
-            <div className={styles.section}>
-                <span className={styles.indicator} data-status={modelStatus} />
-                <span className={styles.label} title={modelTitle}>
-                    {displayModelName}
-                </span>
-            </div>
+            <Tooltip content={modelTitle}>
+                <div className={styles.section}>
+                    <span className={styles.indicator} data-status={modelStatus} />
+                    <span className={styles.label}>
+                        {displayModelName}
+                    </span>
+                </div>
+            </Tooltip>
 
             <div className={styles.divider} />
 
             {/* 第二类目：实时上下文压力（仅活跃 LLM 调用时显示） */}
             {visibleContextPressure && (
                 <>
-                    <div className={styles.section}>
-                        <span
-                            className={styles.label}
-                            data-pressure={
-                                visibleContextPressure.currentInputTokens / visibleContextPressure.contextWindowSize > 0.95
-                                    ? 'critical'
-                                    : visibleContextPressure.currentInputTokens / visibleContextPressure.contextWindowSize > 0.8
-                                        ? 'warning'
-                                        : 'normal'
-                            }
-                            title={t('layout.currentLlmInputTitle', { input: visibleContextPressure.currentInputTokens, window: visibleContextPressure.contextWindowSize })}
-                        >
-                            ContextUsage: ⬇ {formatTokenCount(visibleContextPressure.currentInputTokens)}/{formatTokenCount(visibleContextPressure.contextWindowSize)}
-                        </span>
-                    </div>
+                    <Tooltip content={t('layout.currentLlmInputTitle', { input: visibleContextPressure.currentInputTokens, window: visibleContextPressure.contextWindowSize })}>
+                        <div className={styles.section}>
+                            <span
+                                className={styles.label}
+                                data-pressure={
+                                    visibleContextPressure.currentInputTokens / visibleContextPressure.contextWindowSize > 0.95
+                                        ? 'critical'
+                                        : visibleContextPressure.currentInputTokens / visibleContextPressure.contextWindowSize > 0.8
+                                            ? 'warning'
+                                            : 'normal'
+                                }
+                            >
+                                ContextUsage: ⬇ {formatTokenCount(visibleContextPressure.currentInputTokens)}/{formatTokenCount(visibleContextPressure.contextWindowSize)}
+                            </span>
+                        </div>
+                    </Tooltip>
 
                     <div className={styles.divider} />
                 </>
             )}
 
             {/* 第三类目：累积 Token 花费（Input + Output） */}
-            <div className={styles.section}>
-                <span
-                    className={styles.label}
-                    title={t('layout.tokenUsageTitle', { input: tokenUsage.inputTokens, output: tokenUsage.outputTokens })}
-                >
-                    Est.TotalIn: {formatTokenCount(tokenUsage.inputTokens)} / Est.TotalOut: {formatTokenCount(tokenUsage.outputTokens)}
-                </span>
-            </div>
+            <Tooltip content={t('layout.tokenUsageTitle', { input: tokenUsage.inputTokens, output: tokenUsage.outputTokens })}>
+                <div className={styles.section}>
+                    <span className={styles.label}>
+                        Est.TotalIn: {formatTokenCount(tokenUsage.inputTokens)} / Est.TotalOut: {formatTokenCount(tokenUsage.outputTokens)}
+                    </span>
+                </div>
+            </Tooltip>
 
             <div className={styles.divider} />
 
@@ -264,16 +267,17 @@ export function StatusBar() {
             {imConnectedCount > 0 && (
                 <>
                     <div className={styles.divider} />
-                    <div className={styles.section}>
-                        <span
-                            className={styles.indicator}
-                            data-status="online"
-                            title={t('layout.imConnectedTitle', { count: imConnectedCount })}
-                        />
-                        <span className={styles.label}>
-                            IM{imConnectedCount > 1 ? ` ×${imConnectedCount}` : ''}
-                        </span>
-                    </div>
+                    <Tooltip content={t('layout.imConnectedTitle', { count: imConnectedCount })}>
+                        <div className={styles.section}>
+                            <span
+                                className={styles.indicator}
+                                data-status="online"
+                            />
+                            <span className={styles.label}>
+                                IM{imConnectedCount > 1 ? ` ×${imConnectedCount}` : ''}
+                            </span>
+                        </div>
+                    </Tooltip>
                 </>
             )}
 

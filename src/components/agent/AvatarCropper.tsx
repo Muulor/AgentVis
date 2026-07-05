@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useI18n } from '@/i18n';
 import styles from './AvatarCropper.module.css';
 
@@ -228,9 +229,13 @@ export function AvatarCropper({
 
             {/* 缩放控制 */}
             <div className={styles.zoomControls}>
-                <button className={styles.zoomBtn} onClick={handleZoomOut} title={t('chat.zoomOut')}>−</button>
+                <Tooltip content={t('chat.zoomOut')}>
+                    <button className={styles.zoomBtn} onClick={handleZoomOut} aria-label={t('chat.zoomOut')}>−</button>
+                </Tooltip>
                 <span className={styles.zoomLabel}>{Math.round(cropState.scale * 100)}%</span>
-                <button className={styles.zoomBtn} onClick={handleZoomIn} title={t('chat.zoomIn')}>+</button>
+                <Tooltip content={t('chat.zoomIn')}>
+                    <button className={styles.zoomBtn} onClick={handleZoomIn} aria-label={t('chat.zoomIn')}>+</button>
+                </Tooltip>
             </div>
 
             {/* 操作按钮 */}

@@ -6,6 +6,7 @@ import { useAgentStore } from '@stores/agentStore';
 import { useChatStore } from '@stores/chatStore';
 import { HubCreateModal } from './HubCreateModal';
 import { HubContextMenu } from './HubContextMenu';
+import { Tooltip } from '@components/ui/Tooltip';
 import { OPEN_HUB_CREATE_EVENT } from '@components/onboarding/onboardingEvents';
 import { getLogger } from '@services/logger';
 import { useI18n } from '@/i18n';
@@ -253,21 +254,25 @@ export function HubTabs() {
         <>
             <div className={styles.tabs}>
                 <div className={styles.hubActions}>
-                    <button
-                        className={styles.hubActionButton}
-                        onClick={handleCurrentHubClick}
-                        disabled={!currentHub}
-                        aria-label={t('hub.tabs.openDiscussion')}
-                    >
-                        <MessageSquareText size={17} strokeWidth={1.6} />
-                    </button>
-                    <button
-                        className={styles.hubActionButton}
-                        onClick={() => setIsCreateModalOpen(true)}
-                        aria-label={t('hub.tabs.newHub')}
-                    >
-                        <Plus size={17} strokeWidth={1.7} />
-                    </button>
+                    <Tooltip content={t('hub.tabs.openDiscussion')}>
+                        <button
+                            className={styles.hubActionButton}
+                            onClick={handleCurrentHubClick}
+                            disabled={!currentHub}
+                            aria-label={t('hub.tabs.openDiscussion')}
+                        >
+                            <MessageSquareText size={17} strokeWidth={1.6} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip content={t('hub.tabs.newHub')}>
+                        <button
+                            className={styles.hubActionButton}
+                            onClick={() => setIsCreateModalOpen(true)}
+                            aria-label={t('hub.tabs.newHub')}
+                        >
+                            <Plus size={17} strokeWidth={1.7} />
+                        </button>
+                    </Tooltip>
                 </div>
 
                 {hubs.length > 0 && (
@@ -280,18 +285,19 @@ export function HubTabs() {
                         onBlurCapture={handleBlur}
                     >
                         {currentHub && (
-                            <button
-                                className={styles.currentHub}
-                                title={currentHub.name}
-                                onClick={handleCurrentHubClick}
-                                onContextMenu={(e) => handleContextMenu(e, currentHub.id)}
-                                aria-expanded={isExpanded}
-                            >
-                                <span className={styles.currentHubLabel}>{currentHub.name}</span>
-                                <svg className={styles.currentHubChevron} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                    <path d="M3 4.5l3 3 3-3" />
-                                </svg>
-                            </button>
+                            <Tooltip content={currentHub.name}>
+                                <button
+                                    className={styles.currentHub}
+                                    onClick={handleCurrentHubClick}
+                                    onContextMenu={(e) => handleContextMenu(e, currentHub.id)}
+                                    aria-expanded={isExpanded}
+                                >
+                                    <span className={styles.currentHubLabel}>{currentHub.name}</span>
+                                    <svg className={styles.currentHubChevron} width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                        <path d="M3 4.5l3 3 3-3" />
+                                    </svg>
+                                </button>
+                            </Tooltip>
                         )}
 
                         <div
@@ -300,27 +306,27 @@ export function HubTabs() {
                             onWheel={handleRailWheel}
                         >
                             {hubs.map((hub) => (
-                                <button
-                                    key={hub.id}
-                                    ref={hub.id === currentHubId ? activeHubRef : undefined}
-                                    className={styles.tab}
-                                    data-active={hub.id === currentHubId}
-                                    data-dragging={draggedHubId === hub.id}
-                                    data-drag-over={dragOverHubId === hub.id}
-                                    draggable
-                                    title={hub.name}
-                                    onClick={() => handleTabClick(hub.id)}
-                                    onContextMenu={(e) => handleContextMenu(e, hub.id)}
-                                    onDragStart={(e) => handleHubDragStart(e, hub.id)}
-                                    onDragOver={(e) => handleHubDragOver(e, hub.id)}
-                                    onDragLeave={() => handleHubDragLeave(hub.id)}
-                                    onDrop={(e) => { void handleHubDrop(e, hub.id, getHorizontalDropPlacement(e)); }}
-                                    onDragEnd={handleHubDragEnd}
-                                >
-                                    <span className={styles.tabLabel}>{hub.name}</span>
-                                    {/* 未读 Agent 消息小圆点：当前 hub 非激活态且有任意 agent 未读时显示 */}
-                                    {hubUnreadSet.has(hub.id) && <span className={styles.unreadDot} aria-label={t('hub.tabs.unread')} />}
-                                </button>
+                                <Tooltip key={hub.id} content={hub.name}>
+                                    <button
+                                        ref={hub.id === currentHubId ? activeHubRef : undefined}
+                                        className={styles.tab}
+                                        data-active={hub.id === currentHubId}
+                                        data-dragging={draggedHubId === hub.id}
+                                        data-drag-over={dragOverHubId === hub.id}
+                                        draggable
+                                        onClick={() => handleTabClick(hub.id)}
+                                        onContextMenu={(e) => handleContextMenu(e, hub.id)}
+                                        onDragStart={(e) => handleHubDragStart(e, hub.id)}
+                                        onDragOver={(e) => handleHubDragOver(e, hub.id)}
+                                        onDragLeave={() => handleHubDragLeave(hub.id)}
+                                        onDrop={(e) => { void handleHubDrop(e, hub.id, getHorizontalDropPlacement(e)); }}
+                                        onDragEnd={handleHubDragEnd}
+                                    >
+                                        <span className={styles.tabLabel}>{hub.name}</span>
+                                        {/* 未读 Agent 消息小圆点：当前 hub 非激活态且有任意 agent 未读时显示 */}
+                                        {hubUnreadSet.has(hub.id) && <span className={styles.unreadDot} aria-label={t('hub.tabs.unread')} />}
+                                    </button>
+                                </Tooltip>
                             ))}
                         </div>
                     </div>

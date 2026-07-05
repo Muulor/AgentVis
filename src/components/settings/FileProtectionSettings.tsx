@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { FileText, Folder, FolderOpen, Layers, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash, Trash2, X } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import { Tooltip } from '@components/ui/Tooltip';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -372,30 +373,33 @@ export function FileProtectionSettings() {
                         </h3>
                         <p className={styles.hint}>{t('settings.fileProtection.trashBinHint')}</p>
                     </div>
-                    <button
-                        className={styles.iconButton}
-                        onClick={() => void loadData()}
-                        disabled={isLoading}
-                        title={t('settings.fileProtection.refreshTrashTitle')}
-                        aria-label={t('settings.fileProtection.refreshTrashTitle')}
-                    >
-                        <RefreshCw size={15} strokeWidth={1.7} className={cx(isLoading && styles.spinIcon)} />
-                    </button>
+                    <Tooltip content={t('settings.fileProtection.refreshTrashTitle')}>
+                        <button
+                            className={styles.iconButton}
+                            onClick={() => void loadData()}
+                            disabled={isLoading}
+                            aria-label={t('settings.fileProtection.refreshTrashTitle')}
+                        >
+                            <RefreshCw size={15} strokeWidth={1.7} className={cx(isLoading && styles.spinIcon)} />
+                        </button>
+                    </Tooltip>
                 </div>
 
                 <div className={styles.pathDisplay}>
                     <span className={styles.pathText}>
                         {trashBinPath || t('settings.fileProtection.trashBinMissingPath')}
                     </span>
-                    <button
-                        className={styles.openButton}
-                        onClick={handleOpenTrashBin}
-                        disabled={!trashBinPath}
-                        title={t('settings.fileProtection.trashBinOpenTitle')}
-                    >
-                        <FolderOpen size={14} strokeWidth={1.6} />
-                        {t('common.open')}
-                    </button>
+                    <Tooltip content={t('settings.fileProtection.trashBinOpenTitle')}>
+                        <button
+                            className={styles.openButton}
+                            onClick={handleOpenTrashBin}
+                            disabled={!trashBinPath}
+                            aria-label={t('settings.fileProtection.trashBinOpenTitle')}
+                        >
+                            <FolderOpen size={14} strokeWidth={1.6} />
+                            {t('common.open')}
+                        </button>
+                    </Tooltip>
                 </div>
 
                 <div className={styles.trashToolbar}>
@@ -466,30 +470,38 @@ export function FileProtectionSettings() {
                                     </span>
                                     <div className={styles.entryMain}>
                                         <div className={styles.entryTitleLine}>
-                                            <span className={styles.entryName} title={entry.originalPath}>
-                                                {getFileName(entry.originalPath)}
-                                            </span>
+                                            <Tooltip content={entry.originalPath}>
+                                                <span className={styles.entryName}>
+                                                    {getFileName(entry.originalPath)}
+                                                </span>
+                                            </Tooltip>
                                             {status && <span className={styles.warningBadge}>{status}</span>}
                                         </div>
-                                        <div className={styles.entryPath} title={entry.originalPath}>
-                                            {entry.originalPath}
-                                        </div>
+                                        <Tooltip content={entry.originalPath}>
+                                            <div className={styles.entryPath}>
+                                                {entry.originalPath}
+                                            </div>
+                                        </Tooltip>
                                         <div className={styles.entryMeta}>
                                             <span>{formatDeletedAt(entry.deletedAt)}</span>
-                                            <span title={entry.command}>{entry.command}</span>
+                                            <Tooltip content={entry.command}>
+                                                <span>{entry.command}</span>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                     {batchCount > 1 && (
                                         <div className={styles.entryActions}>
-                                            <button
-                                                className={styles.secondaryButton}
-                                                onClick={() => handleSelectBatch(entry.batchId)}
-                                                disabled={restoringKey !== null || deletingKey !== null}
-                                                title={t('settings.fileProtection.selectBatchTitle', { count: batchCount })}
-                                            >
-                                                <Layers size={13} strokeWidth={1.7} />
-                                                {t('settings.fileProtection.selectBatch')}
-                                            </button>
+                                            <Tooltip content={t('settings.fileProtection.selectBatchTitle', { count: batchCount })}>
+                                                <button
+                                                    className={styles.secondaryButton}
+                                                    onClick={() => handleSelectBatch(entry.batchId)}
+                                                    disabled={restoringKey !== null || deletingKey !== null}
+                                                    aria-label={t('settings.fileProtection.selectBatchTitle', { count: batchCount })}
+                                                >
+                                                    <Layers size={13} strokeWidth={1.7} />
+                                                    {t('settings.fileProtection.selectBatch')}
+                                                </button>
+                                            </Tooltip>
                                         </div>
                                     )}
                                 </div>
@@ -533,16 +545,19 @@ export function FileProtectionSettings() {
                         ) : (
                             protectedPaths.map((path, index) => (
                                 <div key={`${path}-${index}`} className={styles.pathRow}>
-                                    <span className={styles.pathRowText} title={path}>{path}</span>
-                                    <button
-                                        className={styles.removeButton}
-                                        onClick={() => void handleRemovePath(index)}
-                                        disabled={isSavingPaths}
-                                        title={t('settings.fileProtection.protectedPathRemoveTitle')}
-                                        aria-label={t('settings.fileProtection.protectedPathRemoveAria', { path })}
-                                    >
-                                        <X size={14} strokeWidth={1.8} />
-                                    </button>
+                                    <Tooltip content={path}>
+                                        <span className={styles.pathRowText}>{path}</span>
+                                    </Tooltip>
+                                    <Tooltip content={t('settings.fileProtection.protectedPathRemoveTitle')}>
+                                        <button
+                                            className={styles.removeButton}
+                                            onClick={() => void handleRemovePath(index)}
+                                            disabled={isSavingPaths}
+                                            aria-label={t('settings.fileProtection.protectedPathRemoveAria', { path })}
+                                        >
+                                            <X size={14} strokeWidth={1.8} />
+                                        </button>
+                                    </Tooltip>
                                 </div>
                             ))
                         )}

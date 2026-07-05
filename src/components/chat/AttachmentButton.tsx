@@ -9,6 +9,7 @@
 
 import { memo, useCallback } from 'react';
 import { attachmentService } from '@/services/attachment';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useI18n } from '@/i18n';
 import styles from './AttachmentButton.module.css';
 import { getLogger } from '@services/logger';
@@ -48,27 +49,30 @@ export const AttachmentButton = memo(function AttachmentButton({
         }
     }, [disabled, onFileSelect]);
 
+    const tooltipLabel = t('chat.addAttachment');
+
     return (
-        <button
-            className={styles.button}
-            onClick={handleClick}
-            disabled={disabled}
-            aria-label={t('chat.addAttachment')}
-            title={t('chat.addAttachment')}
-        >
-            {/* Lucide Paperclip 图标 */}
-            <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        <Tooltip content={tooltipLabel}>
+            <button
+                className={styles.button}
+                onClick={handleClick}
+                disabled={disabled}
+                aria-label={tooltipLabel}
             >
-                <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57a4 4 0 1 1 5.66 5.66l-8.58 8.58a2 2 0 1 1-2.83-2.83l8.49-8.48" />
-            </svg>
-        </button>
+                {/* Lucide Paperclip 图标 */}
+                <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57a4 4 0 1 1 5.66 5.66l-8.58 8.58a2 2 0 1 1-2.83-2.83l8.49-8.48" />
+                </svg>
+            </button>
+        </Tooltip>
     );
 });

@@ -8,6 +8,7 @@
 
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { useI18n } from '@/i18n';
+import { Tooltip } from '@components/ui/Tooltip';
 import type { ChatMode } from '@/types/chatMode';
 import styles from './ModeSelector.module.css';
 
@@ -95,32 +96,35 @@ export const ModeSelector = memo(function ModeSelector({
     }, [onChange]);
 
     const currentConfig = MODE_CONFIG[mode];
+    const tooltipContent = isImageModel ? t('chat.imageModelChatOnly') : t('chat.selectMode');
 
     return (
         <div className={styles.container} ref={containerRef}>
-            <button
-                className={styles.trigger}
-                onClick={handleToggle}
-                disabled={effectiveDisabled}
-                data-mode={mode}
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
-                title={isImageModel ? t('chat.imageModelChatOnly') : undefined}
-            >
-                <span className={styles.modeLabel}>{currentConfig.label}</span>
-                <svg
-                    className={styles.arrow}
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    data-open={isOpen}
+            <Tooltip content={tooltipContent} disabled={disabled && !isImageModel}>
+                <button
+                    className={styles.trigger}
+                    onClick={handleToggle}
+                    disabled={effectiveDisabled}
+                    data-mode={mode}
+                    aria-haspopup="listbox"
+                    aria-expanded={isOpen}
+                    aria-label={t('chat.selectMode')}
                 >
-                    <path d="M3 4.5l3 3 3-3" />
-                </svg>
-            </button>
+                    <span className={styles.modeLabel}>{currentConfig.label}</span>
+                    <svg
+                        className={styles.arrow}
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        data-open={isOpen}
+                    >
+                        <path d="M3 4.5l3 3 3-3" />
+                    </svg>
+                </button>
+            </Tooltip>
 
             {isOpen && (
                 <div className={styles.dropdown} role="listbox">

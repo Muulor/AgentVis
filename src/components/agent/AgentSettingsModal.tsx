@@ -6,7 +6,7 @@ import { useAgentStore, type AgentSandboxMode } from '@stores/agentStore';
 import { useRuntimeStore } from '@stores/runtimeStore';
 import { MemoryPanel } from '@components/memory';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
-import { TextContextMenu, useTextContextMenu } from '@components/ui';
+import { TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
 import { getRagService } from '@services/rag';
 import { PLANNING_CONSTANTS } from '@services/planning/PlanningConstants';
 import { imageCompressionService } from '@services/attachment';
@@ -851,14 +851,15 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                                 </div>
                                 <span style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>{t('agent.settings.loopUnit')}</span>
                                 {planningLoopBudget !== null && (
-                                    <button
-                                        className={styles.browseBtn}
-                                        onClick={() => setPlanningLoopBudget(null)}
-                                        title={t('agent.settings.resetLoopTitle', { max: defaultDecisionRounds })}
-                                        type="button"
-                                    >
-                                        {t('agent.settings.resetDefault')}
-                                    </button>
+                                    <Tooltip content={t('agent.settings.resetLoopTitle', { max: defaultDecisionRounds })}>
+                                        <button
+                                            className={styles.browseBtn}
+                                            onClick={() => setPlanningLoopBudget(null)}
+                                            type="button"
+                                        >
+                                            {t('agent.settings.resetDefault')}
+                                        </button>
+                                    </Tooltip>
                                 )}
                             </div>
 
@@ -1094,19 +1095,24 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                                                 <span className={styles.fileName}>{path.split(/[/\\]/).pop()}</span>
                                                 {/* 非多选模式显示单个删除按钮 */}
                                                 {!isSelectMode && (
-                                                    <button
-                                                        className={styles.removeBtn}
-                                                        onClick={() => {
-                                                            setPendingDeletePath(path);
-                                                            setDeleteKnowledgeConfirmOpen(true);
-                                                        }}
+                                                    <Tooltip
+                                                        content={t('agent.settings.deleteFileTitle')}
                                                         disabled={isSaving || isDeleting}
-                                                        title={t('agent.settings.deleteFileTitle')}
                                                     >
-                                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                                            <path d="M3 3l6 6M9 3L3 9" />
-                                                        </svg>
-                                                    </button>
+                                                        <button
+                                                            className={styles.removeBtn}
+                                                            onClick={() => {
+                                                                setPendingDeletePath(path);
+                                                                setDeleteKnowledgeConfirmOpen(true);
+                                                            }}
+                                                            disabled={isSaving || isDeleting}
+                                                            aria-label={t('agent.settings.deleteFileTitle')}
+                                                        >
+                                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                                <path d="M3 3l6 6M9 3L3 9" />
+                                                            </svg>
+                                                        </button>
+                                                    </Tooltip>
                                                 )}
                                             </div>
                                         );

@@ -10,6 +10,7 @@ import { appDataDir } from '@tauri-apps/api/path';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '../ui/Toast';
+import { Tooltip } from '@components/ui/Tooltip';
 import {
     getDataStats,
     exportData,
@@ -430,17 +431,19 @@ export function DataSettings() {
                     <span className={styles.pathText}>
                         {backupStats?.dirPath ?? t('common.loading')}
                     </span>
-                    <button
-                        id="backup-open-dir-btn"
-                        className={styles.openButton}
-                        onClick={handleOpenBackupsDir}
-                        title={t('settings.data.openBackupsTitle')}
-                    >
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <path d="M7 2h3v3M10 2L6 6M2 5.5V10h7V6" />
-                        </svg>
-                        {t('common.open')}
-                    </button>
+                    <Tooltip content={t('settings.data.openBackupsTitle')}>
+                        <button
+                            id="backup-open-dir-btn"
+                            className={styles.openButton}
+                            onClick={handleOpenBackupsDir}
+                            aria-label={t('settings.data.openBackupsTitle')}
+                        >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M7 2h3v3M10 2L6 6M2 5.5V10h7V6" />
+                            </svg>
+                            {t('common.open')}
+                        </button>
+                    </Tooltip>
                 </div>
 
                 {/* 备份文件统计摘要 */}

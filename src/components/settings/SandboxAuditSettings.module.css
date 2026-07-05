@@ -51,6 +51,13 @@
     opacity: 0.6;
 }
 
+.tooltipButtonWrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+}
+
 .summaryGrid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));

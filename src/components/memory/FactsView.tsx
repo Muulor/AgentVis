@@ -15,6 +15,7 @@ import type { LongTermFactCategory } from '@services/memory/types';
 import { FactCard } from './FactCard';
 import { FactEditModal } from './FactEditModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Tooltip } from '@components/ui/Tooltip';
 import { getLogger } from '@services/logger';
 import { useI18n } from '@/i18n';
 import { buildManualFactCreateRequest, isManualFactMetadata } from './manualFact';
@@ -233,22 +234,24 @@ export function FactsView({ agentId }: FactsViewProps) {
             <div className={styles.header}>
                 <span className={styles.title}>{t('memory.factsTitle', { count: facts.length })}</span>
                 <div className={styles.headerActions}>
-                    <button
-                        className={styles.iconBtn}
-                        onClick={handleCreate}
-                        title={t('memory.addFact')}
-                        aria-label={t('memory.addFact')}
-                    >
-                        <Plus size={14} strokeWidth={1.8} />
-                    </button>
-                    <button
-                        className={styles.iconBtn}
-                        onClick={loadData}
-                        title={t('common.refresh')}
-                        aria-label={t('common.refresh')}
-                    >
-                        <RefreshCw size={14} strokeWidth={1.8} />
-                    </button>
+                    <Tooltip content={t('memory.addFact')}>
+                        <button
+                            className={styles.iconBtn}
+                            onClick={handleCreate}
+                            aria-label={t('memory.addFact')}
+                        >
+                            <Plus size={14} strokeWidth={1.8} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip content={t('common.refresh')}>
+                        <button
+                            className={styles.iconBtn}
+                            onClick={loadData}
+                            aria-label={t('common.refresh')}
+                        >
+                            <RefreshCw size={14} strokeWidth={1.8} />
+                        </button>
+                    </Tooltip>
                 </div>
             </div>
 

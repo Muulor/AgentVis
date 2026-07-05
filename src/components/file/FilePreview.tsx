@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { CodeHighlight } from './CodeHighlight';
-import { TextContextMenu, useTextContextMenu } from '@components/ui';
+import { TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
 import { usePreviewStore } from '@stores/previewStore';
 import { getLogger } from '@services/logger';
 import { isPreviewableFile, inferTemplateFromFileName } from '@services/preview';
@@ -242,15 +242,16 @@ function MediaFallbackCard({
                         {t('file.tooLargeUseSystem')}
                     </span>
                 </div>
-                <button
-                    className={styles.openSystemBtn}
-                    onClick={() => { void handleOpenSystem(); }}
-                    disabled={isOpening}
-                    title={t('file.openWithSystem')}
-                >
-                    <ExternalLink size={14} />
-                    <span>{isOpening ? t('file.opening') : t('file.systemOpen')}</span>
-                </button>
+                <Tooltip content={t('file.openWithSystem')}>
+                    <button
+                        className={styles.openSystemBtn}
+                        onClick={() => { void handleOpenSystem(); }}
+                        disabled={isOpening}
+                    >
+                        <ExternalLink size={14} />
+                        <span>{isOpening ? t('file.opening') : t('file.systemOpen')}</span>
+                    </button>
+                </Tooltip>
             </div>
         </div>
     );
@@ -491,14 +492,15 @@ function LargeHtmlCard({
                     </span>
                 </div>
                 {/* 直接预览：触发 iframe 渲染 */}
-                <button
-                    className={styles.openSystemBtn}
-                    onClick={onPreview}
-                    title={t('file.renderHtmlTitle')}
-                >
-                    <Play size={14} />
-                    <span>{t('layout.panelPreview')}</span>
-                </button>
+                <Tooltip content={t('file.renderHtmlTitle')}>
+                    <button
+                        className={styles.openSystemBtn}
+                        onClick={onPreview}
+                    >
+                        <Play size={14} />
+                        <span>{t('layout.panelPreview')}</span>
+                    </button>
+                </Tooltip>
             </div>
         </div>
     );
@@ -556,15 +558,16 @@ function BinaryDocCard({
                         {fileSize !== null && ` · ${formatFileSize(fileSize)}`}
                     </span>
                 </div>
-                <button
-                    className={styles.openSystemBtn}
-                    onClick={() => { void handleOpenSystem(); }}
-                    disabled={isOpening}
-                    title={t('file.openWithSystem')}
-                >
-                    <ExternalLink size={14} />
-                    <span>{isOpening ? t('file.opening') : t('file.systemOpen')}</span>
-                </button>
+                <Tooltip content={t('file.openWithSystem')}>
+                    <button
+                        className={styles.openSystemBtn}
+                        onClick={() => { void handleOpenSystem(); }}
+                        disabled={isOpening}
+                    >
+                        <ExternalLink size={14} />
+                        <span>{isOpening ? t('file.opening') : t('file.systemOpen')}</span>
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 提取内容预览区域 */}

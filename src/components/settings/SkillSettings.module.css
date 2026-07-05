@@ -431,6 +431,12 @@
 }
 
 /* 安装状态 pill 按钮（图标 + 文字标签） */
+.tooltipButtonWrap {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
 .installPill {
     flex-shrink: 0;
     display: inline-flex;

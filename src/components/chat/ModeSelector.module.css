@@ -17,7 +17,7 @@
     border: 1px solid transparent;
     border-radius: var(--radius-md);
     background-color: transparent;
-    color: var(--color-text-primary);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
@@ -28,6 +28,7 @@
 .trigger:focus-visible:not(:disabled) {
     border-color: var(--color-border-hover);
     background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
     outline: none;
 }
 
@@ -38,12 +39,12 @@
 
 /* Chat 模式样式 */
 .trigger[data-mode="chat"] {
-    color: var(--color-status-info);
+    color: var(--color-text-secondary);
 }
 
 /* Planning 模式样式 */
 .trigger[data-mode="planning"] {
-    color: var(--color-status-success);
+    color: var(--color-text-secondary);
 }
 
 .modeLabel {

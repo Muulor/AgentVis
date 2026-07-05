@@ -11,6 +11,7 @@ import { ChevronDown, Download, Pencil, Plus, RotateCcw, Save, Trash2, Upload, X
 import { useSettingsStore } from '@stores/settingsStore';
 import { useToast } from '@components/ui/Toast';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
+import { Tooltip } from '@components/ui/Tooltip';
 import {
     getProviders,
     getModelsByProvider,
@@ -399,10 +400,12 @@ export function ModelSettings() {
                 </form>
 
                 <div className={styles.configActions}>
-                    <button className={styles.actionButton} onClick={handleDownloadTemplate} title={t('settings.model.downloadTemplateTitle')}>
-                        <Download size={14} />
-                        {t('settings.model.downloadTemplate')}
-                    </button>
+                    <Tooltip content={t('settings.model.downloadTemplateTitle')}>
+                        <button className={styles.actionButton} onClick={handleDownloadTemplate}>
+                            <Download size={14} />
+                            {t('settings.model.downloadTemplate')}
+                        </button>
+                    </Tooltip>
                     <button className={styles.actionButton} onClick={handleImport}>
                         <Upload size={14} />
                         {t('settings.model.importConfig')}
@@ -447,22 +450,24 @@ export function ModelSettings() {
                                             </span>
                                         </div>
                                         <div className={styles.userModelActions}>
-                                            <button
-                                                className={styles.userModelIconButton}
-                                                onClick={() => handleEditUserModel(model)}
-                                                aria-label={t('settings.model.editCustomModel')}
-                                                title={t('settings.model.editCustomModel')}
-                                            >
-                                                <Pencil size={12} />
-                                            </button>
-                                            <button
-                                                className={cx(styles.userModelIconButton, styles.userModelDangerButton)}
-                                                onClick={() => handleRemoveUserModel(model.id, model.providerId)}
-                                                aria-label={t('common.delete')}
-                                                title={t('settings.model.deleteCustomModel')}
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
+                                            <Tooltip content={t('settings.model.editCustomModel')}>
+                                                <button
+                                                    className={styles.userModelIconButton}
+                                                    onClick={() => handleEditUserModel(model)}
+                                                    aria-label={t('settings.model.editCustomModel')}
+                                                >
+                                                    <Pencil size={12} />
+                                                </button>
+                                            </Tooltip>
+                                            <Tooltip content={t('settings.model.deleteCustomModel')}>
+                                                <button
+                                                    className={cx(styles.userModelIconButton, styles.userModelDangerButton)}
+                                                    onClick={() => handleRemoveUserModel(model.id, model.providerId)}
+                                                    aria-label={t('settings.model.deleteCustomModel')}
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                 ))}

@@ -9,9 +9,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { RefreshCw } from 'lucide-react';
 import styles from './SummaryView.module.css';
 import type { SummaryViewProps, SummaryItem } from './types';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Tooltip } from '@components/ui/Tooltip';
 import { getMemorySafeMessageContent, stripMemoryVisualCodeBlocks } from '@services/memory/utils/SafeMessageContent';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
@@ -294,11 +296,11 @@ export function SummaryView({ agentId }: SummaryViewProps) {
             {/* 头部 */}
             <div className={styles.header}>
                 <span className={styles.title}>{t('memory.summariesTitle', { count: summaries.length })}</span>
-                <button className={styles.refreshBtn} onClick={loadData} title={t('common.refresh')}>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M1.5 7a5.5 5.5 0 109.5-3.75M11 1v2.25H8.75" />
-                    </svg>
-                </button>
+                <Tooltip content={t('common.refresh')}>
+                    <button className={styles.refreshBtn} onClick={loadData} aria-label={t('common.refresh')}>
+                        <RefreshCw size={14} strokeWidth={1.8} />
+                    </button>
+                </Tooltip>
             </div>
 
             {/* 摘要列表 */}

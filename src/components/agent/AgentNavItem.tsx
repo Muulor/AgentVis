@@ -5,6 +5,7 @@ import { useChatStore } from '@stores/chatStore';
 import { useCronStore } from '@stores/cronStore';
 import { useUIStore } from '@stores/uiStore';
 import { AgentContextMenu } from './AgentContextMenu';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useI18n } from '@/i18n';
 import styles from './AgentNavItem.module.css';
 
@@ -135,58 +136,59 @@ export function AgentNavItem({
 
     return (
         <>
-            <div
-                className={styles.navItem}
-                data-active={isActive}
-                data-collapsed={isCollapsed}
-                data-dragging={isDragging}
-                data-drag-over={isDragOver}
-                draggable={draggable}
-                onClick={handleClick}
-                onContextMenu={handleContextMenu}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-                onDragEnd={onDragEnd}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleClick()}
-                title={name}
-            >
-                {/* 头像容器（相对定位，供角标绝对定位） */}
-                <div className={styles.avatarWrapper}>
-                    <div
-                        className={styles.avatar}
-                        style={avatar
-                            ? { borderColor: avatarColor }  /* 有头像时用颜色作为边框 */
-                            : { backgroundColor: avatarColor }  /* 无头像时用颜色作为背景 */
-                        }
-                        data-has-image={!!avatar}
-                    >
-                        {avatar ? (
-                            <img
-                                src={`data:image/webp;base64,${avatar}`}
-                                alt={name}
-                                className={styles.avatarImg}
-                            />
-                        ) : (
-                            avatarLetter
+            <Tooltip content={name}>
+                <div
+                    className={styles.navItem}
+                    data-active={isActive}
+                    data-collapsed={isCollapsed}
+                    data-dragging={isDragging}
+                    data-drag-over={isDragOver}
+                    draggable={draggable}
+                    onClick={handleClick}
+                    onContextMenu={handleContextMenu}
+                    onDragStart={onDragStart}
+                    onDragOver={onDragOver}
+                    onDragLeave={onDragLeave}
+                    onDrop={onDrop}
+                    onDragEnd={onDragEnd}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+                >
+                    {/* 头像容器（相对定位，供角标绝对定位） */}
+                    <div className={styles.avatarWrapper}>
+                        <div
+                            className={styles.avatar}
+                            style={avatar
+                                ? { borderColor: avatarColor }  /* 有头像时用颜色作为边框 */
+                                : { backgroundColor: avatarColor }  /* 无头像时用颜色作为背景 */
+                            }
+                            data-has-image={!!avatar}
+                        >
+                            {avatar ? (
+                                <img
+                                    src={`data:image/webp;base64,${avatar}`}
+                                    alt={name}
+                                    className={styles.avatarImg}
+                                />
+                            ) : (
+                                avatarLetter
+                            )}
+                        </div>
+                        {/* 未读消息蓝点（右上角） */}
+                        {hasUnread && <span className={styles.unreadDot} />}
+                        {/* Cron 定时任务图标（右下角） */}
+                        {hasCronJobs && (
+                            <span className={styles.cronBadge} aria-label={t('agent.hasEnabledCron')}>
+                                <Timer size={8} />
+                            </span>
                         )}
                     </div>
-                    {/* 未读消息蓝点（右上角） */}
-                    {hasUnread && <span className={styles.unreadDot} />}
-                    {/* Cron 定时任务图标（右下角） */}
-                    {hasCronJobs && (
-                        <span className={styles.cronBadge} title={t('agent.hasEnabledCron')}>
-                            <Timer size={8} />
-                        </span>
+                    {!isCollapsed && (
+                        <span className={styles.name}>{name}</span>
                     )}
                 </div>
-                {!isCollapsed && (
-                    <span className={styles.name}>{name}</span>
-                )}
-            </div>
+            </Tooltip>
 
             {/* 右键菜单 */}
             {contextMenu && (

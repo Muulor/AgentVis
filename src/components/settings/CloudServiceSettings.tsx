@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '@components/ui/Toast';
+import { Tooltip } from '@components/ui/Tooltip';
 import { notifySetupStatusChanged } from '@components/onboarding/onboardingEvents';
 import { useSettingsStore } from '@stores/settingsStore';
 import { getProviders, getModelsByProvider } from '@/config/modelRegistry';
@@ -501,13 +502,15 @@ export function CloudServiceSettings() {
             <section className={styles.serviceSection}>
                 <div className={styles.serviceHeader}>
                     <h3 className={styles.serviceName}>{t('settings.cloud.siliconflowTitle')}</h3>
-                    <button
-                        className={styles.externalLinkButton}
-                        onClick={() => openExternalUrl(PROVIDER_URLS.siliconflow)}
-                        title={t('settings.cloud.getApiKeyTitle')}
-                    >
-                        <ExternalLink size={14} />
-                    </button>
+                    <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
+                        <button
+                            className={styles.externalLinkButton}
+                            onClick={() => openExternalUrl(PROVIDER_URLS.siliconflow)}
+                            aria-label={t('settings.cloud.getApiKeyTitle')}
+                        >
+                            <ExternalLink size={14} />
+                        </button>
+                    </Tooltip>
                     <span className={styles.requiredBadge}>{t('common.required')}</span>
                     {siliconflowConfigured && <span className={styles.configuredBadge}>{t('common.configured')}</span>}
                 </div>
@@ -551,13 +554,15 @@ export function CloudServiceSettings() {
                             {siliconflowTesting ? t('common.testing') : siliconflowTestResult === 'success' ? `✓ ${t('common.test')}` : siliconflowTestResult === 'error' ? `✗ ${t('common.test')}` : t('common.test')}
                         </button>
                         {siliconflowConfigured && (
-                            <button
-                                className={styles.deleteButton}
-                                onClick={() => handleDeleteApiKey('siliconflow', 'SiliconFlow', setSiliconflowConfigured, setSiliconflowTestResult)}
-                                title={t('settings.cloud.deleteApiKeyTitle')}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={() => handleDeleteApiKey('siliconflow', 'SiliconFlow', setSiliconflowConfigured, setSiliconflowTestResult)}
+                                    aria-label={t('settings.cloud.deleteApiKeyTitle')}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -587,13 +592,15 @@ export function CloudServiceSettings() {
             <section className={styles.serviceSection}>
                 <div className={styles.serviceHeader}>
                     <h3 className={styles.serviceName}>Gitee AI (Embedding Fallback)</h3>
-                    <button
-                        className={styles.externalLinkButton}
-                        onClick={() => openExternalUrl(PROVIDER_URLS.giteeai)}
-                        title={t('settings.cloud.getApiKeyTitle')}
-                    >
-                        <ExternalLink size={14} />
-                    </button>
+                    <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
+                        <button
+                            className={styles.externalLinkButton}
+                            onClick={() => openExternalUrl(PROVIDER_URLS.giteeai)}
+                            aria-label={t('settings.cloud.getApiKeyTitle')}
+                        >
+                            <ExternalLink size={14} />
+                        </button>
+                    </Tooltip>
                     <span className={styles.optionalBadge}>{t('common.optional')}</span>
                     {giteeaiConfigured && <span className={styles.configuredBadge}>{t('common.configured')}</span>}
                 </div>
@@ -634,13 +641,15 @@ export function CloudServiceSettings() {
                             {giteeaiTesting ? t('common.testing') : giteeaiTestResult === 'success' ? `✓ ${t('common.test')}` : giteeaiTestResult === 'error' ? `✗ ${t('common.test')}` : t('common.test')}
                         </button>
                         {giteeaiConfigured && (
-                            <button
-                                className={styles.deleteButton}
-                                onClick={() => handleDeleteApiKey('giteeai', 'Gitee AI', setGiteeaiConfigured, setGiteeaiTestResult)}
-                                title={t('settings.cloud.deleteApiKeyTitle')}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={() => handleDeleteApiKey('giteeai', 'Gitee AI', setGiteeaiConfigured, setGiteeaiTestResult)}
+                                    aria-label={t('settings.cloud.deleteApiKeyTitle')}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -650,13 +659,15 @@ export function CloudServiceSettings() {
             <section className={styles.serviceSection}>
                 <div className={styles.serviceHeader}>
                     <h3 className={styles.serviceName}>{t('settings.cloud.tavilyTitle')}</h3>
-                    <button
-                        className={styles.externalLinkButton}
-                        onClick={() => openExternalUrl(PROVIDER_URLS.tavily)}
-                        title={t('settings.cloud.getApiKeyTitle')}
-                    >
-                        <ExternalLink size={14} />
-                    </button>
+                    <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
+                        <button
+                            className={styles.externalLinkButton}
+                            onClick={() => openExternalUrl(PROVIDER_URLS.tavily)}
+                            aria-label={t('settings.cloud.getApiKeyTitle')}
+                        >
+                            <ExternalLink size={14} />
+                        </button>
+                    </Tooltip>
                     <span className={styles.optionalBadge}>{t('common.optional')}</span>
                     {tavilyConfigured && <span className={styles.configuredBadge}>{t('common.configured')}</span>}
                 </div>
@@ -695,13 +706,15 @@ export function CloudServiceSettings() {
                             {tavilyTesting ? t('common.testing') : tavilyTestResult === 'success' ? `✓ ${t('common.test')}` : tavilyTestResult === 'error' ? `✗ ${t('common.test')}` : t('common.test')}
                         </button>
                         {tavilyConfigured && (
-                            <button
-                                className={styles.deleteButton}
-                                onClick={() => handleDeleteApiKey('tavily', 'Tavily', setTavilyConfigured, setTavilyTestResult)}
-                                title={t('settings.cloud.deleteApiKeyTitle')}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={() => handleDeleteApiKey('tavily', 'Tavily', setTavilyConfigured, setTavilyTestResult)}
+                                    aria-label={t('settings.cloud.deleteApiKeyTitle')}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -712,13 +725,15 @@ export function CloudServiceSettings() {
             <section className={styles.serviceSection}>
                 <div className={styles.serviceHeader}>
                     <h3 className={styles.serviceName}>{t('settings.cloud.githubTitle')}</h3>
-                    <button
-                        className={styles.externalLinkButton}
-                        onClick={() => openExternalUrl(PROVIDER_URLS.github)}
-                        title={t('settings.cloud.getApiKeyTitle')}
-                    >
-                        <ExternalLink size={14} />
-                    </button>
+                    <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
+                        <button
+                            className={styles.externalLinkButton}
+                            onClick={() => openExternalUrl(PROVIDER_URLS.github)}
+                            aria-label={t('settings.cloud.getApiKeyTitle')}
+                        >
+                            <ExternalLink size={14} />
+                        </button>
+                    </Tooltip>
                     <span className={styles.optionalBadge}>{t('common.optional')}</span>
                     {githubConfigured && <span className={styles.configuredBadge}>{t('common.configured')}</span>}
                 </div>
@@ -757,13 +772,15 @@ export function CloudServiceSettings() {
                             {githubTesting ? t('common.testing') : githubTestResult === 'success' ? `✓ ${t('common.test')}` : githubTestResult === 'error' ? `✕ ${t('common.test')}` : t('common.test')}
                         </button>
                         {githubConfigured && (
-                            <button
-                                className={styles.deleteButton}
-                                onClick={() => handleDeleteApiKey('github', 'GitHub', setGithubConfigured, setGithubTestResult)}
-                                title={t('settings.cloud.deleteApiKeyTitle')}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={() => handleDeleteApiKey('github', 'GitHub', setGithubConfigured, setGithubTestResult)}
+                                    aria-label={t('settings.cloud.deleteApiKeyTitle')}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -773,13 +790,15 @@ export function CloudServiceSettings() {
             <section className={styles.serviceSection}>
                 <div className={styles.serviceHeader}>
                     <h3 className={styles.serviceName}>{t('settings.cloud.context7Title')}</h3>
-                    <button
-                        className={styles.externalLinkButton}
-                        onClick={() => openExternalUrl(PROVIDER_URLS.context7)}
-                        title={t('settings.cloud.getApiKeyTitle')}
-                    >
-                        <ExternalLink size={14} />
-                    </button>
+                    <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
+                        <button
+                            className={styles.externalLinkButton}
+                            onClick={() => openExternalUrl(PROVIDER_URLS.context7)}
+                            aria-label={t('settings.cloud.getApiKeyTitle')}
+                        >
+                            <ExternalLink size={14} />
+                        </button>
+                    </Tooltip>
                     <span className={styles.optionalBadge}>{t('common.optional')}</span>
                     {context7Configured && <span className={styles.configuredBadge}>{t('common.configured')}</span>}
                 </div>
@@ -818,13 +837,15 @@ export function CloudServiceSettings() {
                             {context7Testing ? t('common.testing') : context7TestResult === 'success' ? `✓ ${t('common.test')}` : context7TestResult === 'error' ? `✕ ${t('common.test')}` : t('common.test')}
                         </button>
                         {context7Configured && (
-                            <button
-                                className={styles.deleteButton}
-                                onClick={() => handleDeleteApiKey('context7', 'Context7', setContext7Configured, setContext7TestResult)}
-                                title={t('settings.cloud.deleteApiKeyTitle')}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={() => handleDeleteApiKey('context7', 'Context7', setContext7Configured, setContext7TestResult)}
+                                    aria-label={t('settings.cloud.deleteApiKeyTitle')}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>
@@ -899,13 +920,15 @@ export function CloudServiceSettings() {
                             </button>
                         )}
                         {imageGenerationConfigured && (
-                            <button
-                                className={styles.deleteButton}
-                                onClick={() => handleDeleteApiKey('image-generation', t('settings.cloud.imageGeneration'), setImageGenerationConfigured, (_v) => undefined)}
-                                title={t('settings.cloud.deleteApiKeyTitle')}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={() => handleDeleteApiKey('image-generation', t('settings.cloud.imageGeneration'), setImageGenerationConfigured, (_v) => undefined)}
+                                    aria-label={t('settings.cloud.deleteApiKeyTitle')}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
                 </div>

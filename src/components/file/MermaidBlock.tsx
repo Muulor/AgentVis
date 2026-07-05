@@ -27,6 +27,7 @@ import {
 } from './MermaidVisualTheme';
 import {
     fixFlowchartDanglingPipeLabelLinks,
+    fixFlowchartPseudoSubgraphNodeDeclarations,
     fixFlowchartRedundantPipeLabelLinkTails,
     fixFlowchartReservedNodeIds,
     fixFlowchartUnsafeSubgraphTitles,
@@ -207,7 +208,8 @@ function sanitizeMermaidCode(code: string): string {
         .replace(/≥/g, '>=');
 
     // Pass 1.5：修复 subgraph ID 与内部节点 ID 冲突（须在符号标准化后执行）
-    const quotedLabelFixed = sanitizeFlowchartQuotedLabels(symbolFixed);
+    const pseudoSubgraphFixed = fixFlowchartPseudoSubgraphNodeDeclarations(symbolFixed);
+    const quotedLabelFixed = sanitizeFlowchartQuotedLabels(pseudoSubgraphFixed);
     const subgraphTitleFixed = fixFlowchartUnsafeSubgraphTitles(quotedLabelFixed);
     const structFixed = fixSubgraphNodeIdCollision(subgraphTitleFixed);
 

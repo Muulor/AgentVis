@@ -237,7 +237,7 @@
 }
 
 .safetyFooterTextarea:focus {
-    border-color: var(--color-primary, #6366f1);
+    border-color: var(--color-action-primary);
 }
 
 @media (max-width: 560px) {

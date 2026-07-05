@@ -17,6 +17,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { FolderOpen, X } from 'lucide-react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Tooltip } from '@components/ui/Tooltip';
 import { useAgentStore } from '@stores/agentStore';
 import { useI18n } from '@/i18n';
 import styles from './ProjectPathButton.module.css';
@@ -134,21 +135,20 @@ export const ProjectPathButton = memo(function ProjectPathButton({
         const folderName = extractFolderName(projectPath);
         return (
             <>
-                <div
-                    className={styles.linkedBadge}
-                    title={t('chat.projectLinkedTitle', { path: projectPath })}
-                >
-                    <FolderOpen size={12} className={styles.badgeIcon} />
-                    <span className={styles.badgeName}>{folderName}</span>
-                    <button
-                        className={styles.unlinkBtn}
-                        onClick={handleUnlink}
-                        disabled={disabled || isSaving}
-                        aria-label={t('chat.projectUnlinkAria')}
-                    >
-                        <X size={10} />
-                    </button>
-                </div>
+                <Tooltip content={t('chat.projectLinkedTitle', { path: projectPath })}>
+                    <div className={styles.linkedBadge}>
+                        <FolderOpen size={12} className={styles.badgeIcon} />
+                        <span className={styles.badgeName}>{folderName}</span>
+                        <button
+                            className={styles.unlinkBtn}
+                            onClick={handleUnlink}
+                            disabled={disabled || isSaving}
+                            aria-label={t('chat.projectUnlinkAria')}
+                        >
+                            <X size={10} />
+                        </button>
+                    </div>
+                </Tooltip>
             </>
         );
     }
@@ -156,16 +156,17 @@ export const ProjectPathButton = memo(function ProjectPathButton({
     // 未关联：显示"打开项目"按钮
     return (
         <>
-            <button
-                className={styles.openProjectBtn}
-                onClick={handleOpenPicker}
-                disabled={disabled || isSaving}
-                title={t('chat.projectOpenTitle')}
-                aria-label={t('chat.projectOpenLabel')}
-            >
-                <FolderOpen size={14} />
-                <span>{t('chat.projectOpenLabel')}</span>
-            </button>
+            <Tooltip content={t('chat.projectOpenTitle')}>
+                <button
+                    className={styles.openProjectBtn}
+                    onClick={handleOpenPicker}
+                    disabled={disabled || isSaving}
+                    aria-label={t('chat.projectOpenLabel')}
+                >
+                    <FolderOpen size={14} />
+                    <span>{t('chat.projectOpenLabel')}</span>
+                </button>
+            </Tooltip>
 
             {/* 授权确认对话框 */}
             <ConfirmDialog

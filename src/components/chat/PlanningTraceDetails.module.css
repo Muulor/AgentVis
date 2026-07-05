@@ -1,0 +1,83 @@
+/**
+ * PlanningTraceDetails 样式
+ *
+ * 已完成 Planning 任务的轻量执行详情收纳行。
+ */
+
+.container {
+    width: 100%;
+    margin: 2px 0 var(--spacing-xs);
+}
+
+.summaryButton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 28px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+}
+
+.summaryButton:hover {
+    color: var(--color-text-secondary);
+}
+
+.summaryButton:hover .rule {
+    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
+}
+
+.summaryText {
+    flex-shrink: 0;
+    font-weight: 500;
+}
+
+.chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: currentColor;
+}
+
+.rule {
+    flex: 1;
+    height: 1px;
+    min-width: 24px;
+    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
+    transition: background-color var(--transition-fast, 150ms ease);
+}
+
+.details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0 12px;
+    border-bottom: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.12));
+}
+
+.detailSection {
+    min-width: 0;
+}
+
+.detailHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.detailHeader svg {
+    flex-shrink: 0;
+    color: var(--color-action-primary, #339CFF);
+}
