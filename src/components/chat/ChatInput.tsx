@@ -10,7 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, memo, useMemo, type SetStateAction } from 'react';
-import { ArrowBigRightDash, BookOpen, ClipboardPaste, Copy, FileText, Folder, Scissors, Square, TextSelect, X } from 'lucide-react';
+import { ArrowBigRightDash, ClipboardPaste, Copy, FileText, Folder, Scissors, Square, TextSelect, Toolbox, X } from 'lucide-react';
 import { QuotePreview } from './QuotePreview';
 import { ModeSelector } from './ModeSelector';
 import { MentionInput } from './MentionInput';
@@ -261,8 +261,11 @@ function createTokenIconElement(tokenType: InputContextToken['type']): SVGSVGEle
     };
 
     if (tokenType === 'skill') {
-        addPath('M12 7v14');
-        addPath('M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z');
+        addPath('M16 12v4');
+        addPath('M16 6a2 2 0 0 1 1.414.586l4 4A2 2 0 0 1 22 12v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 .586-1.414l4-4A2 2 0 0 1 8 6z');
+        addPath('M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2');
+        addPath('M2 14h20');
+        addPath('M8 12v4');
         return icon;
     }
 
@@ -1615,7 +1618,7 @@ export const ChatInput = memo(function ChatInput({
                                                 : 'chat.openFilePath', { path: token.path })
                                         : token.label}
                                 >
-                                    <BookOpen size={13} className={styles.skillChipIcon} aria-hidden="true" />
+                                    <Toolbox size={13} className={styles.skillChipIcon} aria-hidden="true" />
                                     <span className={styles.skillChipLabel}>{token.label}</span>
                                 </button>
                                 {token.badge && (

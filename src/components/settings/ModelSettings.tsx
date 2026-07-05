@@ -12,6 +12,7 @@ import { useSettingsStore } from '@stores/settingsStore';
 import { useToast } from '@components/ui/Toast';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { Tooltip } from '@components/ui/Tooltip';
+import { Select } from '@components/ui';
 import {
     getProviders,
     getModelsByProvider,
@@ -306,17 +307,15 @@ export function ModelSettings() {
             {/* 默认模型 */}
             <section className={styles.section}>
                 <h3 className={styles.sectionTitle}>{t('settings.model.defaultModel')}</h3>
-                <select
+                <Select
                     className={styles.select}
                     value={defaultModel || (availableModels.length > 0 ? availableModels[0]?.id ?? '' : '')}
-                    onChange={(e) => setDefaultModel(e.target.value)}
-                >
-                    {availableModels.map((model) => (
-                        <option key={`${model.id}-${model.providerId}`} value={model.id}>
-                            {model.name}
-                        </option>
-                    ))}
-                </select>
+                    onValueChange={setDefaultModel}
+                    options={availableModels.map((model) => ({
+                        value: model.id,
+                        label: model.name,
+                    }))}
+                />
             </section>
 
             {/* 模型配置管理 */}
@@ -333,15 +332,15 @@ export function ModelSettings() {
                     <div className={styles.modelFormGrid}>
                         <label className={styles.field}>
                             <span className={styles.fieldLabel}>{t('settings.model.formProvider')}</span>
-                            <select
+                            <Select
                                 className={styles.formControl}
                                 value={modelForm.providerId}
-                                onChange={(event) => setModelForm(form => ({ ...form, providerId: event.target.value }))}
-                            >
-                                {providers.map(provider => (
-                                    <option key={provider.id} value={provider.id}>{provider.name}</option>
-                                ))}
-                            </select>
+                                onValueChange={(value) => setModelForm(form => ({ ...form, providerId: value }))}
+                                options={providers.map(provider => ({
+                                    value: provider.id,
+                                    label: provider.name,
+                                }))}
+                            />
                         </label>
                         <label className={styles.field}>
                             <span className={styles.fieldLabel}>{t('settings.model.formModelId')}</span>

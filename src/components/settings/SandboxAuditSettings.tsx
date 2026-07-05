@@ -16,6 +16,7 @@ import type {
     SandboxAuditSource,
 } from '@/types';
 import { Tooltip } from '@components/ui/Tooltip';
+import { Select } from '@components/ui';
 import { useI18n, type TranslationKey } from '@/i18n';
 import { cx } from '@utils/classNames';
 import styles from './SandboxAuditSettings.module.css';
@@ -475,73 +476,72 @@ export function SandboxAuditSettings() {
                 <div className={styles.filterPrimaryRow}>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.decision')}</span>
-                        <select
+                        <Select
+                            className={styles.filterSelect}
                             value={decisionFilter}
-                            onChange={(event) => setDecisionFilter(event.target.value as DecisionFilter)}
-                        >
-                            {DECISION_FILTER_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                    {option === 'all' ? t('settings.audit.filters.all') : t(DECISION_LABEL_KEYS[option])}
-                                </option>
-                            ))}
-                        </select>
+                            onValueChange={(value) => setDecisionFilter(value as DecisionFilter)}
+                            options={DECISION_FILTER_OPTIONS.map((option) => ({
+                                value: option,
+                                label: option === 'all' ? t('settings.audit.filters.all') : t(DECISION_LABEL_KEYS[option]),
+                            }))}
+                        />
                     </label>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.backend')}</span>
-                        <select
+                        <Select
+                            className={styles.filterSelect}
                             value={backendFilter}
-                            onChange={(event) => setBackendFilter(event.target.value as BackendFilter)}
-                        >
-                            {BACKEND_FILTER_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                    {option === 'all' ? t('settings.audit.filters.all') : t(BACKEND_LABEL_KEYS[option])}
-                                </option>
-                            ))}
-                        </select>
+                            onValueChange={(value) => setBackendFilter(value as BackendFilter)}
+                            options={BACKEND_FILTER_OPTIONS.map((option) => ({
+                                value: option,
+                                label: option === 'all' ? t('settings.audit.filters.all') : t(BACKEND_LABEL_KEYS[option]),
+                            }))}
+                        />
                     </label>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.source')}</span>
-                        <select
+                        <Select
+                            className={styles.filterSelect}
                             value={sourceFilter}
-                            onChange={(event) => setSourceFilter(event.target.value as SourceFilter)}
-                        >
-                            {SOURCE_FILTER_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                    {option === 'all' ? t('settings.audit.filters.all') : t(SOURCE_LABEL_KEYS[option])}
-                                </option>
-                            ))}
-                        </select>
+                            onValueChange={(value) => setSourceFilter(value as SourceFilter)}
+                            options={SOURCE_FILTER_OPTIONS.map((option) => ({
+                                value: option,
+                                label: option === 'all' ? t('settings.audit.filters.all') : t(SOURCE_LABEL_KEYS[option]),
+                            }))}
+                        />
                     </label>
                 </div>
                 <div className={styles.filterSecondaryRow}>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.reason')}</span>
                         <Tooltip content={reasonFilter === 'all' ? t('settings.audit.filters.all') : reasonFilter}>
-                            <select
-                                value={reasonFilter}
-                                onChange={(event) => setReasonFilter(event.target.value as ReasonFilter)}
-                            >
-                                {REASON_FILTER_OPTIONS.map((option) => (
-                                    <option key={option} value={option}>
-                                        {option === 'all' ? t('settings.audit.filters.all') : option}
-                                    </option>
-                                ))}
-                            </select>
+                            <span className={styles.tooltipSelectWrap}>
+                                <Select
+                                    className={styles.filterSelect}
+                                    value={reasonFilter}
+                                    onValueChange={(value) => setReasonFilter(value as ReasonFilter)}
+                                    options={REASON_FILTER_OPTIONS.map((option) => ({
+                                        value: option,
+                                        label: option === 'all' ? t('settings.audit.filters.all') : option,
+                                    }))}
+                                />
+                            </span>
                         </Tooltip>
                     </label>
                     <label className={styles.filterField}>
                         <span>{t('settings.audit.filters.guardMode')}</span>
                         <Tooltip content={guardModeFilter === 'all' ? t('settings.audit.filters.all') : guardModeFilter}>
-                            <select
-                                value={guardModeFilter}
-                                onChange={(event) => setGuardModeFilter(event.target.value as GuardModeFilter)}
-                            >
-                                {GUARD_MODE_FILTER_OPTIONS.map((option) => (
-                                    <option key={option} value={option}>
-                                        {option === 'all' ? t('settings.audit.filters.all') : option}
-                                    </option>
-                                ))}
-                            </select>
+                            <span className={styles.tooltipSelectWrap}>
+                                <Select
+                                    className={styles.filterSelect}
+                                    value={guardModeFilter}
+                                    onValueChange={(value) => setGuardModeFilter(value as GuardModeFilter)}
+                                    options={GUARD_MODE_FILTER_OPTIONS.map((option) => ({
+                                        value: option,
+                                        label: option === 'all' ? t('settings.audit.filters.all') : option,
+                                    }))}
+                                />
+                            </span>
                         </Tooltip>
                     </label>
                 </div>

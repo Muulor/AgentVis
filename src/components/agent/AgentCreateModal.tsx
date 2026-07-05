@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useHubStore } from '@stores/hubStore';
 import { useAgentStore } from '@stores/agentStore';
 import { useSettingsStore } from '@stores/settingsStore';
+import { Select } from '@components/ui';
 import { getProviders, getModelsByProvider } from '@/config/modelRegistry';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -223,19 +224,17 @@ export function AgentCreateModal({ isOpen, onClose }: AgentCreateModalProps) {
                     {/* 模型选择 */}
                     <div className={styles.formGroup}>
                         <label htmlFor="agent-model" className={styles.label}>{t('agent.create.model')}</label>
-                        <select
+                        <Select
                             id="agent-model"
                             className={styles.select}
                             value={modelId}
-                            onChange={(e) => setModelId(e.target.value)}
                             disabled={isSubmitting}
-                        >
-                            {getModelsByProvider(providerId).map((model) => (
-                                <option key={model.id} value={model.id}>
-                                    {model.name}
-                                </option>
-                            ))}
-                        </select>
+                            onValueChange={setModelId}
+                            options={getModelsByProvider(providerId).map((model) => ({
+                                value: model.id,
+                                label: model.name,
+                            }))}
+                        />
                     </div>
 
                     {error && <div className={styles.error}>{error}</div>}

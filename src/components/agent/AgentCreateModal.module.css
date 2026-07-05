@@ -106,8 +106,8 @@
 
 .input:focus {
     outline: none;
-    border-color: var(--color-action-primary);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .input::placeholder {
@@ -123,12 +123,13 @@
     color: var(--color-text-primary);
     font-size: var(--font-size-base);
     cursor: pointer;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .select:focus {
     outline: none;
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .error {

@@ -9,6 +9,7 @@
 
 import { useState, useCallback } from 'react';
 import { emit } from '@tauri-apps/api/event';
+import { CircleAlert } from 'lucide-react';
 import styles from './MemoryPanel.module.css';
 import type { MemoryPanelProps, MemoryTabId } from './types';
 import { MEMORY_TABS } from './types';
@@ -53,9 +54,7 @@ export function MemoryPanel({ agentId }: MemoryPanelProps) {
         <div className={styles.container}>
             {/* Hub 隔离提示 */}
             <div className={styles.isolationBanner}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7 5a1 1 0 112 0v3a1 1 0 11-2 0V5zm1 6a1 1 0 100 2 1 1 0 000-2z" />
-                </svg>
+                <CircleAlert size={16} strokeWidth={2.2} className={styles.isolationIcon} />
                 <span>{t('memory.embeddingHint')}</span>
             </div>
 

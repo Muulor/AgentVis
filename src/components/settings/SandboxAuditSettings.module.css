@@ -100,7 +100,7 @@
     min-height: 28px;
     padding: 4px 9px;
     border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-lg);
     background: var(--color-bg-secondary);
     color: var(--color-text-secondary);
     font-size: 12px;
@@ -153,7 +153,7 @@
     font-size: 12px;
 }
 
-.filterField select,
+.filterSelect,
 .filterField input {
     width: 100%;
     min-width: 0;
@@ -165,11 +165,19 @@
     color: var(--color-text-primary);
     font-size: 13px;
     outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.filterField select:focus,
+.filterSelect:focus,
 .filterField input:focus {
-    border-color: var(--color-accent-primary, #2563eb);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
+}
+
+.tooltipSelectWrap {
+    display: block;
+    width: 100%;
+    min-width: 0;
 }
 
 .clearButton {
@@ -227,7 +235,7 @@
     justify-content: center;
     min-height: 24px;
     padding: 3px 8px;
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-lg);
     font-size: 12px;
     font-weight: 600;
 }
@@ -296,7 +304,7 @@
     max-width: 100%;
     padding: 3px 7px;
     border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-lg);
     background: var(--color-bg-secondary);
     color: var(--color-text-secondary);
     font-size: 12px;

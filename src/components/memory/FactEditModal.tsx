@@ -9,12 +9,14 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { CircleAlert } from 'lucide-react';
 import styles from './FactEditModal.module.css';
 import type { FactEditModalProps } from './types';
 import type { LongTermFactCategory } from '@services/memory/types';
 import { CATEGORY_OPTIONS, CATEGORY_DISPLAY_MAP } from './types';
 import { getLogger } from '@services/logger';
 import { useI18n } from '@/i18n';
+import { Select } from '@components/ui';
 
 const logger = getLogger('FactEditModal');
 
@@ -125,17 +127,15 @@ export function FactEditModal({
                     {/* 类别选择 */}
                     <div className={styles.formGroup}>
                         <label className={styles.label}>{t('memory.factCategory')}</label>
-                        <select
+                        <Select
                             className={styles.select}
                             value={category}
-                            onChange={(e) => setCategory(e.target.value as LongTermFactCategory)}
-                        >
-                            {CATEGORY_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {getCategoryLabel(opt.value, t)}
-                                </option>
-                            ))}
-                        </select>
+                            onValueChange={(value) => setCategory(value as LongTermFactCategory)}
+                            options={CATEGORY_OPTIONS.map((opt) => ({
+                                value: opt.value,
+                                label: getCategoryLabel(opt.value, t),
+                            }))}
+                        />
                         {/* 类别预览 */}
                         <span
                             className={styles.categoryPreview}
@@ -172,9 +172,7 @@ export function FactEditModal({
 
                     {/* 警告提示 */}
                     <div className={styles.warning}>
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7 5a1 1 0 112 0v3a1 1 0 11-2 0V5zm1 6a1 1 0 100 2 1 1 0 000-2z" />
-                        </svg>
+                        <CircleAlert size={16} strokeWidth={2.2} className={styles.warningIcon} />
                         <span>{isCreateMode ? t('memory.addWarning') : t('memory.editWarning')}</span>
                     </div>
                 </div>

@@ -23,6 +23,10 @@
     color: var(--color-text-primary);
 }
 
+.isolationIcon {
+    flex-shrink: 0;
+}
+
 /* 标签切换 */
 .tabList {
     display: flex;

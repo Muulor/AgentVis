@@ -59,7 +59,7 @@
     line-height: 1.5;
     resize: none;
     overflow: hidden;
-    transition: border-color var(--transition-fast, 150ms ease);
+    transition: border-color var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease);
 }
 
 .textarea::placeholder {
@@ -68,7 +68,8 @@
 
 .textarea:focus {
     outline: none;
-    border-color: var(--color-action-primary, #2563EB);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 /* 确认发送按钮 */

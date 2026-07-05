@@ -8,8 +8,7 @@
  */
 
 import { memo, useCallback } from 'react';
-import { Check } from 'lucide-react';
-import { cx } from '@utils/classNames';
+import { SelectionCheck } from '@components/ui';
 import { useI18n } from '@/i18n';
 import styles from './SelectCheckbox.module.css';
 
@@ -37,12 +36,12 @@ export const SelectCheckbox = memo(function SelectCheckbox({
 
     return (
         <button
-            className={cx(styles.checkbox, checked && styles.checked)}
+            className={styles.checkbox}
             onClick={handleClick}
             aria-label={checked ? t('chat.unselectMessage') : t('chat.selectMessage')}
             aria-pressed={checked}
         >
-            {checked && <Check size={12} strokeWidth={3} className={styles.checkIcon} />}
+            <SelectionCheck checked={checked} shape="circle" />
         </button>
     );
 });

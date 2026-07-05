@@ -70,11 +70,12 @@
     background-color: var(--color-bg-secondary);
     border: 1px solid var(--color-border-default);
     border-radius: var(--radius-lg);
-    transition: border-color var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .inputWrapper:focus-within {
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .input {

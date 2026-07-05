@@ -12,3 +12,6 @@ export { FileRevertDialog } from './FileRevertDialog';
 export type { DiffRecord } from './FileRevertDialog';
 export { TextContextMenu, useTextContextMenu } from './TextContextMenu';
 export { Tooltip, TooltipProvider } from './Tooltip';
+export { Select } from './Select';
+export type { SelectOption } from './Select';
+export { SelectionCheck } from './SelectionCheck';

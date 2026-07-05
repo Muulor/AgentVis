@@ -285,11 +285,13 @@
     font-size: var(--font-size-sm, 13px);
     margin-bottom: 16px;
     box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .dialogInput:focus {
     outline: none;
-    border-color: var(--color-border-secondary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .dialogActions {

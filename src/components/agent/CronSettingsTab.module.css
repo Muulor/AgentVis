@@ -93,12 +93,13 @@
     color: var(--color-text-primary);
     font-size: var(--font-size-sm, 12px);
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     box-sizing: border-box;
 }
 
 .input:focus {
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 /* 下拉选择器 */
@@ -112,12 +113,13 @@
     font-size: var(--font-size-sm, 12px);
     outline: none;
     cursor: pointer;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     box-sizing: border-box;
 }
 
 .select:focus {
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 /* 小尺寸下拉（内联使用） */
@@ -133,12 +135,13 @@
     font-size: var(--font-size-sm, 12px);
     outline: none;
     cursor: pointer;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     min-width: 60px;
 }
 
 .selectSmall:focus {
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 /* 调度行（内联排列） */
@@ -244,12 +247,13 @@
     overflow-y: auto;
     font-family: inherit;
     line-height: 1.5;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     box-sizing: border-box;
 }
 
 .textarea:focus {
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .fieldHint {

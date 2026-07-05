@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '@components/ui/Toast';
 import { Tooltip } from '@components/ui/Tooltip';
+import { Select } from '@components/ui';
 import { notifySetupStatusChanged } from '@components/onboarding/onboardingEvents';
 import { useSettingsStore } from '@stores/settingsStore';
 import { getProviders, getModelsByProvider } from '@/config/modelRegistry';
@@ -473,27 +474,27 @@ export function CloudServiceSettings() {
                 <div className={styles.providerModelRow}>
                     <div className={styles.fieldGroup}>
                         <label className={styles.label}>{t('settings.cloud.provider')}</label>
-                        <select
+                        <Select
                             className={styles.select}
                             value={effectiveProvider}
-                            onChange={(e) => handleProviderChange(e.target.value)}
-                        >
-                            {providerList.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
+                            onValueChange={handleProviderChange}
+                            options={providerList.map((p) => ({
+                                value: p.id,
+                                label: p.name,
+                            }))}
+                        />
                     </div>
                     <div className={styles.fieldGroup}>
                         <label className={styles.label}>{t('settings.cloud.model')}</label>
-                        <select
+                        <Select
                             className={styles.select}
                             value={effectiveModel}
-                            onChange={(e) => setMemoryModel(e.target.value)}
-                        >
-                            {modelList.map((m) => (
-                                <option key={m.id} value={m.id}>{m.name}</option>
-                            ))}
-                        </select>
+                            onValueChange={setMemoryModel}
+                            options={modelList.map((m) => ({
+                                value: m.id,
+                                label: m.name,
+                            }))}
+                        />
                     </div>
                 </div>
             </section>

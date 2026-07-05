@@ -20,12 +20,12 @@
     border: 1px solid var(--color-border-default);
     border-radius: var(--radius-composer);
     background-color: var(--color-bg-secondary);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
 }
 
 .composer:focus-within {
-    border-color: color-mix(in srgb, var(--color-action-primary) 52%, var(--color-border-default));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-action-primary) 18%, transparent);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-composer-shadow);
 }
 
 /* ==================== 输入框容器 ==================== */
@@ -117,7 +117,7 @@
     padding: 0 2px;
     border: none;
     background: transparent;
-    color: var(--color-action-primary);
+    color: var(--color-inline-token);
     font: inherit;
     font-weight: var(--font-weight-semibold);
     line-height: inherit;
@@ -126,16 +126,16 @@
 }
 
 .richEditor :global(.inline-file-token) {
-    color: var(--color-action-primary);
+    color: var(--color-inline-token);
 }
 
 .richEditor :global(.inline-skill-token) {
-    color: var(--color-status-success);
+    color: var(--color-inline-token);
 }
 
 .richEditor :global(.inline-context-token:hover),
 .richEditor :global(.inline-context-token:focus-visible) {
-    color: color-mix(in srgb, var(--color-action-primary) 78%, var(--color-text-primary));
+    color: var(--color-inline-token-hover);
     text-decoration: underline;
     text-underline-offset: 2px;
     outline: none;
@@ -143,7 +143,7 @@
 
 .richEditor :global(.inline-skill-token:hover),
 .richEditor :global(.inline-skill-token:focus-visible) {
-    color: color-mix(in srgb, var(--color-status-success) 82%, var(--color-text-primary));
+    color: var(--color-inline-token-hover);
 }
 
 .richEditor :global(.inline-context-token-icon) {
@@ -190,7 +190,7 @@
     border: none;
     border-radius: 0;
     background: transparent;
-    color: var(--color-action-primary);
+    color: var(--color-inline-token);
     overflow: visible;
 }
 
@@ -212,7 +212,7 @@
 }
 
 .skillChipMain:hover:not(:disabled) {
-    color: color-mix(in srgb, var(--color-action-primary) 78%, var(--color-text-primary));
+    color: var(--color-inline-token-hover);
     text-decoration: underline;
     text-underline-offset: 2px;
 }

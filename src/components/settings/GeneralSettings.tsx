@@ -5,6 +5,7 @@
  */
 
 import { Bell, MoonStar, Sun } from 'lucide-react';
+import { Select } from '@components/ui';
 import { useSettingsStore, type TaskCompletionNotificationContentMode } from '@stores/settingsStore';
 import { useUIStore } from '@stores/uiStore';
 import { cx } from '@utils/classNames';
@@ -59,17 +60,15 @@ export function GeneralSettings() {
             {/* 语言设置 */}
             <section className={styles.section}>
                 <h3 className={styles.sectionTitle}>{t('settings.general.language')}</h3>
-                <select
+                <Select
                     className={styles.select}
                     value={language}
-                    onChange={(event) => setLanguage(event.target.value as Language)}
-                >
-                    {SUPPORTED_LANGUAGES.map((item) => (
-                        <option key={item.code} value={item.code}>
-                            {item.label}
-                        </option>
-                    ))}
-                </select>
+                    onValueChange={(value) => setLanguage(value as Language)}
+                    options={SUPPORTED_LANGUAGES.map((item) => ({
+                        value: item.code,
+                        label: item.label,
+                    }))}
+                />
                 <p className={styles.hint}>{t('settings.general.languageHint')}</p>
             </section>
 
@@ -116,18 +115,25 @@ export function GeneralSettings() {
                     <label className={styles.fieldLabel} htmlFor="task-completion-notification-content">
                         {t('settings.general.taskCompletionNotificationContent')}
                     </label>
-                    <select
+                    <Select
                         id="task-completion-notification-content"
                         className={styles.select}
                         value={taskCompletionNotificationContentMode}
                         disabled={!taskCompletionNotificationsEnabled}
-                        onChange={(event) => {
-                            setTaskCompletionNotificationContentMode(event.target.value as TaskCompletionNotificationContentMode);
+                        onValueChange={(value) => {
+                            setTaskCompletionNotificationContentMode(value as TaskCompletionNotificationContentMode);
                         }}
-                    >
-                        <option value="summary">{t('settings.general.taskCompletionNotificationSummary')}</option>
-                        <option value="private">{t('settings.general.taskCompletionNotificationPrivate')}</option>
-                    </select>
+                        options={[
+                            {
+                                value: 'summary',
+                                label: t('settings.general.taskCompletionNotificationSummary'),
+                            },
+                            {
+                                value: 'private',
+                                label: t('settings.general.taskCompletionNotificationPrivate'),
+                            },
+                        ]}
+                    />
                     <p className={styles.hint}>{t('settings.general.taskCompletionNotificationContentHint')}</p>
                 </div>
             </section>

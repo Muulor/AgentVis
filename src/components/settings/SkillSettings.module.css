@@ -661,11 +661,13 @@
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     font-size: var(--font-size-sm, 13px);
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .githubInput:focus {
     outline: none;
-    border-color: var(--color-accent-primary, #3b82f6);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .githubInput::placeholder {

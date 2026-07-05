@@ -116,7 +116,7 @@
     appearance: none;
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.96);
+    color: var(--color-inline-token-on-action);
     font: inherit;
     font-weight: var(--font-weight-semibold);
     line-height: inherit;
@@ -127,9 +127,13 @@
 .inlineTokenChip:hover:not(:disabled),
 .inlineTokenChip:focus-visible:not(:disabled) {
     text-decoration: underline;
-    text-decoration-color: rgba(255, 255, 255, 0.55);
+    text-decoration-color: color-mix(in srgb, currentColor 58%, transparent);
     text-underline-offset: 2px;
     outline: none;
+}
+
+.userBubble .inlineTokenChip {
+    color: var(--color-inline-token-on-action);
 }
 
 .inlineTokenChip:disabled {

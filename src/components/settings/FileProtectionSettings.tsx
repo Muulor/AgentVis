@@ -10,6 +10,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { FileText, Folder, FolderOpen, Layers, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash, Trash2, X } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { Tooltip } from '@components/ui/Tooltip';
+import { SelectionCheck } from '@components/ui';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -405,10 +406,16 @@ export function FileProtectionSettings() {
                 <div className={styles.trashToolbar}>
                     <label className={styles.selectAllControl} data-disabled={trashEntries.length === 0}>
                         <input
+                            className={styles.selectionInput}
                             type="checkbox"
                             checked={allEntriesSelected}
                             disabled={trashEntries.length === 0}
                             onChange={handleToggleAllEntries}
+                        />
+                        <SelectionCheck
+                            checked={allEntriesSelected}
+                            indeterminate={selectedCount > 0 && !allEntriesSelected}
+                            disabled={trashEntries.length === 0}
                         />
                         <span>{t('settings.fileProtection.selectTrashEntries', { count: trashEntries.length })}</span>
                     </label>
@@ -454,13 +461,16 @@ export function FileProtectionSettings() {
                                     key={entry.id}
                                     className={styles.trashRow}
                                 >
-                                    <input
-                                        className={styles.entryCheckbox}
-                                        type="checkbox"
-                                        checked={selectedIds.has(entry.id)}
-                                        onChange={() => handleToggleEntry(entry)}
-                                        aria-label={t('settings.fileProtection.selectEntryAria', { path: entry.originalPath })}
-                                    />
+                                    <label className={styles.entryCheckbox}>
+                                        <input
+                                            className={styles.selectionInput}
+                                            type="checkbox"
+                                            checked={selectedIds.has(entry.id)}
+                                            onChange={() => handleToggleEntry(entry)}
+                                            aria-label={t('settings.fileProtection.selectEntryAria', { path: entry.originalPath })}
+                                        />
+                                        <SelectionCheck checked={selectedIds.has(entry.id)} />
+                                    </label>
                                     <span className={styles.entryIcon}>
                                         {entry.isDirectory ? (
                                             <Folder size={16} strokeWidth={1.6} />

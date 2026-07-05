@@ -342,6 +342,10 @@ ui/
 ├── Modal.module.css              # 模态框样式
 ├── ResizeHandle.tsx              # 可调整大小的手柄
 ├── ResizeHandle.module.css       # 手柄样式
+├── Select.tsx                    # 下拉选择组件
+├── Select.module.css             # 下拉选择组件样式
+├── SelectionCheck.tsx            # 选择标记组件
+├── SelectionCheck.module.css     # 选择标记组件样式
 ├── TextContextMenu.ts            # 文本复制/粘贴右键菜单
 ├── TextContextMenu.module.css
 ├── Toast.tsx                     # 提示消息组件

@@ -85,12 +85,13 @@
     border-radius: var(--radius-control);
     font-size: var(--font-size-sm, 13px);
     font-family: var(--font-family-mono);
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .input:focus {
     outline: none;
-    border-color: var(--color-accent-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .input::placeholder {

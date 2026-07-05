@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, memo, useRef } from 'react';
-import { BookOpen, FileText, Folder, Play } from 'lucide-react';
+import { FileText, Folder, Play, Toolbox } from 'lucide-react';
 import { MessageActions } from './MessageActions';
 import { SelectCheckbox } from './SelectCheckbox';
 import { usePreviewStore } from '@stores/previewStore';
@@ -614,7 +614,7 @@ export const MessageBubble = memo(function MessageBubble({
 
                     const token = part.token;
                     const Icon = token.type === 'skill'
-                        ? BookOpen
+                        ? Toolbox
                         : token.type === 'folder'
                             ? Folder
                             : FileText;

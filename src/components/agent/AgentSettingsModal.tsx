@@ -6,7 +6,7 @@ import { useAgentStore, type AgentSandboxMode } from '@stores/agentStore';
 import { useRuntimeStore } from '@stores/runtimeStore';
 import { MemoryPanel } from '@components/memory';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
-import { TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
+import { SelectionCheck, TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
 import { getRagService } from '@services/rag';
 import { PLANNING_CONSTANTS } from '@services/planning/PlanningConstants';
 import { imageCompressionService } from '@services/attachment';
@@ -1064,7 +1064,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                                                                 });
                                                             }}
                                                         />
-                                                        <span className={styles.checkmark} />
+                                                        <SelectionCheck checked={selectedPaths.has(path)} />
                                                     </label>
                                                 )}
                                                 {/* 状态图标 */}
@@ -1199,7 +1199,12 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                                                             }}
                                                             className={styles.pinnedSkillHiddenInput}
                                                         />
-                                                        <span className={cx(styles.pinnedSkillDot, isChecked && styles.pinnedSkillDotActive)} />
+                                                        <SelectionCheck
+                                                            checked={isChecked}
+                                                            disabled={isDisabled}
+                                                            shape="circle"
+                                                            size="sm"
+                                                        />
                                                         <div className={styles.pinnedSkillInfo}>
                                                             <span className={styles.pinnedSkillName}>{skill.name}</span>
                                                             {skill.description && (

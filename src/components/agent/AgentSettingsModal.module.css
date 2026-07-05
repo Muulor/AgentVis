@@ -159,8 +159,8 @@
 
 .input:focus {
     outline: none;
-    border-color: var(--color-action-primary);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .sandboxModeGroup {
@@ -233,11 +233,13 @@
     line-height: normal;
     outline: none;
     box-sizing: border-box;
-    transition: border-color 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .safetyFooterTextarea:focus {
-    border-color: var(--color-action-primary);
+    outline: none;
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 @media (max-width: 560px) {
@@ -264,6 +266,13 @@
     color: var(--color-text-primary);
     font-size: var(--font-size-base);
     cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.select:focus {
+    outline: none;
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .textarea {
@@ -276,11 +285,13 @@
     color: var(--color-text-primary);
     font-size: var(--font-size-base);
     resize: vertical;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .textarea:focus {
     outline: none;
-    border-color: var(--color-action-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .rulesEditorList {
@@ -582,7 +593,7 @@
 /* ==================== 交付物自动同步开关 ==================== */
 .toggleRow {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
     padding: 12px;
@@ -744,33 +755,6 @@
     position: absolute;
 }
 
-.checkmark {
-    width: 16px;
-    height: 16px;
-    border: 1.5px solid var(--color-border-default);
-    border-radius: var(--radius-sm);
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.checkbox input:checked~.checkmark {
-    background-color: var(--color-action-primary);
-    border-color: var(--color-action-primary);
-}
-
-.checkbox input:checked~.checkmark::after {
-    content: '';
-    display: block;
-    width: 4px;
-    height: 8px;
-    border: solid #ffffff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-    margin-top: -1px;
-}
-
 /* ==================== 精准命中技能列表 ==================== */
 .pinnedSkillList {
     display: flex;
@@ -783,7 +767,7 @@
 
 .pinnedSkillItem {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
     padding: 10px 12px;
     background-color: var(--color-bg-tertiary);
@@ -807,21 +791,6 @@
     width: 0;
     height: 0;
     pointer-events: none;
-}
-
-.pinnedSkillDot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 4px;
-    background-color: var(--color-border-default);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.pinnedSkillDotActive {
-    background-color: var(--color-action-primary);
-    box-shadow: 0 0 6px rgba(37, 99, 235, 0.5);
 }
 
 .pinnedSkillInfo {
@@ -876,8 +845,8 @@
 
 .stepperInput:focus {
     outline: none;
-    border-color: var(--color-action-primary);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 /* 步进按钮组：默认隐形，hover 容器时出现 */

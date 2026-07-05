@@ -144,12 +144,13 @@
     color: var(--color-text-primary);
     border-radius: var(--radius-control);
     font-size: var(--font-size-sm, 13px);
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .input:focus {
     outline: none;
-    border-color: var(--color-accent-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .input:disabled {
@@ -183,11 +184,13 @@
     border-radius: var(--radius-control);
     font-size: var(--font-size-sm, 13px);
     cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .select:focus {
     outline: none;
-    border-color: var(--color-accent-primary);
+    border-color: var(--focus-control-border);
+    box-shadow: var(--focus-control-shadow);
 }
 
 .select:disabled {

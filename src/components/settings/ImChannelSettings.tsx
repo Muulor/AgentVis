@@ -17,6 +17,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { v4 as uuidv4 } from 'uuid';
 import { ExternalLink } from 'lucide-react';
 import { Tooltip } from '@components/ui/Tooltip';
+import { Select } from '@components/ui';
 import { useImChannelStore, getBotConnectionState } from '@stores/imChannelStore';
 import { useHubStore } from '@stores/hubStore';
 import {
@@ -965,19 +966,22 @@ function BotCard({
                     {hubs.length > 1 && (
                         <div className={styles.fieldGroup}>
                             <label className={styles.label}>Hub</label>
-                            <select
+                            <Select
                                 id={`im-hub-select-${botConfig.botId}`}
                                 className={styles.select}
                                 value={botConfig.hubId ?? ''}
-                                onChange={(e) => onHubChange(e.target.value || null)}
-                            >
-                                <option value="">{t('settings.im.selectHub')}</option>
-                                {hubs.map((hub) => (
-                                    <option key={hub.id} value={hub.id}>
-                                        {hub.name}
-                                    </option>
-                                ))}
-                            </select>
+                                onValueChange={(value) => onHubChange(value || null)}
+                                options={[
+                                    {
+                                        value: '',
+                                        label: t('settings.im.selectHub'),
+                                    },
+                                    ...hubs.map((hub) => ({
+                                        value: hub.id,
+                                        label: hub.name,
+                                    })),
+                                ]}
+                            />
                             <span className={styles.hint}>{t('settings.im.hubHint')}</span>
                         </div>
                     )}
@@ -985,26 +989,27 @@ function BotCard({
                     {/* Agent 选择 */}
                     <div className={styles.fieldGroup}>
                         <label className={styles.label}>{t('settings.im.targetAgent')}</label>
-                        <select
+                        <Select
                             id={`im-agent-select-${botConfig.botId}`}
                             className={styles.select}
                             value={botConfig.agentId ?? ''}
-                            onChange={(e) => onAgentChange(e.target.value || null)}
                             disabled={!botConfig.hubId || isLoadingAgents}
-                        >
-                            <option value="">
-                                {!botConfig.hubId
-                                    ? t('settings.im.selectHubFirst')
-                                    : isLoadingAgents
-                                      ? t('common.loading')
-                                      : t('settings.im.selectAgent')}
-                            </option>
-                            {hubAgents.map((agent) => (
-                                <option key={agent.id} value={agent.id}>
-                                    {agent.name}
-                                </option>
-                            ))}
-                        </select>
+                            onValueChange={(value) => onAgentChange(value || null)}
+                            options={[
+                                {
+                                    value: '',
+                                    label: !botConfig.hubId
+                                        ? t('settings.im.selectHubFirst')
+                                        : isLoadingAgents
+                                          ? t('common.loading')
+                                          : t('settings.im.selectAgent'),
+                                },
+                                ...hubAgents.map((agent) => ({
+                                    value: agent.id,
+                                    label: agent.name,
+                                })),
+                            ]}
+                        />
                         <span className={styles.hint}>
                             {t('settings.im.targetAgentHint')}
                         </span>
@@ -1029,20 +1034,21 @@ function BotCard({
                         <div className={styles.fieldGroup}>
                             <label className={styles.label}>{t('settings.im.defaultOutboundTarget')}</label>
                             <div className={styles.twoColRow}>
-                                <select
+                                <Select
                                     id={`im-outbound-type-${botConfig.botId}`}
                                     className={styles.select}
                                     value={botConfig.outboundReceiveIdType ?? 'chat_id'}
-                                    onChange={(e) => onOutboundReceiveIdTypeChange(
-                                        e.target.value as NonNullable<BotConfig['outboundReceiveIdType']>,
+                                    onValueChange={(value) => onOutboundReceiveIdTypeChange(
+                                        value as NonNullable<BotConfig['outboundReceiveIdType']>,
                                     )}
-                                >
-                                    <option value="chat_id">chat_id</option>
-                                    <option value="open_id">open_id</option>
-                                    <option value="user_id">user_id</option>
-                                    <option value="union_id">union_id</option>
-                                    <option value="email">email</option>
-                                </select>
+                                    options={[
+                                        { value: 'chat_id', label: 'chat_id' },
+                                        { value: 'open_id', label: 'open_id' },
+                                        { value: 'user_id', label: 'user_id' },
+                                        { value: 'union_id', label: 'union_id' },
+                                        { value: 'email', label: 'email' },
+                                    ]}
+                                />
                                 <input
                                     id={`im-outbound-id-${botConfig.botId}`}
                                     className={styles.input}

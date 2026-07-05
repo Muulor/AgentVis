@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useCronStore } from '@stores/cronStore';
-import { TextContextMenu, useTextContextMenu } from '@components/ui';
+import { Select, TextContextMenu, useTextContextMenu } from '@components/ui';
 import {
     isValidCronExpression,
     describeCronExpression,
@@ -313,30 +313,30 @@ export function CronSettingsTab({ agentId }: CronSettingsTabProps) {
 
                             {/* 频率选择 */}
                             <div className={styles.scheduleRow}>
-                                <select
+                                <Select
                                     className={styles.select}
                                     value={form.schedule.frequency}
-                                    onChange={(e) => handleFrequencyChange(e.target.value as ScheduleFrequency)}
-                                >
-                                    {FREQUENCY_OPTIONS.map(opt => (
-                                        <option key={opt} value={opt}>{getFrequencyLabel(opt)}</option>
-                                    ))}
-                                </select>
+                                    onValueChange={(value) => handleFrequencyChange(value as ScheduleFrequency)}
+                                    options={FREQUENCY_OPTIONS.map(opt => ({
+                                        value: opt,
+                                        label: getFrequencyLabel(opt),
+                                    }))}
+                                />
                             </div>
 
                             {/* 每 N 分钟：间隔选择 */}
                             {form.schedule.frequency === 'every_n_minutes' && (
                                 <div className={styles.scheduleRow}>
                                     <span className={styles.scheduleLabel}>{t('agent.cron.every')}</span>
-                                    <select
+                                    <Select
                                         className={styles.selectSmall}
-                                        value={form.schedule.intervalMinutes}
-                                        onChange={(e) => updateSchedule({ intervalMinutes: parseInt(e.target.value, 10) })}
-                                    >
-                                        {INTERVAL_OPTIONS.map(n => (
-                                            <option key={n} value={n}>{n}</option>
-                                        ))}
-                                    </select>
+                                        value={String(form.schedule.intervalMinutes)}
+                                        onValueChange={(value) => updateSchedule({ intervalMinutes: parseInt(value, 10) })}
+                                        options={INTERVAL_OPTIONS.map(n => ({
+                                            value: String(n),
+                                            label: n,
+                                        }))}
+                                    />
                                     <span className={styles.scheduleLabel}>{t('agent.cron.minute')}</span>
                                 </div>
                             )}
@@ -345,15 +345,15 @@ export function CronSettingsTab({ agentId }: CronSettingsTabProps) {
                             {form.schedule.frequency === 'hourly' && (
                                 <div className={styles.scheduleRow}>
                                     <span className={styles.scheduleLabel}>{t('agent.cron.atMinute')}</span>
-                                    <select
+                                    <Select
                                         className={styles.selectSmall}
-                                        value={form.schedule.minute}
-                                        onChange={(e) => updateSchedule({ minute: parseInt(e.target.value, 10) })}
-                                    >
-                                        {numberOptions(0, 59).map(n => (
-                                            <option key={n} value={n}>{n}</option>
-                                        ))}
-                                    </select>
+                                        value={String(form.schedule.minute)}
+                                        onValueChange={(value) => updateSchedule({ minute: parseInt(value, 10) })}
+                                        options={numberOptions(0, 59).map(n => ({
+                                            value: String(n),
+                                            label: n,
+                                        }))}
+                                    />
                                     <span className={styles.scheduleLabel}>{t('agent.cron.minuteShort')}</span>
                                 </div>
                             )}
@@ -365,39 +365,39 @@ export function CronSettingsTab({ agentId }: CronSettingsTabProps) {
                                     {form.schedule.frequency === 'weekly' && (
                                         <>
                                             <span className={styles.scheduleLabel}>{t('agent.cron.every')}</span>
-                                            <select
+                                            <Select
                                                 className={styles.selectSmall}
-                                                value={form.schedule.dayOfWeek}
-                                                onChange={(e) => updateSchedule({ dayOfWeek: parseInt(e.target.value, 10) })}
-                                            >
-                                                {DAY_OF_WEEK_OPTIONS.map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{t(`agent.cron.${opt.key}`)}</option>
-                                                ))}
-                                            </select>
+                                                value={String(form.schedule.dayOfWeek)}
+                                                onValueChange={(value) => updateSchedule({ dayOfWeek: parseInt(value, 10) })}
+                                                options={DAY_OF_WEEK_OPTIONS.map(opt => ({
+                                                    value: String(opt.value),
+                                                    label: t(`agent.cron.${opt.key}`),
+                                                }))}
+                                            />
                                         </>
                                     )}
 
                                     {/* 指定时间：月 + 日 */}
                                     {form.schedule.frequency === 'specific' && (
                                         <>
-                                            <select
+                                            <Select
                                                 className={styles.selectSmall}
-                                                value={form.schedule.month}
-                                                onChange={(e) => updateSchedule({ month: parseInt(e.target.value, 10) })}
-                                            >
-                                                {numberOptions(1, 12).map(n => (
-                                                    <option key={n} value={n}>{n} {t('agent.cron.month')}</option>
-                                                ))}
-                                            </select>
-                                            <select
+                                                value={String(form.schedule.month)}
+                                                onValueChange={(value) => updateSchedule({ month: parseInt(value, 10) })}
+                                                options={numberOptions(1, 12).map(n => ({
+                                                    value: String(n),
+                                                    label: `${n} ${t('agent.cron.month')}`,
+                                                }))}
+                                            />
+                                            <Select
                                                 className={styles.selectSmall}
-                                                value={form.schedule.dayOfMonth}
-                                                onChange={(e) => updateSchedule({ dayOfMonth: parseInt(e.target.value, 10) })}
-                                            >
-                                                {numberOptions(1, 31).map(n => (
-                                                    <option key={n} value={n}>{n} {t('agent.cron.day')}</option>
-                                                ))}
-                                            </select>
+                                                value={String(form.schedule.dayOfMonth)}
+                                                onValueChange={(value) => updateSchedule({ dayOfMonth: parseInt(value, 10) })}
+                                                options={numberOptions(1, 31).map(n => ({
+                                                    value: String(n),
+                                                    label: `${n} ${t('agent.cron.day')}`,
+                                                }))}
+                                            />
                                         </>
                                     )}
 
@@ -405,38 +405,38 @@ export function CronSettingsTab({ agentId }: CronSettingsTabProps) {
                                     {form.schedule.frequency === 'monthly' && (
                                         <>
                                             <span className={styles.scheduleLabel}>{t('agent.cron.monthlyEvery')}</span>
-                                            <select
+                                            <Select
                                                 className={styles.selectSmall}
-                                                value={form.schedule.dayOfMonth}
-                                                onChange={(e) => updateSchedule({ dayOfMonth: parseInt(e.target.value, 10) })}
-                                            >
-                                                {numberOptions(1, 31).map(n => (
-                                                    <option key={n} value={n}>{n} {t('agent.cron.day')}</option>
-                                                ))}
-                                            </select>
+                                                value={String(form.schedule.dayOfMonth)}
+                                                onValueChange={(value) => updateSchedule({ dayOfMonth: parseInt(value, 10) })}
+                                                options={numberOptions(1, 31).map(n => ({
+                                                    value: String(n),
+                                                    label: `${n} ${t('agent.cron.day')}`,
+                                                }))}
+                                            />
                                         </>
                                     )}
 
                                     {/* 时:分 */}
-                                    <select
+                                    <Select
                                         className={styles.selectSmall}
-                                        value={form.schedule.hour}
-                                        onChange={(e) => updateSchedule({ hour: parseInt(e.target.value, 10) })}
-                                    >
-                                        {numberOptions(0, 23).map(n => (
-                                            <option key={n} value={n}>{String(n).padStart(2, '0')}</option>
-                                        ))}
-                                    </select>
+                                        value={String(form.schedule.hour)}
+                                        onValueChange={(value) => updateSchedule({ hour: parseInt(value, 10) })}
+                                        options={numberOptions(0, 23).map(n => ({
+                                            value: String(n),
+                                            label: String(n).padStart(2, '0'),
+                                        }))}
+                                    />
                                     <span className={styles.timeSeparator}>:</span>
-                                    <select
+                                    <Select
                                         className={styles.selectSmall}
-                                        value={form.schedule.minute}
-                                        onChange={(e) => updateSchedule({ minute: parseInt(e.target.value, 10) })}
-                                    >
-                                        {numberOptions(0, 59).map(n => (
-                                            <option key={n} value={n}>{String(n).padStart(2, '0')}</option>
-                                        ))}
-                                    </select>
+                                        value={String(form.schedule.minute)}
+                                        onValueChange={(value) => updateSchedule({ minute: parseInt(value, 10) })}
+                                        options={numberOptions(0, 59).map(n => ({
+                                            value: String(n),
+                                            label: String(n).padStart(2, '0'),
+                                        }))}
+                                    />
 
                                     {/* 指定时间模式：行尾显示「执行一次后自动关闭」开关 */}
                                     {form.schedule.frequency === 'specific' && (
