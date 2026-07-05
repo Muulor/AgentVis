@@ -255,7 +255,7 @@
     align-items: center;
     gap: 5px;
     padding: 6px 12px;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     border: 1px solid var(--color-border-default, #E5E5E5);
     background: var(--color-bg-primary, #FFFFFF);
     font-size: var(--font-size-sm, 12px);

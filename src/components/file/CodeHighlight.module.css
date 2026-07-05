@@ -43,7 +43,7 @@
     border: none;
     background: transparent;
     color: var(--color-text-tertiary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -73,7 +73,7 @@
     border: none;
     background: transparent;
     color: #a6e3a1;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -98,7 +98,7 @@
     border: none;
     background: transparent;
     color: #89b4fa;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all var(--transition-fast);
 }

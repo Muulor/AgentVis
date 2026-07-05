@@ -86,6 +86,11 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-full: 9999px;
+  --radius-surface: 12px;
+  --radius-control: 12px;
+  --radius-button: 12px;
+  --radius-composer: 18px;
+  --radius-message-bubble: 12px;
 
   /* ============================================
    * 阴影系统
@@ -116,6 +121,10 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
+
+  /* Cursor */
+  --cursor-disabled: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E") 8 8, not-allowed;
+  --blocked-cursor: var(--cursor-disabled);
 }
 
 /* ============================================

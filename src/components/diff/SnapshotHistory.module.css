@@ -37,7 +37,7 @@
     font-size: 20px;
     color: var(--text-secondary);
     cursor: pointer;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     line-height: 1;
 }
 
@@ -129,7 +129,7 @@
 .previewBtn,
 .rollbackBtn {
     padding: 6px 12px;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -157,7 +157,7 @@
 
 .deleteBtn {
     padding: 6px 12px;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -272,7 +272,7 @@
 .cancelBtn,
 .confirmRollbackBtn {
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -302,7 +302,7 @@
 .cancelBtn:disabled,
 .confirmRollbackBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* ==================== 预览弹窗 ==================== */

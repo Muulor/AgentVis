@@ -14,7 +14,7 @@
     gap: 3px;
     margin-bottom: 8px;
     padding: 8px 10px;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-control);
     background: rgba(37, 99, 235, 0.07);
     border: 1px solid rgba(37, 99, 235, 0.18);
 }
@@ -50,7 +50,7 @@
     min-height: 32px;
     max-height: 120px;
     padding: 6px 10px;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-control);
     border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
     background: var(--color-bg-input, rgba(255, 255, 255, 0.05));
     color: var(--color-text-primary, #E8E8E8);
@@ -79,7 +79,7 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     border: none;
     background: var(--color-action-primary, #2563EB);
     color: #fff;
@@ -100,7 +100,7 @@
 
 .confirmBtnDisabled {
     opacity: 0.35;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 提示文字 */
@@ -133,7 +133,7 @@
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-button);
     border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
     background: transparent;
     color: var(--color-text-secondary, #AAAAAA);

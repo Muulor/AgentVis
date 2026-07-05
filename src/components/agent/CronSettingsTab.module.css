@@ -32,7 +32,7 @@
     align-items: center;
     gap: 4px;
     padding: 6px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-button);
     border: 1px solid var(--color-action-primary);
     background: transparent;
     color: var(--color-action-primary);
@@ -50,7 +50,7 @@
 .form {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border-default);
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
     padding: 16px;
 }
 
@@ -87,7 +87,7 @@
 .input {
     width: 100%;
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     border: 1px solid var(--color-border-default);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
@@ -105,7 +105,7 @@
 .select {
     width: 100%;
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     border: 1px solid var(--color-border-default);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
@@ -126,7 +126,7 @@
     --select-chevron-padding: 34px;
 
     padding: 6px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     border: 1px solid var(--color-border-default);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
@@ -231,7 +231,7 @@
 .textarea {
     width: 100%;
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     border: 1px solid var(--color-border-default);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
@@ -264,7 +264,7 @@
     display: flex;
     gap: 0;
     border: 1px solid var(--color-border-default);
-    border-radius: 8px;
+    border-radius: var(--radius-control);
     overflow: hidden;
     width: fit-content;
 }
@@ -295,7 +295,7 @@
     margin-bottom: 12px;
     padding: 6px 10px;
     background: rgba(239, 68, 68, 0.08);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
 }
 
 /* 表单操作按钮 */
@@ -307,7 +307,7 @@
 
 .cancelFormBtn {
     padding: 6px 14px;
-    border-radius: 8px;
+    border-radius: var(--radius-button);
     border: 1px solid var(--color-border-default);
     background: transparent;
     color: var(--color-text-secondary);
@@ -322,7 +322,7 @@
 
 .saveFormBtn {
     padding: 6px 14px;
-    border-radius: 8px;
+    border-radius: var(--radius-button);
     border: none;
     background: var(--color-action-primary);
     color: #fff;
@@ -338,7 +338,7 @@
 .saveFormBtn:disabled,
 .cancelFormBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 任务列表 */

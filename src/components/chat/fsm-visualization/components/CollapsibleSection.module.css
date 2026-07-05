@@ -6,7 +6,7 @@
 
 .container {
     background-color: var(--color-bg-secondary, #1E1E2E);
-    border-radius: 6px;
+    border-radius: var(--radius-surface);
     overflow: hidden;
     min-width: 100%;
     /* 确保容器占满可用宽度 */

@@ -152,7 +152,7 @@
 .secondaryButton,
 .confirmButton {
     min-height: 36px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     padding: 0 var(--spacing-md);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);

@@ -60,7 +60,7 @@
     border: none;
     background: none;
     color: var(--color-text-tertiary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all var(--transition-fast);
     flex-shrink: 0;

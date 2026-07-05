@@ -56,7 +56,7 @@ button {
 }
 
 button:disabled {
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
     opacity: 0.5;
 }
 
@@ -70,6 +70,12 @@ select {
     background: transparent;
     border: none;
     outline: none;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+    cursor: var(--cursor-disabled);
 }
 
 /* 列表 Reset */

@@ -102,7 +102,7 @@
 .acceptAllBtn,
 .rejectAllBtn {
     padding: 8px 20px;
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -126,7 +126,7 @@
 .acceptAllBtn:disabled,
 .rejectAllBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .footerStats {

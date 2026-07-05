@@ -3,7 +3,7 @@
 .card {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border-default);
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
     padding: 14px 16px;
     transition: all 0.2s ease;
 }
@@ -159,7 +159,7 @@
     background: none;
     border: 1px solid transparent;
     padding: 4px;
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     cursor: pointer;
     color: var(--color-text-secondary);
     transition: all 0.15s ease;
@@ -180,5 +180,5 @@
 
 .actionBtn:disabled {
     opacity: 0.4;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }

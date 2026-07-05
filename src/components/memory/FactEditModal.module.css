@@ -23,7 +23,7 @@
     display: flex;
     flex-direction: column;
     background-color: var(--color-bg-primary);
-    border-radius: 12px;
+    border-radius: var(--radius-surface);
     box-shadow: var(--shadow-xl);
     overflow: hidden;
 }
@@ -53,7 +53,7 @@
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 150ms ease;
@@ -94,7 +94,7 @@
     color: var(--color-text-primary);
     background-color: var(--color-bg-secondary);
     border: 1px solid var(--color-border-primary);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     cursor: pointer;
     transition: border-color 150ms ease;
 }
@@ -112,7 +112,7 @@
 .categoryPreview {
     align-self: flex-start;
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
 }
@@ -125,7 +125,7 @@
     color: var(--color-text-primary);
     background-color: var(--color-bg-secondary);
     border: 1px solid var(--color-border-primary);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     resize: vertical;
     min-height: 80px;
     transition: border-color 150ms ease;
@@ -151,7 +151,7 @@
     gap: 8px;
     padding: 8px 12px;
     background-color: var(--color-bg-tertiary);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
 }
@@ -162,11 +162,11 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background-color: rgba(234, 179, 8, 0.1);
-    border-left: 2px solid var(--color-status-warning);
-    border-radius: 4px;
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border-default);
+    border-radius: var(--radius-surface);
     font-size: var(--font-size-sm);
-    color: var(--color-status-warning);
+    color: var(--color-text-primary);
 }
 
 /* 底部按钮 */
@@ -183,7 +183,7 @@
     padding: 8px 16px;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all 150ms ease;
 }
@@ -212,5 +212,5 @@
 .saveBtn:disabled,
 .cancelBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }

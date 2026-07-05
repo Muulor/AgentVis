@@ -19,7 +19,7 @@
     gap: var(--spacing-sm);
     height: 40px;
     padding: 0 var(--spacing-sm);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: background-color var(--transition-fast);
 }
@@ -89,7 +89,7 @@
     height: 40px;
     padding: 0 12px;
     border: 1px dashed var(--color-border-default);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all var(--transition-fast);

@@ -96,7 +96,7 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     color: var(--color-text-secondary);
     transition: all var(--transition-fast);
 }

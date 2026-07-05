@@ -49,7 +49,7 @@
 
 .menuItem:disabled {
     color: var(--color-text-tertiary);
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
     opacity: 0.55;
 }
 

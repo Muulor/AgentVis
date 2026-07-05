@@ -65,7 +65,7 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     color: var(--color-text-secondary);
     transition: all var(--transition-fast);
 }
@@ -80,7 +80,7 @@
 .modeSwitch {
     display: flex;
     background: var(--color-bg-tertiary);
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     padding: 2px;
 }
 
@@ -91,7 +91,7 @@
     padding: 4px 10px;
     border: none;
     background: transparent;
-    border-radius: 4px;
+    border-radius: calc(var(--radius-button) - 2px);
     font-size: 12px;
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -224,7 +224,7 @@
     justify-content: center;
     border: none;
     background: transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     font-size: 16px;
     color: var(--color-text-tertiary);
     cursor: pointer;
@@ -254,7 +254,7 @@
     justify-content: center;
     border: none;
     background: transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     color: var(--color-text-tertiary);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -333,7 +333,7 @@
     padding: 6px 12px;
     border: 1px solid var(--color-border-default);
     background: transparent;
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     font-size: 12px;
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -359,7 +359,7 @@
     height: 28px;
     border: none;
     background: transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -372,7 +372,7 @@
 
 .toolbarBtn:disabled {
     opacity: 0.4;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 工具栏分隔线 */
@@ -506,7 +506,7 @@
     justify-content: center;
     border: none;
     background: transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     font-size: 16px;
     color: var(--color-text-tertiary);
     cursor: pointer;

@@ -65,7 +65,7 @@
     font-size: var(--font-size-sm);
     font-family: var(--font-family-sans);
     cursor: pointer;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     transition: all var(--transition-fast);
     white-space: nowrap;
 }
@@ -77,7 +77,7 @@
 
 .actionBtn:disabled {
     opacity: 0.4;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 删除按钮危险色 */
@@ -98,7 +98,7 @@
     font-size: var(--font-size-sm);
     font-family: var(--font-family-sans);
     cursor: pointer;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     transition: all var(--transition-fast);
     white-space: nowrap;
     margin-left: auto;

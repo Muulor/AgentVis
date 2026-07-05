@@ -6,7 +6,7 @@
     min-width: 0;
     gap: 12px;
     padding: 8px 12px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     cursor: grab;
     transition: background-color 0.15s ease;
 }

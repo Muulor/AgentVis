@@ -3,7 +3,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--spacing-sm);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     font-weight: var(--font-weight-medium);
     transition: all var(--transition-fast);
     cursor: pointer;
@@ -84,7 +84,7 @@
 /* 禁用状态 */
 .button:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 加载状态 */

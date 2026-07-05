@@ -62,7 +62,7 @@
     height: 28px;
     padding: 0;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     background: transparent;
     color: var(--color-text-tertiary);
     cursor: pointer;
@@ -128,7 +128,7 @@
 .cancelBtn {
     padding: 8px 16px;
     border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     background: transparent;
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
@@ -144,7 +144,7 @@
 .submitBtn {
     padding: 8px 16px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     background-color: var(--color-action-primary);
     color: #ffffff;
     font-size: var(--font-size-sm);
@@ -159,5 +159,5 @@
 
 .submitBtn:disabled {
     opacity: 0.6;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }

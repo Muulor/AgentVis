@@ -296,7 +296,7 @@
     color: #fff;
     background: rgba(255, 255, 255, 0.15);
     border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     cursor: pointer;
     backdrop-filter: blur(4px);
     transition: background 0.15s ease;

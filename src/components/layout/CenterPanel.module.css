@@ -102,7 +102,7 @@
     font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
     border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     transition: all var(--transition-fast);
 }
 
@@ -119,7 +119,7 @@
     height: 36px;
     background-color: var(--color-action-primary);
     color: white;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     transition: background-color var(--transition-fast);
 }
 

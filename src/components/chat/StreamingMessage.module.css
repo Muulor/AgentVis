@@ -49,8 +49,8 @@
 
 .content {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-lg);
-    border-bottom-left-radius: var(--radius-sm);
+    border-radius: var(--radius-message-bubble);
+    border-bottom-left-radius: var(--radius-message-bubble);
     background-color: var(--color-bg-tertiary);
     color: var(--color-text-primary);
     line-height: var(--line-height-normal);

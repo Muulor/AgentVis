@@ -64,7 +64,7 @@
 
 .cancelBtn {
     padding: 6px 16px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     background-color: var(--color-bg-secondary);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border-primary);
@@ -79,7 +79,7 @@
 
 .confirmBtn {
     padding: 6px 16px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     background-color: var(--color-action-primary);
     color: #ffffff;
     border: none;

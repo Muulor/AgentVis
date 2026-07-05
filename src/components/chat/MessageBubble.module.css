@@ -74,7 +74,7 @@
 
 .content {
     padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-message-bubble);
     line-height: var(--line-height-normal);
     word-break: break-word;
 }
@@ -83,7 +83,7 @@
 .userBubble .content {
     background-color: var(--color-action-primary);
     color: white;
-    border-bottom-right-radius: var(--radius-sm);
+    border-bottom-right-radius: var(--radius-message-bubble);
     overflow-wrap: anywhere;
     text-wrap: pretty;
     /* 用户消息是纯文本，保留换行符 */
@@ -154,7 +154,7 @@
 .agentBubble .content {
     background-color: var(--color-bg-tertiary);
     color: var(--color-text-primary);
-    border-bottom-left-radius: var(--radius-sm);
+    border-bottom-left-radius: var(--radius-message-bubble);
     /* Agent 消息使用 Markdown 渲染，由 react-markdown 控制排版 */
     white-space: normal;
 }

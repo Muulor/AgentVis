@@ -44,7 +44,7 @@
     height: 22px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -57,7 +57,7 @@
 
 .navBtn:disabled {
     opacity: 0.3;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* ==================== 面包屑 ==================== */
@@ -127,7 +127,7 @@
     height: 22px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     color: var(--color-text-tertiary);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -141,7 +141,7 @@
 
 .refreshBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 项目预览按钮（绿色 Play 图标） */
@@ -153,7 +153,7 @@
     height: 22px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     color: #a6e3a1;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -167,7 +167,7 @@
 
 .previewBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .spinning {
@@ -263,7 +263,7 @@
     padding: var(--spacing-xs) var(--spacing-md);
     background: transparent;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     color: var(--color-text-primary);
     font-size: 12px;
     cursor: pointer;

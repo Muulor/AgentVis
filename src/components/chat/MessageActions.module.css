@@ -9,7 +9,7 @@
     padding: var(--spacing-xs);
     background-color: var(--color-bg-primary);
     border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     box-shadow: var(--shadow-md);
     position: absolute;
     z-index: 10;
@@ -42,7 +42,7 @@
     border: none;
     background: none;
     color: var(--color-text-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all var(--transition-fast);
 }

@@ -154,7 +154,7 @@
     align-items: center;
     justify-content: center;
     border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-medium);
     cursor: pointer;
@@ -177,7 +177,7 @@
 
 .stepAction:disabled {
     opacity: 0.55;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .primaryButton {

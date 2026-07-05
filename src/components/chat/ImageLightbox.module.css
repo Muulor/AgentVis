@@ -79,7 +79,7 @@
     padding: 6px 10px;
     background-color: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     color: white;
     cursor: pointer;
     font-size: 13px;
@@ -92,7 +92,7 @@
 
 .toolButton:disabled {
     opacity: 0.4;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .scaleLabel {
@@ -189,7 +189,7 @@
 
 .navButton:disabled {
     opacity: 0.3;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .navPrev {

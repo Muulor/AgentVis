@@ -149,7 +149,7 @@
     height: 18px;
     padding: 0;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     background-color: transparent;
     color: var(--color-text-tertiary);
     cursor: pointer;

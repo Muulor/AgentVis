@@ -1,7 +1,7 @@
 /* ChoicesWidget - 选项卡片交互组件样式 */
 
 .container {
-    border-radius: var(--radius-xl, 12px);
+    border-radius: var(--radius-surface);
     background: var(--color-bg-secondary, #F7F7F7);
     border: 1px solid var(--color-border-default, #E5E5E5);
     overflow: hidden;
@@ -41,7 +41,7 @@
     align-items: center;
     gap: 10px;
     padding: 10px 14px;
-    border-radius: var(--radius-lg, 8px);
+    border-radius: var(--radius-control);
     border: 1px solid transparent;
     background: var(--color-bg-primary, #FFFFFF);
     cursor: pointer;
@@ -134,7 +134,7 @@
 /* 错误降级 */
 .errorFallback {
     padding: 10px 14px;
-    border-radius: var(--radius-lg, 8px);
+    border-radius: var(--radius-control);
     background: var(--color-bg-secondary, #F7F7F7);
     border: 1px dashed var(--color-border-default, #E5E5E5);
     font-size: var(--font-size-sm, 12px);
@@ -179,7 +179,7 @@
     width: calc(100% - 16px);
     margin: 4px 8px 10px;
     padding: 9px 16px;
-    border-radius: var(--radius-lg, 8px);
+    border-radius: var(--radius-button);
     border: none;
     background: var(--color-action-primary, #2563EB);
     color: #fff;
@@ -204,7 +204,7 @@
 
 .confirmBtnDisabled {
     opacity: 0.4;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 确认按钮中已选数量标记 */

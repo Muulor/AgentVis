@@ -33,7 +33,7 @@
 .rejectBtn:disabled,
 .undoBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* ==================== Accept 按钮（深灰色） ==================== */

@@ -12,7 +12,7 @@
     height: 28px;
     padding: 0;
     border: 1px solid transparent;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     background-color: transparent;
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -33,7 +33,7 @@
 
 .button:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .button svg {

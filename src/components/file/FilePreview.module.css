@@ -192,7 +192,7 @@
     border: 1px solid rgba(137, 180, 250, 0.3);
     background: rgba(137, 180, 250, 0.08);
     color: #89b4fa;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;

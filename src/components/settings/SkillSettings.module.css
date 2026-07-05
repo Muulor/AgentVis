@@ -23,7 +23,7 @@
     min-height: 52px;
     padding: 10px 12px;
     border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-surface);
     background: var(--color-bg-secondary);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
 }
@@ -108,7 +108,7 @@
     height: 30px;
     padding: 0 10px;
     border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     background: color-mix(in srgb, currentColor 8%, transparent);
     color: currentColor;
     cursor: pointer;
@@ -162,7 +162,7 @@
     flex-direction: column;
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-surface);
     transition: border-color 0.15s;
 }
 
@@ -318,7 +318,7 @@
     border: 1px solid rgba(59, 130, 246, 0.3);
     background: transparent;
     color: var(--color-accent-primary, #3b82f6);
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 11px);
     cursor: pointer;
     transition: all 0.15s;
@@ -336,7 +336,7 @@
     padding: 6px 8px;
     background: rgba(245, 158, 11, 0.05);
     border: 1px solid rgba(245, 158, 11, 0.15);
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-surface);
 }
 
 .manualDepHeader {
@@ -398,7 +398,7 @@
     border: none;
     background: transparent;
     color: var(--color-text-tertiary);
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -447,7 +447,7 @@
     border: 1px solid rgba(59, 130, 246, 0.4);
     background: transparent;
     color: var(--color-accent-primary, #3b82f6);
-    border-radius: 10px;
+    border-radius: var(--radius-button);
     cursor: pointer;
     font-size: 10px;
     font-weight: 500;
@@ -561,7 +561,7 @@
     border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
     background: transparent;
     color: var(--color-text-secondary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 11px);
     cursor: pointer;
     transition: all 0.15s;
@@ -582,7 +582,7 @@
     border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
     background: transparent;
     color: var(--color-text-secondary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 11px);
     cursor: pointer;
     transition: all 0.15s;
@@ -596,7 +596,7 @@
 
 .deleteSkillButton:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .emptyState {
@@ -606,7 +606,7 @@
     font-size: var(--font-size-sm, 13px);
     background: var(--color-bg-secondary);
     border: 1px dashed var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-surface);
 }
 
 /* ==================== 安装新技能 ==================== */
@@ -630,7 +630,7 @@
     border: 1px solid var(--color-border-primary);
     background: var(--color-bg-secondary);
     color: var(--color-text-secondary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-sm, 13px);
     cursor: pointer;
     transition: all 0.15s;
@@ -644,7 +644,7 @@
 
 .actionButton:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* GitHub URL 输入区 */
@@ -657,7 +657,7 @@
     flex: 1;
     padding: 8px 12px;
     border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-control);
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     font-size: var(--font-size-sm, 13px);
@@ -680,7 +680,7 @@
     border: 1px solid var(--color-accent-primary, #3b82f6);
     background: var(--color-accent-primary, #3b82f6);
     color: white;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-sm, 13px);
     cursor: pointer;
     transition: all 0.15s;
@@ -693,7 +693,7 @@
 
 .installButton:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* ==================== Python 环境 ==================== */
@@ -705,7 +705,7 @@
     padding: 16px;
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-surface);
 }
 
 .envRow {
@@ -769,7 +769,7 @@
     border: 1px solid rgba(220, 38, 38, 0.3);
     background: transparent;
     color: #dc2626;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 12px);
     cursor: pointer;
     transition: all 0.15s;
@@ -782,7 +782,7 @@
 
 .dangerButton:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .primaryButton {
@@ -793,7 +793,7 @@
     border: 1px solid rgba(34, 197, 94, 0.3);
     background: transparent;
     color: #22c55e;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 12px);
     cursor: pointer;
     transition: all 0.15s;
@@ -806,7 +806,7 @@
 
 .primaryButton:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 进度条 */
@@ -837,7 +837,7 @@
     align-items: flex-start;
     gap: 8px;
     padding: 8px 12px;
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-surface);
     font-size: var(--font-size-sm, 13px);
     line-height: 1.5;
     min-width: 0;

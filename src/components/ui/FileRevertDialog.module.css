@@ -132,7 +132,7 @@
 .cancelBtn,
 .confirmBtn {
     padding: 10px 20px;
-    border-radius: 8px;
+    border-radius: var(--radius-button);
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
@@ -164,6 +164,6 @@
 .cancelBtn:disabled,
 .confirmBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
     transform: none;
 }

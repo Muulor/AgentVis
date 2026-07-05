@@ -21,7 +21,7 @@
     gap: 8px;
     padding: 16px;
     background: var(--color-bg-secondary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-surface);
     border: 1px solid var(--color-border-primary);
 }
 
@@ -55,7 +55,7 @@
     border: none;
     background: transparent;
     color: var(--color-text-tertiary);
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -82,7 +82,7 @@
     border: 1px solid var(--color-border-primary);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-control);
     font-size: var(--font-size-sm, 13px);
     font-family: var(--font-family-mono);
     transition: border-color 0.15s;
@@ -111,7 +111,7 @@
     background: transparent;
     color: var(--color-text-tertiary);
     cursor: pointer;
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-button);
     transition: color 0.15s;
 }
 
@@ -124,7 +124,7 @@
     border: 1px solid var(--color-border-default);
     background: var(--color-bg-primary);
     color: var(--color-text-secondary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-sm, 13px);
     font-weight: var(--font-weight-medium, 500);
     cursor: pointer;
@@ -145,7 +145,7 @@
     border: 1px solid var(--color-border-primary);
     background: var(--color-bg-primary);
     color: var(--color-text-secondary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     font-size: var(--font-size-sm, 13px);
     cursor: pointer;
     transition: all 0.15s;
@@ -159,7 +159,7 @@
 
 .testButton:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 .testSuccess {
@@ -191,7 +191,7 @@
     border: 1px solid var(--color-border-primary);
     background: var(--color-bg-primary);
     color: var(--color-text-tertiary);
-    border-radius: var(--radius-md, 6px);
+    border-radius: var(--radius-button);
     cursor: pointer;
     transition: all 0.15s;
 }

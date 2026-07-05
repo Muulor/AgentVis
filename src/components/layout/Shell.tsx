@@ -214,6 +214,10 @@ export function Shell() {
     // 拖拽时添加 resizing 类禁用过渡效果
     const leftPanelClass = cx(styles.leftPanel, isResizing && styles.resizing);
     const rightPanelClass = cx(styles.rightPanel, isResizing && styles.resizing);
+    const rightResizeHandleClass = cx(
+        styles.rightResizeHandle,
+        !isRightPanelVisible && styles.rightResizeHandleHidden
+    );
 
     return (
         <div className={styles.shell}>
@@ -252,25 +256,23 @@ export function Shell() {
                 </section>
 
                 {/* 右栏拖拽手柄 */}
-                {isRightPanelVisible && (
-                    <ResizeHandle
-                        direction="horizontal"
-                        onResize={handleRightResize}
-                        onResizeStart={handleRightResizeStart}
-                        onResizeEnd={handleResizeEnd}
-                        className={styles.rightResizeHandle}
-                    />
-                )}
+                <ResizeHandle
+                    direction="horizontal"
+                    onResize={handleRightResize}
+                    onResizeStart={handleRightResizeStart}
+                    onResizeEnd={handleResizeEnd}
+                    className={rightResizeHandleClass}
+                />
 
                 {/* 右栏 */}
-                {isRightPanelVisible && (
-                    <aside
-                        className={rightPanelClass}
-                        style={{ width: actualRightWidth }}
-                    >
-                        <RightPanel />
-                    </aside>
-                )}
+                <aside
+                    className={rightPanelClass}
+                    data-visible={isRightPanelVisible}
+                    aria-hidden={!isRightPanelVisible}
+                    style={{ width: actualRightWidth }}
+                >
+                    <RightPanel />
+                </aside>
             </main>
 
             {/* 底部状态栏 */}

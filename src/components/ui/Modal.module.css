@@ -50,7 +50,7 @@
     align-items: center;
     justify-content: center;
     color: var(--color-text-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-button);
     transition: all var(--transition-fast);
 }
 

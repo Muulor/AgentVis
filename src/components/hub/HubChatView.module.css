@@ -44,7 +44,7 @@
     width: 32px;
     height: 32px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-button);
     background: transparent;
     color: var(--color-text-tertiary);
     cursor: pointer;
@@ -153,7 +153,7 @@
     width: 44px;
     height: 44px;
     border: none;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-button);
     background-color: var(--color-action-primary);
     color: #ffffff;
     cursor: pointer;
@@ -166,7 +166,7 @@
 
 .sendBtn:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
+    cursor: var(--cursor-disabled);
 }
 
 /* 工具栏 */

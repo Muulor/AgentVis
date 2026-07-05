@@ -5,7 +5,6 @@
 .container {
     position: relative;
     width: 100%;
-    --blocked-cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E") 8 8,not-allowed;
 }
 
 /* ==================== 输入框 ==================== */
@@ -33,7 +32,7 @@
 
 .textarea:disabled {
     opacity: 0.6;
-    cursor: var(--blocked-cursor);
+    cursor: var(--cursor-disabled);
 }
 
 .textarea::placeholder {
