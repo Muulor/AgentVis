@@ -7,7 +7,7 @@
  * 支持图像生成模型的 base64 图片渲染（缩略图 + Lightbox 放大 + 保存交付物）。
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo, lazy, Suspense, type MouseEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -83,6 +83,19 @@ const IMAGE_MIME_MAP: Record<string, string> = {
     bmp: 'image/bmp',
     ico: 'image/x-icon',
 };
+
+function isHttpLink(href?: string): href is string {
+    return /^https?:\/\//i.test(href ?? '');
+}
+
+async function openExternalLink(href: string): Promise<void> {
+    try {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(href);
+    } catch {
+        window.open(href, '_blank', 'noopener,noreferrer');
+    }
+}
 
 const MARKDOWN_LOCAL_IMAGE_DOWNSCALE_BYTES = 5 * 1024 * 1024;
 const MARKDOWN_LOCAL_IMAGE_MAX_BYTES = 40 * 1024 * 1024;
@@ -433,6 +446,14 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
         setLightboxSrc(null);
     }, []);
 
+    const handleLinkClick = useCallback((event: MouseEvent<HTMLAnchorElement>, href?: string) => {
+        if (!isHttpLink(href)) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        void openExternalLink(href);
+    }, []);
+
     // 预处理：提取 base64 图片数据（避免 react-markdown 解析器截断超长 URL）
     // 使用 useMemo 缓存结果，防止父组件 hover 等无关状态变化导致重新创建 Map
     const { processedContent, imageMap } = useMemo(() => {
@@ -566,6 +587,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
                     target="_blank"
                     rel="noopener noreferrer"
                     className={styles.link}
+                    onClick={(event) => handleLinkClick(event, href)}
                 >
                     {children}
                 </a>
@@ -610,8 +632,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
                 </blockquote>
             );
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }), [contextId, messageId, onCodePreview, onProjectPreview]);
+    }), [contextId, handleLinkClick, messageId, onCodePreview, onProjectPreview]);
 
     /** 图片组件的稳定 memo（仅依赖 imageMap，与代码块组件生命周期完全隔离） */
     const imgComponent = useMemo<Partial<Components>>(() => ({

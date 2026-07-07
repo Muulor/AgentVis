@@ -205,6 +205,8 @@ file/
 ├── FileItem.module.css           # 文件项样式
 ├── FileList.tsx                  # 文件列表组件（含交付物文件夹 ▶ Run Preview）
 ├── FileList.module.css           # 文件列表样式（含 projectPreviewBtn）
+├── FileListPathRecovery.ts
+├── FilePreviewImageDataUrl.ts
 ├── FilePreview.tsx               # 文件预览组件
 ├── FilePreview.module.css        # 文件预览样式
 ├── PreviewStore.ts               # 实时代码预览状态管理（已迁移至 stores/previewStore.ts）

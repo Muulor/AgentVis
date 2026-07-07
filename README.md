@@ -5,7 +5,7 @@
 # AgentVis
 
 <p align="center">
-  <a href="https://agentvis.muulor.workers.dev/">Official Website</a> | <a href="https://github.com/Muulor/AgentVis/releases/latest">Download for Windows</a> | <a href="README.zh-CN.md">中文 README</a>
+  <a href="https://github.com/Muulor/AgentVis/releases/latest">Download for Windows</a> | <a href="README.zh-CN.md">中文 README</a>
 </p>
 
 <p align="center">

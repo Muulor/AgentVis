@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
     Search,
     ShieldCheck,
@@ -337,9 +338,9 @@ export function SkillAuditModal({ onDecision, isProcessing }: SkillAuditModalPro
     // 从包路径提取技能名
     const skillName = packagePath?.split(/[\\/]/).pop() ?? t('settings.skills.skillPackageFallback');
 
-    return (
+    return createPortal(
         <div className={styles.overlay}>
-            <div className={styles.modal}>
+            <div className={styles.modal} role="dialog" aria-modal="true">
                 {/* 顶部状态栏 */}
                 <div className={styles.header}>
                     <div className={cx(styles.statusIcon, getStatusClass(auditStatus))}>
@@ -385,6 +386,7 @@ export function SkillAuditModal({ onDecision, isProcessing }: SkillAuditModalPro
                 {auditStatus === 'manual_review' && <ManualReviewFooter onDecision={onDecision} isProcessing={isProcessing} />}
                 {auditStatus === 'error' && <ErrorFooter onDecision={onDecision} isProcessing={isProcessing} />}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

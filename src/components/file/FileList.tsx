@@ -26,6 +26,7 @@ import { cx } from '@utils/classNames';
 import { isPreviewableFile, inferTemplateFromFileNames } from '@services/preview';
 import type { ProjectFile } from '@services/preview/types';
 import { useI18n } from '@/i18n';
+import { getMissingDirectoryRecoveryPath } from './FileListPathRecovery';
 
 const logger = getLogger('FileList');
 
@@ -285,6 +286,16 @@ export function FileList({ agentId, hubName, agentName, rootDir, selectedFileId,
                 return newEntries;
             });
         } catch (err) {
+            const recoveryPath = getMissingDirectoryRecoveryPath(path, err);
+            if (recoveryPath !== null) {
+                logger.warn('[FileList] 当前目录不存在，已回退到父目录:', { path, recoveryPath, err });
+                setEntries([]);
+                setCurrentPath(recoveryPath);
+                setForwardStack([]);
+                setError(null);
+                return;
+            }
+
             logger.error('[FileList] 加载目录失败:', err);
             setError(t('file.loadDirectoryFailed'));
         } finally {

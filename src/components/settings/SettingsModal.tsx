@@ -115,6 +115,8 @@ export function SettingsModal({ isOpen, onClose, initialTab = 'general' }: Setti
     const { t } = useI18n();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const skillAuditStatus = useRuntimeStore((s) => s.skillAuditStatus);
+    const skillAuditMinimized = useRuntimeStore((s) => s.skillAuditMinimized);
+    const isSkillAuditModalActive = skillAuditStatus !== 'idle' && !skillAuditMinimized;
     const {
         menu: textContextMenu,
         closeMenu: closeTextContextMenu,
@@ -178,7 +180,11 @@ export function SettingsModal({ isOpen, onClose, initialTab = 'general' }: Setti
     };
 
     return (
-        <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <Dialog.Root
+            open={isOpen}
+            modal={!isSkillAuditModalActive}
+            onOpenChange={(open) => !open && onClose()}
+        >
             <Dialog.Portal>
                 <Dialog.Overlay className={styles.overlay} />
                 <Dialog.Content

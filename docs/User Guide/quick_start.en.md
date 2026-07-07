@@ -38,7 +38,7 @@ After entering "Settings -> Cloud Services", you need to configure at least two 
 - Embedding model provider credentials: used for Knowledge Base, memory, and semantic retrieval.
 - Memory-system LLM: used for memory summaries and fact extraction.
 
-We also recommend applying for and configuring a Tavily key. After configuration, Agents can use web search tools more reliably to query public information.
+We also recommend applying for and configuring a Tavily key. After configuration, Agents can use web search tools more reliably to query public information. DuckDuckGo is used as a free fallback without an API key.
 
 Image generation is not required for initial use. If you want Agents to directly generate images, posters, or visual assets, configure it when needed.
 

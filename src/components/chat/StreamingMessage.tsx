@@ -39,10 +39,10 @@ const AVATAR_COLORS = [
     '#7E57C2',
     '#E27A3A',
     '#21804E',
+    '#ff9090',
     '#6da7e1',
     '#4a8131',
     '#7D8BF4',
-    '#ff9090',
 ];
 
 function getAvatarColor(name: string): string {

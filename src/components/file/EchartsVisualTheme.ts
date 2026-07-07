@@ -60,10 +60,10 @@ const APP_CHART_COLORS = [
     '#7E57C2',
     '#E27A3A',
     '#21804E',
+    '#ff9090',
     '#6da7e1',
     '#4a8131',
     '#7D8BF4',
-    '#ff9090',
 ];
 
 const APP_CHART_BAR_GRADIENTS: [string, string][] = [
@@ -75,10 +75,10 @@ const APP_CHART_BAR_GRADIENTS: [string, string][] = [
     ['#9b72df', '#7E57C2'],
     ['#ed975f', '#E27A3A'],
     ['#3a9b68', '#21804E'],
+    ['#ffb1b1', '#ff9090'],
     ['#93c5fd', '#6da7e1'],
     ['#6b9a4d', '#4a8131'],
     ['#98a3ff', '#7D8BF4'],
-    ['#ffb1b1', '#ff9090'],
 ];
 
 const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {

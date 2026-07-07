@@ -4,7 +4,7 @@
 
 # AgentVis
 <p align="center">
-  <a href="https://agentvis.muulor.workers.dev/">官方网站</a> | <a href="https://github.com/Muulor/AgentVis/releases/latest">下载 Windows 版</a> | <a href="README.md">English README</a>
+  <a href="https://github.com/Muulor/AgentVis/releases/latest">下载 Windows 版</a> | <a href="README.md">English README</a>
 </p>
 <p align="center">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB">

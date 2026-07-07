@@ -42,6 +42,7 @@ import {
     isSystemVideoFile as isRegistrySystemVideoFile,
 } from '@services/file-types';
 import styles from './FilePreview.module.css';
+import { createImageDataUrl } from './FilePreviewImageDataUrl';
 
 const logger = getLogger('FilePreview');
 
@@ -159,7 +160,12 @@ function ImagePreview({ filePath, fileName }: { filePath: string; fileName: stri
 
         invoke<string>('file_read_as_base64', { path: filePath })
             .then((base64) => {
-                setImageSrc(`data:${mimeType};base64,${base64}`);
+                const nextImageSrc = createImageDataUrl(mimeType, base64);
+                if (!nextImageSrc) {
+                    setHasError(true);
+                    return;
+                }
+                setImageSrc(nextImageSrc);
             })
             .catch(() => {
                 setHasError(true);

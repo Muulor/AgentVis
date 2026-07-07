@@ -123,6 +123,7 @@
     z-index: 1;
     display: flex;
     align-items: center;
+    justify-content: safe center;
     gap: 4px;
     min-width: 0;
     padding: 3px 8px;
