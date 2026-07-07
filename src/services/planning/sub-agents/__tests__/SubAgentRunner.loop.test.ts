@@ -275,5 +275,108 @@ describe('SubAgentRunner 新架构 Checkpoint', () => {
         expect(mockExecutor).toHaveBeenCalled(); // 高风险操作被批准并执行
         expect(result.status).toBe('completed');
     });
+
+    it('[新架构] 同一步多个并发工具失败只累计 1 次连续失败', async () => {
+        const responses: LLMResponse[] = [
+            {
+                content: 'Resolving docs in parallel',
+                rawToolCalls: [
+                    {
+                        name: 'external_skill_execute',
+                        args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+                    },
+                    {
+                        name: 'external_skill_execute',
+                        args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+                    },
+                    {
+                        name: 'external_skill_execute',
+                        args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+                    },
+                ],
+            },
+            { content: 'Task complete TASK_COMPLETE', rawToolCalls: [] },
+        ];
+
+        const mockExecutor = vi.fn().mockResolvedValue({
+            success: false,
+            content: '[External Script Skill: context7-docs]\nExit code: 2',
+        });
+        const mockCaller = createExtendedMockCaller(responses);
+        const runner = new SubAgentRunner(mockCaller as LLMCaller);
+        runner.setToolExecutor(mockExecutor);
+
+        const spec = createMockSpec({
+            allowedTools: ['external_skill_execute'],
+            loopConfig: createMockLoopConfig({
+                initialBudget: 3,
+                checkpointInterval: 999,
+                maxSteps: 5,
+            }),
+        });
+
+        const checkpointFn = vi.fn();
+
+        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+
+        expect(mockExecutor).toHaveBeenCalledTimes(3);
+        expect(checkpointFn).not.toHaveBeenCalled();
+        expect(result.status).toBe('completed');
+    });
+
+    it('[新架构] 连续 3 个工具调用步失败才触发连续失败 Checkpoint', async () => {
+        const responses: LLMResponse[] = [
+            {
+                content: 'Attempt 1',
+                rawToolCalls: [{
+                    name: 'external_skill_execute',
+                    args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+                }],
+            },
+            {
+                content: 'Attempt 2',
+                rawToolCalls: [{
+                    name: 'external_skill_execute',
+                    args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+                }],
+            },
+            {
+                content: 'Attempt 3',
+                rawToolCalls: [{
+                    name: 'external_skill_execute',
+                    args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+                }],
+            },
+        ];
+
+        const mockExecutor = vi.fn().mockResolvedValue({
+            success: false,
+            content: '[External Script Skill: context7-docs]\nExit code: 2',
+        });
+        const mockCaller = createExtendedMockCaller(responses);
+        const runner = new SubAgentRunner(mockCaller as LLMCaller);
+        runner.setToolExecutor(mockExecutor);
+
+        const spec = createMockSpec({
+            allowedTools: ['external_skill_execute'],
+            loopConfig: createMockLoopConfig({
+                initialBudget: 3,
+                checkpointInterval: 999,
+                maxSteps: 5,
+            }),
+        });
+
+        const checkpointFn = vi.fn().mockResolvedValueOnce({
+            type: 'TERMINATE_SUB_AGENT',
+            reason: 'Repeated failed steps',
+        } as CheckpointDecision);
+
+        await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+
+        expect(mockExecutor).toHaveBeenCalledTimes(3);
+        expect(checkpointFn).toHaveBeenCalledTimes(1);
+        expect(checkpointFn.mock.calls[0]?.[0].checkpointTrigger).toBe('consecutive_failures');
+        expect(checkpointFn.mock.calls[0]?.[0].completedIterations).toBe(3);
+    });
 });
 

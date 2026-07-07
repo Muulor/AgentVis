@@ -507,6 +507,7 @@ services/
 ├── 📁 file-types/                # 文件类型能力注册表（附件/预览/解析/知识库策略）
 ├── 📁 llm/                       # LLM 调用服务
 ├── 📁 memory/                    # 记忆系统服务
+├── 📁 navigation/                # 外部链接与导航边界服务
 ├── 📁 planning/                  # 规划执行服务（Agent Loop）
 ├── 📁 preview/                   # Vite 实时预览服务（多文件项目预览）
 ├── 📁 cron/                      # 定时任务服务（调度/执行/表达式解析）
@@ -615,6 +616,12 @@ memory/
     ├── index.ts                  # 工具导出
     ├── SafeMessageContent.ts     # 过滤可视化代码块工具
     └── JsonParser.ts             # JSON 解析器
+```
+
+### 📁 services/navigation/ - 外部链接与导航边界服务
+```
+navigation/
+└── externalUrl.ts                # 外部 HTTP(S) 链接统一打开入口（Tauri 内走系统浏览器，避免主 WebView 任意导航）
 ```
 
 ### 📁 services/planning/ - 规划执行服务
@@ -901,6 +908,7 @@ preview/
 ├── TemplateManager.ts            # 模板管理器（vanilla/react-tailwind/vue-tailwind + 依赖漂移检测）
 ├── templateInference.ts          # 模板推断逻辑
 ├── htmlResourceInliner.ts          # HTML 相对路径资源内嵌工具
+├── previewUrlPolicy.ts           # Project Preview URL allow-list（仅允许受控 localhost 预览端口）
 └── PortAllocator.ts              # 端口分配器（async fetch 探测防冲突，范围 3100-3199）
 ```
 

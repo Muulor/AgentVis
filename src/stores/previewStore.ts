@@ -11,6 +11,7 @@
 
 import { create } from 'zustand';
 import { getLogger } from '@services/logger';
+import { isManagedPreviewUrl } from '@services/preview/previewUrlPolicy';
 import type { ViteServerStatus, TemplateId } from '@services/preview/types';
 
 const logger = getLogger('previewStore');
@@ -117,6 +118,17 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
     },
 
     setProjectUrl: (url, template) => {
+        if (!isManagedPreviewUrl(url)) {
+            logger.warn('[previewStore] Blocked unmanaged project preview URL:', url);
+            set({
+                projectUrl: null,
+                projectStatus: 'error',
+                projectTemplate: template,
+                projectError: null,
+            });
+            return;
+        }
+
         set({
             projectUrl: url,
             projectStatus: 'running',

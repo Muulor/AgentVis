@@ -226,7 +226,10 @@ pub fn run() {
             //   小屏（任意一边不足）→ 最大化启动，保留任务栏和标题栏，确保小屏最佳呈现
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(windows)]
-                webview_diagnostics::install_process_failed_logger(&window);
+                {
+                    webview_diagnostics::install_process_failed_logger(&window);
+                    webview_diagnostics::install_navigation_guard(&window);
+                }
 
                 match window.primary_monitor() {
                     Ok(Some(monitor)) => {

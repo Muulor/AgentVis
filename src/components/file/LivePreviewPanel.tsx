@@ -27,7 +27,7 @@ import { Code2, Play, RefreshCw, X, Loader2, AlertTriangle, Maximize2, Minimize2
 import { CodeHighlight } from './CodeHighlight';
 import { usePreviewStore } from '@stores/previewStore';
 import { useUIStore } from '@stores/uiStore';
-import { vitePreviewService, inlineHtmlResources, injectSrcdocHashNavFix } from '@services/preview';
+import { vitePreviewService, inlineHtmlResources, injectSrcdocHashNavFix, isManagedPreviewUrl } from '@services/preview';
 import type { ViteServerStatus } from '@services/preview/types';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
@@ -389,6 +389,19 @@ function renderProjectContent(
 
         case 'running':
             if (!url) return <div className={styles.projectLoading}>{t('file.waitingUrl')}</div>;
+            if (!isManagedPreviewUrl(url)) {
+                logger.warn('[LivePreviewPanel] Blocked unmanaged project preview URL:', url);
+                return (
+                    <div className={styles.projectError}>
+                        <AlertTriangle size={32} className={styles.projectErrorIcon} />
+                        <span className={styles.projectErrorText}>{t('file.previewStartFailed')}</span>
+                        <button className={styles.retryBtn} onClick={onRetry}>
+                            <RefreshCw size={14} />
+                            <span>{t('common.retry')}</span>
+                        </button>
+                    </div>
+                );
+            }
             return (
                 <iframe
                     ref={iframeRef}

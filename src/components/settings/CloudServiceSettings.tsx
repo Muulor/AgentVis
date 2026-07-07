@@ -16,6 +16,7 @@ import { getProviders, getModelsByProvider } from '@/config/modelRegistry';
 import { ExternalLink, Trash2 } from 'lucide-react';
 import styles from './CloudServiceSettings.module.css';
 import { getLogger } from '@services/logger';
+import { openExternalUrl } from '@services/navigation/externalUrl';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 
@@ -38,17 +39,6 @@ const PROVIDER_URLS = {
     github: 'https://github.com/settings/tokens',
     context7: 'https://context7.com/dashboard',
 } as const;
-
-/** 在系统浏览器中打开外部 URL */
-const openExternalUrl = async (url: string) => {
-    try {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(url);
-    } catch {
-        // 回退：尝试用 window.open
-        window.open(url, '_blank');
-    }
-};
 
 /** 可见性切换 SVG 图标 - 可见状态（眼睛） */
 function EyeOpenIcon() {
@@ -506,7 +496,7 @@ export function CloudServiceSettings() {
                     <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
                         <button
                             className={styles.externalLinkButton}
-                            onClick={() => openExternalUrl(PROVIDER_URLS.siliconflow)}
+                            onClick={() => { void openExternalUrl(PROVIDER_URLS.siliconflow); }}
                             aria-label={t('settings.cloud.getApiKeyTitle')}
                         >
                             <ExternalLink size={14} />
@@ -596,7 +586,7 @@ export function CloudServiceSettings() {
                     <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
                         <button
                             className={styles.externalLinkButton}
-                            onClick={() => openExternalUrl(PROVIDER_URLS.giteeai)}
+                            onClick={() => { void openExternalUrl(PROVIDER_URLS.giteeai); }}
                             aria-label={t('settings.cloud.getApiKeyTitle')}
                         >
                             <ExternalLink size={14} />
@@ -663,7 +653,7 @@ export function CloudServiceSettings() {
                     <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
                         <button
                             className={styles.externalLinkButton}
-                            onClick={() => openExternalUrl(PROVIDER_URLS.tavily)}
+                            onClick={() => { void openExternalUrl(PROVIDER_URLS.tavily); }}
                             aria-label={t('settings.cloud.getApiKeyTitle')}
                         >
                             <ExternalLink size={14} />
@@ -729,7 +719,7 @@ export function CloudServiceSettings() {
                     <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
                         <button
                             className={styles.externalLinkButton}
-                            onClick={() => openExternalUrl(PROVIDER_URLS.github)}
+                            onClick={() => { void openExternalUrl(PROVIDER_URLS.github); }}
                             aria-label={t('settings.cloud.getApiKeyTitle')}
                         >
                             <ExternalLink size={14} />
@@ -794,7 +784,7 @@ export function CloudServiceSettings() {
                     <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
                         <button
                             className={styles.externalLinkButton}
-                            onClick={() => openExternalUrl(PROVIDER_URLS.context7)}
+                            onClick={() => { void openExternalUrl(PROVIDER_URLS.context7); }}
                             aria-label={t('settings.cloud.getApiKeyTitle')}
                         >
                             <ExternalLink size={14} />

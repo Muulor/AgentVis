@@ -7,6 +7,12 @@
 export { vitePreviewService } from './VitePreviewService';
 export { templateManager } from './TemplateManager';
 export { portAllocator } from './PortAllocator';
+export {
+    getManagedPreviewPort,
+    isManagedPreviewUrl,
+    PREVIEW_PORT_RANGE_END,
+    PREVIEW_PORT_RANGE_START,
+} from './previewUrlPolicy';
 export { inlineHtmlResources, injectSrcdocHashNavFix } from './htmlResourceInliner';
 export {
     isPreviewableFile,

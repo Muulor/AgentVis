@@ -1064,6 +1064,7 @@ export const zhCN = {
             unicodeReplacementHint: '[EXEC_CMD_HINT] Unicode 输出提示: 这条 cmd/echo 命令包含非 ASCII 文本，但输出出现 `???`/替换字符，通常是 cmd 代码页限制。需要准确 Unicode 内容时，请改用 PowerShell `Write-Output` 或 Python/Node 输出。',
             findstrSilentExitHint: '[EXEC_CMD_HINT] findstr 提示: findstr 可能用非 0 退出码表示没有匹配、搜索表达式/引号解析失败，且 stderr 为空。请同时检查 exitCode、stdout 和 findstr 语法；复杂模式建议改用 PowerShell Select-String。',
             silentNonZeroExitHint: '[EXEC_CMD_HINT] 静默退出提示: 该命令返回 exitCode={exitCode} 但 stderr 为空。这通常是命令本身用退出码表达状态，并不一定是 exec 工具异常；请根据该命令的退出码语义判断下一步。',
+            localWebServerVerificationHint: '[EXEC_BROWSER_VERIFICATION_HINT] 检测到本地 Web 服务 URL: {urls}。如果任务需要验证 UI 且 agent-browser 可用，请用 agent-browser 打开该 URL，截图，检查 console/errors，并按需交互验证后再报告成功。验证完成后请关闭专用 CDP 浏览器 runtime，除非用户要求保持打开，或仍需要人工登录/查看。',
             hintHead: '使用 PowerShell: powershell -Command "... | Select-Object -First N"',
             hintTail: '使用 PowerShell: powershell -Command "... | Select-Object -Last N"',
             hintGrep: '使用 findstr 或 PowerShell: findstr /C:"pattern" file 或 powershell -Command "... | Select-String pattern"',

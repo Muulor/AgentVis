@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import { AlertCircle, CheckCircle2, Download, RefreshCw, RotateCcw, SkipForward } from 'lucide-react';
-import { open } from '@tauri-apps/plugin-shell';
+import { openExternalUrl } from '@services/navigation/externalUrl';
 import { formatReleaseSize, getLocalizedReleaseNotes } from '@services/update';
 import { useUpdateStore } from '@stores/updateStore';
 import { useToast } from '../ui/Toast';
@@ -95,7 +95,13 @@ export function UpdateSettings() {
         if (!targetUrl) return;
 
         try {
-            await open(targetUrl);
+            const opened = await openExternalUrl(targetUrl);
+            if (!opened) {
+                toast({
+                    type: 'error',
+                    title: t('settings.general.updateOpenDownloadFailed'),
+                });
+            }
         } catch (openError) {
             toast({
                 type: 'error',

@@ -32,6 +32,7 @@ import { initializeImTaskBridge } from '@services/im-channel/ImTaskBridge';
 import type { BotConfig, FeishuChannelConfig, SlackChannelConfig } from '@services/im-channel/types';
 import { MAX_BOT_COUNT } from '@services/im-channel/types';
 import { getLogger } from '@services/logger';
+import { openExternalUrl } from '@services/navigation/externalUrl';
 import { cx } from '@utils/classNames';
 import styles from './ImChannelSettings.module.css';
 import {
@@ -52,16 +53,6 @@ const PLATFORM_APP_URLS = {
 // 模块加载时注册飞书平台适配器（幂等，多次调用安全）
 registerPlatform('feishu', (config) => new FeishuChannel(config as FeishuChannelConfig));
 registerPlatform('slack', (config) => new SlackChannel(config as SlackChannelConfig));
-
-/** 在系统浏览器中打开外部 URL */
-const openExternalUrl = async (url: string) => {
-    try {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(url);
-    } catch {
-        window.open(url, '_blank');
-    }
-};
 
 // ============================================================================
 // 类型定义

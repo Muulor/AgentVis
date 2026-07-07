@@ -10,8 +10,10 @@ import {
     generateCmdSingleQuoteOperatorHint,
     generateCmdVariableExpansionHint,
     generateExecTimeoutGuidance,
+    extractLocalWebServerUrls,
     generateFileReadPathFailureHint,
     generateInlineEvalNewlineHint,
+    generateLocalWebServerVerificationHint,
     generateMojibakeHint,
     generateRemCommandHint,
     generateShellOperatorHint,
@@ -278,6 +280,26 @@ describe('exec observation quality hints', () => {
     it('显式退出码不应额外提示 exec 静默失败', () => {
         const command = 'python -c "import sys; sys.exit(3)"';
         expect(generateSilentNonZeroExitHint(command, 3, '', '')).toBeNull();
+    });
+
+    it('extractLocalWebServerUrls detects local service URLs and strips sensitive query/hash parts', () => {
+        const urls = extractLocalWebServerUrls(
+            'Local: http://localhost:5173/?token=secret\nNetwork: http://0.0.0.0:3000/app#debug'
+        );
+
+        expect(urls).toEqual(['http://localhost:5173/', 'http://localhost:3000/app']);
+    });
+
+    it('generateLocalWebServerVerificationHint suggests agent-browser verification and CDP cleanup', () => {
+        const hint = generateLocalWebServerVerificationHint(
+            'VITE ready at http://127.0.0.1:5173/',
+            ''
+        );
+
+        expect(hint).toContain('[EXEC_BROWSER_VERIFICATION_HINT]');
+        expect(hint).toContain('http://127.0.0.1:5173/');
+        expect(hint).toContain('agent-browser');
+        expect(hint).toContain('CDP');
     });
 
     it('collectExecObservationHints 应汇总成功命令中的高风险可误解现象', () => {

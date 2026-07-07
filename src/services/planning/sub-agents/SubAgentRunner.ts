@@ -872,7 +872,8 @@ export class SubAgentRunner {
         let toolCallSteps = 0; // 执行了工具调用的步数（用于计算平均并行度）
         let terminated = false;
         let terminationReason: string | undefined;
-        // 连续失败检测：安全命令反复失败时仍需 MasterBrain 介入
+        // 连续失败检测：按工具调用步计数。一整步没有任何工具成功才算 1 次失败，
+        // 避免同一轮并发工具全部失败时把 N 个并发结果误算成 N 步。
         let consecutiveFailures = 0;
         const MAX_CONSECUTIVE_FAILURES = 3;
         // 连续无变化写入检测：file_write 反复返回"无变化"时自动终止
@@ -1543,6 +1544,8 @@ export class SubAgentRunner {
                 // toolCallsThisStep 已在推入 assistant 消息之前计算完毕（上方），此处直接使用
 
                 // 执行每个工具
+                let stepHadToolSuccess = false;
+                let stepHadToolFailure = false;
                 for (let tcIndex = 0; tcIndex < toolCallsWithIds.length; tcIndex++) {
                     const tc = toolCallsWithIds[tcIndex];
                     if (!tc) continue;
@@ -1578,7 +1581,7 @@ export class SubAgentRunner {
                         });
                         allToolCallNames.push(tc.name);
                         totalToolCalls++;
-                        consecutiveFailures++;
+                        stepHadToolFailure = true;
                         continue;
                     }
                     // 🛡️ 空参数防御：拦截 JSON args 解析失败导致的空对象
@@ -1601,7 +1604,7 @@ export class SubAgentRunner {
                         });
                         allToolCallNames.push(tc.name);
                         totalToolCalls++;
-                        consecutiveFailures++;
+                        stepHadToolFailure = true;
                         continue;
                     }
 
@@ -1620,7 +1623,7 @@ export class SubAgentRunner {
                         });
                         allToolCallNames.push(tc.name);
                         totalToolCalls++;
-                        consecutiveFailures++;
+                        stepHadToolFailure = true;
                         if (consecutiveMissingFileWriteContent >= 2) {
                             const repeatedInstruction = translate(
                                 'chat.subAgentFileWriteRepeatedMissingContentInstruction',
@@ -1752,7 +1755,7 @@ export class SubAgentRunner {
                     // 日志增强：失败时输出具体内容以便调试
                     if (result.success) {
                         logger.trace(`[SubAgentRunner]   - ${tc.name}: 成功`);
-                        consecutiveFailures = 0;
+                        stepHadToolSuccess = true;
 
                         // 检测 file_write 无变化写入（"File content is unchanged"关键字）
                         // 注意：只有 file_write 工具才影响此计数器，read 等其他工具不应重置它
@@ -1790,7 +1793,7 @@ export class SubAgentRunner {
                     } else {
                         const contentPreview = result.content.substring(0, 200) || '(empty)';
                         logger.debug(`[SubAgentRunner]   - ${tc.name}: 失败 | ${contentPreview}`);
-                        consecutiveFailures++;
+                        stepHadToolFailure = true;
                         consecutiveIdenticalExecs = 0;
                         lastExecSignature = '';
                     }
@@ -1802,10 +1805,16 @@ export class SubAgentRunner {
                     break;
                 }
 
-                // 连续失败检测：同一工具反复失败时强制触发 Checkpoint
-                // 防止安全命令（如 dir）因搜索不到文件而死循环
+                if (stepHadToolSuccess) {
+                    consecutiveFailures = 0;
+                } else if (stepHadToolFailure) {
+                    consecutiveFailures++;
+                }
+
+                // 连续失败检测：连续多个工具调用步都没有任何成功结果时强制触发 Checkpoint
+                // 防止安全命令（如 dir）因搜索不到文件而死循环，同时避免并发失败被误算成多步失败。
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                    logger.debug(`[SubAgentRunner] ⚠️ 连续失败 ${consecutiveFailures} 次，强制触发 Checkpoint`);
+                    logger.debug(`[SubAgentRunner] ⚠️ 连续失败 ${consecutiveFailures} 步，强制触发 Checkpoint`);
                     try {
                         const pendingToolNames = response.rawToolCalls.map(tc => tc.name);
                         const report = this.buildProgressReportFromMessages(

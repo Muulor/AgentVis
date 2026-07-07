@@ -16,6 +16,7 @@ import { CodeHighlight } from './CodeHighlight';
 import { WidgetRenderer } from '../widgets';
 import { extractCodeLanguage, parseWidgetLanguage, resolveWidgetType } from '../widgets/widgetParsing';
 import { parseWithFallback } from '@services/memory/utils/JsonParser';
+import { isHttpUrl, openExternalUrl } from '@services/navigation/externalUrl';
 import { ImageLightbox } from '../chat/ImageLightbox';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -83,19 +84,6 @@ const IMAGE_MIME_MAP: Record<string, string> = {
     bmp: 'image/bmp',
     ico: 'image/x-icon',
 };
-
-function isHttpLink(href?: string): href is string {
-    return /^https?:\/\//i.test(href ?? '');
-}
-
-async function openExternalLink(href: string): Promise<void> {
-    try {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(href);
-    } catch {
-        window.open(href, '_blank', 'noopener,noreferrer');
-    }
-}
 
 const MARKDOWN_LOCAL_IMAGE_DOWNSCALE_BYTES = 5 * 1024 * 1024;
 const MARKDOWN_LOCAL_IMAGE_MAX_BYTES = 40 * 1024 * 1024;
@@ -447,11 +435,11 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
     }, []);
 
     const handleLinkClick = useCallback((event: MouseEvent<HTMLAnchorElement>, href?: string) => {
-        if (!isHttpLink(href)) return;
+        if (!isHttpUrl(href)) return;
 
         event.preventDefault();
         event.stopPropagation();
-        void openExternalLink(href);
+        void openExternalUrl(href);
     }, []);
 
     // 预处理：提取 base64 图片数据（避免 react-markdown 解析器截断超长 URL）

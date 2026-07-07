@@ -11,12 +11,11 @@
  */
 
 import { getLogger } from '@services/logger';
+import { PREVIEW_PORT_RANGE_END, PREVIEW_PORT_RANGE_START } from './previewUrlPolicy';
 
 const logger = getLogger('PortAllocator');
 
 /** 端口分配范围 */
-const PORT_RANGE_START = 3100;
-const PORT_RANGE_END = 3199;
 
 /** fetch 探测超时时间（毫秒），仅用于快速判断端口是否被占用 */
 const PROBE_TIMEOUT_MS = 300;
@@ -43,7 +42,7 @@ class PortAllocator {
      * @throws 当端口范围耗尽时抛出异常
      */
     async allocate(): Promise<number> {
-        for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
+        for (let port = PREVIEW_PORT_RANGE_START; port <= PREVIEW_PORT_RANGE_END; port++) {
             if (this.allocatedPorts.has(port)) {
                 continue;
             }
@@ -60,7 +59,7 @@ class PortAllocator {
             return port;
         }
         throw new Error(
-            `[PortAllocator] Port range [${PORT_RANGE_START}-${PORT_RANGE_END}] is exhausted; unable to allocate a new port`
+            `[PortAllocator] Port range [${PREVIEW_PORT_RANGE_START}-${PREVIEW_PORT_RANGE_END}] is exhausted; unable to allocate a new port`
         );
     }
 

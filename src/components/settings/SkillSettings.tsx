@@ -50,6 +50,7 @@ import { createTauriShellExecute } from '@services/planning/skills/external/taur
 import type { SystemToolInfo } from '@services/planning/skills/external/DependencyAnalyzer';
 import styles from './SkillSettings.module.css';
 import { getLogger } from '@services/logger';
+import { openExternalUrl } from '@services/navigation/externalUrl';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import { translateDependencyInstallResultMessage, translateRuntimeProgressPhase } from '@/i18n/runtimeMessages';
@@ -306,11 +307,8 @@ function DepErrorMessage({ message }: { message: string }) {
     const URL_TEST = /^https?:\/\//;
 
     const handleLinkClick = async (url: string) => {
-        try {
-            const { open } = await import('@tauri-apps/plugin-shell');
-            await open(url);
-        } catch {
-            // 回退：复制到剪贴板
+        const opened = await openExternalUrl(url);
+        if (!opened) {
             void navigator.clipboard.writeText(url);
         }
     };

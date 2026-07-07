@@ -1310,6 +1310,66 @@ export function generateSilentNonZeroExitHint(
     return null;
 }
 
+const LOCAL_WEB_SERVER_URL_PATTERN = /\bhttps?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{2,5}(?:[/?#][^\s"'<>]*)?/gi;
+const TRAILING_URL_PUNCTUATION_PATTERN = /[),.;\]]+$/;
+
+function normalizeLocalWebServerUrl(candidate: string): string | null {
+    const trimmed = candidate.replace(TRAILING_URL_PUNCTUATION_PATTERN, '');
+
+    try {
+        const parsed = new URL(trimmed);
+        const host = parsed.hostname.toLowerCase();
+        if (
+            parsed.protocol !== 'http:' &&
+            parsed.protocol !== 'https:'
+        ) {
+            return null;
+        }
+        if (
+            host !== 'localhost' &&
+            host !== '127.0.0.1' &&
+            host !== '0.0.0.0' &&
+            host !== '[::1]' &&
+            host !== '::1'
+        ) {
+            return null;
+        }
+        if (!parsed.port) {
+            return null;
+        }
+
+        const displayHost = host === '0.0.0.0' ? 'localhost' : parsed.hostname;
+        const path = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : '/';
+        return `${parsed.protocol}//${displayHost}:${parsed.port}${path}`;
+    } catch {
+        return null;
+    }
+}
+
+export function extractLocalWebServerUrls(output: string): string[] {
+    const urls: string[] = [];
+    const seen = new Set<string>();
+    for (const match of output.matchAll(LOCAL_WEB_SERVER_URL_PATTERN)) {
+        const normalized = normalizeLocalWebServerUrl(match[0]);
+        if (normalized && !seen.has(normalized)) {
+            seen.add(normalized);
+            urls.push(normalized);
+        }
+    }
+    return urls;
+}
+
+export function generateLocalWebServerVerificationHint(stdout: string, stderr: string): string | null {
+    const urls = extractLocalWebServerUrls(`${stdout}\n${stderr}`).slice(0, 3);
+    if (urls.length === 0) {
+        return null;
+    }
+
+    return translate('tools.exec.localWebServerVerificationHint', {
+        urls: urls.join(', '),
+    });
+}
+
 function appendExecObservationHint(hints: string[], hint: string | null): void {
     if (hint && !hints.includes(hint)) {
         hints.push(hint);
@@ -1334,6 +1394,7 @@ export function collectExecObservationHints(
     appendExecObservationHint(hints, generateUnicodeReplacementHint(command, `${stdout}\n${stderr}`));
     appendExecObservationHint(hints, generateMojibakeHint(command, `${stdout}\n${stderr}`));
     appendExecObservationHint(hints, generateSilentNonZeroExitHint(command, exitCode, stdout, stderr));
+    appendExecObservationHint(hints, generateLocalWebServerVerificationHint(stdout, stderr));
     return hints;
 }
 

@@ -14,20 +14,11 @@ import { getProviders } from '@/config/modelRegistry';
 import { ExternalLink } from 'lucide-react';
 import styles from './ApiKeySettings.module.css';
 import { getLogger } from '@services/logger';
+import { openExternalUrl } from '@services/navigation/externalUrl';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 
 const logger = getLogger('ApiKeySettings');
-
-/** 在系统浏览器中打开外部 URL */
-const openExternalUrl = async (url: string) => {
-    try {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(url);
-    } catch {
-        window.open(url, '_blank');
-    }
-};
 
 /** API Key 状态 */
 interface ApiKeyStatus {

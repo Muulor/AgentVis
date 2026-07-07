@@ -20,6 +20,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getLogger } from '@services/logger';
 import { templateManager } from './TemplateManager';
 import { portAllocator } from './PortAllocator';
+import { PREVIEW_PORT_RANGE_END, PREVIEW_PORT_RANGE_START } from './previewUrlPolicy';
 import type { TemplateId, TemplateConfig, ProjectFile, ViteServerState } from './types';
 
 const logger = getLogger('VitePreviewService');
@@ -1094,8 +1095,8 @@ class VitePreviewService {
      * 通过 HTTP 探测发现残留的 Vite 进程，使用 netstat + taskkill 终止。
      */
     async cleanupOrphanedProcesses(): Promise<void> {
-        const startPort = 3100;
-        const endPort = 3110; // 只扫描前 10 个端口，避免启动延迟
+        const startPort = PREVIEW_PORT_RANGE_START;
+        const endPort = Math.min(PREVIEW_PORT_RANGE_END, PREVIEW_PORT_RANGE_START + 10); // 只扫描前 10 个端口，避免启动延迟
 
         for (let port = startPort; port <= endPort; port++) {
             try {
