@@ -11,31 +11,65 @@
    * ============================================ */
 
   /* 背景色 */
-  --color-bg-primary: #FFFFFF;
-  --color-bg-secondary: #F7F7F7;
-  --color-bg-tertiary: #EBEBEB;
+  --color-bg-primary: #fefefe;
+  --color-bg-secondary: #f2f2f2;
+  --color-bg-tertiary: #eeeeee;
+  --color-bg-hover: #ececec;
+  --color-bg-input: var(--color-bg-secondary);
+  --color-bg-primary-rgb: 248, 248, 248;
+  --color-surface-secondary: var(--color-bg-secondary);
 
   /* 文本色 */
   --color-text-primary: #1A1A1A;
-  --color-text-secondary: #666666;
-  --color-text-tertiary: #999999;
+  --color-text-secondary: #595959;
+  --color-text-tertiary: #888888;
+  --color-text-quaternary: #afafaf;
+  --color-masterbrain-thought-text: #282828;
+  --color-subagent-observation-text: #595959;
+  --color-subagent-tool-label: #000000;
+  --color-subagent-tool-target: #878787;
+  --color-subagent-pending-icon: #707070;
+  --color-subagent-wave-highlight: #000000;
 
   /* 边框色 */
-  --color-border-default: #E5E5E5;
-  --color-border-hover: #CCCCCC;
+  --color-border-default: #d5d5d5;
+  --color-border-hover: #cccac6;
+  --color-border: var(--color-border-default);
+  --color-border-primary: var(--color-border-default);
+  --color-border-secondary: var(--color-border-hover);
+  --color-border-subtle: #E8E3DA;
+  --color-border-active: var(--color-action-primary);
 
   /* 主操作色 */
-  --color-action-primary: #2563EB;
-  --color-action-primary-hover: #1D4ED8;
-  --color-inline-token: #778490;
+  --color-action-primary: #3F7BD9;
+  --color-action-primary-hover: #336DC8;
+  --color-primary: var(--color-action-primary);
+  --color-primary-hover: var(--color-action-primary-hover);
+  --state-hover-border-mix: 75%;
+  --state-selected-bg-mix: 5%;
+  --state-selected-hover-bg-mix: 10%;
+  --color-state-hover-border: color-mix(in srgb, var(--color-action-primary) var(--state-hover-border-mix), var(--color-border-hover));
+  --color-state-selected-bg: color-mix(in srgb, var(--color-action-primary) var(--state-selected-bg-mix), var(--color-bg-secondary));
+  --color-state-selected-hover-bg: color-mix(in srgb, var(--color-action-primary) var(--state-selected-hover-bg-mix), var(--color-bg-tertiary));
+  --color-primary-bg: var(--color-state-selected-bg);
+  --color-primary-bg-hover: var(--color-state-selected-hover-bg);
+  --color-primary-alpha: color-mix(in srgb, var(--color-action-primary) 28%, transparent);
+  --color-accent-primary: var(--color-action-primary);
+  --color-accent-primary-hover: var(--color-action-primary-hover);
+  --color-accent-primary-rgb: 63, 123, 217;
+  --color-inline-token: #778089;
   --color-inline-token-hover: color-mix(in srgb, var(--color-inline-token) 74%, var(--color-text-primary));
-  --color-inline-token-on-action: #ffffff;
+  --color-inline-token-on-action: #0e5cbc;
 
   /* 状态色 */
-  --color-status-success: #16A34A;
-  --color-status-warning: #CA8A04;
-  --color-status-error: #DC2626;
-  --color-status-info: #0891B2;
+  --color-status-success: #21804E;
+  --color-status-warning: #E0A238;
+  --color-status-error: #E34F53;
+  --color-status-info: #3F7BD9;
+  --color-success: var(--color-status-success);
+  --color-warning: var(--color-status-warning);
+  --color-error: var(--color-status-error);
+  --color-info: var(--color-status-info);
 
   /* Diff 相关颜色 */
   --color-diff-add-bg: #E6FFEC;
@@ -146,28 +180,46 @@
 
 [data-theme='dark'] {
   /* 背景色 */
-  --color-bg-primary: #1E1E1E;
-  --color-bg-secondary: #252525;
-  --color-bg-tertiary: #333333;
+  --color-bg-primary: #141414;
+  --color-bg-secondary: #1b1b1b;
+  --color-bg-tertiary: #252525;
+  --color-bg-hover: #353535;
+  --color-bg-primary-rgb: 18, 18, 20;
+  --color-surface-secondary: var(--color-bg-secondary);
 
   /* 文本色 */
-  --color-text-primary: #F5F5F5;
-  --color-text-secondary: #A0A0A0;
-  --color-text-tertiary: #707070;
+  --color-text-primary: #f4f4f4;
+  --color-text-secondary: #b2b2b2;
+  --color-text-tertiary: #7d7d7d;
+  --color-text-quaternary: #5f5f5f;
+  --color-masterbrain-thought-text: #eeeeee;
+  --color-subagent-observation-text: #c0c0c0;
+  --color-subagent-tool-label: #fbfbfb;
+  --color-subagent-tool-target: #949494;
+  --color-subagent-pending-icon: #bcbcbc;
+  --color-subagent-wave-highlight: #ffffff;
 
   /* 边框色 */
-  --color-border-default: #3D3D3D;
-  --color-border-hover: #505050;
+  --color-border-default: #333337;
+  --color-border-hover: #4A4A51;
+  --color-border-subtle: #28282B;
+  --color-border-active: var(--color-action-primary);
 
   /* 主操作色 */
-  --color-action-primary: #3B82F6;
-  --color-action-primary-hover: #60A5FA;
+  --color-action-primary: #5a8ffa;
+  --color-action-primary-hover: #82A6F6;
+  --state-hover-border-mix: 75%;
+  --state-selected-bg-mix: 4%;
+  --state-selected-hover-bg-mix: 5%;
+  --color-primary-alpha: color-mix(in srgb, var(--color-action-primary) 34%, transparent);
+  --color-accent-primary-rgb: 108, 149, 234;
+  --color-inline-token-on-action: #5191ff;
 
   /* 状态色 */
-  --color-status-success: #22C55E;
-  --color-status-warning: #FACC15;
-  --color-status-error: #EF4444;
-  --color-status-info: #06B6D4;
+  --color-status-success: #21804E;
+  --color-status-warning: #E0A238;
+  --color-status-error: #E34F53;
+  --color-status-info: #82A6F6;
 
   /* Diff 相关颜色 */
   --color-diff-add-bg: #1A3D1A;

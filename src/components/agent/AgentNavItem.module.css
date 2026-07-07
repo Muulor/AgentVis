@@ -89,7 +89,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background-color: var(--color-action-primary, #3B82F6);
+    background-color: var(--color-action-primary, #3F7BD9);
     /* 深色边框避免与头像色混淆 */
     border: 1.5px solid var(--color-bg-primary);
     pointer-events: none;

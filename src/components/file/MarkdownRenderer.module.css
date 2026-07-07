@@ -110,10 +110,10 @@
 
 /* 行内代码 */
 .inlineCode {
-    background: var(--color-bg-tertiary);
     color: var(--color-primary);
-    padding: 0.15em 0.4em;
-    border-radius: var(--radius-sm);
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 0.9em;
 }

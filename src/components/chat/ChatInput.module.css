@@ -441,43 +441,79 @@
 }
 
 .sendBtn {
+    --chat-action-bg: color-mix(in srgb, var(--color-text-primary) 38%, var(--color-bg-tertiary));
+    --chat-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 46%, var(--color-bg-tertiary));
+    --chat-action-bg-disabled: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
+    --chat-action-border: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+    --chat-action-border-hover: color-mix(in srgb, var(--color-text-primary) 26%, transparent);
+    --chat-action-icon: #fff;
+    --chat-action-icon-disabled: color-mix(in srgb, #fff 100%, var(--color-text-quaternary));
+
     display: flex;
     align-items: center;
     justify-content: center;
     width: 28px;
     height: 28px;
     padding: 0;
-    border: none;
+    border: 1px solid var(--chat-action-border);
     border-radius: var(--radius-full);
-    background-color: var(--color-action-primary);
-    color: white;
+    background-color: var(--chat-action-bg);
+    color: var(--chat-action-icon);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition:
+        background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        opacity var(--transition-fast),
+        transform var(--transition-fast);
     flex-shrink: 0;
 }
 
 .sendBtn:hover:not(:disabled) {
-    background-color: var(--color-action-primary-hover);
+    border-color: var(--chat-action-border-hover);
+    background-color: var(--chat-action-bg-hover);
 }
 
 .sendBtn:disabled {
-    opacity: 0.5;
+    background-color: var(--chat-action-bg-disabled);
+    border-color: transparent;
+    color: var(--chat-action-icon-disabled);
     cursor: var(--cursor-disabled);
+    opacity: 1;
 }
 
 .sendBtn:active:not(:disabled) {
     transform: scale(0.95);
 }
 
-/* 停止按钮样式 - 尺寸为发送按钮的三分之二 */
+/* 停止按钮样式 - 使用略高对比度的中性灰 */
 .sendBtn.stopBtn {
+    --chat-action-bg: color-mix(in srgb, var(--color-text-primary) 44%, var(--color-bg-tertiary));
+    --chat-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 52%, var(--color-bg-tertiary));
+    --chat-action-border: color-mix(in srgb, var(--color-text-primary) 22%, transparent);
+    --chat-action-border-hover: color-mix(in srgb, var(--color-text-primary) 30%, transparent);
+
     width: 28px;
     height: 28px;
-    background-color: #ff6363;
 }
 
 .sendBtn.stopBtn:hover:not(:disabled) {
-    background-color: #ff7474;
+    background-color: var(--chat-action-bg-hover);
+}
+
+:global([data-theme='dark']) .sendBtn {
+    --chat-action-bg: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
+    --chat-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 26%, var(--color-bg-tertiary));
+    --chat-action-bg-disabled: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg-tertiary));
+    --chat-action-border: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+    --chat-action-border-hover: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+}
+
+:global([data-theme='dark']) .sendBtn.stopBtn {
+    --chat-action-bg: color-mix(in srgb, var(--color-text-primary) 26%, var(--color-bg-tertiary));
+    --chat-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 34%, var(--color-bg-tertiary));
+    --chat-action-border: color-mix(in srgb, var(--color-text-primary) 16%, transparent);
+    --chat-action-border-hover: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
 }
 
 /* ==================== 工具栏 ==================== */

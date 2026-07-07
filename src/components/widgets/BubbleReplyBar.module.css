@@ -74,24 +74,36 @@
 
 /* 确认发送按钮 */
 .confirmBtn {
+    --widget-action-bg: color-mix(in srgb, var(--color-text-primary) 38%, var(--color-bg-tertiary));
+    --widget-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 46%, var(--color-bg-tertiary));
+    --widget-action-bg-disabled: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
+    --widget-action-border: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+    --widget-action-border-hover: color-mix(in srgb, var(--color-text-primary) 26%, transparent);
+    --widget-action-icon: #fff;
+    --widget-action-icon-disabled: color-mix(in srgb, #fff 100%, var(--color-text-quaternary));
+
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: var(--radius-button);
-    border: none;
-    background: var(--color-action-primary, #2563EB);
-    color: #fff;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--widget-action-border);
+    background: var(--widget-action-bg);
+    color: var(--widget-action-icon);
     cursor: pointer;
     transition:
-        background var(--transition-fast, 150ms ease),
+        background-color var(--transition-fast, 150ms ease),
+        border-color var(--transition-fast, 150ms ease),
+        color var(--transition-fast, 150ms ease),
+        opacity var(--transition-fast, 150ms ease),
         transform var(--transition-fast, 150ms ease);
 }
 
 .confirmBtn:hover:not(:disabled) {
-    background: #1d4ed8;
+    border-color: var(--widget-action-border-hover);
+    background: var(--widget-action-bg-hover);
     transform: translateY(-1px);
 }
 
@@ -100,8 +112,19 @@
 }
 
 .confirmBtnDisabled {
-    opacity: 0.35;
+    background: var(--widget-action-bg-disabled);
+    border-color: transparent;
+    color: var(--widget-action-icon-disabled);
+    opacity: 1;
     cursor: var(--cursor-disabled);
+}
+
+:global([data-theme='dark']) .confirmBtn {
+    --widget-action-bg: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
+    --widget-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 26%, var(--color-bg-tertiary));
+    --widget-action-bg-disabled: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg-tertiary));
+    --widget-action-border: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+    --widget-action-border-hover: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
 }
 
 /* 提示文字 */

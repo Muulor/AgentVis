@@ -42,6 +42,8 @@
 
 /* 步骤容器：固定 1000px 滚动窗口，有新内容时自动滚到底部 */
 .stepsContainer {
+    --masterbrain-thought-text: var(--color-masterbrain-thought-text, var(--color-text-secondary));
+
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
@@ -117,7 +119,7 @@
 .completedContent {
     font-size: var(--font-size-sm);
     line-height: 1.6;
-    color: var(--color-text-secondary);
+    color: var(--masterbrain-thought-text);
     white-space: pre-wrap;
     word-break: break-word;
 }

@@ -3,9 +3,13 @@
  */
 
 .actions {
+    --message-actions-transform: translate(0, 0);
+
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: var(--spacing-xs);
+    max-width: max-content;
     padding: var(--spacing-xs);
     background-color: var(--color-bg-primary);
     border: 1px solid var(--color-border-default);
@@ -13,14 +17,15 @@
     box-shadow: var(--shadow-md);
     position: absolute;
     z-index: 10;
+    transform: var(--message-actions-transform);
     animation: fadeIn 150ms ease;
 }
 
-/* 用户消息操作栏位置 - 左侧底部 */
+/* 用户消息操作栏位置 - 下方右侧，避免长消息占满宽度时被左侧空间截断 */
 .userActions {
-    right: 100%;
+    right: 0;
     bottom: 0;
-    margin-right: var(--spacing-xs);
+    --message-actions-transform: translateY(calc(100% + var(--spacing-xs)));
 }
 
 /* Agent 消息操作栏位置 - 右侧底部 */
@@ -71,11 +76,11 @@
 @keyframes fadeIn {
     from {
         opacity: 0;
-        transform: scale(0.95);
+        transform: var(--message-actions-transform) scale(0.95);
     }
 
     to {
         opacity: 1;
-        transform: scale(1);
+        transform: var(--message-actions-transform) scale(1);
     }
 }

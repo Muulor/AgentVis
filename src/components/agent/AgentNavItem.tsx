@@ -28,17 +28,23 @@ interface AgentNavItemProps {
  * 根据名称生成颜色
  * 使用简单哈希算法生成一致的颜色
  */
+const AVATAR_COLORS = [
+    '#3F7BD9',
+    '#7CB342',
+    '#E0A238',
+    '#4ba1c9',
+    '#E34F53',
+    '#7E57C2',
+    '#E27A3A',
+    '#21804E',
+    '#6da7e1',
+    '#4a8131',
+    '#7D8BF4',
+    '#ff9090',
+];
+
 function getAvatarColor(name: string): string {
-    const colors = [
-        '#3B82F6', // Blue
-        '#10B981', // Emerald
-        '#8B5CF6', // Violet
-        '#F59E0B', // Amber
-        '#EF4444', // Red
-        '#EC4899', // Pink
-        '#06B6D4', // Cyan
-        '#84CC16', // Lime
-    ];
+    const colors = AVATAR_COLORS;
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
         hash = name.charCodeAt(i) + ((hash << 5) - hash);

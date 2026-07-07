@@ -7,6 +7,12 @@
 
 /* 观测内容容器 */
 .observationList {
+    --observation-thinking-text: var(--color-subagent-observation-text, var(--color-text-secondary, #666666));
+    --observation-tool-label: var(--color-subagent-tool-label, var(--color-text-secondary, #666666));
+    --observation-tool-target: var(--color-subagent-tool-target, var(--color-text-primary, #1A1A1A));
+    --observation-pending-icon: var(--color-subagent-pending-icon, var(--color-text-tertiary, #999999));
+    --observation-wave-highlight: var(--color-subagent-wave-highlight, #20242B);
+
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs, 4px);
@@ -17,7 +23,7 @@
 
 /* LLM 思考文字 */
 .thinkingText {
-    color: var(--color-text-secondary, #9CA3AF);
+    color: var(--observation-thinking-text);
     font-size: var(--font-size-sm, 12px);
     line-height: 1.5;
     padding: 2px 0;
@@ -26,11 +32,6 @@
 
 /* 工具行为指示器 */
 .toolAction {
-    --observation-tool-label: var(--color-text-secondary, #666666);
-    --observation-tool-target: var(--color-text-primary, #1A1A1A);
-    --observation-pending-icon: var(--color-text-tertiary, #999999);
-    --observation-wave-highlight: #20242B;
-
     display: flex;
     align-items: flex-start;
     gap: 6px;
@@ -43,20 +44,6 @@
 
 .toolActionExpanded {
     align-items: flex-start;
-}
-
-:global([data-theme='dark']) .toolAction {
-    --observation-tool-label: #d7d0d0;
-    --observation-tool-target: #a19d9d;
-    --observation-pending-icon: #bcbcbc;
-    --observation-wave-highlight: #FFFFFF;
-}
-
-:global([data-theme='light']) .toolAction {
-    --observation-tool-label: #1c1c1c;
-    --observation-tool-target: #868282;
-    --observation-pending-icon: #707070;
-    --observation-wave-highlight: #000000;
 }
 
 /* 工具图标 */
@@ -208,7 +195,7 @@
     background: rgba(37, 99, 235, 0.1);
     border-radius: var(--radius-full, 9999px);
     font-size: 11px;
-    color: var(--color-action-primary, #3B82F6);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 .runningDot {
@@ -216,7 +203,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--color-action-primary, #3B82F6);
+    background: var(--color-action-primary, #3F7BD9);
     animation: observationPulse 1.5s ease-in-out infinite;
 }
 
@@ -315,7 +302,7 @@
     height: 16px;
     flex-shrink: 0;
     line-height: 0;
-    color: var(--color-warning, #F59E0B);
+    color: var(--color-warning, #C98D2E);
 }
 
 /* "User" 标签（等宽字体，与工具名对齐） */
@@ -323,7 +310,7 @@
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 11px;
     line-height: 1.4;
-    color: var(--color-warning, #F59E0B);
+    color: var(--color-warning, #C98D2E);
     flex-shrink: 0;
     font-weight: 500;
 }

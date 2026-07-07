@@ -6,9 +6,23 @@
  */
 
 .container {
+    --inline-image-placeholder-bg: var(--color-bg-secondary);
+    --inline-image-placeholder-border: var(--color-border-primary);
+    --inline-image-placeholder-text: var(--color-text-tertiary);
+    --inline-image-thumbnail-bg: var(--color-bg-tertiary);
+    --inline-image-thumbnail-border: var(--color-border-primary);
+
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--color-border-subtle);
+}
+
+:global([data-theme='dark']) .container {
+    --inline-image-placeholder-bg: rgba(255, 255, 255, 0.03);
+    --inline-image-placeholder-border: rgba(255, 255, 255, 0.12);
+    --inline-image-placeholder-text: rgba(255, 255, 255, 0.3);
+    --inline-image-thumbnail-bg: rgba(255, 255, 255, 0.03);
+    --inline-image-thumbnail-border: rgba(255, 255, 255, 0.08);
 }
 
 /* 缩略图网格布局：固定尺寸，不随窗口拉伸 */
@@ -26,8 +40,8 @@
     cursor: pointer;
     /* 实际尺寸由 inline style 动态控制（最短边 250px） */
     flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--inline-image-thumbnail-bg);
+    border: 1px solid var(--inline-image-thumbnail-border);
     transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
@@ -72,9 +86,9 @@
     width: 250px;
     height: 250px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px dashed rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.3);
+    background: var(--inline-image-placeholder-bg);
+    border: 1px dashed var(--inline-image-placeholder-border);
+    color: var(--inline-image-placeholder-text);
 }
 
 .errorText {
@@ -89,9 +103,9 @@
     width: 250px;
     height: 250px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.25);
+    background: var(--inline-image-placeholder-bg);
+    border: 1px solid var(--inline-image-placeholder-border);
+    color: var(--inline-image-placeholder-text);
 }
 
 .spinner {

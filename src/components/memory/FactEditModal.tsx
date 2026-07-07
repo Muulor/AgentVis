@@ -76,13 +76,6 @@ export function FactEditModal({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onClose]);
 
-    // 点击遮罩关闭
-    const handleOverlayClick = useCallback((e: React.MouseEvent) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
-    }, [onClose]);
-
     // 保存
     const handleSave = useCallback(async () => {
         const trimmedContent = content.trim();
@@ -104,7 +97,7 @@ export function FactEditModal({
     }
 
     return (
-        <div className={styles.overlay} onClick={handleOverlayClick}>
+        <div className={styles.overlay}>
             <div className={styles.modal} role="dialog" aria-modal="true">
                 {/* 头部 */}
                 <div className={styles.header}>

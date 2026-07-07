@@ -6,6 +6,8 @@
  */
 
 .container {
+    --skill-success-color: #42b353;
+
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -35,21 +37,21 @@
 }
 
 .auditBannerSuccess {
-    color: #22c55e;
-    border-color: rgba(34, 197, 94, 0.32);
-    background: color-mix(in srgb, #22c55e 10%, var(--color-bg-secondary));
+    color: var(--skill-success-color);
+    border-color: color-mix(in srgb, var(--skill-success-color) 36%, transparent);
+    background: color-mix(in srgb, var(--skill-success-color) 10%, var(--color-bg-secondary));
 }
 
 .auditBannerWarning {
-    color: #f59e0b;
-    border-color: rgba(245, 158, 11, 0.34);
-    background: color-mix(in srgb, #f59e0b 10%, var(--color-bg-secondary));
+    color: var(--color-status-warning);
+    border-color: color-mix(in srgb, var(--color-status-warning) 38%, transparent);
+    background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-bg-secondary));
 }
 
 .auditBannerDanger {
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.34);
-    background: color-mix(in srgb, #ef4444 10%, var(--color-bg-secondary));
+    color: var(--color-status-error);
+    border-color: color-mix(in srgb, var(--color-status-error) 38%, transparent);
+    background: color-mix(in srgb, var(--color-status-error) 10%, var(--color-bg-secondary));
 }
 
 .auditBannerIcon {
@@ -192,11 +194,11 @@
     border-radius: var(--radius-sm, 4px);
     cursor: pointer;
     transition: all 0.15s;
-    color: #22c55e;
+    color: var(--skill-success-color);
 }
 
 .skillToggle:hover {
-    background: rgba(34, 197, 94, 0.1);
+    background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
 }
 
 /* 禁用状态的开关 */
@@ -256,18 +258,18 @@
 }
 
 .statusReady {
-    color: #22c55e;
-    background: rgba(34, 197, 94, 0.1);
+    color: var(--skill-success-color);
+    background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
 }
 
 .statusPending {
-    color: #f59e0b;
-    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-status-warning);
+    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
 }
 
 .statusError {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-status-error);
+    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 .skillInfo {
@@ -308,7 +310,7 @@
 
 .skillMissing {
     font-size: var(--font-size-xs, 11px);
-    color: #f59e0b;
+    color: var(--color-status-warning);
     margin: 2px 0 0 0;
 }
 
@@ -334,8 +336,8 @@
 .manualDepSection {
     margin-top: 6px;
     padding: 6px 8px;
-    background: rgba(245, 158, 11, 0.05);
-    border: 1px solid rgba(245, 158, 11, 0.15);
+    background: color-mix(in srgb, var(--color-status-warning) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-status-warning) 18%, transparent);
     border-radius: var(--radius-surface);
 }
 
@@ -344,7 +346,7 @@
     align-items: center;
     gap: 4px;
     font-size: var(--font-size-xs, 11px);
-    color: #f59e0b;
+    color: var(--color-status-warning);
     font-weight: var(--font-weight-medium, 500);
     margin-bottom: 4px;
 }
@@ -359,7 +361,7 @@
 }
 
 .manualDepItem+.manualDepItem {
-    border-top: 1px solid rgba(245, 158, 11, 0.1);
+    border-top: 1px solid color-mix(in srgb, var(--color-status-warning) 14%, transparent);
 }
 
 .depToolInfo {
@@ -416,8 +418,8 @@
     align-items: center;
     gap: 3px;
     font-size: 10px;
-    color: #f59e0b;
-    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-status-warning);
+    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
     padding: 1px 6px;
     border-radius: 3px;
 }
@@ -466,9 +468,9 @@
 
 /* 已安装：绿色 pill */
 .installPillSuccess {
-    color: #22c55e;
-    border-color: rgba(34, 197, 94, 0.3);
-    background: rgba(34, 197, 94, 0.08);
+    color: var(--skill-success-color);
+    border-color: color-mix(in srgb, var(--skill-success-color) 36%, transparent);
+    background: color-mix(in srgb, var(--skill-success-color) 10%, transparent);
     opacity: 0.9;
 }
 
@@ -482,13 +484,13 @@
 
 /* 错误/重试：橙色 pill */
 .installPillError {
-    color: #f59e0b;
-    border-color: rgba(245, 158, 11, 0.4);
+    color: var(--color-status-warning);
+    border-color: color-mix(in srgb, var(--color-status-warning) 46%, transparent);
 }
 
 .installPillError:hover:not(:disabled) {
-    background: rgba(245, 158, 11, 0.12);
-    border-color: rgba(245, 158, 11, 0.6);
+    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-status-warning) 64%, transparent);
 }
 
 /* Spinner 旋转动画 */
@@ -517,13 +519,13 @@
 }
 
 .depMessageError {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.08);
+    color: var(--color-status-error);
+    background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
 }
 
 .depMessageNetwork {
-    color: #f59e0b;
-    background: rgba(245, 158, 11, 0.08);
+    color: var(--color-status-warning);
+    background: color-mix(in srgb, var(--color-status-warning) 12%, transparent);
 }
 
 /* 重试链接按钮 */
@@ -746,15 +748,15 @@
 }
 
 .envStatusReady {
-    color: #22c55e;
+    color: var(--skill-success-color);
 }
 
 .envStatusError {
-    color: #ef4444;
+    color: var(--color-status-error);
 }
 
 .envStatusPending {
-    color: #f59e0b;
+    color: var(--color-status-warning);
 }
 
 .envActions {
@@ -768,9 +770,9 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border: 1px solid rgba(220, 38, 38, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-status-error) 42%, transparent);
     background: transparent;
-    color: #dc2626;
+    color: var(--color-status-error);
     border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 12px);
     cursor: pointer;
@@ -778,8 +780,8 @@
 }
 
 .dangerButton:hover:not(:disabled) {
-    border-color: #dc2626;
-    background: rgba(220, 38, 38, 0.1);
+    border-color: var(--color-status-error);
+    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 .dangerButton:disabled {
@@ -792,9 +794,9 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    border: 1px solid color-mix(in srgb, var(--skill-success-color) 42%, transparent);
     background: transparent;
-    color: #22c55e;
+    color: var(--skill-success-color);
     border-radius: var(--radius-button);
     font-size: var(--font-size-xs, 12px);
     cursor: pointer;
@@ -802,8 +804,8 @@
 }
 
 .primaryButton:hover:not(:disabled) {
-    border-color: #22c55e;
-    background: rgba(34, 197, 94, 0.1);
+    border-color: var(--skill-success-color);
+    background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
 }
 
 .primaryButton:disabled {
@@ -859,15 +861,15 @@
 }
 
 .resultSuccess {
-    background: rgba(34, 197, 94, 0.1);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    background: color-mix(in srgb, var(--skill-success-color) 12%, transparent);
+    color: var(--skill-success-color);
+    border: 1px solid color-mix(in srgb, var(--skill-success-color) 24%, transparent);
 }
 
 .resultError {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
+    color: var(--color-status-error);
+    border: 1px solid color-mix(in srgb, var(--color-status-error) 24%, transparent);
 }
 
 /* 加载动画 */

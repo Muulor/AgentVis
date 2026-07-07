@@ -51,9 +51,39 @@ const RISKY_OPTION_KEYS = new Set([
     'mapbox',
 ]);
 
+const APP_CHART_COLORS = [
+    '#3F7BD9',
+    '#7CB342',
+    '#E0A238',
+    '#4ba1c9',
+    '#E34F53',
+    '#7E57C2',
+    '#E27A3A',
+    '#21804E',
+    '#6da7e1',
+    '#4a8131',
+    '#7D8BF4',
+    '#ff9090',
+];
+
+const APP_CHART_BAR_GRADIENTS: [string, string][] = [
+    ['#679aed', '#3F7BD9'],
+    ['#94c85f', '#7CB342'],
+    ['#efb64d', '#E0A238'],
+    ['#72badb', '#4ba1c9'],
+    ['#f37477', '#E34F53'],
+    ['#9b72df', '#7E57C2'],
+    ['#ed975f', '#E27A3A'],
+    ['#3a9b68', '#21804E'],
+    ['#93c5fd', '#6da7e1'],
+    ['#6b9a4d', '#4a8131'],
+    ['#98a3ff', '#7D8BF4'],
+    ['#ffb1b1', '#ff9090'],
+];
+
 const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {
     analyticalDark: {
-        colors: ['#7DA0FA', '#8FD17F', '#F3C567', '#E8787B', '#71C6D4', '#B79CFF', '#D39A66', '#6EC6A6'],
+        colors: APP_CHART_COLORS,
         axisLabel: 'rgba(235, 238, 245, 0.72)',
         axisLine: 'rgba(235, 238, 245, 0.32)',
         splitLine: 'rgba(235, 238, 245, 0.10)',
@@ -62,18 +92,13 @@ const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {
         tooltipBackground: 'rgba(31, 34, 40, 0.94)',
         tooltipBorder: 'rgba(255, 255, 255, 0.12)',
         sliceBorder: 'rgba(30, 32, 36, 0.96)',
-        barGradients: [
-            ['#9bb8ff', '#5b78d6'],
-            ['#a8df91', '#65af5c'],
-            ['#ffd67d', '#d59c35'],
-            ['#ff8588', '#d9555b'],
-        ],
+        barGradients: APP_CHART_BAR_GRADIENTS,
         // 深色背景对比度低，面积填充需更高不透明度才能有效感知
         areaOpacity: 0.26,
         radarAreaOpacity: 0.15,
     },
     cleanLight: {
-        colors: ['#4F6FD7', '#68AD5B', '#D7A33E', '#D85F63', '#4EA9BF', '#8E70D1', '#BD7F4F', '#4BA88B'],
+        colors: APP_CHART_COLORS,
         axisLabel: 'rgba(42, 47, 58, 0.68)',
         axisLine: 'rgba(42, 47, 58, 0.18)',
         splitLine: 'rgba(42, 47, 58, 0.08)',
@@ -82,18 +107,13 @@ const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {
         tooltipBackground: 'rgba(255, 255, 255, 0.96)',
         tooltipBorder: 'rgba(42, 47, 58, 0.12)',
         sliceBorder: '#ffffff',
-        barGradients: [
-            ['#7e9cff', '#4f6fd7'],
-            ['#91cf7f', '#68ad5b'],
-            ['#f0bf62', '#d7a33e'],
-            ['#ee8387', '#d85f63'],
-        ],
+        barGradients: APP_CHART_BAR_GRADIENTS,
         // 浅色背景明亮，面积填充需克制以免喧宾夺主
         areaOpacity: 0.10,
         radarAreaOpacity: 0.06,
     },
     financialWarm: {
-        colors: ['#A2855E', '#D08B5B', '#E2B878', '#C7B9A4', '#8DA3A6', '#7B9274', '#B96B5D', '#9174A8'],
+        colors: APP_CHART_COLORS,
         axisLabel: 'rgba(238, 232, 222, 0.74)',
         axisLine: 'rgba(238, 232, 222, 0.26)',
         splitLine: 'rgba(238, 232, 222, 0.09)',
@@ -102,18 +122,13 @@ const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {
         tooltipBackground: 'rgba(43, 40, 36, 0.94)',
         tooltipBorder: 'rgba(226, 184, 120, 0.28)',
         sliceBorder: 'rgba(42, 39, 35, 0.96)',
-        barGradients: [
-            ['#d9bc8d', '#9b7c55'],
-            ['#e1a06f', '#b56f43'],
-            ['#ead09a', '#c49a4b'],
-            ['#b7c4c5', '#7f9698'],
-        ],
+        barGradients: APP_CHART_BAR_GRADIENTS,
         // 暖金色深色背景，适当提升面积可读性
         areaOpacity: 0.25,
         radarAreaOpacity: 0.14,
     },
     presentationSoft: {
-        colors: ['#6F8FE7', '#7CCB99', '#F2C66D', '#EA787A', '#74C2D4', '#B198E6', '#D69C73', '#72B7A2'],
+        colors: APP_CHART_COLORS,
         axisLabel: 'rgba(44, 49, 60, 0.66)',
         axisLine: 'rgba(44, 49, 60, 0.16)',
         splitLine: 'rgba(44, 49, 60, 0.07)',
@@ -122,17 +137,12 @@ const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {
         tooltipBackground: 'rgba(255, 255, 255, 0.97)',
         tooltipBorder: 'rgba(44, 49, 60, 0.10)',
         sliceBorder: '#ffffff',
-        barGradients: [
-            ['#9fb5ff', '#6f8fe7'],
-            ['#9ee0b7', '#70bf90'],
-            ['#f6d68d', '#e3b858'],
-            ['#f09a9c', '#d9696b'],
-        ],
+        barGradients: APP_CHART_BAR_GRADIENTS,
         areaOpacity: 0.09,
         radarAreaOpacity: 0.05,
     },
     contrastBusiness: {
-        colors: ['#315BAA', '#2C8C7A', '#C9952E', '#C94F55', '#3A99B5', '#7259A5', '#A9673F', '#5B8E4C'],
+        colors: APP_CHART_COLORS,
         axisLabel: 'rgba(32, 37, 48, 0.70)',
         axisLine: 'rgba(32, 37, 48, 0.20)',
         splitLine: 'rgba(32, 37, 48, 0.09)',
@@ -141,12 +151,7 @@ const VISUAL_PRESETS: Record<ChartVisualPreset, ChartVisualTheme> = {
         tooltipBackground: 'rgba(255, 255, 255, 0.98)',
         tooltipBorder: 'rgba(32, 37, 48, 0.14)',
         sliceBorder: '#ffffff',
-        barGradients: [
-            ['#6388d6', '#315baa'],
-            ['#58b3a2', '#2c8c7a'],
-            ['#dfb558', '#c9952e'],
-            ['#de787d', '#c94f55'],
-        ],
+        barGradients: APP_CHART_BAR_GRADIENTS,
         areaOpacity: 0.09,
         radarAreaOpacity: 0.05,
     },
@@ -524,7 +529,7 @@ function applyRadarOptionRecipe(option: AnyRecord, theme: ChartVisualTheme): voi
 }
 
 function applyGaugeRecipe(series: AnyRecord, theme: ChartVisualTheme): void {
-    const primaryColor = theme.colors[0] ?? '#7DA0FA';
+    const primaryColor = theme.colors[0] ?? '#E34F53';
     series.radius = series.radius ?? '84%';
 
     // 细长发光指针：同色 + shadowBlur，比传统粗指针更轻盈，
@@ -592,7 +597,7 @@ function applyHeatmapRecipe(option: AnyRecord, series: AnyRecord, theme: ChartVi
         left: 'center',
         bottom: 0,
         textStyle: { color: theme.muted },
-        inRange: { color: [pickColor(theme, 0), pickColor(theme, 2), pickColor(theme, 3)] },
+        inRange: { color: [pickColor(theme, 3), pickColor(theme, 7), pickColor(theme, 0)] },
     };
 }
 
@@ -626,11 +631,11 @@ function mergeDefaults(target: AnyRecord, defaults: AnyRecord): AnyRecord {
 }
 
 function pickColor(theme: ChartVisualTheme, index: number): string {
-    return theme.colors[index % theme.colors.length] ?? '#7DA0FA';
+    return theme.colors[index % theme.colors.length] ?? '#E34F53';
 }
 
 function pickGradient(theme: ChartVisualTheme, index: number): [string, string] {
-    return theme.barGradients[index % theme.barGradients.length] ?? ['#9bb8ff', '#5b78d6'];
+    return theme.barGradients[index % theme.barGradients.length] ?? ['#f37477', '#E34F53'];
 }
 
 function makeLinearGradient(colors: [string, string]): AnyRecord {

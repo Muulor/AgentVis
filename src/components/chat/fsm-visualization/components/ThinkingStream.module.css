@@ -6,7 +6,7 @@
 
 .container {
     font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    color: var(--color-masterbrain-thought-text, var(--color-text-secondary));
     line-height: var(--line-height-relaxed);
     white-space: pre-wrap;
     word-break: break-word;

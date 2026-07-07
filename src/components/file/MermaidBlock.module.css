@@ -101,7 +101,7 @@
     padding: 16px;
     border-radius: var(--radius-lg, 8px);
     background: var(--color-bg-secondary, #F7F7F7);
-    border: 1px dashed var(--color-warning, #F59E0B);
+    border: 1px dashed var(--color-warning, #C98D2E);
 }
 
 .errorIcon {

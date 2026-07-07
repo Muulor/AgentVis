@@ -162,13 +162,13 @@
 }
 
 .dangerButton {
-    border-color: rgba(220, 38, 38, 0.3);
-    color: #dc2626;
+    border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
+    color: var(--color-status-error);
 }
 
 .dangerButton:hover:not(:disabled) {
-    border-color: #dc2626;
-    background: rgba(220, 38, 38, 0.1);
+    border-color: var(--color-status-error);
+    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 /* 加载动画 */
@@ -271,7 +271,7 @@
 
 .dialogWarning {
     font-size: var(--font-size-sm, 13px);
-    color: #dc2626;
+    color: var(--color-status-error);
     margin: 0 0 12px 0;
 }
 
@@ -318,8 +318,8 @@
 
 .dialogDangerButton {
     padding: 8px 16px;
-    border: 1px solid #dc2626;
-    background: #dc2626;
+    border: 1px solid var(--color-status-error);
+    background: var(--color-status-error);
     color: white;
     border-radius: var(--radius-button);
     font-size: var(--font-size-sm, 13px);
@@ -328,8 +328,8 @@
 }
 
 .dialogDangerButton:hover:not(:disabled) {
-    background: #b91c1c;
-    border-color: #b91c1c;
+    background: color-mix(in srgb, var(--color-status-error) 88%, #000);
+    border-color: color-mix(in srgb, var(--color-status-error) 88%, #000);
 }
 
 .dialogDangerButton:disabled {
@@ -370,11 +370,11 @@
 }
 
 .importModeReplace svg {
-    color: #dc2626;
+    color: var(--color-status-error);
 }
 
 .importModeReplace:hover {
-    border-color: #dc2626;
+    border-color: var(--color-status-error);
 }
 
 .importModeTitle {
@@ -512,15 +512,15 @@
 
 /* 危险操作行 */
 .cleanOptionDanger .cleanOptionLabel {
-    color: #dc2626;
+    color: var(--color-status-error);
 }
 
 .cleanOptionDanger .cleanExecButton {
-    border-color: rgba(220, 38, 38, 0.4);
-    color: #dc2626;
+    border-color: color-mix(in srgb, var(--color-status-error) 46%, transparent);
+    color: var(--color-status-error);
 }
 
 .cleanOptionDanger .cleanExecButton:hover:not(:disabled) {
-    background: rgba(220, 38, 38, 0.08);
-    border-color: #dc2626;
+    background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
+    border-color: var(--color-status-error);
 }

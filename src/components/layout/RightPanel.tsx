@@ -159,6 +159,12 @@ export function RightPanel() {
         setIsFilePreviewFullscreen((prev) => !prev);
     }, []);
 
+    const handleCloseFilePreview = useCallback(() => {
+        setIsFilePreviewFullscreen(false);
+        setSelectedFile(null);
+        setPreviewContent('');
+    }, []);
+
     // Escape 键退出全屏
     useEffect(() => {
         if (!isFilePreviewFullscreen) return;
@@ -539,9 +545,11 @@ export function RightPanel() {
             {/* 预览区 */}
             <div className={cx(styles.previewContainer, isFilePreviewFullscreen && styles.previewFullscreen)}>
                 {/* 预览头部：文件名 + 全屏/关闭按钮 */}
-                {selectedFile && (
+                {(selectedFile !== null || isFilePreviewFullscreen) && (
                     <div className={styles.previewHeader}>
-                        <span className={styles.previewFileName}>{selectedFile.fileName}</span>
+                        <span className={styles.previewFileName}>
+                            {selectedFile?.fileName ?? t('file.selectFilePreview')}
+                        </span>
                         <div className={styles.previewHeaderActions}>
                             {/* 全屏切换按钮 */}
                             <Tooltip content={isFilePreviewFullscreen ? t('layout.fullscreenExit') : t('layout.fullscreenPreview')}>
@@ -555,17 +563,13 @@ export function RightPanel() {
                             </Tooltip>
                             {/* 关闭预览按钮 */}
                             <Tooltip content={t('layout.closePreview')}>
-                            <button
-                                className={styles.previewCloseBtn}
-                                onClick={() => {
-                                    setIsFilePreviewFullscreen(false);
-                                    setSelectedFile(null);
-                                    setPreviewContent('');
-                                }}
-                                aria-label={t('layout.closePreview')}
-                            >
-                                ×
-                            </button>
+                                <button
+                                    className={styles.previewCloseBtn}
+                                    onClick={handleCloseFilePreview}
+                                    aria-label={t('layout.closePreview')}
+                                >
+                                    ×
+                                </button>
                             </Tooltip>
                         </div>
                     </div>

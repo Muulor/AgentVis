@@ -241,23 +241,23 @@
 }
 
 .decisionAllow {
-    background: rgba(34, 197, 94, 0.12);
-    color: #16a34a;
+    background: color-mix(in srgb, var(--color-status-success) 16%, transparent);
+    color: var(--color-status-success);
 }
 
 .decisionAudit {
-    background: rgba(59, 130, 246, 0.12);
-    color: #2563eb;
+    background: color-mix(in srgb, var(--color-status-info) 16%, transparent);
+    color: var(--color-status-info);
 }
 
 .decisionBlock {
-    background: rgba(239, 68, 68, 0.12);
-    color: #dc2626;
+    background: color-mix(in srgb, var(--color-status-error) 16%, transparent);
+    color: var(--color-status-error);
 }
 
 .decisionDiagnostic {
-    background: rgba(245, 158, 11, 0.14);
-    color: #b45309;
+    background: color-mix(in srgb, var(--color-status-warning) 18%, transparent);
+    color: var(--color-status-warning);
 }
 
 .time {
@@ -342,8 +342,8 @@
 }
 
 .errorState {
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #dc2626;
+    border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
+    color: var(--color-status-error);
 }
 
 .loadMoreRow {

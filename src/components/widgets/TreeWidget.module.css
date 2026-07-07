@@ -46,7 +46,7 @@
 }
 
 .breadcrumbItemActive {
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 .breadcrumbSep {
@@ -99,7 +99,7 @@
 
 .optionCard:hover:not(:disabled) {
     background: var(--color-bg-tertiary, #EBEBEB);
-    border-color: var(--color-action-primary, #2563EB);
+    border-color: var(--color-action-primary, #3F7BD9);
     transform: translateY(-1px);
 }
 
@@ -110,7 +110,7 @@
 /* 选中状态 */
 .optionSelected {
     background: rgba(37, 99, 235, 0.08) !important;
-    border-color: var(--color-action-primary, #2563EB) !important;
+    border-color: var(--color-action-primary, #3F7BD9) !important;
 }
 
 /* 非选中项淡出 */
@@ -163,7 +163,7 @@
 }
 
 .optionCard:hover .optionArrow {
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 /* ========== 新层级滑入动画 ========== */
@@ -201,7 +201,7 @@
 }
 
 .reselectBtn:hover {
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 /* 错误降级 */

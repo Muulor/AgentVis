@@ -568,20 +568,10 @@
     flex-wrap: nowrap;
     gap: 6px;
     padding: 6px 12px;
-    background: var(--color-bg-tertiary);
+    background: transparent;
     flex-shrink: 0;
     min-height: 34px;
     overflow: hidden;
-}
-
-.historyAccessBar::after {
-    content: '';
-    position: absolute;
-    right: var(--right-panel-divider-inset);
-    bottom: 0;
-    left: var(--right-panel-divider-inset);
-    height: 1px;
-    background: var(--right-panel-divider-color);
 }
 
 .historyAccessHint {

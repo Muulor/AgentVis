@@ -181,28 +181,28 @@ export interface CategoryDisplayConfig {
  */
 export const CATEGORY_DISPLAY_MAP: Record<LongTermFactCategory, CategoryDisplayConfig> = {
     identity_role: {
-        color: '#16A34A',
-        bgColor: 'rgba(22, 163, 74, 0.15)',
+        color: '#669535',
+        bgColor: 'rgba(53, 110, 69, 0.15)',
     },
     preference_style: {
-        color: '#2563EB',
-        bgColor: 'rgba(37, 99, 235, 0.15)',
+        color: '#de6d6d',
+        bgColor: 'rgba(119, 119, 119, 0.15)',
     },
     long_term_goal: {
-        color: '#EA580C',
-        bgColor: 'rgba(234, 88, 12, 0.15)',
+        color: '#df9f30',
+        bgColor: 'rgba(172, 128, 99, 0.15)',
     },
     knowledge_level: {
-        color: '#0891B2',
-        bgColor: 'rgba(8, 145, 178, 0.15)',
+        color: '#919eff',
+        bgColor: 'rgba(122, 133, 222, 0.10)',
     },
     interaction_signals: {
-        color: '#6B7280',
+        color: '#1e7749',
         bgColor: 'rgba(107, 114, 128, 0.15)',
     },
     task_experience: {
-        color: '#7C3AED',
-        bgColor: 'rgba(124, 58, 237, 0.15)',
+        color: '#60a0e0',
+        bgColor: 'rgba(162, 162, 162, 0.15)',
     },
 };
 

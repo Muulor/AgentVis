@@ -137,13 +137,23 @@ function parseChartData(raw: Record<string, unknown>): ChartData | null {
 // ============================================================================
 
 const PRESET_COLORS = [
-    '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B',
-    '#EF4444', '#EC4899', '#06B6D4', '#84CC16',
+    '#3F7BD9',
+    '#7CB342',
+    '#E0A238',
+    '#4ba1c9',
+    '#E34F53',
+    '#7E57C2',
+    '#E27A3A',
+    '#21804E',
+    '#6da7e1',
+    '#4a8131',
+    '#7D8BF4',
+    '#ff9090',
 ];
 
 function getItemColor(index: number, customColor?: string): string {
     if (customColor) return customColor;
-    return PRESET_COLORS[index % PRESET_COLORS.length] ?? '#3B82F6';
+    return PRESET_COLORS[index % PRESET_COLORS.length] ?? '#3F7BD9';
 }
 
 // ============================================================================

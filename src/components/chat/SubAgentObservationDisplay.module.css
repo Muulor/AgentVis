@@ -6,6 +6,14 @@
  */
 
 .container {
+    --observation-thinking-text: var(--color-subagent-observation-text, var(--color-text-secondary, #666666));
+    --observation-tool-label: var(--color-subagent-tool-label, var(--color-text-secondary, #666666));
+    --observation-tool-target: var(
+        --color-subagent-wave-highlight,
+        var(--color-subagent-tool-target, var(--color-text-primary, #1A1A1A))
+    );
+    --observation-pending-icon: var(--color-subagent-pending-icon, var(--color-text-tertiary, #999999));
+
     margin-bottom: 12px;
     border: 1px solid var(--color-border-secondary);
     border-radius: var(--radius-surface);
@@ -74,6 +82,14 @@
     padding: 0;
 }
 
+.thinkingText {
+    color: var(--observation-thinking-text);
+    font-size: var(--font-size-sm, 12px);
+    line-height: 1.5;
+    padding: 2px 0;
+    word-break: break-word;
+}
+
 /* 工具行为指示器 */
 .toolAction {
     display: flex;
@@ -119,14 +135,14 @@
 }
 
 .toolIcon.pending {
-    color: var(--color-text-tertiary, #6B7280);
+    color: var(--observation-pending-icon);
 }
 
 .toolLabel {
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 11px;
     line-height: 1.4;
-    color: var(--color-text-secondary, #9CA3AF);
+    color: var(--observation-tool-label);
     flex-shrink: 0;
 }
 
@@ -136,7 +152,7 @@
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 11px;
     line-height: 1.4;
-    color: var(--color-text-primary, #E5E7EB);
+    color: var(--observation-tool-target);
     min-width: 0;
     overflow: hidden;
     overflow-wrap: anywhere;
@@ -262,14 +278,14 @@
     height: 16px;
     flex-shrink: 0;
     line-height: 0;
-    color: var(--color-warning, #F59E0B);
+    color: var(--color-warning, #C98D2E);
 }
 
 .interventionLabel {
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 11px;
     line-height: 1.4;
-    color: var(--color-warning, #F59E0B);
+    color: var(--color-warning, #C98D2E);
     flex-shrink: 0;
     font-weight: 500;
 }

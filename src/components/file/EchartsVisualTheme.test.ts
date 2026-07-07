@@ -14,7 +14,7 @@ describe('buildSafeEChartsOption', () => {
         const series = Array.isArray(option.series) ? option.series[0] : undefined;
 
         expect(option.backgroundColor).toBe('transparent');
-        expect(option.color).toEqual(expect.arrayContaining(['#7DA0FA']));
+        expect(option.color).toEqual(expect.arrayContaining(['#E34F53']));
         expect(option.tooltip).toMatchObject({ confine: true });
         expect(option.grid).toMatchObject({ containLabel: true });
         const itemStyle = (series as Record<string, unknown> | undefined)?.itemStyle as Record<string, unknown> | undefined;
@@ -182,9 +182,9 @@ describe('buildSafeEChartsOption', () => {
         const secondLine = data?.[1]?.lineStyle as Record<string, unknown> | undefined;
         const thirdArea = data?.[2]?.areaStyle as Record<string, unknown> | undefined;
 
-        expect(firstLine?.color).toBe('#7DA0FA');
-        expect(secondLine?.color).toBe('#8FD17F');
-        expect(thirdArea).toMatchObject({ color: '#F3C567', opacity: 0.15 });
+        expect(firstLine?.color).toBe('#E34F53');
+        expect(secondLine?.color).toBe('#E27A3A');
+        expect(thirdArea).toMatchObject({ color: '#21804E', opacity: 0.15 });
     });
 
     it('财务暖色主题的折线面积渐变保持可见', () => {

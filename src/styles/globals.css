@@ -113,6 +113,31 @@ kbd {
     background: var(--color-border-hover);
 }
 
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-button:single-button,
+::-webkit-scrollbar-button:double-button,
+::-webkit-scrollbar-button:vertical,
+::-webkit-scrollbar-button:horizontal,
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:end:increment,
+::-webkit-scrollbar-button:horizontal:start:decrement,
+::-webkit-scrollbar-button:horizontal:end:increment {
+    display: none;
+    width: 0;
+    height: 0;
+    min-width: 0;
+    min-height: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    background-image: none;
+    border: 0;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
 /* ============================================
  * 选中文本样式
  * ============================================ */

@@ -60,11 +60,11 @@
 }
 
 .item[data-type="image"] .icon {
-    color: #3B82F6;
+    color: #3F7BD9;
 }
 
 .item[data-type="document"] .icon {
-    color: #10B981;
+    color: #356E45;
 }
 
 /* ==================== 文件名 ==================== */
@@ -83,6 +83,6 @@
 
 .indexedBadge {
     font-size: 10px;
-    color: #10B981;
+    color: #356E45;
     flex-shrink: 0;
 }

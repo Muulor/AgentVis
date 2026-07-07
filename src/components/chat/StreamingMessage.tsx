@@ -30,11 +30,23 @@ interface StreamingMessageProps {
 
 // ==================== 工具函数 ====================
 
+const AVATAR_COLORS = [
+    '#3F7BD9',
+    '#7CB342',
+    '#E0A238',
+    '#4ba1c9',
+    '#E34F53',
+    '#7E57C2',
+    '#E27A3A',
+    '#21804E',
+    '#6da7e1',
+    '#4a8131',
+    '#7D8BF4',
+    '#ff9090',
+];
+
 function getAvatarColor(name: string): string {
-    const colors = [
-        '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B',
-        '#EF4444', '#EC4899', '#06B6D4', '#84CC16',
-    ];
+    const colors = AVATAR_COLORS;
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
         hash = name.charCodeAt(i) + ((hash << 5) - hash);

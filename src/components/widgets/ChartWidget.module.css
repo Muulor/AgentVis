@@ -69,7 +69,7 @@
     padding: 10px 14px;
     border-radius: var(--radius-lg, 8px);
     background: var(--color-bg-primary, #FFFFFF);
-    border-left: 3px solid #3B82F6;
+    border-left: 3px solid #3F7BD9;
     transition: transform var(--transition-fast, 150ms ease);
 }
 
@@ -209,7 +209,7 @@
 .infoValue {
     font-size: var(--font-size-sm, 12px);
     font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
     flex: 1 1 0;
     min-width: 0;
     line-height: var(--line-height-normal, 1.5);
@@ -271,7 +271,7 @@
 
 .actionBtn:hover:not(:disabled) {
     background: var(--color-bg-tertiary, #EBEBEB);
-    border-color: var(--color-action-primary, #2563EB);
+    border-color: var(--color-action-primary, #3F7BD9);
     transform: translateY(-1px);
 }
 
@@ -281,8 +281,8 @@
 
 .actionClicked {
     background: rgba(37, 99, 235, 0.08) !important;
-    border-color: var(--color-action-primary, #2563EB) !important;
-    color: var(--color-action-primary, #2563EB) !important;
+    border-color: var(--color-action-primary, #3F7BD9) !important;
+    color: var(--color-action-primary, #3F7BD9) !important;
 }
 
 .actionDisabled {
@@ -314,7 +314,7 @@
 }
 
 .reselectBtn:hover {
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 /* 错误降级 */

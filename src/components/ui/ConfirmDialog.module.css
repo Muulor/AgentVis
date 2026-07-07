@@ -42,18 +42,18 @@
 }
 
 .iconWrapper.danger {
-    background-color: rgba(239, 68, 68, 0.15);
-    color: #ef4444;
+    background-color: color-mix(in srgb, var(--color-status-error) 18%, transparent);
+    color: var(--color-status-error);
 }
 
 .iconWrapper.warning {
-    background-color: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
+    background-color: color-mix(in srgb, var(--color-status-warning) 18%, transparent);
+    color: var(--color-status-warning);
 }
 
 .iconWrapper.info {
-    background-color: rgba(59, 130, 246, 0.15);
-    color: #3b82f6;
+    background-color: color-mix(in srgb, var(--color-action-primary) 18%, transparent);
+    color: var(--color-action-primary);
 }
 
 .title {
@@ -107,27 +107,27 @@
 }
 
 .confirmButton.danger {
-    background-color: #ef4444;
+    background-color: var(--color-status-error);
 }
 
 .confirmButton.danger:hover:not(:disabled) {
-    background-color: #dc2626;
+    background-color: color-mix(in srgb, var(--color-status-error) 88%, #000);
 }
 
 .confirmButton.warning {
-    background-color: #f59e0b;
+    background-color: var(--color-status-warning);
 }
 
 .confirmButton.warning:hover:not(:disabled) {
-    background-color: #d97706;
+    background-color: color-mix(in srgb, var(--color-status-warning) 88%, #000);
 }
 
 .confirmButton.info {
-    background-color: #3b82f6;
+    background-color: var(--color-action-primary);
 }
 
 .confirmButton.info:hover:not(:disabled) {
-    background-color: #2563eb;
+    background-color: var(--color-action-primary-hover);
 }
 
 .cancelButton:disabled,

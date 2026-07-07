@@ -147,12 +147,12 @@
 
 .rollbackBtn {
     background: transparent;
-    border: 1px solid var(--color-warning, #eab308);
-    color: var(--color-warning, #ca8a04);
+    border: 1px solid var(--color-warning, #E0A238);
+    color: var(--color-warning, #E0A238);
 }
 
 .rollbackBtn:hover {
-    background: rgba(234, 179, 8, 0.1);
+    background: color-mix(in srgb, var(--color-warning, #E0A238) 14%, transparent);
 }
 
 .deleteBtn {
@@ -162,12 +162,12 @@
     cursor: pointer;
     transition: all 0.15s ease;
     background: transparent;
-    border: 1px solid var(--color-error, #ef4444);
-    color: var(--color-error, #ef4444);
+    border: 1px solid var(--color-error, #E34F53);
+    color: var(--color-error, #E34F53);
 }
 
 .deleteBtn:hover {
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in srgb, var(--color-error, #E34F53) 14%, transparent);
 }
 
 /* ==================== 弹窗通用 ==================== */
@@ -255,7 +255,7 @@
 .dialogWarning p {
     margin: 0;
     font-size: 13px;
-    color: #ca8a04;
+    color: var(--color-warning, #E0A238);
 }
 
 .warningTip {
@@ -290,13 +290,13 @@
 }
 
 .confirmRollbackBtn {
-    background: var(--color-warning, #eab308);
+    background: var(--color-warning, #E0A238);
     border: none;
     color: white;
 }
 
 .confirmRollbackBtn:hover:not(:disabled) {
-    background: #ca8a04;
+    background: color-mix(in srgb, var(--color-warning, #E0A238) 88%, #000);
 }
 
 .cancelBtn:disabled,

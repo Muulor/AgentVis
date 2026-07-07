@@ -81,8 +81,13 @@
 
 /* 用户消息样式 */
 .userBubble .content {
-    background-color: var(--color-action-primary);
-    color: white;
+    --user-message-bg: #e9e9e9;
+    --user-message-color: #181818;
+    --user-message-selection-bg: rgba(0, 0, 0, 0.16);
+    --user-message-selection-color: #1A1A1A;
+
+    background-color: var(--user-message-bg);
+    color: var(--user-message-color);
     border-bottom-right-radius: var(--radius-message-bubble);
     overflow-wrap: anywhere;
     text-wrap: pretty;
@@ -90,15 +95,22 @@
     white-space: pre-wrap;
 }
 
+:global([data-theme='dark']) .userBubble .content {
+    --user-message-bg: #2E2E31;
+    --user-message-color: white;
+    --user-message-selection-bg: rgba(255, 255, 255, 0.4);
+    --user-message-selection-color: white;
+}
+
 /* 用户消息选中样式 - 使用高对比度颜色以区分背景 */
 .userBubble .content::selection {
-    background-color: rgba(255, 255, 255, 0.4);
-    color: white;
+    background-color: var(--user-message-selection-bg);
+    color: var(--user-message-selection-color);
 }
 
 .userBubble .content *::selection {
-    background-color: rgba(255, 255, 255, 0.4);
-    color: white;
+    background-color: var(--user-message-selection-bg);
+    color: var(--user-message-selection-color);
 }
 
 /* Agent 消息样式 */
@@ -262,7 +274,7 @@
     padding: var(--spacing-xs) var(--spacing-sm);
     /* 使用语义化 token，同时支持浅色和深色主题 */
     background-color: var(--color-bg-secondary);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-message-bubble);
     border-left: none;
     font-size: var(--font-size-xs);
 }
@@ -281,14 +293,22 @@
 
 /* 展开/收起方向指示器 */
 .expandIndicator {
-    font-size: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: var(--color-text-tertiary);
     user-select: none;
     flex-shrink: 0;
+    transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.expandIndicatorExpanded {
+    transform: rotate(90deg);
 }
 
 /* 收起态：单行截断（默认） */
 .quotedFromContent {
+    display: block;
     color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -304,13 +324,12 @@
     text-overflow: unset;
     max-height: 200px;
     overflow-y: auto;
+    padding-right: var(--spacing-xs);
     /* 精简滚动条 */
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-hover) transparent;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar-track {
@@ -319,7 +338,44 @@
 
 .quotedFromContentExpanded::-webkit-scrollbar-thumb {
     background-color: var(--color-border-hover);
-    border-radius: var(--radius-full);
+    border-radius: 3px;
+}
+
+.quotedFromContentExpanded::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+    min-width: 0;
+    min-height: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    background-image: none;
+    border: 0;
+}
+
+.quotedFromContentExpanded::-webkit-scrollbar-button:single-button,
+.quotedFromContentExpanded::-webkit-scrollbar-button:double-button,
+.quotedFromContentExpanded::-webkit-scrollbar-button:vertical,
+.quotedFromContentExpanded::-webkit-scrollbar-button:horizontal,
+.quotedFromContentExpanded::-webkit-scrollbar-button:vertical:start:decrement,
+.quotedFromContentExpanded::-webkit-scrollbar-button:vertical:end:increment,
+.quotedFromContentExpanded::-webkit-scrollbar-button:horizontal:start:decrement,
+.quotedFromContentExpanded::-webkit-scrollbar-button:horizontal:end:increment {
+    display: none;
+    width: 0;
+    height: 0;
+    min-width: 0;
+    min-height: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    background-image: none;
+    border: 0;
+}
+
+.quotedFromContentExpanded::-webkit-scrollbar-corner {
+    background: transparent;
 }
 
 /* ==================== 多选模式 ==================== */

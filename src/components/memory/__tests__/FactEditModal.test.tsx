@@ -20,12 +20,12 @@ function renderModal() {
 }
 
 describe('FactEditModal', () => {
-    it('renders create copy and keeps task experience selectable in create mode', () => {
+    it('renders create copy and keeps edit copy out of create mode', () => {
         const html = renderModal();
 
         expect(html).toContain('新增事实');
         expect(html).toContain('保存事实');
-        expect(html).toContain('任务经验');
+        expect(html).toContain('新增事实会立即影响 Agent 后续行为');
         expect(html).not.toContain('编辑事实');
         expect(html).not.toContain('保存修改');
     });

@@ -226,7 +226,7 @@
     margin-left: -4px;
     margin-right: 4px;
     border-radius: 50%;
-    background-color: var(--color-action-primary, #3B82F6);
+    background-color: var(--color-action-primary, #3F7BD9);
     box-shadow: 0 0 0 1.5px var(--color-bg-primary);
     pointer-events: none;
     align-self: center;

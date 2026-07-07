@@ -274,12 +274,13 @@
 
 /* 发送并继续按钮（强调样式） */
 .sendResumeBtn {
-    border: 1px solid rgba(59, 130, 246, 0.4);
-    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid color-mix(in srgb, var(--color-action-primary, #60A5FA) 68%, transparent);
+    background: transparent;
     color: var(--color-action-primary, #60A5FA);
 }
 
 .sendResumeBtn:hover {
-    background: rgba(59, 130, 246, 0.2);
-    border-color: rgba(59, 130, 246, 0.6);
+    background: transparent;
+    border-color: var(--color-action-primary-hover, var(--color-action-primary, #60A5FA));
+    color: var(--color-action-primary-hover, var(--color-action-primary, #60A5FA));
 }

@@ -1868,7 +1868,7 @@ export const ChatInput = memo(function ChatInput({
                             onClick={onStop}
                             aria-label={t('chat.stopOutput')}
                         >
-                            <Square size={16} fill="currentColor" />
+                            <Square size={12} fill="currentColor" />
                         </button>
                     ) : (
                         // 非流式：显示发送按钮

@@ -325,11 +325,7 @@ function StaticStepItem({ step }: StaticStepItemProps) {
         <>
             {/* LLM 思考文字：每步只显示一次 */}
             {showThinking && (
-                <div style={{
-                    fontSize: '12px',
-                    color: 'var(--color-text-tertiary, #6B7280)',
-                    padding: '2px 0',
-                }}>
+                <div className={styles.thinkingText}>
                     {step.thinking}
                 </div>
             )}

@@ -57,7 +57,7 @@
 
 .optionCard:hover:not(:disabled) {
     background: var(--color-bg-tertiary, #EBEBEB);
-    border-color: var(--color-action-primary, #2563EB);
+    border-color: var(--color-action-primary, #3F7BD9);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
 }
@@ -69,7 +69,7 @@
 /* 选中状态 */
 .optionSelected {
     background: rgba(37, 99, 235, 0.08) !important;
-    border-color: var(--color-action-primary, #2563EB) !important;
+    border-color: var(--color-action-primary, #3F7BD9) !important;
 }
 
 /* 禁用状态（其他未选中的选项） */
@@ -128,7 +128,7 @@
 }
 
 .reselectBtn:hover {
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 /* 错误降级 */
@@ -161,13 +161,13 @@
 }
 
 .checkboxChecked {
-    color: var(--color-action-primary, #2563EB);
+    color: var(--color-action-primary, #3F7BD9);
 }
 
 /* 多选已选项的高亮样式（浅蓝背景 + 实线边框） */
 .multiSelected {
     background: rgba(37, 99, 235, 0.07) !important;
-    border-color: var(--color-action-primary, #2563EB) !important;
+    border-color: var(--color-action-primary, #3F7BD9) !important;
 }
 
 /* 确认按钮（primary 样式） */
@@ -181,7 +181,7 @@
     padding: 9px 16px;
     border-radius: var(--radius-button);
     border: none;
-    background: var(--color-action-primary, #2563EB);
+    background: var(--color-action-primary, #3F7BD9);
     color: #fff;
     font-family: inherit;
     font-size: var(--font-size-sm, 13px);

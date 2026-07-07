@@ -81,7 +81,6 @@
 /* 标签页 */
 .tabList {
     display: flex;
-    border-bottom: 1px solid var(--color-border-default);
     padding: 0 20px;
     flex-shrink: 0;
 }
@@ -186,14 +185,18 @@
 }
 
 .sandboxModeOption:hover {
-    border-color: var(--color-action-primary);
+    border-color: var(--color-state-hover-border);
     color: var(--color-text-primary);
 }
 
 .sandboxModeOption[data-active="true"] {
-    border-color: var(--color-action-primary);
-    background: rgba(37, 99, 235, 0.1);
+    border-color: var(--color-state-hover-border);
+    background: var(--color-state-selected-bg);
     color: var(--color-text-primary);
+}
+
+.sandboxModeOption[data-active="true"]:hover {
+    background: var(--color-state-selected-hover-bg);
 }
 
 .sandboxModeTitle {
@@ -409,7 +412,6 @@
     justify-content: flex-end;
     gap: 12px;
     padding: 16px 20px;
-    border-top: 1px solid var(--color-border-default);
     flex-shrink: 0;
 }
 

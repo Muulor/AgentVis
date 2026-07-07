@@ -3,6 +3,8 @@
  */
 
 .container {
+    --memory-positive-color: #7CB342;
+
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -139,7 +141,7 @@
 .summaryContent::-webkit-scrollbar,
 .originalMessages::-webkit-scrollbar,
 .statusDetails::-webkit-scrollbar {
-    width: 12px;
+    width: 6px;
     background: transparent;
 }
 
@@ -172,16 +174,16 @@
 .originalMessages::-webkit-scrollbar-thumb,
 .statusDetails::-webkit-scrollbar-thumb {
     min-height: 28px;
-    border: 3px solid transparent;
-    background-color: var(--color-border-hover);
-    background-clip: content-box;
-    border-radius: var(--radius-full);
+    border: 0;
+    background-color: var(--color-border-default);
+    background-clip: padding-box;
+    border-radius: 3px;
 }
 
 .summaryContent::-webkit-scrollbar-thumb:hover,
 .originalMessages::-webkit-scrollbar-thumb:hover,
 .statusDetails::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-text-tertiary);
+    background-color: var(--color-border-hover);
 }
 
 .originalMessage {
@@ -217,11 +219,11 @@
 }
 
 .importanceHigh {
-    color: #16A34A;
+    color: var(--memory-positive-color);
 }
 
 .importanceMedium {
-    color: #2563EB;
+    color: #3F7BD9;
 }
 
 .importanceLow {
@@ -278,14 +280,14 @@
     margin-bottom: 2px;
 }
 
-/* 已确认决策 - Fern Green */
+/* 已确认决策 */
 .statusSectionTitle.confirmed {
-    color: #16A34A;
+    color: var(--memory-positive-color);
 }
 
 /* 待决问题 - Marigold */
 .statusSectionTitle.pending {
-    color: #f9a620;
+    color: #CA8A04;
 }
 
 /* 已失效观点 - Terracotta */

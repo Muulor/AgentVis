@@ -39,14 +39,14 @@
     top: 0;
     left: 0;
     height: 100%;
-    background-color: #5B8DEF;
+    background-color: #3F7BD9;
     border-radius: var(--radius-button);
     transition: width 300ms ease-out;
 }
 
 /* 超过水位线时 - 柔和琥珀色 */
 .fill[data-above-threshold="true"] {
-    background-color: #E8A855;
+    background-color: #E0A238;
 }
 
 /* 整理中时的动画效果 */
