@@ -4,6 +4,7 @@
 
 use chrono::Utc;
 use sqlx::{Pool, QueryBuilder, Sqlite};
+use std::collections::HashMap;
 
 use super::models::{Message, MessageRole};
 use crate::error::{AppError, AppResult};
@@ -332,6 +333,52 @@ impl MessageRepository {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         Ok(messages)
+    }
+
+    /// 获取一组 Agent 各自最新的非 Hub 对话消息。
+    pub async fn latest_non_hub_by_agent_ids(
+        &self,
+        agent_ids: &[String],
+    ) -> AppResult<HashMap<String, Message>> {
+        if agent_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT id, agent_id, role, content, metadata, created_at, deleted_at \
+             FROM ( \
+                 SELECT id, agent_id, role, content, metadata, created_at, deleted_at, \
+                        ROW_NUMBER() OVER (PARTITION BY agent_id ORDER BY created_at DESC, id DESC) AS rn \
+                 FROM messages \
+                 WHERE deleted_at IS NULL \
+                   AND role IN ('user', 'assistant') \
+                   AND (CASE \
+                        WHEN metadata IS NOT NULL AND json_valid(metadata) \
+                        THEN COALESCE(json_extract(metadata, '$.sourceType'), '') \
+                        ELSE '' \
+                       END) != 'hub' \
+                   AND agent_id IN (",
+        );
+
+        {
+            let mut separated = builder.separated(", ");
+            for agent_id in agent_ids {
+                separated.push_bind(agent_id);
+            }
+        }
+
+        builder.push(")) WHERE rn = 1");
+
+        let messages = builder
+            .build_query_as::<Message>()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(messages
+            .into_iter()
+            .map(|message| (message.agent_id.clone(), message))
+            .collect())
     }
 
     /// 获取指定消息 ID 之后的所有消息（增量加载）
@@ -1058,6 +1105,75 @@ mod tests {
         for r in &recent {
             assert!(all_msgs.iter().any(|m| m.id == r.id));
         }
+    }
+
+    #[tokio::test]
+    async fn test_latest_non_hub_by_agent_ids_ignores_hub_messages() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+        let other_agent = agent_repo.create(&hub.id, "其他 Agent").await.unwrap();
+
+        let first = msg_repo
+            .create(&agent.id, MessageRole::User, "first", None)
+            .await
+            .unwrap();
+        let hub_message = msg_repo
+            .create(
+                &agent.id,
+                MessageRole::Assistant,
+                "hub-only",
+                Some(r#"{"sourceType":"hub","hubId":"hub-1"}"#.to_string()),
+            )
+            .await
+            .unwrap();
+        let latest = msg_repo
+            .create(&agent.id, MessageRole::Assistant, "latest agent message", None)
+            .await
+            .unwrap();
+        let other_latest = msg_repo
+            .create(&other_agent.id, MessageRole::User, "other latest", None)
+            .await
+            .unwrap();
+
+        msg_repo
+            .update_content_metadata(&first.id, &first.content, None, Some(1_000))
+            .await
+            .unwrap();
+        msg_repo
+            .update_content_metadata(
+                &hub_message.id,
+                &hub_message.content,
+                hub_message.metadata,
+                Some(3_000),
+            )
+            .await
+            .unwrap();
+        msg_repo
+            .update_content_metadata(&latest.id, &latest.content, None, Some(2_000))
+            .await
+            .unwrap();
+        msg_repo
+            .update_content_metadata(&other_latest.id, &other_latest.content, None, Some(4_000))
+            .await
+            .unwrap();
+
+        let latest_by_agent = msg_repo
+            .latest_non_hub_by_agent_ids(&[agent.id.clone(), other_agent.id.clone()])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            latest_by_agent.get(&agent.id).map(|message| message.content.as_str()),
+            Some("latest agent message")
+        );
+        assert_eq!(
+            latest_by_agent
+                .get(&other_agent.id)
+                .map(|message| message.content.as_str()),
+            Some("other latest")
+        );
     }
 
 

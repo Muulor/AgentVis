@@ -62,6 +62,10 @@ function getAvatarLetter(name: string): string {
     return trimmed.charAt(0).toUpperCase();
 }
 
+function getMessagePreview(content: string): string {
+    return content.replace(/\s+/g, ' ').trim();
+}
+
 /**
  * AgentNavItem 组件
  *
@@ -92,21 +96,34 @@ export function AgentNavItem({
     const isCollapsed = useUIStore((state) => state.isLeftPanelCollapsed);
 
     // 获取自定义头像
-    const avatar = useAgentStore((state) => state.agents.find(a => a.id === agentId)?.avatar);
+    const agent = useAgentStore((state) => state.agents.find(a => a.id === agentId));
+    const avatar = agent?.avatar;
+    const persistedMessagePreview = agent?.latestMessagePreview ?? '';
 
     // 未读消息判断：比较最新消息时间和最后查看时间
-    const messagesByAgent = useChatStore((state) => state.messagesByAgent);
-    const lastReadByAgent = useChatStore((state) => state.lastReadByAgent);
+    const agentMessages = useChatStore((state) => state.messagesByAgent.get(agentId));
+    const lastReadAt = useChatStore((state) => state.lastReadByAgent.get(agentId) ?? 0);
+    const streamingState = useChatStore((state) => state.streamingByContext.get(agentId));
     const hasUnread = useMemo(() => {
         // 当前选中的 Agent 不显示未读（正在查看）
         if (currentAgentId === agentId) return false;
-        const messages = messagesByAgent.get(agentId);
-        if (!messages || messages.length === 0) return false;
-        const latestMsg = messages[messages.length - 1];
+        const latestMsg = agentMessages?.[agentMessages.length - 1];
         if (!latestMsg) return false;
-        const lastRead = lastReadByAgent.get(agentId) ?? 0;
-        return latestMsg.createdAt > lastRead;
-    }, [agentId, currentAgentId, messagesByAgent, lastReadByAgent]);
+        return latestMsg.createdAt > lastReadAt;
+    }, [agentId, currentAgentId, agentMessages, lastReadAt]);
+
+    const latestMessagePreview = useMemo(() => {
+        if (streamingState?.isStreaming && streamingState.content.trim()) {
+            return getMessagePreview(streamingState.content);
+        }
+
+        if (agentMessages) {
+            const latestMsg = agentMessages[agentMessages.length - 1];
+            return latestMsg ? getMessagePreview(latestMsg.content) : '';
+        }
+
+        return getMessagePreview(persistedMessagePreview);
+    }, [agentMessages, persistedMessagePreview, streamingState]);
 
     // Cron 定时任务指示器：检查该 Agent 是否有启用的定时任务
     const hasCronJobs = useCronStore((state) => state.enabledAgentIds.has(agentId));
@@ -191,7 +208,14 @@ export function AgentNavItem({
                         )}
                     </div>
                     {!isCollapsed && (
-                        <span className={styles.name}>{name}</span>
+                        <div className={styles.content}>
+                            <span className={styles.name}>{name}</span>
+                            {latestMessagePreview && (
+                                <span className={styles.preview} title={latestMessagePreview}>
+                                    {latestMessagePreview}
+                                </span>
+                            )}
+                        </div>
                     )}
                 </div>
             </Tooltip>

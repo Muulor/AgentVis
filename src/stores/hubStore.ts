@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAgentStore } from './agentStore';
 
 /**
  * Hub 类型定义
@@ -72,12 +73,14 @@ export const useHubStore = create<HubState>((set) => ({
                     }),
             };
         }),
-    removeHub: (id) =>
+    removeHub: (id) => {
+        useAgentStore.getState().removeAgentsByHubId(id);
         set((state) => ({
             hubs: state.hubs.filter((h) => h.id !== id),
             // 如果删除的是当前 Hub，清空选中状态
             currentHubId: state.currentHubId === id ? null : state.currentHubId,
-        })),
+        }));
+    },
     setCurrentHubId: (id) => set({ currentHubId: id }),
     setLoading: (loading) => set({ isLoading: loading }),
     setError: (error) => set({ error }),

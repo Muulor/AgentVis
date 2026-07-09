@@ -5,9 +5,25 @@
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 
-use crate::db::{Agent, AgentUpdate};
+use crate::db::{Agent, AgentUpdate, Message};
 use crate::error::{AppError, CommandResult};
 use crate::AppState;
+
+const AGENT_LATEST_MESSAGE_PREVIEW_MAX_CHARS: usize = 200;
+
+fn build_latest_message_preview(content: &str) -> Option<String> {
+    let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return None;
+    }
+
+    Some(
+        normalized
+            .chars()
+            .take(AGENT_LATEST_MESSAGE_PREVIEW_MAX_CHARS)
+            .collect(),
+    )
+}
 
 /// Agent 列表响应项
 #[derive(Debug, Serialize)]
@@ -35,8 +51,20 @@ pub struct AgentItem {
     pub sandbox_mode: Option<String>,      // 用户可见的三档沙箱权限
     pub sub_agent_safety_footer_enabled: Option<bool>, // Sub-Agent 每步 Safety Footer 实验开关
     pub sub_agent_safety_footer_text: Option<String>,  // Sub-Agent Safety Footer 自定义提示词
+    pub latest_message_preview: Option<String>,
+    pub latest_message_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+impl AgentItem {
+    fn with_latest_message(mut self, latest_message: Option<&Message>) -> Self {
+        if let Some(message) = latest_message {
+            self.latest_message_preview = build_latest_message_preview(&message.content);
+            self.latest_message_at = Some(message.created_at);
+        }
+        self
+    }
 }
 
 impl From<Agent> for AgentItem {
@@ -64,6 +92,8 @@ impl From<Agent> for AgentItem {
             sandbox_mode: agent.sandbox_mode,
             sub_agent_safety_footer_enabled: agent.sub_agent_safety_footer_enabled,
             sub_agent_safety_footer_text: agent.sub_agent_safety_footer_text,
+            latest_message_preview: None,
+            latest_message_at: None,
             created_at: agent.created_at,
             updated_at: agent.updated_at,
         }
@@ -131,7 +161,22 @@ pub async fn agent_list_by_hub(
 ) -> CommandResult<Vec<AgentItem>> {
     let db = state.db.lock().await;
     let agents = db.agent_repo().list_by_hub(&hub_id).await?;
-    Ok(agents.into_iter().map(|a| a.into()).collect())
+    let agent_ids = agents
+        .iter()
+        .map(|agent| agent.id.clone())
+        .collect::<Vec<_>>();
+    let latest_messages = db
+        .message_repo()
+        .latest_non_hub_by_agent_ids(&agent_ids)
+        .await?;
+
+    Ok(agents
+        .into_iter()
+        .map(|agent| {
+            let latest_message = latest_messages.get(&agent.id);
+            AgentItem::from(agent).with_latest_message(latest_message)
+        })
+        .collect())
 }
 
 /// 获取单个 Agent
@@ -139,7 +184,18 @@ pub async fn agent_list_by_hub(
 pub async fn agent_get(state: State<'_, AppState>, id: String) -> CommandResult<Option<AgentItem>> {
     let db = state.db.lock().await;
     let agent = db.agent_repo().get(&id).await?;
-    Ok(agent.map(|a| a.into()))
+    if let Some(agent) = agent {
+        let latest_messages = db
+            .message_repo()
+            .latest_non_hub_by_agent_ids(std::slice::from_ref(&agent.id))
+            .await?;
+        let latest_message = latest_messages.get(&agent.id);
+        Ok(Some(
+            AgentItem::from(agent).with_latest_message(latest_message),
+        ))
+    } else {
+        Ok(None)
+    }
 }
 
 /// 更新 Agent
@@ -227,7 +283,13 @@ pub async fn agent_update(
         }
     }
 
-    Ok(agent.into())
+    let latest_messages = db
+        .message_repo()
+        .latest_non_hub_by_agent_ids(std::slice::from_ref(&agent.id))
+        .await?;
+    let latest_message = latest_messages.get(&agent.id);
+
+    Ok(AgentItem::from(agent).with_latest_message(latest_message))
 }
 
 /// 更新 Agent 排序

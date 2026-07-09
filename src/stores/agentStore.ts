@@ -31,6 +31,8 @@ interface Agent {
     sandboxMode?: AgentSandboxMode | null;  // 对应Rust的sandbox_mode
     subAgentSafetyFooterEnabled?: boolean | null;  // 对应Rust的sub_agent_safety_footer_enabled
     subAgentSafetyFooterText?: string | null;  // 对应Rust的sub_agent_safety_footer_text
+    latestMessagePreview?: string | null;
+    latestMessageAt?: number | null;
     createdAt: number;  // 对应Rust的created_at，类型为i64
     updatedAt: number;  // 对应Rust的updated_at，类型为i64
 }
@@ -60,6 +62,7 @@ interface AgentState {
     updateAgent: (id: string, data: Partial<Agent>) => void;
     reorderAgents: (hubId: string, orderedIds: string[]) => void;
     removeAgent: (id: string) => void;
+    removeAgentsByHubId: (hubId: string) => void;
     setCurrentAgentId: (id: string | null) => void;
     setLoading: (loading: boolean) => void;
     setError: (error: string | null) => void;
@@ -127,6 +130,26 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                 agents: state.agents.filter((a) => a.id !== id),
                 currentAgentId: state.currentAgentId === id ? null : state.currentAgentId,
                 agentHubMap: newMap,
+            };
+        }),
+    removeAgentsByHubId: (hubId) =>
+        set((state) => {
+            const agentHubMap = new Map(state.agentHubMap);
+            for (const [agentId, agentHubId] of agentHubMap) {
+                if (agentHubId === hubId) {
+                    agentHubMap.delete(agentId);
+                }
+            }
+
+            const currentAgentHubId = state.currentAgentId
+                ? state.agentHubMap.get(state.currentAgentId)
+                    ?? state.agents.find((agent) => agent.id === state.currentAgentId)?.hubId
+                : null;
+
+            return {
+                agents: state.agents.filter((agent) => agent.hubId !== hubId),
+                currentAgentId: currentAgentHubId === hubId ? null : state.currentAgentId,
+                agentHubMap,
             };
         }),
     setCurrentAgentId: (id) => set({ currentAgentId: id }),

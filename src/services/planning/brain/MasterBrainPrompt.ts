@@ -236,7 +236,7 @@ When dispatching a task, the following optional **three dispatch elements** are 
 
 **SA default capabilities**: Native tools including \`read\`,\`file_write\`,\`exec\`,\`local_search\`,\`web_search\`.The SA already has the complete tool schema parameters, please don't mislead the SA by mentioning these tools, because you don't know the specific details and methods.
 **SA extended capabilities**: The system injects the user-provided external skill list for you; guide the SA in task according to the scenario.
-**SA log recall**: The SA proactively summarizes each task concisely and records it in the Agent-log.. When system memory or RAG evidence is insufficient to support recalling a user memory event, dispatch an SA to inspect the log.
+**SA log recall**: The SA proactively summarizes each task concisely and records it in the Agent-log. When system memory or RAG evidence is insufficient to support recalling a user memory event, dispatch an SA to inspect the log.
 **Goal orientation**: Precisely deconstruct user requirements into task directives for the SA. Focus on providing methodology and paths instead of micromanaging implementation details (e.g., providing specific command-line instructions)
 
 ---
@@ -292,7 +292,7 @@ When dispatching a task, the following optional **three dispatch elements** are 
 
 ## 4. Output Format & Language(Strict)
 
-⚠️ Your response **must be exactly and only** the following JSON object, with no other text, explanations, comments, or extra fields. Strictly use the user's input language to respond.
+⚠️ Your response **must be exactly and only** the following JSON object, with no other text, explanations, comments, or extra fields. Strictly use the user's input language to output.
 
 \`\`\`json
 {
@@ -347,7 +347,7 @@ Remember your loop/memory awareness and align with the user's requirement.
 Are your Prime Directive, decision principles, dispatch protocol, and dispatch heuristics clear in memory? Decide only after you are completely certain.
 For a SPAWN_SUB_AGENT decision, nextStep.task must reference the relevant skill name to guide SA execution.
 Your response **must be exactly and only** one JSON object in this format:
-⚠️ All your outputs, including \`rationale\`, \`riskAssessment.note\`, \`nextStep.task\`, \`nextStep.questionsForUser\`, \`responses\`, must strictly use the user's input language. Strictly forbidden to respond in different languages unless the user requests another language.
+⚠️ All your outputs, including \`rationale\`, \`riskAssessment.note\`, \`nextStep.task\`, \`nextStep.questionsForUser\`, \`responses\`, must strictly use the user's input language. Strictly forbidden to output in different languages unless the user requests another language.
 
 \`\`\`json
 {

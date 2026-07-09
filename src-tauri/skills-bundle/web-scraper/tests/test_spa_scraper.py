@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from bs4 import BeautifulSoup
+import httpx
 
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
@@ -26,8 +27,11 @@ LONG_PARAGRAPH = (
 
 
 class FakeResponse:
-    def __init__(self, payload, status_code=200):
+    def __init__(self, payload, status_code=200, url="https://example.com/", headers=None):
         self.status_code = status_code
+        self.url = url
+        self.headers = headers or {"content-type": "text/html; charset=utf-8"}
+        self.encoding = "utf-8"
         if isinstance(payload, bytes):
             self.content = payload
         elif isinstance(payload, str):
@@ -44,8 +48,14 @@ class FakeClient:
     def get(self, url, headers=None):
         self.requests.append((url, headers or {}))
         if url not in self.routes:
-            return FakeResponse({}, status_code=404)
-        return FakeResponse(self.routes[url])
+            return FakeResponse({}, status_code=404, url=url)
+        payload = self.routes[url]
+        if isinstance(payload, FakeResponse):
+            return payload
+        if isinstance(payload, tuple):
+            body, status_code = payload
+            return FakeResponse(body, status_code=status_code, url=url)
+        return FakeResponse(payload, url=url)
 
 
 class HashRouterUrlTests(unittest.TestCase):
@@ -82,6 +92,39 @@ class HashRouterUrlTests(unittest.TestCase):
         self.assertIn("https://example.com/#/docs/b", links)
         self.assertIn("https://example.com/docs/c", links)
         self.assertNotIn("https://example.com/app/#intro", links)
+
+
+class HttpObservationTests(unittest.TestCase):
+    def test_404_observation_marks_page_unavailable_instead_of_fingerprint_retry(self):
+        url = "https://example.com/missing"
+        html = """
+        <html>
+          <head><title>Page not found</title></head>
+          <body><h1>Sorry, we couldn't find the page you were looking for.</h1></body>
+        </html>
+        """
+        client = FakeClient({url: (html, 404)})
+
+        with self.assertRaises(httpx.HTTPStatusError) as caught:
+            scrape.fetch_page(client, url)
+
+        message = str(caught.exception)
+        self.assertIn("HTTP 404 Not Found", message)
+        self.assertIn("does not exist", message)
+        self.assertIn("removed or invalid", message)
+        self.assertIn("do not retry alternate browser fingerprints", message)
+        self.assertIn("Sorry, we couldn't find the page", message)
+
+    def test_impersonate_aliases_align_user_agent_with_profile(self):
+        chrome_ua = scrape._user_agent_for_impersonate(scrape.DEFAULT_USER_AGENT, "chrome")
+        pinned_chrome_ua = scrape._user_agent_for_impersonate(scrape.DEFAULT_USER_AGENT, "chrome146")
+        firefox_ua = scrape._user_agent_for_impersonate(scrape.DEFAULT_USER_AGENT, "firefox")
+        safari_ua = scrape._user_agent_for_impersonate(scrape.DEFAULT_USER_AGENT, "safari")
+
+        self.assertIn("Chrome/146.0.0.0", chrome_ua)
+        self.assertIn("Chrome/146.0.0.0", pinned_chrome_ua)
+        self.assertIn("Firefox/147.0", firefox_ua)
+        self.assertIn("Version/26.0 Safari", safari_ua)
 
 
 class StructuredSpaRecoveryTests(unittest.TestCase):

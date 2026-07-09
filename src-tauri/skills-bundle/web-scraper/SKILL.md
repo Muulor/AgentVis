@@ -11,7 +11,7 @@ Scrape web page content from any URL, extract structured knowledge (title, body 
 
 ## Quick Use - Recommended Method
 
-- Use the `scripts/scrape.py` script to complete all scraping tasks. The script uses httpx, BeautifulSoup, and lxml already available in the runtime, so no additional dependencies need to be installed. It is recommended to directly use curl_cffi browser TLS fingerprint impersonation through the `--impersonate` parameter to bypass detection. For platforms with stricter anti-scraping, use the Session Cookie method for scraping.
+- Use the `scripts/scrape.py` script to complete all scraping tasks. The script uses httpx, BeautifulSoup, and lxml already available in the runtime, so no additional dependencies need to be installed. For anti-scraping pages, prefer curl_cffi browser TLS fingerprint impersonation with `--impersonate chrome`; curl_cffi resolves this alias to the newest bundled Chrome profile. Pin a specific profile such as `chrome146` only when reproducibility matters. For platforms with stricter anti-scraping, use the Session Cookie method for scraping.
 - For sparse SPA/documentation pages, the scraper automatically attempts structured data recovery before giving up. Current adapters cover Next.js `/api/doc/{identifier}` Notion-style record maps, Next.js `__NEXT_DATA__` and RSC flight data, Gatsby `page-data.json`, Nuxt payload data, Remix/React Router hydration data, SvelteKit `__data.json` and fetched payloads, Angular TransferState, Qwik JSON, page-level Markdown source files, VitePress/VuePress/Pagefind bodies, MkDocs/Docusaurus-style search indexes, `llms.txt`, documentation manifests, Algolia DocSearch, dehydrated app state, conservative same-origin JS bundle API discovery, and Swagger/OpenAPI specs, then continue through the normal Markdown saving/image pipeline.
 - When `--sitemap` cannot find a valid sitemap, the scraper falls back to scoped link crawling. For documentation entry pages such as `/learn` or `/docs`, crawl discovery prioritizes URLs under the same top-level path before global navigation links.
 - Multi-page crawling normalizes URLs for de-duplication (ordinary anchor fragments, default ports, trailing slashes, query ordering, and common tracking parameters) and skips both already scraped URLs and URLs already queued for scraping. Hash-router SPA routes such as `#/docs/page` and `#!/docs/page` are preserved as distinct crawl URLs.
@@ -56,7 +56,7 @@ python scripts/scrape.py "URL" --selector "article.main-content" --output-dir "O
 | `--encoding` | | Force a specific encoding (auto-detect if not specified) | Auto |
 | `--summary` | | Output the site summary file summary.md | `false` |
 | `--no-trafilatura` | | Disable trafilatura body extraction and force fallback to the BeautifulSoup heuristic | `false` |
-| `--impersonate` | | Use curl_cffi to impersonate browser TLS fingerprints and bypass anti-scraping (for example `chrome131`) | - |
+| `--impersonate` | | Use curl_cffi to impersonate browser TLS fingerprints and bypass anti-scraping (recommended `chrome`, or pin `chrome146`) | - |
 
 ## Output Format
 
@@ -136,10 +136,10 @@ python scripts/scrape.py "https://example.com/article" --download-images -o "./r
 
 ### Scrape Anti-scraping Websites (curl_cffi Fingerprint Impersonation)
 ```bash
-# Use Chrome 131's TLS fingerprint to bypass anti-scraping detection
-python scripts/scrape.py "URL" --impersonate chrome131 -o "./result"
+# Use the latest bundled Chrome TLS fingerprint to bypass anti-scraping detection
+python scripts/scrape.py "URL" --impersonate chrome -o "./result"
 
-# Optional fingerprints: chrome131, chrome124, chrome120, safari17_0, edge101, etc.
+# Optional pinned fingerprints: chrome146, chrome145, chrome142, chrome136, chrome131, safari260, safari184, firefox147, edge101, etc.
 ```
 
 ## Troubleshooting
@@ -149,6 +149,8 @@ python scripts/scrape.py "URL" --impersonate chrome131 -o "./result"
 | Garbled encoding | Use `--encoding utf-8` to force the encoding |
 | Rate limited by the target site | Increase the `--delay` value (for example `--delay 2`) |
 | Suspected verification page or blank page returned | Check the `[WARN]` hints in the terminal; preferably provide login cookies or a proxy, and switch to a browser-rendering solution if necessary |
+| HTTP 404/410 returned | The URL is likely invalid or the content was removed. If a normal browser shows the same not-found page, report the source as unavailable instead of retrying fingerprints |
+| HTTP 401/403 returned | Authentication, permission, region, or anti-bot restrictions may apply. If a normal browser can access the real page, retry with cookies/proxy/browser rendering; if the browser also shows an error or not-found page, report it as unavailable |
 | Scraped content is empty | Use `--selector` to manually specify the body content area |
 | SPA returns only a loading shell | The script automatically tries structured data recovery (`__NEXT_DATA__`, RSC flight data, `page-data.json`, Nuxt payloads, Remix/React Router loader data, SvelteKit data, Angular TransferState, Qwik JSON, page Markdown, Pagefind bodies, search indexes, same-origin JS bundle API discovery, `llms.txt`, OpenAPI specs, etc.) when the extracted body is too short; if it still fails, use agent-browser/Playwright as the final fallback |
 | Hash-router SPA child pages are missing | Crawl discovery preserves route fragments such as `#/docs/page` and `#!/docs/page`; ordinary anchors like `#intro` are still collapsed for de-duplication |

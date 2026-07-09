@@ -69,6 +69,8 @@ interface AgentItem {
     knowledgePaths: string | null;
     visualEnhancementEnabled?: boolean | null;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork' | null;
+    latestMessagePreview?: string | null;
+    latestMessageAt?: number | null;
     createdAt: number;
     updatedAt: number;
 }

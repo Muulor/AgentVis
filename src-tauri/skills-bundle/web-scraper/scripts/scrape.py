@@ -17,6 +17,7 @@ Usage:
 import argparse
 from copy import copy
 from email.utils import parsedate_to_datetime
+from http import HTTPStatus
 import importlib.util
 import io
 import json
@@ -53,11 +54,16 @@ except ImportError:
 
 # ==================== Constants ====================
 
+# Current curl_cffi browser profile guidance. Keep this aligned with SUPPORTED_IMPERSONATE.
+LATEST_CHROME_MAJOR = "146"
+LATEST_FIREFOX_MAJOR = "147"
+LATEST_SAFARI_PROFILE = "safari260"
+
 # Default User-Agent, impersonating a mainstream browser to avoid anti-scraping blocking.
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/131.0.0.0 Safari/537.36"
+    f"Chrome/{LATEST_CHROME_MAJOR}.0.0.0 Safari/537.36"
 )
 
 # Default CSS selectors to exclude, filtering noisy areas such as navigation, sidebars, and footers.
@@ -83,7 +89,6 @@ MIN_TEXT_DENSITY = 20
 
 # Network resilience defaults. Kept internal so the CLI stays small.
 RETRIABLE_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
-SOFT_BLOCK_STATUS_CODES = {401, 403, 429}
 MAX_FETCH_ATTEMPTS = 3
 MAX_RETRY_AFTER_SECONDS = 15.0
 
@@ -103,6 +108,18 @@ CHALLENGE_PAGE_SIGNALS = (
     ("verify you are human", "human verification"),
     ("unusual traffic", "traffic verification"),
     ("access denied", "access denied page"),
+)
+
+NOT_FOUND_PAGE_SIGNALS = (
+    ("sorry, we couldn't find the page", "page-not-found message"),
+    ("sorry, we could not find the page", "page-not-found message"),
+    ("couldn't find the page you were looking for", "page-not-found message"),
+    ("could not find the page you were looking for", "page-not-found message"),
+    ("the page you were looking for doesn't exist", "page-not-found message"),
+    ("the page you were looking for does not exist", "page-not-found message"),
+    ("the requested page could not be found", "page-not-found message"),
+    ("404 not found", "404 page"),
+    ("page not found", "page-not-found message"),
 )
 
 TRACKING_QUERY_PREFIXES = ("utm_",)
@@ -152,17 +169,55 @@ def default_proxy_from_env() -> str | None:
 
 # Browser fingerprint list supported by curl_cffi (common values).
 SUPPORTED_IMPERSONATE = [
-    "chrome131", "chrome124", "chrome120", "chrome116", "chrome110",
-    "chrome107", "chrome104", "chrome101", "chrome100",
+    "chrome", "chrome146", "chrome145", "chrome142", "chrome136", "chrome133a",
+    "chrome131", "chrome124", "chrome123", "chrome120", "chrome119", "chrome116",
+    "chrome110", "chrome107", "chrome104", "chrome101", "chrome100",
+    "chrome_android", "chrome131_android",
     "edge101", "edge99",
-    "safari17_0", "safari15_5", "safari15_3",
+    "safari", "safari260", "safari2601", "safari184", "safari180", "safari170",
+    "safari17_0", "safari155", "safari15_5", "safari153", "safari15_3",
+    "safari_ios", "safari260_ios", "safari184_ios", "safari180_ios", "safari172_ios",
+    "firefox", "firefox147", "firefox144", "firefox135", "firefox133",
+    "tor145",
 ]
+
+IMPERSONATE_ALIASES = {
+    "chrome": f"chrome{LATEST_CHROME_MAJOR}",
+    "chrome_android": "chrome131_android",
+    "firefox": f"firefox{LATEST_FIREFOX_MAJOR}",
+    "safari": LATEST_SAFARI_PROFILE,
+    "safari_ios": "safari260_ios",
+}
+
+SAFARI_PROFILE_VERSIONS = {
+    "safari153": "15.3",
+    "safari15_3": "15.3",
+    "safari155": "15.5",
+    "safari15_5": "15.5",
+    "safari170": "17.0",
+    "safari17_0": "17.0",
+    "safari172_ios": "17.2",
+    "safari180": "18.0",
+    "safari180_ios": "18.0",
+    "safari184": "18.4",
+    "safari184_ios": "18.4",
+    "safari260": "26.0",
+    "safari260_ios": "26.0",
+    "safari2601": "26.0.1",
+}
+
+
+def _resolve_impersonate_alias(impersonate: str | None) -> str | None:
+    if not impersonate:
+        return None
+    return IMPERSONATE_ALIASES.get(impersonate, impersonate)
 
 
 def _major_from_impersonate(impersonate: str | None) -> str | None:
+    impersonate = _resolve_impersonate_alias(impersonate)
     if not impersonate:
         return None
-    match = re.search(r"(chrome|edge)(\d+)", impersonate)
+    match = re.search(r"(chrome|edge|firefox)(\d+)", impersonate)
     return match.group(2) if match else None
 
 
@@ -171,27 +226,40 @@ def _user_agent_for_impersonate(user_agent: str, impersonate: str | None) -> str
     if not impersonate or user_agent != DEFAULT_USER_AGENT:
         return user_agent
 
+    resolved_impersonate = _resolve_impersonate_alias(impersonate) or impersonate
     major = _major_from_impersonate(impersonate)
-    if impersonate.startswith("edge") and major:
+    if resolved_impersonate.startswith("edge") and major:
         return (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             f"Chrome/{major}.0.0.0 Safari/537.36 Edg/{major}.0.0.0"
         )
-    if impersonate.startswith("chrome") and major:
+    if resolved_impersonate.startswith("chrome") and "_android" in resolved_impersonate and major:
+        return (
+            "Mozilla/5.0 (Linux; Android 10; K) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            f"Chrome/{major}.0.0.0 Mobile Safari/537.36"
+        )
+    if resolved_impersonate.startswith("chrome") and major:
         return (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             f"Chrome/{major}.0.0.0 Safari/537.36"
         )
-    if impersonate.startswith("safari17"):
+    if resolved_impersonate.startswith("firefox") and major:
         return (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-            "Version/17.0 Safari/605.1.15"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
+            f"rv:{major}.0) Gecko/20100101 Firefox/{major}.0"
         )
-    if impersonate.startswith("safari15"):
-        version = "15.5" if "15_5" in impersonate else "15.3"
+    if resolved_impersonate.startswith("safari"):
+        version = SAFARI_PROFILE_VERSIONS.get(resolved_impersonate, "26.0")
+        if resolved_impersonate.endswith("_ios"):
+            ios_version = version.replace(".", "_")
+            return (
+                f"Mozilla/5.0 (iPhone; CPU iPhone OS {ios_version} like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                f"Version/{version} Mobile/15E148 Safari/604.1"
+            )
         return (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/605.1.15 (KHTML, like Gecko) "
@@ -235,7 +303,7 @@ def _build_browser_headers(user_agent: str, impersonate: str | None = None) -> d
             headers["Sec-CH-UA"] = (
                 f'"Google Chrome";v="{major}", "Chromium";v="{major}", "Not_A Brand";v="24"'
             )
-        headers["Sec-CH-UA-Mobile"] = "?0"
+        headers["Sec-CH-UA-Mobile"] = "?1" if "Mobile" in user_agent else "?0"
         headers["Sec-CH-UA-Platform"] = f'"{platform}"'
 
     return headers
@@ -286,7 +354,7 @@ class CurlCffiClient:
         timeout: float = 15.0,
         proxy: str | None = None,
         headers: dict[str, str] | None = None,
-        impersonate: str = "chrome131",
+        impersonate: str = "chrome",
         cookies: dict[str, str] | None = None,
     ) -> None:
         from curl_cffi import requests as curl_requests
@@ -324,7 +392,7 @@ def create_http_client(
     Uses curl_cffi (browser TLS fingerprint impersonation) when the impersonate
     parameter is specified; otherwise uses httpx (lightweight and fast).
 
-    @param impersonate: Browser fingerprint identifier (for example 'chrome131');
+    @param impersonate: Browser fingerprint identifier (for example 'chrome' or 'chrome146');
         uses curl_cffi when provided.
     @param cookies: Cookie dictionary attached to all requests, with higher
         priority than Set-Cookie response headers.
@@ -501,6 +569,14 @@ def _detect_challenge_signal(html_text: str, final_url: str) -> str | None:
     return None
 
 
+def _detect_not_found_signal(html_text: str, final_url: str) -> str | None:
+    sample = (final_url + "\n" + html_text[:120_000]).lower()
+    for needle, label in NOT_FOUND_PAGE_SIGNALS:
+        if needle in sample:
+            return label
+    return None
+
+
 def _warn_if_challenge_page(html_text: str, final_url: str) -> None:
     signal = _detect_challenge_signal(html_text, final_url)
     if signal:
@@ -508,6 +584,194 @@ def _warn_if_challenge_page(html_text: str, final_url: str) -> None:
             f"  [WARN] The page appears to have returned an anti-scraping/verification page ({signal}): {final_url}\n"
             f"         The output may be empty or not body content; try providing login cookies, switching network/proxy, or using a browser-rendering solution."
         )
+
+
+def _warn_if_not_found_page(html_text: str, final_url: str) -> None:
+    signal = _detect_not_found_signal(html_text, final_url)
+    if signal:
+        print(
+            f"  [WARN] The page content looks like a not-found/error page ({signal}): {final_url}\n"
+            f"         If a normal browser shows the same not-found message, report that the source page is unavailable instead of retrying fingerprints."
+        )
+
+
+def _collapse_text(text: str) -> str:
+    """Collapse whitespace for compact terminal diagnostics."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _response_header(response: object, name: str) -> str:
+    headers = getattr(response, "headers", {}) or {}
+    try:
+        return str(headers.get(name, ""))
+    except AttributeError:
+        return ""
+
+
+def _decode_response_body(response: object, forced_encoding: str | None = None) -> str:
+    content = getattr(response, "content", b"") or b""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, bytes) or not content:
+        return ""
+
+    if forced_encoding:
+        encoding = forced_encoding
+    else:
+        encoding = detect_encoding(content, getattr(response, "encoding", None))
+    return content.decode(encoding, errors="replace")
+
+
+def _html_error_evidence(html_text: str) -> list[str]:
+    if not html_text:
+        return []
+
+    soup = BeautifulSoup(html_text, "lxml")
+    evidence: list[str] = []
+
+    if soup.title:
+        title = _collapse_text(soup.title.get_text(" ", strip=True))
+        if title:
+            evidence.append(f"title={title[:120]}")
+
+    for tag_name in ("h1", "h2"):
+        heading = soup.find(tag_name)
+        if heading:
+            heading_text = _collapse_text(heading.get_text(" ", strip=True))
+            if heading_text:
+                evidence.append(f"{tag_name}={heading_text[:160]}")
+                break
+
+    body_text = _collapse_text(soup.get_text(" ", strip=True))
+    if body_text:
+        evidence.append(f"body starts={body_text[:220]}")
+
+    return evidence
+
+
+def _http_status_phrase(status: int) -> str:
+    try:
+        return HTTPStatus(status).phrase
+    except ValueError:
+        return "HTTP error"
+
+
+def _http_status_guidance(status: int, html_text: str, final_url: str) -> tuple[str, str]:
+    challenge_signal = _detect_challenge_signal(html_text, final_url)
+    not_found_signal = _detect_not_found_signal(html_text, final_url)
+
+    if status == 404:
+        meaning = "The server says this URL does not exist."
+        next_action = (
+            "If a normal browser shows the same not-found page, treat the source as removed or invalid; "
+            "do not retry alternate browser fingerprints."
+        )
+    elif status == 410:
+        meaning = "The server says this content is gone."
+        next_action = "Report that the source content was removed instead of retrying browser fingerprints."
+    elif status == 401:
+        meaning = "The server requires authentication."
+        next_action = "Ask for login/session cookies or use an authenticated browser-rendering workflow."
+    elif status == 403:
+        if challenge_signal:
+            meaning = f"The server denied access and returned a verification page ({challenge_signal})."
+        else:
+            meaning = "The server denied access; this may be anti-bot, region, permission, or login related."
+        next_action = (
+            "Compare with a normal browser. If the browser can access real content, try cookies, proxy, or browser rendering; "
+            "if the browser also shows an error/not-found page, report the page as unavailable."
+        )
+    elif status == 429:
+        meaning = "The target rate-limited the scraper."
+        next_action = "Increase --delay, lower --max-pages, wait before retrying, or use a stable proxy/session."
+    elif status == 451:
+        meaning = "The content is unavailable for legal or regional reasons."
+        next_action = "Report the availability restriction or try a compliant region/proxy if appropriate."
+    elif 500 <= status <= 599:
+        meaning = "The target server returned a temporary server-side error."
+        next_action = "Retry later or reduce request rate; changing browser fingerprints is unlikely to fix a persistent 5xx."
+    elif not_found_signal:
+        meaning = f"The response body looks like a not-found page ({not_found_signal})."
+        next_action = "Verify the URL in a browser and report it as unavailable if the browser shows the same page."
+    else:
+        meaning = "The target returned an HTTP error status."
+        next_action = "Verify the URL in a browser, then decide between reporting unavailability, adding cookies, or using browser rendering."
+
+    return meaning, next_action
+
+
+def _format_http_status_observation(
+    response: object,
+    request_url: str,
+    forced_encoding: str | None = None,
+) -> str:
+    status = int(getattr(response, "status_code", 0) or 0)
+    final_url = str(getattr(response, "url", "") or request_url)
+    html_text = _decode_response_body(response, forced_encoding)
+    meaning, next_action = _http_status_guidance(status, html_text, final_url)
+    content_type = _response_header(response, "content-type")
+
+    lines = [
+        f"HTTP {status} {_http_status_phrase(status)} for {request_url}",
+    ]
+    if final_url != request_url:
+        lines.append(f"Final URL: {final_url}")
+    if content_type:
+        lines.append(f"Content-Type: {content_type}")
+    lines.append(f"Meaning: {meaning}")
+
+    evidence = _html_error_evidence(html_text)
+    if evidence:
+        lines.append("Evidence: " + " | ".join(evidence[:3]))
+    lines.append(f"Next action: {next_action}")
+    return "\n".join(lines)
+
+
+def _response_request(response: object, request_url: str) -> httpx.Request:
+    try:
+        request = getattr(response, "request", None)
+    except RuntimeError:
+        request = None
+    return request or httpx.Request("GET", request_url)
+
+
+def _raise_http_status_observation(
+    response: object,
+    request_url: str,
+    forced_encoding: str | None = None,
+) -> None:
+    status = int(getattr(response, "status_code", 0) or 0)
+    message = _format_http_status_observation(response, request_url, forced_encoding)
+    request = _response_request(response, request_url)
+
+    if isinstance(response, httpx.Response):
+        httpx_response = response
+    else:
+        headers = getattr(response, "headers", {}) or {}
+        httpx_response = httpx.Response(
+            status,
+            request=request,
+            headers=headers,
+            content=getattr(response, "content", b"") or b"",
+        )
+
+    raise httpx.HTTPStatusError(message, request=request, response=httpx_response)
+
+
+def _one_line_error_message(error: Exception) -> str:
+    """Compact a multi-line exception for progress-bar friendly crawl logs."""
+    return _collapse_text(str(error)) or f"{type(error).__name__}: {error}"
+
+
+def _print_error_observation(error: Exception) -> None:
+    message = str(error).strip() or f"{type(error).__name__}: {error}"
+    lines = message.splitlines()
+    if not lines:
+        print(f"[ERR] {type(error).__name__}")
+        return
+    print(f"[ERR] {lines[0]}")
+    for line in lines[1:]:
+        print(f"      {line}")
 
 
 def fetch_page(
@@ -522,9 +786,8 @@ def fetch_page(
     """
     response = _request_with_retries(client, url)
     status = getattr(response, "status_code", 0)
-    if status in SOFT_BLOCK_STATUS_CODES:
-        print(f"  [WARN] Target returned HTTP {status}; cookies, a proxy, or browser rendering may be required: {url}")
-    response.raise_for_status()
+    if status >= 400:
+        _raise_http_status_observation(response, url, forced_encoding)
 
     # Get the final URL (after redirects).
     final_url = str(response.url)
@@ -538,6 +801,7 @@ def fetch_page(
         html_text = response.content.decode(encoding, errors="replace")
 
     _warn_if_challenge_page(html_text, final_url)
+    _warn_if_not_found_page(html_text, final_url)
     return html_text, final_url
 
 
@@ -2548,7 +2812,7 @@ def scrape_multi_page(
                         next_level_urls.append(normalized_link)
 
             except httpx.HTTPStatusError as e:
-                print(f"\n  [!] Skipping {url}: HTTP {e.response.status_code}")
+                print(f"\n  [!] Skipping {url}: {_one_line_error_message(e)}")
             except httpx.RequestError as e:
                 print(f"\n  [!] Skipping {url}: {e}")
             except Exception as e:
@@ -2760,8 +3024,8 @@ Examples:
     parser.add_argument("--encoding", help="Force a specific web page encoding (auto-detect if not specified)")
     parser.add_argument("--summary", action="store_true", help="Generate site summary file summary.md")
     parser.add_argument("--impersonate", metavar="BROWSER",
-                        help=f"Use curl_cffi to impersonate browser TLS fingerprints and bypass anti-scraping (for example chrome131). "
-                             f"Optional values: {', '.join(SUPPORTED_IMPERSONATE[:5])}...")
+                        help=f"Use curl_cffi to impersonate browser TLS fingerprints and bypass anti-scraping (recommended chrome, or pin chrome146). "
+                             f"Optional values: {', '.join(SUPPORTED_IMPERSONATE[:8])}...")
     parser.add_argument("--cookies", metavar="JSON",
                         help="Additional cookies, in JSON string format, such as '{\"name\": \"value\"}', "
                              "often used for pages requiring login or to bypass session verification")
@@ -2892,7 +3156,7 @@ Examples:
             )
 
     except httpx.HTTPStatusError as e:
-        print(f"[ERR] HTTP error: {e.response.status_code} -- {args.url}")
+        _print_error_observation(e)
         sys.exit(1)
     except (httpx.RequestError, Exception) as e:
         # Compatible with exception types from both httpx and curl_cffi.

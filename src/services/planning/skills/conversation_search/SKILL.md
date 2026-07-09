@@ -10,8 +10,6 @@ requiresAuth: false
 
 Searches persisted user and assistant messages for the current Agent only. It is useful when the live context or compressed memory does not contain enough evidence about an earlier conversation.
 
-Search matches the memory-safe conversation text returned by this tool, not visual-only UI rendering artifacts.
-
 Use it in three stages:
 
 1. `mode: "timeline"` lists lightweight chronological previews without requiring a keyword.
@@ -28,8 +26,6 @@ Use it in three stages:
 
 ## When Not To Use
 
-- Search project files or code -> use `local_search` or `read`.
-- Search the web or current public information -> use `web_search`.
 - Search another Agent, Hub messages, or all Agents -> this tool is intentionally scoped to the current Agent only.
 - The user has already supplied the needed fact in the current request.
 

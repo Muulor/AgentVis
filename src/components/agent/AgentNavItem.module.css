@@ -113,11 +113,28 @@
 }
 
 /* 名称 */
-.name {
+.content {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+}
+
+.name {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.preview {
+    font-size: var(--font-size-xs);
+    line-height: 1.35;
+    color: var(--color-text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -138,6 +155,6 @@
     padding: 8px;
 }
 
-.navItem[data-collapsed="true"] .name {
+.navItem[data-collapsed="true"] .content {
     display: none;
 }
