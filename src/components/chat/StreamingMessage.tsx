@@ -17,6 +17,7 @@ import { ChatReasoningTrace } from './ChatReasoningTrace';
 import { usePreviewStore } from '@stores/previewStore';
 import { wrapSvgInHtml } from '@services/preview/templateInference';
 import { useI18n } from '@/i18n';
+import { cx } from '@utils/classNames';
 import type { ChatMode } from '@/types/chatMode';
 import styles from './StreamingMessage.module.css';
 
@@ -92,7 +93,7 @@ export const StreamingMessage = memo(function StreamingMessage({
     const hasReasoningContent = reasoningContent.trim().length > 0;
 
     return (
-        <div className={styles.streamingBubble}>
+        <div className={cx(styles.streamingBubble, mode === 'planning' && styles.planningBubble)}>
             {/* 头像 */}
             <div
                 className={styles.avatar}

@@ -41,6 +41,7 @@ const MIN_ENHANCED_LENGTH_RATIO = 0.6;
 /** 默认超时毫秒数（增强器需要处理完整报告+生成增强版本，120 秒更安全） */
 const DEFAULT_TIMEOUT_MS = 120_000;
 const CHARS_PER_TOKEN_ESTIMATE = 2.5;
+const VISUAL_ENHANCER_STREAM_UI_FLUSH_INTERVAL_MS = 64;
 
 /** 已包含可视化格式的检测模式（这些格式无需再增强） */
 const EXISTING_VISUAL_PATTERNS = [
@@ -283,14 +284,49 @@ async function collectStreamResponse(
         let accumulatedContent = '';
         let unlistenFn: (() => void) | null = null;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let streamFlushTimer: ReturnType<typeof setTimeout> | null = null;
+        let pendingStreamContent: string | null = null;
         let settled = false;
         let streamStarted = false;
+
+        const clearStreamFlushTimer = () => {
+            if (streamFlushTimer) {
+                clearTimeout(streamFlushTimer);
+                streamFlushTimer = null;
+            }
+        };
+
+        const flushStreamDelta = () => {
+            clearStreamFlushTimer();
+
+            if (!onStreamDelta || pendingStreamContent === null || settled || options.signal?.aborted) {
+                pendingStreamContent = null;
+                return;
+            }
+
+            const content = pendingStreamContent;
+            pendingStreamContent = null;
+            onStreamDelta(content);
+        };
+
+        const scheduleStreamDelta = (content: string) => {
+            if (!onStreamDelta) return;
+
+            pendingStreamContent = content;
+            if (streamFlushTimer) return;
+
+            streamFlushTimer = setTimeout(
+                flushStreamDelta,
+                VISUAL_ENHANCER_STREAM_UI_FLUSH_INTERVAL_MS
+            );
+        };
 
         const cleanup = () => {
             if (timeoutId) {
                 clearTimeout(timeoutId);
                 timeoutId = null;
             }
+            clearStreamFlushTimer();
             if (options.signal) {
                 options.signal.removeEventListener('abort', handleAbort);
             }
@@ -308,6 +344,7 @@ async function collectStreamResponse(
 
         const finishResolve = (content: string) => {
             if (settled) return;
+            flushStreamDelta();
             settled = true;
             cleanup();
             resolve(content);
@@ -319,6 +356,7 @@ async function collectStreamResponse(
             if (cancelBackend) {
                 cancelBackendStream();
             }
+            pendingStreamContent = null;
             cleanup();
             reject(error);
         };
@@ -352,10 +390,8 @@ async function collectStreamResponse(
 
             accumulatedContent += event.payload.delta;
 
-            // 流式回调：将当前累积内容实时推送给调用方（如 UI 渲染层）
-            if (onStreamDelta) {
-                onStreamDelta(accumulatedContent);
-            }
+            // 流式回调合批推送，避免每个 SSE chunk 都触发 Markdown 重新渲染。
+            scheduleStreamDelta(accumulatedContent);
 
             if (event.payload.done) {
                 // 流完成，上报 token 用量

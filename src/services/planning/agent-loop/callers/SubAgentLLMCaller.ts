@@ -18,6 +18,7 @@ import { translate } from '@/i18n';
 
 const logger = getLogger('SubAgentLLMCaller');
 const SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS = 5000;
+const SUB_AGENT_REASONING_UI_FLUSH_INTERVAL_MS = 64;
 
 /**
  * 工具调用信息
@@ -299,6 +300,54 @@ export class SubAgentLLMCallerFactory {
 
         let unlistenToolCallProgress: (() => void) | undefined;
         let unlistenReasoningProgress: (() => void) | undefined;
+        let reasoningProgressContent = '';
+        let reasoningProgressFlushTimer: ReturnType<typeof setTimeout> | null = null;
+        let pendingReasoningProgress = false;
+        let pendingReasoningDone = false;
+
+        const clearReasoningProgressFlushTimer = () => {
+            if (reasoningProgressFlushTimer) {
+                clearTimeout(reasoningProgressFlushTimer);
+                reasoningProgressFlushTimer = null;
+            }
+        };
+
+        const flushReasoningProgress = () => {
+            clearReasoningProgressFlushTimer();
+
+            if (!onReasoningTrace || !pendingReasoningProgress) return;
+
+            const done = pendingReasoningDone;
+            pendingReasoningProgress = false;
+            pendingReasoningDone = false;
+
+            if (signal?.aborted && !done) return;
+
+            onReasoningTrace({
+                content: reasoningProgressContent,
+                done,
+            });
+        };
+
+        const scheduleReasoningProgress = (done: boolean) => {
+            if (!onReasoningTrace) return;
+
+            pendingReasoningProgress = true;
+            pendingReasoningDone = pendingReasoningDone || done;
+
+            if (done) {
+                flushReasoningProgress();
+                return;
+            }
+
+            if (reasoningProgressFlushTimer) return;
+
+            reasoningProgressFlushTimer = setTimeout(
+                flushReasoningProgress,
+                SUB_AGENT_REASONING_UI_FLUSH_INTERVAL_MS
+            );
+        };
+
         if (onToolCallProgress) {
             try {
                 const { listen } = await import('@tauri-apps/api/event');
@@ -322,19 +371,15 @@ export class SubAgentLLMCallerFactory {
         if (onReasoningTrace) {
             try {
                 const { listen } = await import('@tauri-apps/api/event');
-                let reasoningContent = '';
                 unlistenReasoningProgress = await listen<ReasoningProgressPayload>(
                     'llm-reasoning-progress',
                     (event) => {
                         const payload = event.payload;
                         if (payload.sessionId !== sessionId) return;
                         if (payload.delta) {
-                            reasoningContent += payload.delta;
+                            reasoningProgressContent += payload.delta;
                         }
-                        onReasoningTrace({
-                            content: reasoningContent,
-                            done: payload.done,
-                        });
+                        scheduleReasoningProgress(payload.done);
                     }
                 );
             } catch (error) {
@@ -489,6 +534,8 @@ export class SubAgentLLMCallerFactory {
         } finally {
             // 无论成功/失败/取消，都清理 AbortSignal 监听器，避免内存泄漏
             signal?.removeEventListener('abort', abortHandler);
+            flushReasoningProgress();
+            clearReasoningProgressFlushTimer();
             unlistenToolCallProgress?.();
             unlistenReasoningProgress?.();
         }

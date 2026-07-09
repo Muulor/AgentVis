@@ -78,6 +78,7 @@ interface AgentLoopLLMMessage { role: string; content: string; images?: unknown 
 const DEEPSEEK_V4_MODEL_IDS = new Set(['deepseek-v4-pro', 'deepseek-v4-flash']);
 const DEEPSEEK_V4_MB_PRE_JSON_RETRY_CHARS = 2600;
 const DEEPSEEK_V4_MB_GUARD_CANCEL_GRACE_MS = 1200;
+const MB_STREAM_UI_FLUSH_INTERVAL_MS = 64;
 const REPETITION_SEGMENT_MIN_CHARS = 16;
 const REPETITION_SEGMENT_MIN_COUNT = 8;
 const REPETITION_SEGMENT_MIN_TOTAL_CHARS = 900;
@@ -1490,14 +1491,16 @@ export class AgentLoop {
             let guardCancelTimer: ReturnType<typeof setTimeout> | null = null;
             let hasReasoningTraceStarted = false;
             let reasoningTraceCompleted = false;
+            let reasoningTraceFlushTimer: ReturnType<typeof setTimeout> | null = null;
+            let pendingReasoningTraceContent = false;
+            let streamDisplayFlushTimer: ReturnType<typeof setTimeout> | null = null;
+            let pendingStreamDisplayContent: string | null = null;
 
-            const cleanup = () => {
-                if (guardCancelTimer) {
-                    clearTimeout(guardCancelTimer);
-                    guardCancelTimer = null;
+            const clearReasoningTraceFlushTimer = () => {
+                if (reasoningTraceFlushTimer) {
+                    clearTimeout(reasoningTraceFlushTimer);
+                    reasoningTraceFlushTimer = null;
                 }
-                unlistenFn?.();
-                unlistenFn = null;
             };
 
             const emitReasoningTraceStart = () => {
@@ -1506,7 +1509,10 @@ export class AgentLoop {
                 onReasoningTrace({ type: 'START' });
             };
 
-            const emitReasoningTraceContent = () => {
+            const flushReasoningTraceContent = () => {
+                clearReasoningTraceFlushTimer();
+                if (!pendingReasoningTraceContent) return;
+                pendingReasoningTraceContent = false;
                 if (!onReasoningTrace || reasoningTraceCompleted) return;
                 emitReasoningTraceStart();
                 onReasoningTrace({
@@ -1515,13 +1521,68 @@ export class AgentLoop {
                 });
             };
 
+            const scheduleReasoningTraceContent = () => {
+                if (!onReasoningTrace || reasoningTraceCompleted) return;
+
+                pendingReasoningTraceContent = true;
+                if (reasoningTraceFlushTimer) return;
+
+                reasoningTraceFlushTimer = setTimeout(
+                    flushReasoningTraceContent,
+                    MB_STREAM_UI_FLUSH_INTERVAL_MS
+                );
+            };
+
             const emitReasoningTraceComplete = () => {
+                flushReasoningTraceContent();
                 if (!onReasoningTrace || !hasReasoningTraceStarted || reasoningTraceCompleted) return;
                 reasoningTraceCompleted = true;
                 onReasoningTrace({
                     type: 'COMPLETE',
                     content: reasoningContent,
                 });
+            };
+
+            const clearStreamDisplayFlushTimer = () => {
+                if (streamDisplayFlushTimer) {
+                    clearTimeout(streamDisplayFlushTimer);
+                    streamDisplayFlushTimer = null;
+                }
+            };
+
+            const flushStreamDisplayContent = () => {
+                clearStreamDisplayFlushTimer();
+                if (pendingStreamDisplayContent === null || settled) {
+                    pendingStreamDisplayContent = null;
+                    return;
+                }
+
+                const content = pendingStreamDisplayContent;
+                pendingStreamDisplayContent = null;
+                onStreamDelta(content);
+            };
+
+            const scheduleStreamDisplayContent = (content: string) => {
+                pendingStreamDisplayContent = content;
+                if (streamDisplayFlushTimer) return;
+
+                streamDisplayFlushTimer = setTimeout(
+                    flushStreamDisplayContent,
+                    MB_STREAM_UI_FLUSH_INTERVAL_MS
+                );
+            };
+
+            const cleanup = () => {
+                if (guardCancelTimer) {
+                    clearTimeout(guardCancelTimer);
+                    guardCancelTimer = null;
+                }
+                clearReasoningTraceFlushTimer();
+                clearStreamDisplayFlushTimer();
+                pendingReasoningTraceContent = false;
+                pendingStreamDisplayContent = null;
+                unlistenFn?.();
+                unlistenFn = null;
             };
 
             const settleReject = (error: Error) => {
@@ -1590,7 +1651,7 @@ export class AgentLoop {
                 // 累积 reasoning（思考模型的推理过程）和 delta（JSON 输出）
                 if (event.payload.reasoning) {
                     reasoningContent += event.payload.reasoning;
-                    emitReasoningTraceContent();
+                    scheduleReasoningTraceContent();
                 }
                 if (event.payload.delta) {
                     deltaContent += event.payload.delta;
@@ -1608,12 +1669,12 @@ export class AgentLoop {
                 if (useDeepSeekV4MbGuard) {
                     const guardedDisplayContent = this.buildDeepSeekV4MbDisplayContent(deltaContent);
                     if (guardedDisplayContent) {
-                        onStreamDelta(guardedDisplayContent);
+                        scheduleStreamDisplayContent(guardedDisplayContent);
                     }
                 } else {
                     // Decision only displays structured output; provider reasoning_content uses Thinking.
                     if (deltaContent) {
-                        onStreamDelta(deltaContent);
+                        scheduleStreamDisplayContent(deltaContent);
                     }
                 }
 
@@ -1640,6 +1701,8 @@ export class AgentLoop {
                         settleReject(new MbEmptyDecisionContentError(reasoningContent.length));
                         return;
                     }
+
+                    flushStreamDisplayContent();
 
                     // 返回纯 delta 内容（JSON 输出），供 DecisionParser 解析
                     settleResolve(finalDeltaContent);

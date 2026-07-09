@@ -101,14 +101,17 @@ export function useDataLoader(): void {
 
                 setHubs(formattedHubs);
 
-                // 2. 如果有 Hub，自动选中第一个
-                if (hubs.length > 0 && hubs[0]) {
-                    const firstHubId = hubs[0].id;
-                    setCurrentHubId(firstHubId);
+                // 2. 优先恢复上次选中的 Hub；如果不存在，再回退到第一个
+                const persistedHubExists = currentHubId
+                    ? hubs.some((hub) => hub.id === currentHubId)
+                    : false;
+                const initialHubId = persistedHubExists ? currentHubId : hubs[0]?.id ?? null;
+                setCurrentHubId(initialHubId);
 
-                    // 3. 加载第一个 Hub 下的 Agent
+                if (initialHubId) {
+                    // 3. 加载初始 Hub 下的 Agent
                     const agents = await invoke<AgentItem[]>('agent_list_by_hub', {
-                        hubId: firstHubId,
+                        hubId: initialHubId,
                     });
                     setAgents(agents);
                 }
@@ -122,7 +125,7 @@ export function useDataLoader(): void {
         }
 
         void loadInitialData();
-    }, [setHubs, setCurrentHubId, setAgents, initSkillPreferences]);
+    }, [setHubs, setCurrentHubId, setAgents, currentHubId, initSkillPreferences]);
 
     // 监听 Hub 切换，加载对应的 Agent 列表
     useEffect(() => {

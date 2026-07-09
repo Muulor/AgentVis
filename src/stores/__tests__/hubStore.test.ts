@@ -1,6 +1,25 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAgentStore } from '../agentStore';
-import { useHubStore } from '../hubStore';
+import { CURRENT_HUB_STORAGE_KEY, useHubStore } from '../hubStore';
+
+function createMemoryStorage(): Storage {
+    const values = new Map<string, string>();
+
+    return {
+        get length() {
+            return values.size;
+        },
+        clear: () => values.clear(),
+        getItem: (key) => values.get(key) ?? null,
+        key: (index) => Array.from(values.keys())[index] ?? null,
+        removeItem: (key) => {
+            values.delete(key);
+        },
+        setItem: (key, value) => {
+            values.set(key, value);
+        },
+    };
+}
 
 function createAgent(id: string, hubId: string) {
     return {
@@ -32,6 +51,7 @@ function createHub(id: string) {
 
 describe('hubStore', () => {
     beforeEach(() => {
+        vi.stubGlobal('localStorage', createMemoryStorage());
         useHubStore.setState({
             hubs: [],
             currentHubId: null,
@@ -47,11 +67,31 @@ describe('hubStore', () => {
         });
     });
 
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('persists the selected hub id', () => {
+        useHubStore.getState().setCurrentHubId('hub-2');
+
+        expect(useHubStore.getState().currentHubId).toBe('hub-2');
+        expect(localStorage.getItem(CURRENT_HUB_STORAGE_KEY)).toBe('hub-2');
+    });
+
+    it('clears the persisted hub id when the selection is cleared', () => {
+        useHubStore.getState().setCurrentHubId('hub-2');
+        useHubStore.getState().setCurrentHubId(null);
+
+        expect(useHubStore.getState().currentHubId).toBeNull();
+        expect(localStorage.getItem(CURRENT_HUB_STORAGE_KEY)).toBeNull();
+    });
+
     it('clears the selected agent when removing its hub', () => {
         useHubStore.setState({
             hubs: [createHub('hub-1'), createHub('hub-2')],
             currentHubId: 'hub-1',
         });
+        localStorage.setItem(CURRENT_HUB_STORAGE_KEY, 'hub-1');
         useAgentStore.setState({
             agents: [createAgent('agent-1', 'hub-1'), createAgent('agent-2', 'hub-2')],
             currentAgentId: 'agent-1',
@@ -69,6 +109,7 @@ describe('hubStore', () => {
         expect(useAgentStore.getState().agents.map((agent) => agent.id)).toEqual(['agent-2']);
         expect(useAgentStore.getState().agentHubMap.has('agent-1')).toBe(false);
         expect(useAgentStore.getState().agentHubMap.get('agent-2')).toBe('hub-2');
+        expect(localStorage.getItem(CURRENT_HUB_STORAGE_KEY)).toBeNull();
     });
 
     it('keeps the selected agent when removing a different hub', () => {

@@ -64,20 +64,22 @@ export function ReasoningTraceSection({ contextId }: { contextId: string }) {
                 </span>
             </button>
 
-            {isExpanded && (
-                <div ref={traceContainerRef} className={styles.traceContainer}>
-                    {hasContent ? (
-                        <ThinkingStream
-                            content={content}
-                            isActive={isStreaming}
-                            showCursor={isStreaming}
-                            typeSpeed={24}
-                        />
-                    ) : (
-                        <div className={styles.placeholder}>{t('chat.masterBrainReasoning')}</div>
-                    )}
-                </div>
-            )}
+            <div
+                ref={traceContainerRef}
+                className={cx(styles.traceContainer, isExpanded ? styles.expanded : styles.collapsed)}
+                aria-hidden={!isExpanded}
+            >
+                {hasContent ? (
+                    <ThinkingStream
+                        content={content}
+                        isActive={isStreaming}
+                        showCursor={isStreaming}
+                        typeSpeed={24}
+                    />
+                ) : (
+                    <div className={styles.placeholder}>{t('chat.masterBrainReasoning')}</div>
+                )}
+            </div>
         </section>
     );
 }

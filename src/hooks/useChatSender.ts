@@ -43,6 +43,7 @@ import { modelSupportsVision } from '@/config/modelRegistry';
 
 const logger = getLogger('useChatSender');
 const CHARS_PER_TOKEN_ESTIMATE = 2.5;
+const STREAM_UI_FLUSH_INTERVAL_MS = 64;
 
 function getPositiveTokenCount(value: number | undefined): number | undefined {
     return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -823,6 +824,48 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             // 取消标志：当后端发送 "用户取消" 错误时置为 true，
             // 用于阻止步骤4继续执行 addMessage 导致气泡重新出现
             const cancellationState = { cancelled: false };
+            let pendingContentDelta = '';
+            let pendingReasoningDelta = '';
+            let streamFlushTimer: number | null = null;
+
+            const clearStreamFlushTimer = () => {
+                if (streamFlushTimer !== null) {
+                    window.clearTimeout(streamFlushTimer);
+                    streamFlushTimer = null;
+                }
+            };
+
+            const flushStreamingDeltas = () => {
+                clearStreamFlushTimer();
+
+                if (abortController.signal.aborted || cancellationState.cancelled) {
+                    pendingContentDelta = '';
+                    pendingReasoningDelta = '';
+                    return;
+                }
+
+                const contentDelta = pendingContentDelta;
+                const reasoningDelta = pendingReasoningDelta;
+                pendingContentDelta = '';
+                pendingReasoningDelta = '';
+
+                if (contentDelta) {
+                    appendStreamingContent(contextId, contentDelta);
+                }
+
+                if (reasoningDelta) {
+                    appendStreamingReasoning(contextId, reasoningDelta);
+                }
+            };
+
+            const scheduleStreamingFlush = () => {
+                if (streamFlushTimer !== null) return;
+
+                streamFlushTimer = window.setTimeout(
+                    flushStreamingDeltas,
+                    STREAM_UI_FLUSH_INTERVAL_MS
+                );
+            };
 
             const { listen } = await import('@tauri-apps/api/event');
 
@@ -845,24 +888,36 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                     // 区分用户主动取消与真正的流式错误
                     if (event.payload.error === 'User cancelled') {
                         cancellationState.cancelled = true;
+                        pendingContentDelta = '';
+                        pendingReasoningDelta = '';
+                        clearStreamFlushTimer();
                         logger.trace('[useChatSender] 收到后端取消确认');
                     } else {
+                        flushStreamingDeltas();
                         logger.error('[useChatSender] 流式响应错误:', event.payload.error);
                     }
                     finishStreaming(contextId);
                     return;
                 }
 
-                accumulatedContent += event.payload.delta;
-                appendStreamingContent(contextId, event.payload.delta);
+                if (event.payload.delta) {
+                    accumulatedContent += event.payload.delta;
+                    pendingContentDelta += event.payload.delta;
+                }
 
                 if (event.payload.reasoning) {
                     accumulatedReasoning += event.payload.reasoning;
-                    appendStreamingReasoning(contextId, event.payload.reasoning);
+                    pendingReasoningDelta += event.payload.reasoning;
+                }
+
+                if (event.payload.delta || event.payload.reasoning) {
+                    scheduleStreamingFlush();
                 }
 
                 // 流结束时提取 API 返回的 token 用量，累加到 statusStore
                 if (event.payload.done) {
+                    flushStreamingDeltas();
+
                     const inputChars = messages.reduce((sum, m) => sum + m.content.length, 0);
                     const estimatedInput = Math.ceil(inputChars / CHARS_PER_TOKEN_ESTIMATE);
                     const estimatedOutput = Math.ceil(accumulatedContent.length / CHARS_PER_TOKEN_ESTIMATE);
@@ -871,7 +926,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                     const hasApiUsage = getPositiveTokenCount(event.payload.inputTokens) !== undefined
                         || getPositiveTokenCount(event.payload.outputTokens) !== undefined;
 
-                    if (hasApiUsage || accumulatedContent.length > 0) {
+                    if (hasApiUsage || accumulatedContent.length > 0 || accumulatedReasoning.length > 0) {
                         useStatusStore.getState().addTokenUsage(
                             contextId,
                             inputTokens,
@@ -951,6 +1006,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                 });
             } finally {
                 unlisten();
+                flushStreamingDeltas();
             }
 
             // ====== 步骤 4: 保存助手响应 ======
@@ -958,7 +1014,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             if (cancellationState.cancelled || abortController.signal.aborted) {
                 logger.trace('[useChatSender] 用户已取消，跳过响应保存');
                 finishStreaming(contextId);
-            } else if (accumulatedContent.trim()) {
+            } else if (accumulatedContent.trim() || accumulatedReasoning.trim()) {
                 let assistantMessageId: string;
                 let assistantMessageCreatedAt: number;
 

@@ -9,6 +9,10 @@
     align-self: flex-start;
 }
 
+.planningBubble {
+    width: 85%;
+}
+
 /* ==================== 头像 ==================== */
 
 .avatar {
