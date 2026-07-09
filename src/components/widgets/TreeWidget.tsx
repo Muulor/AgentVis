@@ -34,7 +34,7 @@
  */
 
 import { memo, useCallback, useMemo } from 'react';
-import { Undo2, ChevronRight } from 'lucide-react';
+import { ChevronRight, Undo2 } from 'lucide-react';
 import type { WidgetComponentProps } from './WidgetRenderer';
 import { useWidgetStore } from '@stores/widgetStore';
 import { WidgetIcon } from './WidgetIcon';
@@ -238,7 +238,7 @@ export const TreeWidget = memo(function TreeWidget({
                 if (shouldUseBubbleSubmit && messageId) {
                     setBubbleWidgetSelection(messageId, bubbleWidgetKey, [actionText]);
                 } else {
-                    dispatchAction(contextId, actionText, displayText);
+                    dispatchAction(contextId, actionText, displayText, undefined, messageId);
                 }
             }
             // 有子节点 → 仅更新 store（触发重渲染，新层级滑入）
@@ -370,8 +370,8 @@ export const TreeWidget = memo(function TreeWidget({
                 );
             })}
 
-            {/* 重选按钮 */}
-            {selectedPath.length > 0 && !isBubbleSubmitted && (
+            {/* 树内部重选按钮：仅重置路径，不撤回消息 */}
+            {selectedPath.length > 0 && !isBubbleSubmitted && (!isTreeDone || shouldUseBubbleSubmit) && (
                 <button
                     className={styles.reselectBtn}
                     onClick={handleReselect}

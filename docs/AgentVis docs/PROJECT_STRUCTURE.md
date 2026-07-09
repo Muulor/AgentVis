@@ -116,6 +116,8 @@ chat/
 ├── ChatInput.tsx                 # 聊天输入框
 ├── ChatInput.module.css          # 输入框样式
 ├── ChatSearchBar.tsx             # 聊天搜索栏（关键字搜索、结果高亮、键盘导航）
+├── ChatReasoningTrace.tsx        # Chat 模式推理内容折叠块
+├── ChatReasoningTrace.module.css
 ├── ChatSearchBar.module.css      # 搜索栏样式
 ├── ImageLightbox.tsx             # 图片灯箱（大图预览）
 ├── ImageLightbox.module.css      # 灯箱样式
@@ -167,6 +169,8 @@ chat/
     │   ├── ThinkingStream.module.css
     │   ├── DecisionCard.tsx          # 决策卡片
     │   ├── DecisionCard.module.css
+    │   ├── ReasoningTraceSection.tsx   #Master Brain 推理内容流式区块
+    │   ├── ReasoningTraceSection.module.css
     │   ├── SubAgentObservationSection.tsx  # Sub-Agent 实时观测面板
     │   └── SubAgentObservationSection.module.css
     │
@@ -370,6 +374,8 @@ widgets/
 ├── WidgetParsing.tsx             # Widget 解析工具件
 ├── TreeWidget.tsx                # 渐进式决策树（多层级嵌套+面包屑+淡出滑入动画+叶子回调）
 ├── TreeWidget.module.css         # 决策树样式
+├── StandaloneTreeReplyBar.tsx    # 决策树消息底部操作栏
+├── StandaloneTreeReplyBar.module.css
 ├── BubbleReplyBar.tsx            # 气泡底部统一回复确认栏
 ├── BubbleReplyBar.module.css     # 气泡统一回复确认栏样式
 └── index.ts                      # 模块导出索引
@@ -490,6 +496,7 @@ types/
 ```
 utils/
 ├── classNames.ts
+├── messageReload.ts
 ├── networkDirectRisk.ts
 └── quoteContent.ts
 ```

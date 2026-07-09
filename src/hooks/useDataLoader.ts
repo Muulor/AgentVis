@@ -12,36 +12,15 @@ import { useChatStore } from '@stores/chatStore';
 import { useRuntimeStore } from '@stores/runtimeStore';
 import { useWidgetStore } from '@stores/widgetStore';
 import { collectWidgetBubbleSubmissions } from '@stores/widgetSubmissionRecovery';
-import type { Message } from '@/types';
 import { getLogger } from '@services/logger';
+import type { Message } from '@/types';
+import { parseQuotedFrom, type PersistedMessageItem } from '@utils/messageReload';
 
 const logger = getLogger('useDataLoader');
 
 // ==================== 工具函数 ====================
 
 /** 从已解析的 metadata 中安全提取 quotedFrom 列表 */
-function parseQuotedFrom(
-    metadata: Record<string, unknown> | undefined | null,
-): Message['quotedFrom'] | undefined {
-    if (!metadata) return undefined;
-    const raw = metadata.quotedFrom;
-    if (!Array.isArray(raw) || raw.length === 0) return undefined;
-    const result = raw.flatMap((item) => {
-        if (typeof item !== 'object' || item === null) return [];
-
-        const record = item as Record<string, unknown>;
-        if (typeof record.content !== 'string') return [];
-        const legacyContextContent = typeof record.contextContent === 'string' && record.contextContent.trim()
-            ? record.contextContent
-            : undefined;
-
-        return [{
-            content: legacyContextContent ?? record.content,
-            ...(typeof record.agentName === 'string' ? { agentName: record.agentName } : {}),
-        }];
-    });
-    return result.length > 0 ? result : undefined;
-}
 
 /** Hub 类型 - 对应 Rust 端 HubItem */
 interface HubItem {
@@ -184,14 +163,7 @@ export function useDataLoader(): void {
                 // 超出部分通过 ChatHistory 顶部的"加载更多"按钮分批拉取。
                 const INITIAL_LOAD_COUNT = 100;
                 const [messagesFromDb, totalCount] = await Promise.all([
-                    invoke<Array<{
-                        id: string;
-                        agentId: string;
-                        role: string;
-                        content: string;
-                        metadata: string | null;
-                        createdAt: number;
-                    }>>('message_get_recent', {
+                    invoke<PersistedMessageItem[]>('message_get_recent', {
                         agentId: currentAgentId,
                         count: INITIAL_LOAD_COUNT,
                     }),
@@ -293,14 +265,7 @@ export function useDataLoader(): void {
                 // 后者按 ASC 取最旧的 200 条，消息超限后新消息加载不到 UI
                 const HUB_INITIAL_LOAD_COUNT = 100;
                 const [messagesFromDb, totalCount] = await Promise.all([
-                    invoke<Array<{
-                        id: string;
-                        agentId: string;
-                        role: string;
-                        content: string;
-                        metadata: string | null;
-                        createdAt: number;
-                    }>>('message_get_recent_hub', {
+                    invoke<PersistedMessageItem[]>('message_get_recent_hub', {
                         hubId: currentHubId,
                         count: HUB_INITIAL_LOAD_COUNT,
                     }),

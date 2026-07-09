@@ -21,6 +21,7 @@ import type { DiffRecord } from '@components/ui';
 import { getLogger } from '@services/logger';
 import { useI18n } from '@/i18n';
 import { getMessageQuoteContent } from '@utils/quoteContent';
+import { refreshAgentMessagesFromDb, refreshHubMessagesFromDb } from '@utils/messageReload';
 
 const logger = getLogger('useMessageActions');
 
@@ -265,14 +266,33 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                             const newMessages = currentMessages.filter(m => !idsToDelete.includes(m.id));
                             useChatStore.getState().setMessages(contextId, newMessages);
 
-                            // 后端持久化删除
-                            for (const id of idsToDelete) {
-                                try {
-                                    await invoke('message_delete', { id });
-                                } catch (error) {
-                                    logger.error('[useMessageActions] 删除消息失败:', error);
+                            const deleteResults = await Promise.allSettled(
+                                idsToDelete.map((id) => invoke('message_delete', { id }))
+                            );
+                            const failedDeletes = deleteResults.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+                            let deletedIds = idsToDelete.filter((_, index) => deleteResults[index]?.status === 'fulfilled');
+                            if (failedDeletes.length > 0) {
+                                logger.error('[useMessageActions] Delete message failed:', failedDeletes.map((result) => String(result.reason)));
+                                await refreshAgentMessagesFromDb(contextId, currentMessages.length);
+                                const reloadedMessages = useChatStore.getState().messagesByAgent.get(contextId) ?? [];
+                                const reloadedIds = new Set(reloadedMessages.map((message) => message.id));
+                                deletedIds = idsToDelete.filter((id) => !reloadedIds.has(id));
+                                if (deletedIds.length > 0) {
+                                    try {
+                                        const { getCachedMemoryService } = await import('@services/memory');
+                                        const memoryService = getCachedMemoryService(contextId);
+                                        if (memoryService) {
+                                            for (const id of deletedIds) {
+                                                memoryService.removeMessageFromBuffer(id);
+                                            }
+                                        }
+                                    } catch (e) {
+                                        logger.warn('[useMessageActions] Failed to clean partially deleted messages from memory buffer:', e);
+                                    }
                                 }
-                            }
+                            } else {
+
+                            // 后端持久化删除
                             logger.trace('[useMessageActions] 消息已删除:', idsToDelete);
 
                             // 同步删除关联的短期缓冲记录，防止已删除消息被水位线摘要收录
@@ -298,18 +318,24 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                             } catch (e) {
                                 logger.warn('[useMessageActions] 清理内存缓冲失败:', e);
                             }
+                            }
                         } else {
                             // Hub 模式：更新 Store 并调用后端持久化删除
                             const currentMessages = useChatStore.getState().messagesByHub.get(contextId) ?? [];
                             const filteredMessages = currentMessages.filter((m) => m.id !== messageId);
                             useChatStore.getState().setHubMessages(contextId, filteredMessages);
 
-                            // 后端持久化删除
+                            let hubDeleteSucceeded = true;
                             try {
                                 await invoke('message_delete', { id: messageId });
-                                logger.trace('[useMessageActions] Hub 消息已删除:', messageId);
                             } catch (error) {
-                                logger.error('[useMessageActions] Hub 消除消息失败:', error);
+                                hubDeleteSucceeded = false;
+                                logger.error('[useMessageActions] Delete hub message failed:', error);
+                                await refreshHubMessagesFromDb(contextId, currentMessages.length);
+                            }
+
+                            if (hubDeleteSucceeded) {
+                                logger.trace('[useMessageActions] Hub 消息已删除:', messageId);
                             }
                         }
                         // 确认后关闭弹窗
@@ -377,13 +403,15 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                                         agentGroups.set(m.agentId, { firstId: m.id });
                                     }
                                 }
-                                for (const [agentId, { firstId }] of agentGroups.entries()) {
-                                    try {
-                                        await invoke('message_retract_from', { id: firstId, agentId });
-                                        logger.debug('[useMessageActions] Hub 消息已按 agentId 撤回:', agentId);
-                                    } catch (error) {
-                                        logger.error('[useMessageActions] Hub 撤回消息失败 (agentId:', agentId, '):', error);
-                                    }
+                                const retractResults = await Promise.allSettled(
+                                    Array.from(agentGroups.entries()).map(([agentId, { firstId }]) => (
+                                        invoke('message_retract_from', { id: firstId, agentId })
+                                    ))
+                                );
+                                const failedRetracts = retractResults.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+                                if (failedRetracts.length > 0) {
+                                    logger.error('[useMessageActions] Hub revoke failed:', failedRetracts.map((result) => String(result.reason)));
+                                    await refreshHubMessagesFromDb(contextId, allMessages.length);
                                 }
                             }
 
@@ -499,12 +527,15 @@ async function handleAgentRevoke(
         // 2.3 更新 UI 状态
         useChatStore.getState().setMessages(agentId, currentMessages.slice(0, idx));
 
-        // 2.4 调用后端命令撤回消息
         try {
-            await invoke('message_retract_from', { id: messageId, agentId: agentId });
+            await invoke('message_retract_from', {
+                id: messageId,
+                agentId: agentId,
+            });
             logger.debug('[useMessageActions] 消息已撤回:', messageId);
         } catch (error) {
-            logger.error('[useMessageActions] 撤回消息失败:', error);
+            logger.error('[useMessageActions] Revoke message failed:', error);
+            await refreshAgentMessagesFromDb(agentId, currentMessages.length);
         }
 
         // 2.5 同步删除关联的短期缓冲记录

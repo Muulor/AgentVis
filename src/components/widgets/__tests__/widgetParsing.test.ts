@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     containsChoicesWidgetBlock,
+    containsTreeWidgetBlock,
     extractCodeLanguage,
     extractFencedCodeBlocks,
     parseWidgetLanguage,
@@ -75,5 +76,6 @@ describe('widgetParsing', () => {
         ].join('\n');
 
         expect(shouldDeferTreeWidgetSubmit(markdown)).toBe(false);
+        expect(containsTreeWidgetBlock(markdown)).toBe(true);
     });
 });

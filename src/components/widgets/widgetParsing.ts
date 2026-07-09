@@ -106,6 +106,12 @@ export function containsChoicesWidgetBlock(markdown: string): boolean {
     );
 }
 
+export function containsTreeWidgetBlock(markdown: string): boolean {
+    return extractFencedCodeBlocks(markdown).some((block) =>
+        resolveWidgetBlockType(block) === 'tree'
+    );
+}
+
 export function shouldDeferTreeWidgetSubmit(markdown: string): boolean {
     const widgetTypes = extractFencedCodeBlocks(markdown)
         .map(resolveWidgetBlockType)

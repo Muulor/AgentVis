@@ -23,6 +23,10 @@ export interface WidgetUndoRetractionPlan<T extends WidgetUndoMessage> {
     agentGroups: Map<string, WidgetUndoAgentGroup>;
 }
 
+export interface WidgetUndoOptions {
+    widgetBubbleId?: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -39,19 +43,22 @@ function parseMetadata(metadata: unknown): Record<string, unknown> | null {
     }
 }
 
-function isWidgetUserMessage(message: WidgetUndoMessage): boolean {
+function isWidgetUserMessage(message: WidgetUndoMessage, options: WidgetUndoOptions): boolean {
     const metadata = parseMetadata(message.metadata);
-    return message.role === 'user' && metadata?.source === 'widget';
+    if (message.role !== 'user' || metadata?.source !== 'widget') return false;
+    if (!options.widgetBubbleId) return true;
+    return metadata.widgetBubbleId === options.widgetBubbleId;
 }
 
 export function buildWidgetUndoRetractionPlan<T extends WidgetUndoMessage>(
-    messages: T[]
+    messages: T[],
+    options: WidgetUndoOptions = {}
 ): WidgetUndoRetractionPlan<T> | null {
     let startIndex = -1;
 
     for (let i = messages.length - 1; i >= 0; i--) {
         const message = messages[i];
-        if (message && isWidgetUserMessage(message)) {
+        if (message && isWidgetUserMessage(message, options)) {
             startIndex = i;
             break;
         }

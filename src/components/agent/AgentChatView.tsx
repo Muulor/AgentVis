@@ -33,6 +33,7 @@ import type { Message } from '@/types';
 import styles from './AgentChatView.module.css';
 import { getLogger } from '@services/logger';
 import { getMessageQuoteContent } from '@utils/quoteContent';
+import { refreshAgentMessagesFromDb } from '@utils/messageReload';
 
 const logger = getLogger('AgentChatView');
 
@@ -622,7 +623,9 @@ export function AgentChatView() {
 
                 // 从 chatStore 原始数据中查找（包括被过滤隐藏的 widget 消息）
                 const allMessages = useChatStore.getState().messagesByAgent.get(currentAgentId) ?? [];
-                const undoPlan = buildWidgetUndoRetractionPlan(allMessages);
+                const undoPlan = buildWidgetUndoRetractionPlan(allMessages, {
+                    widgetBubbleId: undo.widgetBubbleId,
+                });
                 if (undoPlan) {
                     useChatStore.getState().setMessages(currentAgentId, undoPlan.retainedMessages);
 
@@ -635,13 +638,27 @@ export function AgentChatView() {
                         }
                     }
 
-                    for (const [agentId, { firstId }] of undoPlan.agentGroups.entries()) {
-                        invoke('message_retract_from', { id: firstId, agentId }).catch((error: unknown) => {
-                            logger.error('[AgentChatView] Widget 截断撤回失败:', error);
-                        });
-                    }
+                    void Promise.allSettled(
+                        Array.from(undoPlan.agentGroups.entries()).map(([agentId, { firstId }]) => (
+                            invoke('message_retract_from', { id: firstId, agentId })
+                        ))
+                    ).then(async (results) => {
+                        const failed = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+                        if (failed.length > 0) {
+                            logger.error('[AgentChatView] Widget retract failed:', failed.map((result) => String(result.reason)));
+                            await refreshAgentMessagesFromDb(currentAgentId, allMessages.length);
+                        }
+                    }).catch((error: unknown) => {
+                        logger.error('[AgentChatView] Widget retract result handling failed:', error);
+                    });
+
 
                     logger.trace('[AgentChatView] Widget 重选截断撤回完成，撤回消息:', undoPlan.messagesToRetract.length);
+                    return;
+                }
+
+                if (undo.widgetBubbleId) {
+                    logger.warn('[AgentChatView] Widget 重选未找到匹配的气泡消息，跳过撤回:', undo.widgetBubbleId);
                     return;
                 }
 
@@ -688,12 +705,19 @@ export function AgentChatView() {
                     const filtered = allMessages.filter(m => !idsToDelete.includes(m.id));
                     useChatStore.getState().setMessages(currentAgentId, filtered);
 
+                    void Promise.allSettled(
+                        idsToDelete.map((id) => invoke('message_delete', { id }))
+                    ).then(async (results) => {
+                        const failed = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+                        if (failed.length > 0) {
+                            logger.error('[AgentChatView] Widget delete failed:', failed.map((result) => String(result.reason)));
+                            await refreshAgentMessagesFromDb(currentAgentId, allMessages.length);
+                        }
+                    }).catch((error: unknown) => {
+                        logger.error('[AgentChatView] Widget delete result handling failed:', error);
+                    });
+
                     // 后端持久化删除消息
-                    for (const id of idsToDelete) {
-                        invoke('message_delete', { id }).catch((error: unknown) => {
-                            logger.error('[AgentChatView] Widget 撤回消息删除失败:', error);
-                        });
-                    }
 
                     // 同步删除关联的短期缓冲记录，避免记忆摘要重复
                     invoke('memory_delete_by_source_ids', {

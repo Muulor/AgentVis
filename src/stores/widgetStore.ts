@@ -75,7 +75,7 @@ interface WidgetState {
      */
     selections: Map<string, number>;
     /** 待消费的撤回请求（BubbleReplyBar 重选时触发，AgentChatView 消费后删除最近的 widget 消息对） */
-    pendingUndo: { contextId: string } | null;
+    pendingUndo: { contextId: string; widgetBubbleId?: string } | null;
     /**
      * 气泡级暂存：各消息气泡中 widget 的已选标签（未提交阶段）
      * - 持久化，用于重启后展示已选摘要；SQLite 隐藏 widget 消息会作为兜底恢复源
@@ -107,9 +107,9 @@ interface WidgetActions {
     /** 查询 Widget 选中状态（返回已选索引或 null） */
     getSelection: (widgetKey: string) => number | null;
     /** 清除 Widget 选中状态并派发撤回请求（重选功能） */
-    clearSelectionAndUndo: (widgetKey: string, contextId: string) => void;
+    clearSelectionAndUndo: (widgetKey: string, contextId: string, widgetBubbleId?: string) => void;
     /** AgentChatView 调用：消费并清除待处理的撤回请求 */
-    consumeUndo: () => { contextId: string } | null;
+    consumeUndo: () => { contextId: string; widgetBubbleId?: string } | null;
     /**
      * 仅清除 Widget 选中状态，**不触发撤回请求**。
      * 用于 TreeWidget 内部重选（重置导航状态），与消息级回滚完全隔离。
@@ -217,11 +217,11 @@ export const useWidgetStore = create<WidgetState & WidgetActions>()(
                 return get().selections.get(widgetKey) ?? null;
             },
 
-            clearSelectionAndUndo: (widgetKey, contextId) => {
+            clearSelectionAndUndo: (widgetKey, contextId, widgetBubbleId) => {
                 set((state) => {
                     const next = new Map(state.selections);
                     next.delete(widgetKey);
-                    return { selections: next, pendingUndo: { contextId } };
+                    return { selections: next, pendingUndo: { contextId, widgetBubbleId } };
                 });
                 logger.debug('[widgetStore] 清除选中并派发撤回:', widgetKey);
             },
@@ -272,7 +272,7 @@ export const useWidgetStore = create<WidgetState & WidgetActions>()(
                         bubbleSelections: nextBubble,
                         selections: nextSelections,
                         submittedExtraTexts: nextExtraTexts,
-                        pendingUndo: { contextId },
+                        pendingUndo: { contextId, widgetBubbleId: messageId },
                     };
                 });
                 logger.debug('[widgetStore] 气泡重选，派发撤回:', messageId);
@@ -289,7 +289,7 @@ export const useWidgetStore = create<WidgetState & WidgetActions>()(
                     return {
                         selections: nextSelections,
                         submittedExtraTexts: nextExtraTexts,
-                        pendingUndo: { contextId },
+                        pendingUndo: { contextId, widgetBubbleId: messageId },
                     };
                 });
                 logger.debug('[widgetStore] 气泡恢复为可编辑草稿:', messageId);

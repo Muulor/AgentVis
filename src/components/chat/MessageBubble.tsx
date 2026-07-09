@@ -22,7 +22,8 @@ import { ChatReasoningTrace } from './ChatReasoningTrace';
 import { AttachmentCard } from './AttachmentCard';
 import { MarkdownRenderer } from '../file/MarkdownRenderer';
 import { BubbleReplyBar } from '../widgets/BubbleReplyBar';
-import { containsChoicesWidgetBlock, extractFencedCodeBlocks, parseWidgetLanguage, shouldDeferTreeWidgetSubmit } from '../widgets/widgetParsing';
+import { StandaloneTreeReplyBar } from '../widgets/StandaloneTreeReplyBar';
+import { containsChoicesWidgetBlock, containsTreeWidgetBlock, extractFencedCodeBlocks, parseWidgetLanguage, shouldDeferTreeWidgetSubmit } from '../widgets/widgetParsing';
 import { InlineGeneratedImages } from './InlineGeneratedImages';
 import type { InputDisplayPart, InputContextToken } from './inputContextTokens';
 import { formatTimestamp } from '@/types/message';
@@ -516,6 +517,11 @@ export const MessageBubble = memo(function MessageBubble({
         return shouldDeferTreeWidgetSubmit(content);
     }, [role, content]);
 
+    const hasStandaloneTreeWidget = useMemo(() => {
+        if (role !== 'assistant' || !content || deferWidgetSubmit) return false;
+        return containsTreeWidgetBlock(content);
+    }, [role, content, deferWidgetSubmit]);
+
     /**
      * 多文件项目预览回调
      *
@@ -738,6 +744,15 @@ export const MessageBubble = memo(function MessageBubble({
                         messageId={message.id}
                         contextId={contextId}
                         agentId={message.agentId}
+                    />
+                )}
+
+                {/* standalone 决策树已处理态操作栏 */}
+                {hasStandaloneTreeWidget && !isUser && contextId && (
+                    <StandaloneTreeReplyBar
+                        messageId={message.id}
+                        contextId={contextId}
+                        content={content}
                     />
                 )}
 

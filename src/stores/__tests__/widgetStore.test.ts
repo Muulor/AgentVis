@@ -42,7 +42,7 @@ describe('widgetStore', () => {
         const state = useWidgetStore.getState();
         const selections = state.bubbleSelections.get('msg-1');
         expect(state.isBubbleSubmitted('msg-1')).toBe(false);
-        expect(state.pendingUndo).toEqual({ contextId: 'ctx-1' });
+        expect(state.pendingUndo).toEqual({ contextId: 'ctx-1', widgetBubbleId: 'msg-1' });
         expect(selections?.get('tree:msg-1:Decision')).toEqual(['A -> Realtime']);
         expect(selections?.get('choices:msg-1:Scope')).toEqual(['Uploaded only']);
         expect(state.submittedExtraTexts.has('msg-1')).toBe(false);

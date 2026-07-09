@@ -601,12 +601,16 @@ impl MessageRepository {
             r#"
             SELECT id
             FROM messages
-            WHERE agent_id = ? AND created_at >= ? AND deleted_at IS NULL
+            WHERE agent_id = ?
+              AND (created_at > ? OR (created_at = ? AND id >= ?))
+              AND deleted_at IS NULL
             ORDER BY created_at ASC, id ASC
             "#,
         )
         .bind(agent_id)
         .bind(message.created_at)
+        .bind(message.created_at)
+        .bind(id)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -637,12 +641,16 @@ impl MessageRepository {
             r#"
             UPDATE messages 
             SET deleted_at = ?
-            WHERE agent_id = ? AND created_at >= ? AND deleted_at IS NULL
+            WHERE agent_id = ?
+              AND (created_at > ? OR (created_at = ? AND id >= ?))
+              AND deleted_at IS NULL
             "#,
         )
         .bind(now)
         .bind(agent_id)
         .bind(message.created_at)
+        .bind(message.created_at)
+        .bind(id)
         .execute(&self.pool)
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -1204,6 +1212,44 @@ mod tests {
         
         let final_count = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
         assert!(final_count.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retract_from_respects_same_timestamp_order() {
+        let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
+
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
+
+        let first = msg_repo.create(&agent.id, MessageRole::User, "first", None).await.unwrap();
+        let second = msg_repo.create(&agent.id, MessageRole::Assistant, "second", None).await.unwrap();
+        let third = msg_repo.create(&agent.id, MessageRole::User, "third", None).await.unwrap();
+
+        for message in [&first, &second, &third] {
+            msg_repo
+                .update_content_metadata(&message.id, &message.content, None, Some(1_000))
+                .await
+                .unwrap();
+        }
+
+        let ordered = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        assert_eq!(ordered.len(), 3);
+
+        let target = &ordered[1];
+        let expected_retracted_ids: Vec<String> = ordered[1..]
+            .iter()
+            .map(|message| message.id.clone())
+            .collect();
+
+        let listed_ids = msg_repo.list_ids_from(&target.id, &agent.id).await.unwrap();
+        assert_eq!(listed_ids, expected_retracted_ids);
+
+        let deleted_count = msg_repo.retract_from(&target.id, &agent.id).await.unwrap();
+        assert_eq!(deleted_count, 2);
+
+        let remaining = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, ordered[0].id);
     }
 
 }

@@ -1,0 +1,44 @@
+/* StandaloneTreeReplyBar - standalone 决策树消息底部操作栏 */
+
+.bar {
+    margin-top: 12px;
+    border-top: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+    padding-top: 10px;
+}
+
+.submittedRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.submittedLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--font-size-xs, 11px);
+    color: var(--color-text-tertiary, #888888);
+}
+
+.reselectBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-button);
+    border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
+    background: transparent;
+    color: var(--color-text-secondary, #AAAAAA);
+    font-family: inherit;
+    font-size: var(--font-size-xs, 11px);
+    cursor: pointer;
+    transition:
+        border-color var(--transition-fast, 150ms ease),
+        color var(--transition-fast, 150ms ease);
+}
+
+.reselectBtn:hover {
+    border-color: var(--color-text-secondary, #888888);
+    color: var(--color-text-primary, #E8E8E8);
+}

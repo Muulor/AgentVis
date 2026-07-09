@@ -77,4 +77,19 @@ describe('widgetUndo', () => {
         expect(plan?.startIndex).toBe(1);
         expect(plan?.messagesToRetract.map(m => m.id)).toEqual(['wu1', 'a1']);
     });
+
+    it('can target a specific widget bubble id instead of the latest widget message', () => {
+        const messages = [
+            msg('u1', 'user'),
+            msg('wu1', 'user', 'agent-a', { source: 'widget', widgetBubbleId: 'bubble-1' }),
+            msg('a1', 'assistant'),
+            msg('wu2', 'user', 'agent-a', { source: 'widget', widgetBubbleId: 'bubble-2' }),
+            msg('a2', 'assistant'),
+        ];
+
+        const plan = buildWidgetUndoRetractionPlan(messages, { widgetBubbleId: 'bubble-1' });
+
+        expect(plan?.startIndex).toBe(1);
+        expect(plan?.messagesToRetract.map(m => m.id)).toEqual(['wu1', 'a1', 'wu2', 'a2']);
+    });
 });
