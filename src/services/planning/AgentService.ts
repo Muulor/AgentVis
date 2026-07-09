@@ -23,6 +23,7 @@ import type {
     AgentLoopResult,
     AgentLoopCallbacks,
     AgentMessage,
+    ReasoningTraceEvent,
     ThinkingPhaseEvent,
     SubAgentObservationEvent,
 } from './agent-loop/types';
@@ -167,6 +168,13 @@ export interface ProcessMessageOptions {
      * 用于显示三阶段思维链：分析 → 规划 → 决策
      */
     onThinkingPhase?: (event: ThinkingPhaseEvent) => void;
+
+    /**
+     * Master Brain provider reasoning_content 流事件回调
+     *
+     * 用于单独展示模型内部推理流，避免混入结构化 Decision 展示。
+     */
+    onReasoningTrace?: (event: ReasoningTraceEvent) => void;
 
     /**
      * 治理器指标更新回调（FSM 可视化 ）
@@ -519,6 +527,7 @@ export class AgentService {
 
                 // FSM 可视化回调
                 onThinkingPhase: options.onThinkingPhase,
+                onReasoningTrace: options.onReasoningTrace,
                 onMetricsUpdate: options.onMetricsUpdate,
                 onFSMStateChange: options.onFSMStateChange,
 

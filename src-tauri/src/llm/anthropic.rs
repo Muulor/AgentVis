@@ -11,8 +11,8 @@ use std::pin::Pin;
 
 use super::types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
-    ToolCallProgressCallback, ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
-    TOOL_CALL_PROGRESS_STEP_BYTES,
+    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
+    ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES, TOOL_CALL_PROGRESS_STEP_BYTES,
 };
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
@@ -82,6 +82,91 @@ mod tests {
         assert!(normalized["properties"]["mode"].get("anyOf").is_none());
         assert!(normalized["properties"]["badMode"].get("enum").is_none());
     }
+
+    #[test]
+    fn test_stream_delta_accepts_thinking_delta() {
+        let data = r#"{
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+                "type": "thinking_delta",
+                "thinking": "Considering the next step"
+            }
+        }"#;
+
+        let chunk: AnthropicStreamDelta = serde_json::from_str(data).unwrap();
+        let payload = chunk.delta.unwrap();
+        assert_eq!(payload.delta_type, "thinking_delta");
+        assert_eq!(payload.thinking.as_deref(), Some("Considering the next step"));
+    }
+
+    #[test]
+    fn native_adaptive_thinking_request_omits_temperature() {
+        let adapter = AnthropicAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("think carefully")],
+            model: Some("claude-opus-4-8".to_string()),
+            ..Default::default()
+        };
+
+        let value =
+            serde_json::to_value(adapter.build_request_body(&request)).expect("serialize request");
+
+        assert_eq!(value["thinking"]["type"], "adaptive");
+        assert_eq!(value["thinking"]["display"], "summarized");
+        assert_eq!(value["output_config"]["effort"], "high");
+        assert!(value.get("temperature").is_none());
+    }
+
+    #[test]
+    fn compatible_gateway_request_does_not_enable_native_thinking() {
+        let adapter = AnthropicAdapter::new(
+            ProviderConfig::new("test-key").with_base_url("https://example.com/v1"),
+        );
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("think carefully")],
+            model: Some("claude-opus-4-8".to_string()),
+            ..Default::default()
+        };
+
+        let value =
+            serde_json::to_value(adapter.build_request_body(&request)).expect("serialize request");
+
+        assert!(value.get("thinking").is_none());
+        assert!(value.get("output_config").is_none());
+        let temperature = value["temperature"].as_f64().expect("temperature number");
+        assert!((temperature - 0.7).abs() < 0.0001);
+    }
+
+    #[test]
+    fn adaptive_thinking_model_matcher_covers_supported_families() {
+        let enabled_models = [
+            "claude-opus-4-5",
+            "claude-opus-4.6",
+            "claude-opus-4-7",
+            "claude-4-8-opus",
+            "claude-sonnet-4-5",
+            "claude-4.6-sonnet",
+            "claude-sonnet-5",
+            "claude-5-sonnet",
+            "claude-fable-5",
+        ];
+
+        for model in enabled_models {
+            assert!(
+                AnthropicAdapter::model_uses_adaptive_thinking(model),
+                "{model} should enable adaptive thinking"
+            );
+        }
+
+        let disabled_models = ["claude-haiku-4-5", "claude-sonnet-4-4", "gpt-5"];
+        for model in disabled_models {
+            assert!(
+                !AnthropicAdapter::model_uses_adaptive_thinking(model),
+                "{model} should not enable adaptive thinking"
+            );
+        }
+    }
 }
 
 /// Anthropic 适配器
@@ -110,8 +195,71 @@ impl AnthropicAdapter {
             .to_string()
     }
 
+    fn is_native_api(&self) -> bool {
+        match &self.config.base_url {
+            None => true,
+            Some(url) => url.contains("api.anthropic.com"),
+        }
+    }
+
+    fn model_uses_adaptive_thinking(model: &str) -> bool {
+        let model = model.to_ascii_lowercase().replace('.', "-");
+        if !model.contains("claude") {
+            return false;
+        }
+
+        const OPUS_VERSIONS: &[&str] = &["4-5", "4-6", "4-7", "4-8"];
+        const SONNET_VERSIONS: &[&str] = &["4-5", "4-6", "5"];
+
+        OPUS_VERSIONS
+            .iter()
+            .any(|version| Self::model_matches_family_version(&model, "opus", version))
+            || SONNET_VERSIONS
+                .iter()
+                .any(|version| Self::model_matches_family_version(&model, "sonnet", version))
+            || Self::model_matches_family_version(&model, "fable", "5")
+    }
+
+    fn model_matches_family_version(model: &str, family: &str, version: &str) -> bool {
+        model.contains(&format!("{family}-{version}"))
+            || model.contains(&format!("{version}-{family}"))
+    }
+
+    fn thinking_config_for_model(
+        &self,
+        model: &str,
+        max_tokens: u32,
+    ) -> Option<AnthropicThinkingConfig> {
+        if self.is_native_api() && max_tokens >= 1024 && Self::model_uses_adaptive_thinking(model) {
+            Some(AnthropicThinkingConfig {
+                thinking_type: "adaptive".to_string(),
+                display: Some("summarized".to_string()),
+            })
+        } else {
+            None
+        }
+    }
+
+    fn output_config_for_thinking(
+        thinking: &Option<AnthropicThinkingConfig>,
+    ) -> Option<AnthropicOutputConfig> {
+        thinking.as_ref().map(|_| AnthropicOutputConfig {
+            effort: "high".to_string(),
+        })
+    }
+
     /// 构建Request body
     fn build_request_body(&self, request: &ChatRequest) -> AnthropicRequest {
+        let model = self.get_model(request.model.as_deref());
+        let max_tokens = request.max_tokens.unwrap_or(24576);
+        let thinking = self.thinking_config_for_model(&model, max_tokens);
+        let output_config = Self::output_config_for_thinking(&thinking);
+        let temperature = if thinking.is_some() {
+            None
+        } else {
+            request.temperature
+        };
+
         // 分离 system 消息和其他消息
         let mut system_content: Option<String> = None;
         let mut messages: Vec<AnthropicMessage> = Vec::new();
@@ -171,11 +319,13 @@ impl AnthropicAdapter {
         }
 
         AnthropicRequest {
-            model: self.get_model(request.model.as_deref()),
+            model,
             messages,
             system: system_content,
-            max_tokens: request.max_tokens.unwrap_or(24576),
-            temperature: request.temperature,
+            max_tokens,
+            temperature,
+            thinking,
+            output_config,
             stream: request.stream,
         }
     }
@@ -196,10 +346,7 @@ impl AnthropicAdapter {
 
         // 判断是否为原生 Anthropic API（非代理）
         // 原生 API 支持 tool_result.content 内嵌 image block，代理平台不支持
-        let is_native_api = match &self.config.base_url {
-            None => true,
-            Some(url) => url.contains("api.anthropic.com"),
-        };
+        let is_native_api = self.is_native_api();
 
         // 分离 system 消息和其他消息
         let mut system_content: Option<String> = None;
@@ -391,10 +538,11 @@ impl AnthropicAdapter {
         });
 
         // 构建Request body（不含 stream 字段，由调用方设置）
+        let max_tokens = request.max_tokens.unwrap_or(24576);
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
-            "max_tokens": request.max_tokens.unwrap_or(24576)
+            "max_tokens": max_tokens
         });
         if let Some(sys) = system_content {
             body["system"] = serde_json::Value::String(sys);
@@ -403,7 +551,12 @@ impl AnthropicAdapter {
             body["tools"] = serde_json::Value::Array(tools_val);
             body["tool_choice"] = serde_json::json!({"type": "auto"});
         }
-        if let Some(temp) = request.temperature {
+        let thinking = self.thinking_config_for_model(&model, max_tokens);
+        if let Some(thinking_config) = thinking {
+            body["thinking"] = serde_json::to_value(thinking_config)
+                .unwrap_or_else(|_| serde_json::json!({"type": "adaptive", "display": "summarized"}));
+            body["output_config"] = serde_json::json!({"effort": "high"});
+        } else if let Some(temp) = request.temperature {
             body["temperature"] = serde_json::json!(temp);
         }
 
@@ -496,6 +649,7 @@ impl AnthropicAdapter {
         &self,
         request: super::types::ToolChatRequest,
         progress_callback: Option<ToolCallProgressCallback>,
+        reasoning_callback: Option<ReasoningTraceCallback>,
     ) -> AppResult<super::types::ToolChatResponse> {
         use eventsource_stream::Eventsource;
         use futures::StreamExt;
@@ -557,6 +711,7 @@ impl AnthropicAdapter {
 
         // content block 累积状态：按 index 存储 (type, id, name, text_buffer, json_buffer)
         let mut block_states: Vec<ContentBlockState> = Vec::new();
+        let mut reasoning_buffer = String::new();
         let mut chunk_count: u64 = 0;
         // 累积 usage 数据
         let mut final_input_tokens: Option<u32> = None;
@@ -627,6 +782,19 @@ impl AnthropicAdapter {
                                                 }
                                             }
                                         }
+                                        "thinking_delta" => {
+                                            if let Some(ref thinking) = block_delta.delta.thinking {
+                                                if !thinking.is_empty() {
+                                                    reasoning_buffer.push_str(thinking);
+                                                    if let Some(callback) = reasoning_callback.as_ref() {
+                                                        callback(ReasoningTraceProgress {
+                                                            delta: thinking.clone(),
+                                                            done: false,
+                                                        });
+                                                    }
+                                                }
+                                            }
+                                        }
                                         _ => {}
                                     }
                                 }
@@ -659,6 +827,15 @@ impl AnthropicAdapter {
 
 
         // 组装响应：从累积的 block_states 中提取 text 和 tool_use
+        if !reasoning_buffer.is_empty() {
+            if let Some(callback) = reasoning_callback.as_ref() {
+                callback(ReasoningTraceProgress {
+                    delta: String::new(),
+                    done: true,
+                });
+            }
+        }
+
         let mut text_parts: Vec<String> = Vec::new();
         let mut tool_calls: Vec<super::types::ToolCall> = Vec::new();
 
@@ -1095,11 +1272,21 @@ impl LlmProvider for AnthropicAdapter {
                             let delta: AnthropicStreamDelta = serde_json::from_str(&data)
                                 .map_err(|e| AppError::LlmApi(format!("Failed to parse streaming response: {}", e)))?;
 
-                            let text = delta.delta.and_then(|d| d.text).unwrap_or_default();
+                            let (text, reasoning) = match delta.delta {
+                                Some(delta) if delta.delta_type == "thinking_delta" => (
+                                    String::new(),
+                                    delta.thinking.filter(|thinking| !thinking.is_empty()),
+                                ),
+                                Some(delta) => (
+                                    delta.text.unwrap_or_default(),
+                                    None,
+                                ),
+                                None => (String::new(), None),
+                            };
 
                             Ok(StreamChunk {
                                 delta: text,
-                                reasoning: None,
+                                reasoning,
                                 done: false,
                                 finish_reason: None,
                                 input_tokens: None,
@@ -1152,7 +1339,24 @@ struct AnthropicRequest {
     max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<AnthropicThinkingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    output_config: Option<AnthropicOutputConfig>,
     stream: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicThinkingConfig {
+    #[serde(rename = "type")]
+    thinking_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    display: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicOutputConfig {
+    effort: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1222,12 +1426,7 @@ struct AnthropicUsage {
 
 #[derive(Debug, Deserialize)]
 struct AnthropicStreamDelta {
-    delta: Option<AnthropicTextDelta>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicTextDelta {
-    text: Option<String>,
+    delta: Option<AnthropicStreamDeltaPayload>,
 }
 
 // ==================== Function Calling 响应类型 ====================
@@ -1344,6 +1543,9 @@ struct AnthropicStreamDeltaPayload {
     /// input_json_delta 时的 JSON 增量片段
     #[serde(default)]
     partial_json: Option<String>,
+    /// thinking_delta reasoning content.
+    #[serde(default)]
+    thinking: Option<String>,
 }
 
 // ==================== SSE Usage 事件类型 ====================

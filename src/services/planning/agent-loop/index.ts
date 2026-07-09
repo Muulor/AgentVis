@@ -23,6 +23,7 @@ export type {
     // FSM 可视化类型
     ThinkingPhase,
     ThinkingPhaseEvent,
+    ReasoningTraceEvent,
     // Sub-Agent 实时观测类型
     SubAgentObservationEvent,
 } from './types';

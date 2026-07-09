@@ -41,6 +41,7 @@ import type {
     LoopState,
     TerminationReason,
     LLMResponseWithTools,
+    ReasoningTraceEvent,
 } from './types';
 import type { AgentSession } from './AgentSession';
 import {
@@ -502,6 +503,8 @@ export class AgentLoop {
                     mbBudgetRemaining?: number;
                     /** 流式增量回调，LLM 输出过程中实时推送累积内容到 Thought 卡片 */
                     onStreamDelta?: (accumulatedContent: string) => void;
+                    /** provider reasoning_content 流式回调 */
+                    onReasoningTrace?: (event: ReasoningTraceEvent) => void;
                 }
             ): Promise<string> => {
                 try {
@@ -918,6 +921,7 @@ export class AgentLoop {
 
                     if (options?.onStreamDelta) {
                         const onStreamDelta = options.onStreamDelta;
+                        const onReasoningTrace = options.onReasoningTrace;
                         const maxTokens = options.maxTokens ?? 24576;
                         const temperature = options.temperature;
                         let decisionContentRetryUsed = false;
@@ -932,6 +936,7 @@ export class AgentLoop {
                                         onStreamDelta,
                                         maxTokens,
                                         temperature,
+                                        onReasoningTrace,
                                     )
                                 );
                             } catch (streamError) {
@@ -969,6 +974,7 @@ export class AgentLoop {
                                         onStreamDelta,
                                         maxTokens,
                                         temperature,
+                                        onReasoningTrace,
                                     );
                                 } catch (retryError) {
                                     if (this.isMbRetryableDecisionContentError(retryError)) {
@@ -1465,6 +1471,7 @@ export class AgentLoop {
         onStreamDelta: (accumulatedContent: string) => void,
         maxTokens: number,
         temperature?: number,
+        onReasoningTrace?: (event: ReasoningTraceEvent) => void,
     ): Promise<string> {
         const { listen } = await import('@tauri-apps/api/event');
         // 复用外层的 planning session，这样 cancel() 才能命中
@@ -1481,6 +1488,8 @@ export class AgentLoop {
             let settled = false;
             let guardCancellationError: MbAnomalousDecisionContentError | null = null;
             let guardCancelTimer: ReturnType<typeof setTimeout> | null = null;
+            let hasReasoningTraceStarted = false;
+            let reasoningTraceCompleted = false;
 
             const cleanup = () => {
                 if (guardCancelTimer) {
@@ -1491,8 +1500,33 @@ export class AgentLoop {
                 unlistenFn = null;
             };
 
+            const emitReasoningTraceStart = () => {
+                if (hasReasoningTraceStarted || !onReasoningTrace) return;
+                hasReasoningTraceStarted = true;
+                onReasoningTrace({ type: 'START' });
+            };
+
+            const emitReasoningTraceContent = () => {
+                if (!onReasoningTrace || reasoningTraceCompleted) return;
+                emitReasoningTraceStart();
+                onReasoningTrace({
+                    type: 'CONTENT',
+                    content: reasoningContent,
+                });
+            };
+
+            const emitReasoningTraceComplete = () => {
+                if (!onReasoningTrace || !hasReasoningTraceStarted || reasoningTraceCompleted) return;
+                reasoningTraceCompleted = true;
+                onReasoningTrace({
+                    type: 'COMPLETE',
+                    content: reasoningContent,
+                });
+            };
+
             const settleReject = (error: Error) => {
                 if (settled) return;
+                emitReasoningTraceComplete();
                 settled = true;
                 cleanup();
                 reject(error);
@@ -1500,6 +1534,7 @@ export class AgentLoop {
 
             const settleResolve = (content: string) => {
                 if (settled) return;
+                emitReasoningTraceComplete();
                 settled = true;
                 cleanup();
                 resolve(content);
@@ -1555,9 +1590,11 @@ export class AgentLoop {
                 // 累积 reasoning（思考模型的推理过程）和 delta（JSON 输出）
                 if (event.payload.reasoning) {
                     reasoningContent += event.payload.reasoning;
+                    emitReasoningTraceContent();
                 }
                 if (event.payload.delta) {
                     deltaContent += event.payload.delta;
+                    emitReasoningTraceComplete();
                 }
 
                 if (useDeepSeekV4MbGuard) {
@@ -1574,12 +1611,10 @@ export class AgentLoop {
                         onStreamDelta(guardedDisplayContent);
                     }
                 } else {
-                    // 构建显示内容：reasoning 优先展示（思考模型），delta 跟随
-                    // 两部分用换行分隔，让用户先看到推理过程，再看到 JSON 生成
-                    const displayContent = reasoningContent
-                        ? (deltaContent ? `${reasoningContent}\n\n${deltaContent}` : reasoningContent)
-                        : deltaContent;
-                    onStreamDelta(displayContent);
+                    // Decision only displays structured output; provider reasoning_content uses Thinking.
+                    if (deltaContent) {
+                        onStreamDelta(deltaContent);
+                    }
                 }
 
                 if (event.payload.done) {

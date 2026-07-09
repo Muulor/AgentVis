@@ -18,6 +18,7 @@ import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 
 import { PlanningTraceDetails } from './PlanningTraceDetails';
+import { ChatReasoningTrace } from './ChatReasoningTrace';
 import { AttachmentCard } from './AttachmentCard';
 import { MarkdownRenderer } from '../file/MarkdownRenderer';
 import { BubbleReplyBar } from '../widgets/BubbleReplyBar';
@@ -594,14 +595,10 @@ export const MessageBubble = memo(function MessageBubble({
         const reasoning = message.metadata?.reasoningContent;
         if (!reasoning) return null;
         return (
-            <details className={styles.reasoningBlock}>
-                <summary className={styles.reasoningSummary}>
-                    💭 {t('chat.thinkingProcess')}
-                </summary>
-                <div className={styles.reasoningContent}>
-                        {reasoning}
-                </div>
-            </details>
+            <ChatReasoningTrace
+                content={reasoning}
+                defaultExpanded={false}
+            />
         );
     };
 
@@ -708,6 +705,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {/* Planning 执行详情（持久化后用轻量分隔线收纳） */}
                 {!isUser && message.metadata?.mode === 'planning' && (
                     <PlanningTraceDetails
+                        reasoningTrace={message.metadata.reasoningTrace as { content: string; isCompleted?: boolean } | undefined}
                         thinkingChain={message.metadata.thinkingChain as { analyzing: string; planning: string; decided: string } | undefined}
                         thinkingSteps={message.metadata.thinkingSteps as Array<{ stepNumber: number; analyzing: string; planning: string; decided: string }> | undefined}
                         subAgentObservations={message.metadata.subAgentObservations as import('@/services/planning/agent-loop/types').SubAgentObservationEvent[] | undefined}

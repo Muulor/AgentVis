@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import { useFSMVisualizationStore } from '@stores/fsmVisualizationStore';
-import type { ThinkingPhaseEvent } from '@/services/planning/agent-loop';
+import type { ReasoningTraceEvent, ThinkingPhaseEvent } from '@/services/planning/agent-loop';
 import type { AgentServiceState } from '@/services/planning/fsm/types';
 import type { GovernorSnapshot } from '@/services/planning/agent-loop/LoopGovernor';
 import type { MasterBrainDecision } from '@/services/planning/brain/types';
@@ -19,6 +19,8 @@ import type { AgentLoopCallbacks } from '@/services/planning/agent-loop';
 export interface FSMVisualizationCallbacks {
     /** 思维阶段事件 */
     onThinkingPhase: (event: ThinkingPhaseEvent) => void;
+    /** Master Brain provider reasoning_content 流事件 */
+    onReasoningTrace: (event: ReasoningTraceEvent) => void;
     /** FSM 状态变更 */
     onFSMStateChange: (from: AgentServiceState, to: AgentServiceState) => void;
     /** 治理器指标更新 */
@@ -39,6 +41,7 @@ export interface FSMVisualizationCallbacks {
 export function useFSMVisualization(contextId: string) {
     const {
         handleThinkingPhaseEvent,
+        handleReasoningTraceEvent,
         handleFSMStateChange,
         updateMetrics,
         recordSubAgentSpawn,
@@ -54,6 +57,13 @@ export function useFSMVisualization(contextId: string) {
             handleThinkingPhaseEvent(event, contextId);
         },
         [contextId, handleThinkingPhaseEvent]
+    );
+
+    const onReasoningTrace = useCallback(
+        (event: ReasoningTraceEvent) => {
+            handleReasoningTraceEvent(event, contextId);
+        },
+        [contextId, handleReasoningTraceEvent]
     );
 
     const onFSMStateChange = useCallback(
@@ -108,6 +118,7 @@ export function useFSMVisualization(contextId: string) {
     // 获取可传递给 AgentLoop 的完整回调对象
     const getCallbacks = useCallback((): Partial<AgentLoopCallbacks> => ({
         onThinkingPhase,
+        onReasoningTrace,
         onFSMStateChange,
         onMetricsUpdate,
         onSubAgentSpawn,
@@ -115,6 +126,7 @@ export function useFSMVisualization(contextId: string) {
         onSubAgentFail,
     }), [
         onThinkingPhase,
+        onReasoningTrace,
         onFSMStateChange,
         onMetricsUpdate,
         onSubAgentSpawn,
@@ -125,6 +137,7 @@ export function useFSMVisualization(contextId: string) {
     return {
         // 单独的回调函数
         onThinkingPhase,
+        onReasoningTrace,
         onFSMStateChange,
         onMetricsUpdate,
         onSubAgentSpawn,

@@ -10,7 +10,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { BrainCog, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { cx } from '@utils/classNames';
 import styles from './ThinkingChainDisplay.module.css';
@@ -130,6 +130,9 @@ export function ThinkingChainDisplay({
     }
 
     const showContent = showHeader ? isExpanded : true;
+    const toggleLabel = isExpanded
+        ? t('chat.collapseProcessingDetails')
+        : t('chat.expandProcessingDetails');
 
     return (
         <div className={cx(styles.container, !showHeader && styles.embedded, className)}>
@@ -140,9 +143,10 @@ export function ThinkingChainDisplay({
                     onClick={() => setIsExpanded(!isExpanded)}
                     type="button"
                     aria-expanded={isExpanded}
+                    aria-label={toggleLabel}
                 >
-                    <BrainCog size={10} className={styles.headerIcon} />
                     <span className={styles.headerTitle}>{t('chat.masterBrainThought')}</span>
+                    <span className={styles.headerRule} />
                     <span className={styles.toggle}>
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
@@ -154,12 +158,6 @@ export function ThinkingChainDisplay({
                 <div className={styles.stepsContainer}>
                     {steps.map((step) => (
                         <div key={step.stepNumber} className={styles.stepItem}>
-                            {/* 步骤指示器 */}
-                            <div className={styles.stepIndicator}>
-                                <Check size={10} className={styles.checkIcon} />
-                            </div>
-
-                            {/* 步骤内容 */}
                             <div className={styles.stepContent}>{step.content}</div>
                         </div>
                     ))}

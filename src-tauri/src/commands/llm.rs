@@ -998,6 +998,14 @@ pub struct ToolCallProgressEvent {
     pub arg_bytes: usize,
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReasoningProgressEvent {
+    pub session_id: String,
+    pub delta: String,
+    pub done: bool,
+}
+
 /// 发送流式聊天请求
 /// 
 /// 通过 Tauri 事件系统发送流式响应 chunk
@@ -1454,7 +1462,8 @@ pub async fn llm_list_models(
 // ==================== Function Calling 支持 ====================
 
 use crate::llm::types::{
-    ToolCallProgressCallback, ToolCallStreamProgress, ToolChatRequest, ToolChatResponse,
+    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
+    ToolCallStreamProgress, ToolChatRequest, ToolChatResponse,
 };
 
 const FILE_WRITE_IPC_INLINE_CONTENT_LIMIT_BYTES: usize = 32 * 1024;
@@ -1572,6 +1581,24 @@ fn make_tool_call_progress_callback(
     }))
 }
 
+fn make_reasoning_trace_callback(
+    app_handle: AppHandle,
+    session_id: Option<String>,
+) -> Option<ReasoningTraceCallback> {
+    let session_id = session_id?;
+
+    Some(Arc::new(move |progress: ReasoningTraceProgress| {
+        let _ = app_handle.emit(
+            "llm-reasoning-progress",
+            ReasoningProgressEvent {
+                session_id: session_id.clone(),
+                delta: progress.delta,
+                done: progress.done,
+            },
+        );
+    }))
+}
+
 /// 带工具的聊天请求（支持 Function Calling）
 ///
 /// 支持 Gemini / OpenAI / Anthropic 三种提供商协议。
@@ -1603,6 +1630,7 @@ pub async fn llm_chat_with_tools(
         (None, None)
     };
     let tool_call_progress = make_tool_call_progress_callback(app_handle.clone(), session_id.clone());
+    let reasoning_trace = make_reasoning_trace_callback(app_handle.clone(), session_id.clone());
 
     // 根据 provider 类型分发请求
     let result: CommandResult<ToolChatResponse> = match provider {
@@ -1610,20 +1638,20 @@ pub async fn llm_chat_with_tools(
             let api_key = get_api_key("gemini")?;
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision);
             let adapter = GeminiAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "openai" => {
             let api_key = get_api_key("openai")?;
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_stream_usage();
             let adapter = OpenAIAdapter::new(config);
             // 使用流式模式避免大 payload 超时
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "anthropic" => {
             let api_key = get_api_key("anthropic")?;
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision);
             let adapter = AnthropicAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "local" => {
             // Local Router：根据模型名智能推断协议
@@ -1638,18 +1666,18 @@ pub async fn llm_chat_with_tools(
                 "anthropic" => {
                     let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_base_url(base_url);
                     let adapter = AnthropicAdapter::new(config);
-                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
                 }
                 "openai" => {
                     let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
                     let adapter = OpenAIAdapter::new(config);
-                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
                 }
                 _ => {
                     // 默认 Gemini 协议
                     let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_base_url(base_url);
                     let adapter = GeminiAdapter::new(config);
-                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
                 }
             }
         }
@@ -1659,7 +1687,7 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://open.bigmodel.cn/api/paas/v4");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "deepseek" => {
             // DeepSeek 使用 OpenAI 兼容协议
@@ -1667,7 +1695,7 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://api.deepseek.com");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "agnes" => {
             // Agnes AI 使用 OpenAI 兼容协议；Agnes-2.0-Flash 是 text/agentic 模型
@@ -1676,7 +1704,7 @@ pub async fn llm_chat_with_tools(
                 .with_base_url("https://apihub.agnes-ai.com/v1")
                 .with_model("agnes-2.0-flash");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "stepfun" => {
             // StepFun Step Plan 使用 OpenAI 兼容协议，专属路径为 /step_plan/v1
@@ -1685,7 +1713,7 @@ pub async fn llm_chat_with_tools(
                 .with_base_url("https://api.stepfun.com/step_plan/v1")
                 .with_model("step-3.7-flash");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "xiaomi-mimo" => {
             // Xiaomi MiMo Token Plan 使用 Anthropic 兼容协议
@@ -1693,7 +1721,7 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://token-plan-cn.xiaomimimo.com/anthropic/v1");
             let adapter = AnthropicAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "zhipu-coding" => {
             // ZhipuAI Coding Plan 专属 endpoint，与普通 zhipu 共享 API Key
@@ -1702,7 +1730,7 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://open.bigmodel.cn/api/coding/paas/v4");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "volcengine" => {
             // 火山引擎 Coding Plan 使用 OpenAI 兼容协议（流式模式，解决大 payload 超时）
@@ -1710,7 +1738,7 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://ark.cn-beijing.volces.com/api/coding/v3");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "minimax" => {
             // Minimax Anthropic 兼容协议
@@ -1718,7 +1746,7 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://api.minimaxi.com/anthropic/v1");
             let adapter = AnthropicAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "openrouter" => {
             // OpenRouter 使用 OpenAI 兼容协议，支持路由到多个厂商模型
@@ -1727,7 +1755,7 @@ pub async fn llm_chat_with_tools(
                 .with_base_url("https://openrouter.ai/api/v1")
                 .with_stream_usage();
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         _ => {
             // 清理取消通道

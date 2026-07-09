@@ -6,7 +6,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { BrainCog, ChevronDown, ChevronRight, Loader } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { Tooltip } from '@components/ui/Tooltip';
 import type { SubAgentObservationEvent } from '@/services/planning/agent-loop/types';
@@ -15,6 +15,8 @@ import { SubAgentObservationDisplay } from './SubAgentObservationDisplay';
 import styles from './PlanningTraceDetails.module.css';
 
 interface PlanningTraceDetailsProps {
+    /** 持久化 Master Brain provider reasoning 内容 */
+    reasoningTrace?: PersistedReasoningTrace;
     /** 旧版持久化思维链数据 */
     thinkingChain?: ThinkingChainData;
     /** 新版持久化思维步骤 */
@@ -23,6 +25,11 @@ interface PlanningTraceDetailsProps {
     subAgentObservations?: SubAgentObservationEvent[];
     /** 当前 assistant 消息创建时间，用于推导执行耗时 */
     completedAt?: string | number;
+}
+
+interface PersistedReasoningTrace {
+    content: string;
+    isCompleted?: boolean;
 }
 
 const EMPTY_THINKING_CHAIN: ThinkingChainData = {
@@ -70,6 +77,10 @@ function getTraceDurationMs(
     return duration >= 1000 ? duration : null;
 }
 
+function hasReasoningTraceContent(reasoningTrace?: PersistedReasoningTrace): boolean {
+    return Boolean(reasoningTrace?.content.trim());
+}
+
 function formatDuration(durationMs: number, t: ReturnType<typeof useI18n>['t']): string {
     const totalSeconds = Math.max(1, Math.round(durationMs / 1000));
 
@@ -93,10 +104,51 @@ function formatDuration(durationMs: number, t: ReturnType<typeof useI18n>['t']):
     });
 }
 
+function StaticReasoningTrace({ trace }: { trace: PersistedReasoningTrace }) {
+    const { t } = useI18n();
+    const [isExpanded, setIsExpanded] = useState(false);
+    const content = trace.content.trim();
+
+    if (!content) {
+        return null;
+    }
+
+    const toggleLabel = isExpanded
+        ? t('chat.masterBrainReasoningCollapse')
+        : t('chat.masterBrainReasoningExpand');
+
+    return (
+        <div className={styles.reasoningTrace}>
+            <Tooltip content={toggleLabel}>
+                <button
+                    type="button"
+                    className={styles.reasoningTraceHeader}
+                    onClick={() => setIsExpanded(value => !value)}
+                    aria-expanded={isExpanded}
+                    aria-label={toggleLabel}
+                >
+                    <span className={styles.reasoningTraceTitle}>
+                        {t('chat.masterBrainReasoningCollapsedTitle')}
+                    </span>
+                    <span className={styles.reasoningTraceRule} />
+                    <span className={styles.reasoningTraceToggle}>
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                </button>
+            </Tooltip>
+
+            {isExpanded && (
+                <div className={styles.reasoningTraceBody}>{content}</div>
+            )}
+        </div>
+    );
+}
+
 /**
  * Planning 持久化执行详情收纳组件
  */
 export function PlanningTraceDetails({
+    reasoningTrace,
     thinkingChain,
     thinkingSteps,
     subAgentObservations,
@@ -109,6 +161,7 @@ export function PlanningTraceDetails({
         () => hasThinkingContent(thinkingChain, thinkingSteps),
         [thinkingChain, thinkingSteps]
     );
+    const hasReasoningTrace = hasReasoningTraceContent(reasoningTrace);
     const hasSubAgentTrace = Boolean(subAgentObservations?.length);
 
     const durationText = useMemo(() => {
@@ -116,7 +169,7 @@ export function PlanningTraceDetails({
         return durationMs ? formatDuration(durationMs, t) : null;
     }, [completedAt, subAgentObservations, t]);
 
-    if (!hasThinking && !hasSubAgentTrace) {
+    if (!hasReasoningTrace && !hasThinking && !hasSubAgentTrace) {
         return null;
     }
 
@@ -141,22 +194,23 @@ export function PlanningTraceDetails({
                     <span className={styles.chevron}>
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
-                    <span className={styles.rule} />
                 </button>
             </Tooltip>
 
             {isExpanded && (
                 <div className={styles.details}>
+                    {hasReasoningTrace && reasoningTrace && (
+                        <section className={styles.detailSection}>
+                            <StaticReasoningTrace trace={reasoningTrace} />
+                        </section>
+                    )}
+
                     {hasThinking && (
                         <section className={styles.detailSection}>
-                            <div className={styles.detailHeader}>
-                                <BrainCog size={13} />
-                                <span>{t('chat.masterBrainThought')}</span>
-                            </div>
                             <ThinkingChainDisplay
                                 data={thinkingChain ?? EMPTY_THINKING_CHAIN}
                                 steps={thinkingSteps}
-                                showHeader={false}
+                                showHeader
                                 defaultExpanded
                             />
                         </section>

@@ -208,6 +208,23 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
         contextId: currentHubId,
     });
 
+    const handleStopStreaming = useCallback(() => {
+        if (!currentHubId) return;
+
+        stopStreaming(currentHubId);
+        toast({
+            type: 'info',
+            title: t('chat.toastStreamCancelRequestedTitle'),
+            description: t('chat.toastStreamCancelRequestedDescription'),
+            duration: 3000,
+        });
+
+        // Planning 模式额外取消 AgentLoop
+        if (mode === 'planning') {
+            stopPlanningTask();
+        }
+    }, [currentHubId, mode, stopPlanningTask, stopStreaming, t, toast]);
+
     // 获取当前 Hub 的引用列表（直接订阅 Map 状态以实现响应式更新）
     const pendingQuotes = useMemo(
         () => currentHubId ? (pendingQuotesByHub.get(currentHubId) ?? []) : [],
@@ -221,6 +238,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
     }, [currentHubId, streamingByContext]);
     const isStreaming = currentStreamingState.isStreaming;
     const streamingContent = currentStreamingState.content;
+    const streamingReasoningContent = currentStreamingState.reasoningContent ?? '';
     // 从流式状态中获取响应中的 Agent 名称，确保切换标签后也能正确显示
     const streamingAgentName = currentStreamingState.agentName ?? 'Hub';
 
@@ -817,6 +835,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
                     agentName={streamingAgentName}
                     isStreaming={isStreaming}
                     streamingContent={streamingContent}
+                    streamingReasoningContent={streamingReasoningContent}
                     mode={mode}
                     contextId={currentHubId ?? undefined}
                     emptyText={t('hub.chat.startDiscussion')}
@@ -844,15 +863,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
                 draftKey={currentHubId ? `hub:${currentHubId}` : undefined}
                 restoreDraft={restoreDraft}
                 isStreaming={isStreaming}
-                onStop={() => {
-                    if (currentHubId) {
-                        stopStreaming(currentHubId);
-                        // Planning 模式额外取消 AgentLoop
-                        if (mode === 'planning') {
-                            stopPlanningTask();
-                        }
-                    }
-                }}
+                onStop={handleStopStreaming}
                 onSend={handleSend}
                 onModeChange={handleModeChange}
                 onRemoveQuote={handleRemoveQuote}

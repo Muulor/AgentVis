@@ -4,11 +4,10 @@
  * 按步展示 Agent 的思维过程，每步合并分析、规划、决策为连贯文字
  */
 
-import { useMemo, useEffect, useRef } from 'react';
-import { BrainCog, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useFSMVisualizationStore, type ThinkingStep } from '@stores/fsmVisualizationStore';
 import { ThinkingStream } from './ThinkingStream';
-import { CollapsibleSection } from './CollapsibleSection';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './ThinkingChainSection.module.css';
@@ -40,136 +39,77 @@ export function ThinkingChainSection({ contextId }: { contextId: string }) {
     const { t } = useI18n();
     // 从 per-context Map 中读取对应 Agent 的思维链数据
     const contextState = useFSMVisualizationStore((s) => s.contextStates[contextId]);
-    const isThinkingExpanded = useFSMVisualizationStore((s) => s.isThinkingExpanded);
-    const toggleThinkingExpanded = useFSMVisualizationStore((s) => s.toggleThinkingExpanded);
+    const [isExpanded, setIsExpanded] = useState(true);
 
     const thinkingSteps = useMemo(
         () => contextState?.thinkingSteps ?? [],
         [contextState?.thinkingSteps]
     );
-    const isThinking = contextState?.isThinking ?? false;
-
-    // 自动滚动到底部：响应 step 数量变化和流式内容增长
-    // 流式更新只修改现有 step 的内容（thinkingSteps.length 不变），
-    // 因此需要额外监听最后一步的内容长度来触发滚动。
-    // 使用节流（100ms）避免高频 store 更新导致的性能开销。
-    const stepsContainerRef = useRef<HTMLDivElement>(null);
-    const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // 计算最后一步的内容长度作为滚动触发信号
-    const lastStep = thinkingSteps[thinkingSteps.length - 1];
-    const contentSignal = lastStep
-        ? lastStep.analyzing.length
-        + lastStep.planning.length
-        + lastStep.decided.length
-        : 0;
+    const latestStepNumber = thinkingSteps[thinkingSteps.length - 1]?.stepNumber ?? 0;
+    const hasStepContent = thinkingSteps.some((step) => (
+        Boolean(step.analyzing)
+        || Boolean(step.planning)
+        || Boolean(step.decided)
+    ));
 
     useEffect(() => {
-        if (!stepsContainerRef.current) return;
+        setIsExpanded(true);
+    }, [contextId, latestStepNumber]);
 
-        // 节流：100ms 内最多触发一次滚动
-        scrollThrottleRef.current ??= setTimeout(() => {
-            if (stepsContainerRef.current) {
-                stepsContainerRef.current.scrollTop = stepsContainerRef.current.scrollHeight;
-            }
-            scrollThrottleRef.current = null;
-        }, 100);
-
-        return () => {
-            if (scrollThrottleRef.current) {
-                clearTimeout(scrollThrottleRef.current);
-                scrollThrottleRef.current = null;
-            }
-        };
-    }, [thinkingSteps.length, contentSignal]);
-
-    // 计算摘要信息（折叠时显示）
-    const summary = useMemo(() => {
-        if (thinkingSteps.length === 0) {
-            return '';
-        }
-
-        const lastStep = thinkingSteps[thinkingSteps.length - 1];
-        if (!lastStep) return '';
-
-        if (lastStep.isCompleted) {
-            return t('chat.completedSteps', { count: thinkingSteps.length });
-        }
-
-        // 正在进行中，显示当前阶段
-        const phaseLabels: Record<string, string> = {
-            ANALYZING: t('chat.phaseAnalyzing'),
-            PLANNING: t('chat.phasePlanning'),
-            DECIDED: t('chat.phaseDecided'),
-        };
-        return t('chat.stepPhase', {
-            step: lastStep.stepNumber,
-            phase: lastStep.activePhase ? phaseLabels[lastStep.activePhase] ?? '' : '',
-        });
-    }, [thinkingSteps, t]);
-
-    // 如果没有思维步骤，不渲染
-    if (thinkingSteps.length === 0 && !isThinking) {
+    // Avoid rendering an empty Decision header before the first decision token arrives.
+    if (!hasStepContent) {
         return null;
     }
 
-    // 动态标题：进行中时添加动画点
-    const titleContent = isThinking ? (
-        <span className={styles.titleWithAnimation}>
-            Thought
-            <span className={styles.thinkingDots}>
-                <span className={styles.thinkingDot}>.</span>
-                <span className={styles.thinkingDot}>.</span>
-                <span className={styles.thinkingDot}>.</span>
-            </span>
-        </span>
-    ) : 'Thought';
+    const decisionTitle = t('chat.masterBrainThought');
+    const toggleLabel = isExpanded
+        ? t('chat.collapseProcessingDetails')
+        : t('chat.expandProcessingDetails');
 
     return (
-        <CollapsibleSection
-            title={titleContent}
-            icon={<BrainCog size={14} />}
-            collapsedSummary={summary}
-            isExpanded={isThinkingExpanded}
-            onToggle={toggleThinkingExpanded}
-        >
-            {/* 步骤列表 */}
-            <div ref={stepsContainerRef} className={styles.stepsContainer}>
-                {thinkingSteps.map((step) => {
-                    const content = mergeStepContent(step);
-                    const isActive = !step.isCompleted;
+        <section className={styles.section}>
+            <button
+                type="button"
+                className={styles.header}
+                onClick={() => setIsExpanded(value => !value)}
+                aria-expanded={isExpanded}
+                aria-label={toggleLabel}
+            >
+                <span className={styles.title}>{decisionTitle}</span>
+                <span className={styles.rule} />
+                <span className={styles.toggle}>
+                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </span>
+            </button>
 
-                    return (
-                        <div
-                            key={step.stepNumber}
-                            className={cx(styles.stepItem, isActive ? styles.active : styles.completed)}
-                        >
-                            {/* 步骤指示器 */}
-                            <div className={styles.stepIndicator}>
-                                {isActive ? (
-                                    <Loader2 size={12} className={styles.spinningIcon} />
-                                ) : (
-                                    <span className={styles.stepNumber}>{step.stepNumber}</span>
-                                )}
-                            </div>
+            {isExpanded && (
+                <div className={styles.stepsContainer}>
+                    {thinkingSteps.map((step) => {
+                        const content = mergeStepContent(step);
+                        const isActive = !step.isCompleted;
 
-                            {/* 步骤内容 */}
-                            <div className={styles.stepContent}>
-                                {isActive ? (
-                                    <ThinkingStream
-                                        content={content}
-                                        isActive={isActive}
-                                        showCursor={true}
-                                    />
-                                ) : (
-                                    <div className={styles.completedContent}>{content}</div>
-                                )}
+                        return (
+                            <div
+                                key={step.stepNumber}
+                                className={cx(styles.stepItem, isActive ? styles.active : styles.completed)}
+                            >
+                                <div className={styles.stepContent}>
+                                    {isActive ? (
+                                        <ThinkingStream
+                                            content={content}
+                                            isActive={isActive}
+                                            showCursor={true}
+                                        />
+                                    ) : (
+                                        <div className={styles.completedContent}>{content}</div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </CollapsibleSection>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
     );
 }
 

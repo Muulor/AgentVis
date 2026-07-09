@@ -91,6 +91,77 @@
 }
 
 /* 工具行为指示器 */
+.reasoningTrace {
+    align-self: flex-start;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+.reasoningTraceExpanded,
+.reasoningTraceStreaming {
+    align-self: stretch;
+    background: transparent;
+}
+
+.reasoningTraceStreaming {
+    border-color: transparent;
+}
+
+.reasoningTraceHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: auto;
+    min-height: 22px;
+    padding: 2px 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary, #9CA3AF);
+    cursor: pointer;
+    font-size: 11px;
+    text-align: left;
+}
+
+.reasoningTraceExpanded .reasoningTraceHeader,
+.reasoningTraceStreaming .reasoningTraceHeader {
+    width: 100%;
+    min-height: 28px;
+    padding: 2px 0 4px;
+}
+
+.reasoningTraceHeader:hover {
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.reasoningTraceExpanded .reasoningTraceHeader:hover,
+.reasoningTraceStreaming .reasoningTraceHeader:hover {
+    background: transparent;
+}
+
+.reasoningTraceTitle {
+    font-weight: 600;
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.reasoningTraceBody {
+    max-height: 220px;
+    overflow: auto;
+    padding: 4px 0 8px;
+    border-top: none;
+    color: var(--observation-thinking-text);
+    font-size: var(--font-size-sm, 12px);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.embedded .reasoningTraceBody {
+    padding-right: 0;
+}
+
 .toolAction {
     display: flex;
     align-items: flex-start;

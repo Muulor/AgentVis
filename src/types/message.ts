@@ -86,6 +86,11 @@ export interface MessageMetadata {
     hasReasoning?: boolean;
     /** 推理过程内容（可折叠展示） */
     reasoningContent?: string;
+    /** Planning 模式下 Master Brain provider reasoning trace */
+    reasoningTrace?: {
+        content: string;
+        isCompleted?: boolean;
+    };
     /** Planning 模式相关 */
     planningData?: PlanningMessageData;
     /** 意图类型（Planning 模式） */

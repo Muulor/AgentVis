@@ -29,10 +29,6 @@
     color: var(--color-text-secondary);
 }
 
-.summaryButton:hover .rule {
-    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
-}
-
 .summaryText {
     flex-shrink: 0;
     font-weight: 500;
@@ -44,14 +40,6 @@
     justify-content: center;
     flex-shrink: 0;
     color: currentColor;
-}
-
-.rule {
-    flex: 1;
-    height: 1px;
-    min-width: 24px;
-    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
-    transition: background-color var(--transition-fast, 150ms ease);
 }
 
 .details {
@@ -80,4 +68,65 @@
 .detailHeader svg {
     flex-shrink: 0;
     color: var(--color-action-primary, #339CFF);
+}
+
+.reasoningTrace {
+    width: 100%;
+    min-width: 0;
+}
+
+.reasoningTraceHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 28px;
+    padding: 0 0 4px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary, #9CA3AF);
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+}
+
+.reasoningTraceHeader:hover {
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.reasoningTraceHeader:hover .reasoningTraceRule {
+    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
+}
+
+.reasoningTraceTitle {
+    flex-shrink: 0;
+    color: var(--color-text-primary, #E5E7EB);
+    font-weight: 600;
+}
+
+.reasoningTraceRule {
+    flex: 1;
+    height: 1px;
+    min-width: 24px;
+    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
+    transition: background-color var(--transition-fast, 150ms ease);
+}
+
+.reasoningTraceToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--color-text-tertiary);
+}
+
+.reasoningTraceBody {
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 4px 0 8px;
+    color: var(--color-masterbrain-thought-text, var(--color-text-secondary));
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
 }

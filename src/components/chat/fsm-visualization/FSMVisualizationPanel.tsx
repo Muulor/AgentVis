@@ -6,6 +6,7 @@
  */
 
 import { useFSMVisualizationStore } from '@stores/fsmVisualizationStore';
+import { ReasoningTraceSection } from './components/ReasoningTraceSection';
 import { ThinkingChainSection } from './components/ThinkingChainSection';
 import { SubAgentObservationSection } from './components/SubAgentObservationSection';
 import { DecisionCard } from './components/DecisionCard';
@@ -44,8 +45,11 @@ export function FSMVisualizationPanel({ className, contextId }: FSMVisualization
 
     // 检查是否有内容需要显示
     const hasThinkingContent = thinkingSteps.length > 0;
+    const maybeReasoningTrace = (contextState as Partial<typeof contextState>).reasoningTrace;
+    const hasReasoningTrace = Boolean(maybeReasoningTrace?.content ?? '')
+        || (maybeReasoningTrace?.isStreaming ?? false);
     const hasObservations = subAgentObservations.length > 0 || isSubAgentRunning;
-    const shouldShow = isThinking || hasThinkingContent || currentDecision !== null || hasObservations;
+    const shouldShow = hasReasoningTrace || isThinking || hasThinkingContent || currentDecision !== null || hasObservations;
 
     if (!shouldShow) {
         return null;
@@ -53,6 +57,9 @@ export function FSMVisualizationPanel({ className, contextId }: FSMVisualization
 
     return (
         <div className={cx(styles.container, className)}>
+            {/* provider reasoning_content 推理流 */}
+            <ReasoningTraceSection contextId={contextId} />
+
             {/* 思维链区块 */}
             <ThinkingChainSection contextId={contextId} />
 

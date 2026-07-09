@@ -8,10 +8,10 @@
  * 设计对标截图：
  * - LLM 思考文字渲染为段落（每步只显示一次）
  * - 工具行为使用 lucide icon + 行内指示器
- * - 内容区域自动滚动到底部
+ * - 运行态采用无外框布局，交给消息流自然滚动
  */
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
     ChevronDown,
     ChevronRight,
@@ -24,7 +24,6 @@ import {
     Loader,
     MessageSquare,
 } from 'lucide-react';
-import { CollapsibleSection } from './CollapsibleSection';
 import { useFSMVisualizationStore } from '@stores/fsmVisualizationStore';
 import type { SubAgentObservationEvent } from '@/services/planning/agent-loop/types';
 import { extractJsonFromText } from '@/services/memory/utils/JsonParser';
@@ -70,11 +69,15 @@ const TOOL_LABEL_MAP: Record<string, string> = {
  * 将扁平的 observation 事件列表按 thinking 文字变化边界分组，
  * 实现 UI 层去重：每步 thinking 文字只显示一次
  */
+type ReasoningTraceView = NonNullable<SubAgentObservationEvent['reasoningTrace']>;
+
 interface ObservationStep {
     /** LLM 思考文字（已去重，仅保留首次出现） */
     thinking: string;
     /** 该步的工具调用列表 */
     toolActions: Array<NonNullable<SubAgentObservationEvent['toolAction']>>;
+    /** Provider reasoning trace shown only in the UI. */
+    reasoningTrace?: ReasoningTraceView;
     /** 最终结果（仅最后一步可能有） */
     result?: string;
     /** 时间戳（取首条事件的时间） */
@@ -115,6 +118,31 @@ function groupObservationsIntoSteps(observations: SubAgentObservationEvent[]): O
     for (const obs of observations) {
         const currentStep = steps[steps.length - 1];
         const isInterventionEvent = getInterventionMessage(obs.thinking) !== undefined;
+
+        if (obs.reasoningTrace) {
+            let reasoningStep: ObservationStep | undefined;
+            for (let i = steps.length - 1; i >= 0; i--) {
+                const candidate = steps[i];
+                if (candidate?._step === obs.step && candidate?._runId === obs.runId) {
+                    reasoningStep = candidate;
+                    break;
+                }
+            }
+
+            if (!reasoningStep) {
+                reasoningStep = {
+                    thinking: '',
+                    toolActions: [],
+                    timestamp: obs.timestamp,
+                    _step: obs.step,
+                    _runId: obs.runId,
+                };
+                steps.push(reasoningStep);
+            }
+
+            reasoningStep.reasoningTrace = obs.reasoningTrace;
+            continue;
+        }
 
         // 判断是否需要开始新步骤
         let shouldStartNewStep = false;
@@ -176,6 +204,14 @@ function groupObservationsIntoSteps(observations: SubAgentObservationEvent[]): O
 
         const activeStep = steps[steps.length - 1];
         if (!activeStep) continue;
+
+        if (
+            !activeStep.thinking
+            && obs.thinking.trim().length > 0
+            && !obs.thinking.includes('TASK_COMPLETE')
+        ) {
+            activeStep.thinking = obs.thinking;
+        }
 
         // 工具行为合并到当前步骤
         if (obs.toolAction) {
@@ -291,6 +327,53 @@ function UserInterventionIndicator({ message }: { message: string }) {
  *
  * 从 fsmVisualizationStore 读取 observations，按步骤分组后渲染
  */
+function SubAgentReasoningTrace({ trace }: { trace: ReasoningTraceView }) {
+    const { t } = useI18n();
+    const [expanded, setExpanded] = useState(trace.isStreaming ?? true);
+
+    useEffect(() => {
+        if (trace.isStreaming) {
+            setExpanded(true);
+        } else if (trace.completed) {
+            setExpanded(false);
+        }
+    }, [trace.completed, trace.isStreaming]);
+
+    const toggleExpanded = () => setExpanded(value => !value);
+    const toggleLabel = expanded
+        ? t('chat.subAgentReasoningCollapse')
+        : t('chat.subAgentReasoningExpand');
+    const title = trace.isStreaming
+        ? t('chat.subAgentReasoningTitle')
+        : t('chat.subAgentReasoningCollapsedTitle');
+
+    return (
+        <div className={cx(
+            styles.reasoningTrace,
+            trace.isStreaming && styles.reasoningTraceStreaming,
+            expanded && styles.reasoningTraceExpanded
+        )}>
+            <Tooltip content={toggleLabel}>
+                <button
+                    type="button"
+                    className={styles.reasoningTraceHeader}
+                    onClick={toggleExpanded}
+                    aria-expanded={expanded}
+                    aria-label={toggleLabel}
+                >
+                    <span className={styles.reasoningTraceTitle}>{title}</span>
+                    {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </button>
+            </Tooltip>
+            {expanded && (
+                <div className={styles.reasoningTraceBody}>
+                    {trace.content || t('chat.subAgentReasoningTitle')}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export function SubAgentObservationSection({
     contextId,
 }: {
@@ -305,14 +388,8 @@ export function SubAgentObservationSection({
     );
     const isRunning = contextState?.isSubAgentRunning ?? false;
 
-    // 自动滚动到底部
-    const listRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (listRef.current) {
-            listRef.current.scrollTop = listRef.current.scrollHeight;
-        }
-    }, [observations.length]);
-
+    // Frameless live section expansion state.
+    const [isExpanded, setIsExpanded] = useState(true);
     // 将扁平 observations 分组为步骤（去重 thinking 文字）
     const steps = useMemo(
         () => groupObservationsIntoSteps(observations),
@@ -340,35 +417,55 @@ export function SubAgentObservationSection({
         </span>
     ) : null;
 
-    // 折叠摘要
-    const collapsedSummary = steps.length > 0
-        ? t('chat.stepCount', { count: steps.length })
-        : undefined;
+    const toggleLabel = isExpanded
+        ? t('chat.collapseProcessingDetails')
+        : t('chat.expandProcessingDetails');
 
     return (
-        <CollapsibleSection
-            title="Sub-Agent"
-            icon={<Loader size={14} />}
-            statusBadge={statusBadge}
-            collapsedSummary={collapsedSummary}
-            defaultExpanded={true}
-        >
-            <div ref={listRef} className={styles.observationList}>
-                {observations.length === 0 && isRunning && (
-                    <div className={styles.emptyState}>{t('chat.waitingSubAgent')}</div>
-                )}
-                {steps.map((step, index) => (
-                    <StepItem key={`step-${index}-${step.timestamp}`} step={step} isRunning={isRunning} />
-                ))}
-            </div>
-            {/* HITL 暂停介入条（SA 运行中或暂停后展示） */}
-            <HitlInterventionBar
-                contextId={contextId}
-                isRunning={isRunning}
-                execTimeoutSeconds={pendingExecTimeoutStatus?.timeoutSeconds}
-                execTimeoutStartedAtMs={pendingExecTimeoutStatus?.startedAtMs}
-            />
-        </CollapsibleSection>
+        <section className={styles.liveSection}>
+            <Tooltip content={toggleLabel}>
+                <button
+                    type="button"
+                    className={styles.liveHeader}
+                    onClick={() => setIsExpanded(value => !value)}
+                    aria-expanded={isExpanded}
+                    aria-label={toggleLabel}
+                >
+                    <span className={styles.liveHeaderLeft}>
+                        <Loader size={14} className={styles.liveHeaderIcon} />
+                        <span className={styles.liveTitle}>{t('chat.subAgentTrace')}</span>
+                        {statusBadge}
+                    </span>
+                    <span className={styles.liveRule} />
+                    <span className={styles.liveToggle}>
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </span>
+                </button>
+            </Tooltip>
+
+            {isExpanded && (
+                <>
+                    <div className={styles.observationList}>
+                        {observations.length === 0 && isRunning && (
+                            <div className={styles.emptyState}>{t('chat.waitingSubAgent')}</div>
+                        )}
+                        {steps.map((step, index) => (
+                            <StepItem
+                                key={`step-${index}-${step.timestamp}`}
+                                step={step}
+                                isRunning={isRunning}
+                            />
+                        ))}
+                    </div>
+                    <HitlInterventionBar
+                        contextId={contextId}
+                        isRunning={isRunning}
+                        execTimeoutSeconds={pendingExecTimeoutStatus?.timeoutSeconds}
+                        execTimeoutStartedAtMs={pendingExecTimeoutStatus?.startedAtMs}
+                    />
+                </>
+            )}
+        </section>
     );
 }
 
@@ -422,6 +519,9 @@ function StepItem({ step, isRunning }: StepItemProps) {
 
     return (
         <>
+            {step.reasoningTrace && (
+                <SubAgentReasoningTrace trace={step.reasoningTrace} />
+            )}
             {showThinking && (
                 <div className={styles.thinkingText}>
                     {step.thinking}

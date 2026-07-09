@@ -20,6 +20,14 @@ pub struct ToolCallStreamProgress {
 /// LLM Adapter 在流式接收 tool_call arguments 时上报轻量进度
 pub type ToolCallProgressCallback = Arc<dyn Fn(ToolCallStreamProgress) + Send + Sync>;
 
+#[derive(Debug, Clone)]
+pub struct ReasoningTraceProgress {
+    pub delta: String,
+    pub done: bool,
+}
+
+pub type ReasoningTraceCallback = Arc<dyn Fn(ReasoningTraceProgress) + Send + Sync>;
+
 /// 工具参数进度首次上报阈值
 pub const TOOL_CALL_PROGRESS_MIN_BYTES: usize = 4 * 1024;
 /// 工具参数进度节流步长

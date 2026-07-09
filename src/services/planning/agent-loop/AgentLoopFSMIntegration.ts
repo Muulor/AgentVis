@@ -23,7 +23,7 @@ import type {
     FSMContext,
     UserRequestPayload,
 } from '../fsm/types';
-import type { AgentLoopCallbacks, TerminationReason } from './types';
+import type { AgentLoopCallbacks, ReasoningTraceEvent, TerminationReason } from './types';
 import type { AgentSession } from './AgentSession';
 import type { SkillDefinition } from '../skills/types';
 import { PLANNING_CONSTANTS } from '../PlanningConstants';
@@ -192,6 +192,8 @@ export interface LLMServiceInterface {
              * 仅正常 MB 决策路径使用，Checkpoint 路径不启用。
              */
             onStreamDelta?: (accumulatedContent: string) => void;
+            /** provider reasoning_content 流式回调 */
+            onReasoningTrace?: (event: ReasoningTraceEvent) => void;
         }
     ): Promise<string>;
 }

@@ -64,6 +64,10 @@ function buildAttachmentReferences(attachments: AttachmentInfo[]): TaskAttachmen
 type PlanningCheckpointStatus = 'running' | 'failed' | 'abandoned';
 type PlanningCheckpointTranslate = (key: TranslationKey, params?: TranslationParams) => string;
 type PlanningCheckpointThinkingData = Partial<Record<'analyzing' | 'planning' | 'decided', string>>;
+interface PlanningReasoningTraceData {
+    content: string;
+    isCompleted?: boolean;
+}
 
 type HistoricalAttachmentContextItem = Pick<
     AttachmentInfo,
@@ -831,6 +835,10 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             planning: string;
             decided: string;
         } = { analyzing: '', planning: '', decided: '' };
+        const reasoningTraceData: PlanningReasoningTraceData = {
+            content: '',
+            isCompleted: false,
+        };
 
         // 收集 Sub-Agent 观测数据用于持久化（与 thinkingChainData 同理）
         const subAgentObservationsData: import('@/services/planning/agent-loop/types').SubAgentObservationEvent[] = [];
@@ -864,6 +872,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             recoverable: status !== 'abandoned',
             createdUserMessageId,
             error: errorMessage,
+            reasoningTrace: reasoningTraceData.content.trim()
+                ? { ...reasoningTraceData }
+                : undefined,
             thinkingChain: thinkingChainData,
             thinkingSteps: fsmVisualizationActions.getContextState(contextId).thinkingSteps
                 .map(step => ({
@@ -1465,6 +1476,21 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                         });
                     }
                 },
+                onReasoningTrace: (event) => {
+                    fsmVisualizationActions.handleReasoningTraceEvent(event, contextId);
+                    switch (event.type) {
+                        case 'START':
+                        case 'CONTENT':
+                            reasoningTraceData.content = event.content ?? '';
+                            reasoningTraceData.isCompleted = false;
+                            break;
+                        case 'COMPLETE':
+                            reasoningTraceData.content = event.content ?? reasoningTraceData.content;
+                            reasoningTraceData.isCompleted = Boolean(reasoningTraceData.content.trim());
+                            break;
+                    }
+                    schedulePlanningCheckpointFlush();
+                },
                 onMetricsUpdate: (snapshot) => {
                     fsmVisualizationActions.updateMetrics(snapshot, contextId);
                 },
@@ -1640,6 +1666,10 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 toolCallCount: result.toolCallCount,
                 //  标识消息来源模式，用于 MessageBubble 条件渲染
                 mode: 'planning' as const,
+                //  持久化 provider reasoning_content，完成后作为 Thought 展示
+                reasoningTrace: reasoningTraceData.content.trim()
+                    ? { ...reasoningTraceData }
+                    : undefined,
                 //  持久化思维链数据（旧版格式，保留为 backward compatibility）
                 thinkingChain: thinkingChainData,
                 //  持久化思维步骤数组（新版格式，直接从 store 读取，避免排序穿插）

@@ -42,5 +42,5 @@
 
 /* 决策卡片容器 */
 .decisionWrapper {
-    margin-top: var(--spacing-md);
+    margin-top: 6px;
 }

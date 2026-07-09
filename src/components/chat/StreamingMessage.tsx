@@ -13,6 +13,7 @@
 import { memo, useMemo, useCallback } from 'react';
 import { FSMVisualizationPanel } from './fsm-visualization';
 import { MarkdownRenderer } from '../file/MarkdownRenderer';
+import { ChatReasoningTrace } from './ChatReasoningTrace';
 import { usePreviewStore } from '@stores/previewStore';
 import { wrapSvgInHtml } from '@services/preview/templateInference';
 import { useI18n } from '@/i18n';
@@ -26,6 +27,7 @@ interface StreamingMessageProps {
     agentName?: string;
     mode?: ChatMode;
     contextId?: string;
+    reasoningContent?: string;
 }
 
 // ==================== 工具函数 ====================
@@ -67,6 +69,7 @@ export const StreamingMessage = memo(function StreamingMessage({
     agentName = 'Agent',
     mode = 'chat',
     contextId,
+    reasoningContent = '',
 }: StreamingMessageProps) {
     const { t } = useI18n();
     const avatarColor = useMemo(() => getAvatarColor(agentName), [agentName]);
@@ -86,6 +89,7 @@ export const StreamingMessage = memo(function StreamingMessage({
 
     // 内容为空时显示加载动画
     const isWaiting = !content;
+    const hasReasoningContent = reasoningContent.trim().length > 0;
 
     return (
         <div className={styles.streamingBubble}>
@@ -135,20 +139,31 @@ export const StreamingMessage = memo(function StreamingMessage({
                     )
                 ) : (
                     // Chat 模式：传统消息框样式
-                    <div className={styles.content}>
-                        {isWaiting ? (
-                            <span className={styles.typingIndicator}>
-                                <span className={styles.typingDot} />
-                                <span className={styles.typingDot} />
-                                <span className={styles.typingDot} />
-                            </span>
-                        ) : content ? (
-                            <>
-                                <MarkdownRenderer content={content} contextId={contextId} onCodePreview={handleCodePreview} />
-                                <span className={styles.cursor}>|</span>
-                            </>
-                        ) : null}
-                    </div>
+                    <>
+                        {hasReasoningContent && (
+                            <ChatReasoningTrace
+                                content={reasoningContent}
+                                isStreaming
+                                answerStarted={Boolean(content.trim())}
+                            />
+                        )}
+                        {(content || !hasReasoningContent) && (
+                            <div className={styles.content}>
+                                {isWaiting ? (
+                                    <span className={styles.typingIndicator}>
+                                        <span className={styles.typingDot} />
+                                        <span className={styles.typingDot} />
+                                        <span className={styles.typingDot} />
+                                    </span>
+                                ) : content ? (
+                                    <>
+                                        <MarkdownRenderer content={content} contextId={contextId} onCodePreview={handleCodePreview} />
+                                        <span className={styles.cursor}>|</span>
+                                    </>
+                                ) : null}
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>

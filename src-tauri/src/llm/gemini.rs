@@ -10,7 +10,8 @@ use std::pin::Pin;
 
 use super::types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
-    ToolCallProgressCallback, ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
+    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
+    ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
 };
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
@@ -47,8 +48,40 @@ impl GeminiAdapter {
             .to_string()
     }
 
+    fn model_supports_thought_summaries(model: &str) -> bool {
+        let model = model.to_ascii_lowercase();
+        model.contains("gemini-2.5") || model.contains("gemini-3")
+    }
+
+    fn request_wants_image_output(response_modalities: &Option<Vec<String>>) -> bool {
+        response_modalities
+            .as_ref()
+            .map(|modalities| {
+                modalities
+                    .iter()
+                    .any(|modality| modality.eq_ignore_ascii_case("image"))
+            })
+            .unwrap_or(false)
+    }
+
+    fn thinking_config_for_model(
+        model: &str,
+        response_modalities: &Option<Vec<String>>,
+    ) -> Option<GeminiThinkingConfig> {
+        if Self::model_supports_thought_summaries(model)
+            && !Self::request_wants_image_output(response_modalities)
+        {
+            Some(GeminiThinkingConfig {
+                include_thoughts: Some(true),
+            })
+        } else {
+            None
+        }
+    }
+
     /// 构建Request body
     fn build_request_body(&self, request: &ChatRequest) -> GeminiRequest {
+        let model = self.get_model(request.model.as_deref());
         let mut contents: Vec<GeminiContent> = Vec::new();
         let mut system_text: Option<String> = None;
 
@@ -131,6 +164,7 @@ impl GeminiAdapter {
                     image_size: cfg.image_size.clone(),
                 }
             }),
+            thinking_config: Self::thinking_config_for_model(&model, &request.response_modalities),
         };
 
         GeminiRequest {
@@ -398,6 +432,7 @@ impl GeminiAdapter {
             max_output_tokens: request.max_tokens,
             response_modalities: None, // Function Calling 不需要图像输出模态
             image_config: None, // Function Calling 不需要图像配置
+            thinking_config: Self::thinking_config_for_model(&model, &None),
         };
 
         let gemini_request = GeminiRequest {
@@ -455,7 +490,7 @@ impl GeminiAdapter {
 
         if !function_calls.is_empty() {
             let text_content: String = parts.iter()
-                .filter(|p| !p.text.is_empty() && p.function_call.is_none())
+                .filter(|p| !p.text.is_empty() && p.function_call.is_none() && p.thought != Some(true))
                 .map(|p| p.text.clone())
                 .collect::<Vec<_>>()
                 .join("");
@@ -473,7 +508,7 @@ impl GeminiAdapter {
         }
 
         let text_content: String = parts.iter()
-            .filter(|p| !p.text.is_empty())
+            .filter(|p| !p.text.is_empty() && p.thought != Some(true))
             .map(|p| p.text.clone())
             .collect::<Vec<_>>()
             .join("");
@@ -619,6 +654,7 @@ impl GeminiAdapter {
         &self,
         request: super::types::ToolChatRequest,
         progress_callback: Option<super::types::ToolCallProgressCallback>,
+        reasoning_callback: Option<ReasoningTraceCallback>,
     ) -> AppResult<super::types::ToolChatResponse> {
         use eventsource_stream::Eventsource;
         use futures::StreamExt;
@@ -674,6 +710,7 @@ impl GeminiAdapter {
 
         // 累积状态：Gemini 的 functionCall 不分片，直接收集完整的 GeminiPart
         let mut all_parts: Vec<GeminiPart> = Vec::new();
+        let mut reasoning_seen = false;
         let mut chunk_count: u64 = 0;
         // 累积 usage 数据
         let mut final_input_tokens: Option<u32> = None;
@@ -702,6 +739,17 @@ impl GeminiAdapter {
                             if let Some(candidate) = chunk.candidates.first() {
                                 if let Some(content) = candidate.content.as_ref() {
                                     let parts = content.parts.clone();
+                                    for part in &parts {
+                                        if part.thought == Some(true) && !part.text.is_empty() {
+                                            reasoning_seen = true;
+                                            if let Some(callback) = reasoning_callback.as_ref() {
+                                                callback(ReasoningTraceProgress {
+                                                    delta: part.text.clone(),
+                                                    done: false,
+                                                });
+                                            }
+                                        }
+                                    }
                                     Self::emit_tool_call_progress_for_parts(
                                         &parts,
                                         all_parts.len(),
@@ -739,6 +787,15 @@ impl GeminiAdapter {
             chunk_count, all_parts.len());
 
         // 组装响应：复用 extract_tool_response_from_parts
+        if reasoning_seen {
+            if let Some(callback) = reasoning_callback.as_ref() {
+                callback(ReasoningTraceProgress {
+                    delta: String::new(),
+                    done: true,
+                });
+            }
+        }
+
         let mut result = Self::extract_tool_response_from_parts(&all_parts, &name_mapping);
         // 注入 token 用量
         result.input_tokens = final_input_tokens;
@@ -798,8 +855,14 @@ impl LlmProvider for GeminiAdapter {
         let content = api_response
             .candidates
             .first()
-            .and_then(|c| c.content.parts.first())
-            .map(|p| p.text.clone())
+            .map(|c| {
+                c.content
+                    .parts
+                    .iter()
+                    .filter(|p| p.thought != Some(true))
+                    .map(|p| p.text.as_str())
+                    .collect::<String>()
+            })
             .unwrap_or_default();
 
         let finish_reason = api_response
@@ -1027,6 +1090,7 @@ fn normalize_schema_types(value: &serde_json::Value) -> serde_json::Value {
 // ==================== Gemini API 类型定义 ====================
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct GeminiRequest {
     contents: Vec<GeminiContent>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1091,6 +1155,8 @@ struct GeminiGenerationConfig {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking_config: Option<GeminiThinkingConfig>,
     /// 响应输出类型（如 ["Text", "Image"] 或 ["Image"]）
     /// 图像生成模型专用，普通模型不需要设置
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1098,6 +1164,13 @@ struct GeminiGenerationConfig {
     /// 图像生成配置（宽高比等），嵌套在 generationConfig 内
     #[serde(skip_serializing_if = "Option::is_none")]
     image_config: Option<GeminiImageConfig>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiThinkingConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    include_thoughts: Option<bool>,
 }
 
 /// Gemini 图像生成配置（宽高比、分辨率等）
@@ -1226,6 +1299,40 @@ struct GeminiFunctionResponseBlob {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn request_includes_thinking_config_for_thinking_models() {
+        let adapter = GeminiAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("hi")],
+            model: Some("gemini-3.5-flash".to_string()),
+            ..Default::default()
+        };
+
+        let value =
+            serde_json::to_value(adapter.build_request_body(&request)).expect("serialize request");
+
+        assert_eq!(
+            value["generationConfig"]["thinkingConfig"]["includeThoughts"],
+            true
+        );
+    }
+
+    #[test]
+    fn request_skips_thinking_config_for_image_output() {
+        let adapter = GeminiAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("hi")],
+            model: Some("gemini-3.1-flash-image-preview".to_string()),
+            response_modalities: Some(vec!["Image".to_string()]),
+            ..Default::default()
+        };
+
+        let value =
+            serde_json::to_value(adapter.build_request_body(&request)).expect("serialize request");
+
+        assert!(value["generationConfig"].get("thinkingConfig").is_none());
+    }
 
     #[test]
     fn serializes_function_call_thought_signature_and_id() {

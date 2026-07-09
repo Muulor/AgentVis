@@ -209,56 +209,6 @@
     border-left: 3px solid var(--color-status-error);
 }
 
-/* ==================== 思考过程展开 ==================== */
-
-.reasoningBlock {
-    margin-bottom: var(--spacing-sm);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-}
-
-.reasoningBlock[open] {
-    background-color: var(--color-bg-secondary);
-}
-
-.reasoningSummary {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-md);
-    user-select: none;
-    list-style: none;
-    /* 移除默认三角形 */
-}
-
-.reasoningSummary::-webkit-details-marker {
-    display: none;
-    /* Chrome/Safari 移除默认标记 */
-}
-
-.reasoningSummary:hover {
-    color: var(--color-text-secondary);
-    background-color: var(--color-bg-tertiary);
-}
-
-.reasoningContent {
-    background-color: var(--color-bg-secondary);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-md);
-    margin-top: var(--spacing-xs);
-    font-family: var(--font-family-mono);
-    font-size: 13px;
-    line-height: var(--line-height-relaxed);
-    color: var(--color-text-secondary);
-    white-space: pre-wrap;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
 /* ==================== 引用溯源卡片 ==================== */
 
 .quotedFromBlock {

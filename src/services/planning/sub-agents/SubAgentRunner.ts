@@ -273,13 +273,19 @@ export interface LLMCaller {
          */
         persistedIntervention?: { message: string; stepsSinceIntervention: number },
         /** 流式工具调用参数接收进度（不包含参数正文） */
-        onToolCallProgress?: (progress: ToolCallProgress) => void
+        onToolCallProgress?: (progress: ToolCallProgress) => void,
+        onReasoningTrace?: (progress: ReasoningTraceProgress) => void
     ): Promise<LLMResponse>;
 }
 
 export interface ToolCallProgress {
     toolName: string;
     argBytes: number;
+}
+
+export interface ReasoningTraceProgress {
+    content: string;
+    done: boolean;
 }
 
 /**
@@ -1233,6 +1239,27 @@ export class SubAgentRunner {
                     }, { collect: false });
                 }
                 : undefined;
+            const onReasoningTrace = this.observationCallback
+                ? (progress: ReasoningTraceProgress) => {
+                    if (progress.content.trim().length === 0) return;
+
+                    if (slowDecisionTimer) {
+                        clearTimeout(slowDecisionTimer);
+                        slowDecisionTimer = undefined;
+                    }
+
+                    this.emitObservation({
+                        thinking: '',
+                        reasoningTrace: {
+                            content: progress.content,
+                            isStreaming: !progress.done,
+                            completed: progress.done,
+                        },
+                        step: stepCount,
+                        timestamp: Date.now(),
+                    }, { collect: false });
+                }
+                : undefined;
             try {
                 response = await caller.callWithContext(
                     systemPrompt,
@@ -1256,7 +1283,8 @@ export class SubAgentRunner {
                     persistedUserIntervention
                         ? { message: persistedUserIntervention, stepsSinceIntervention: stepCount - interventionAtStep }
                         : undefined,
-                    onToolCallProgress
+                    onToolCallProgress,
+                    onReasoningTrace
                 );
             } finally {
                 if (slowDecisionTimer) {

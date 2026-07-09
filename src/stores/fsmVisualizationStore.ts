@@ -13,6 +13,7 @@ import { create } from 'zustand';
 import type {
     ThinkingPhase,
     ThinkingPhaseEvent,
+    ReasoningTraceEvent,
     SubAgentObservationEvent,
 } from '../services/planning/agent-loop';
 import type { AgentServiceState } from '../services/planning/fsm/types';
@@ -46,6 +47,24 @@ export interface ThinkingStep {
 }
 
 /**
+ * Master Brain provider reasoning_content 流状态
+ *
+ * 与结构化 Decision/Thought 状态分开维护，避免推理流污染最终决策摘要。
+ */
+export interface ReasoningTraceState {
+    /** 当前累计的 reasoning_content */
+    content: string;
+    /** 是否正在流式接收 */
+    isStreaming: boolean;
+    /** 是否已经完成本轮推理 */
+    isCompleted: boolean;
+    /** 开始时间 */
+    startedAt?: Date;
+    /** 完成时间 */
+    completedAt?: Date;
+}
+
+/**
  * Sub-Agent 记录
  */
 export interface SubAgentRecord {
@@ -75,6 +94,7 @@ export interface ContextVisualizationState {
     activePhase: ThinkingPhase;
     isThinking: boolean;
     currentDecision: MasterBrainDecision | null;
+    reasoningTrace: ReasoningTraceState;
 
     // ═══ FSM 状态 ═══
     currentFSMState: AgentServiceState;
@@ -95,6 +115,7 @@ export interface ContextVisualizationState {
 interface FSMVisualizationState {
     // ═══ 展开/折叠状态（全局共享，UI 偏好） ═══
     isThinkingExpanded: boolean;
+    isReasoningExpanded: boolean;
     isFSMStateExpanded: boolean;
     isSubAgentsExpanded: boolean;
     isTimelineExpanded: boolean;
@@ -111,12 +132,14 @@ interface FSMVisualizationState {
 interface FSMVisualizationActions {
     // ═══ 展开/折叠操作（全局） ═══
     toggleThinkingExpanded: () => void;
+    toggleReasoningExpanded: () => void;
     toggleFSMStateExpanded: () => void;
     toggleSubAgentsExpanded: () => void;
     toggleTimelineExpanded: () => void;
 
     // ═══ 内容写入操作（按 contextId 隔离） ═══
     handleThinkingPhaseEvent: (event: ThinkingPhaseEvent, contextId: string) => void;
+    handleReasoningTraceEvent: (event: ReasoningTraceEvent, contextId: string) => void;
     setCurrentDecision: (decision: MasterBrainDecision | null, contextId: string) => void;
     handleFSMStateChange: (from: AgentServiceState, to: AgentServiceState, contextId: string) => void;
     updateMetrics: (snapshot: GovernorSnapshot, contextId: string) => void;
@@ -136,6 +159,14 @@ interface FSMVisualizationActions {
 
 // ==================== 初始状态 ====================
 
+function createInitialReasoningTraceState(): ReasoningTraceState {
+    return {
+        content: '',
+        isStreaming: false,
+        isCompleted: false,
+    };
+}
+
 /**
  * 单个 Context 的初始内容状态
  */
@@ -144,6 +175,7 @@ const initialContextState: ContextVisualizationState = {
     activePhase: 'IDLE',
     isThinking: false,
     currentDecision: null,
+    reasoningTrace: createInitialReasoningTraceState(),
     currentFSMState: 'IDLE',
     fsmStateHistory: [],
     metricsSnapshot: null,
@@ -157,6 +189,7 @@ function createInitialContextState(): ContextVisualizationState {
     return {
         ...initialContextState,
         thinkingSteps: [],
+        reasoningTrace: createInitialReasoningTraceState(),
         fsmStateHistory: [],
         subAgents: {},
         subAgentObservations: [],
@@ -178,6 +211,7 @@ function resolveContext(
  */
 const initialState: FSMVisualizationState = {
     isThinkingExpanded: true,
+    isReasoningExpanded: false,
     isFSMStateExpanded: false,
     isSubAgentsExpanded: false,
     isTimelineExpanded: false,
@@ -196,6 +230,9 @@ export const useFSMVisualizationStore = create<FSMVisualizationState & FSMVisual
         // ═══ 展开/折叠操作（全局共享） ═══
         toggleThinkingExpanded: () =>
             set((state) => ({ isThinkingExpanded: !state.isThinkingExpanded })),
+
+        toggleReasoningExpanded: () =>
+            set((state) => ({ isReasoningExpanded: !state.isReasoningExpanded })),
 
         toggleFSMStateExpanded: () =>
             set((state) => ({ isFSMStateExpanded: !state.isFSMStateExpanded })),
@@ -242,6 +279,9 @@ export const useFSMVisualizationStore = create<FSMVisualizationState & FSMVisual
                                 ...state.contextStates,
                                 [contextId]: {
                                     ...ctx,
+                                    ...(phase === 'ANALYZING'
+                                        ? { reasoningTrace: createInitialReasoningTraceState() }
+                                        : {}),
                                     thinkingSteps: steps,
                                     activePhase: phase,
                                     isThinking: phase !== 'IDLE',
@@ -289,6 +329,78 @@ export const useFSMVisualizationStore = create<FSMVisualizationState & FSMVisual
                                     ...ctx,
                                     thinkingSteps: steps,
                                     isThinking: phase !== 'DECIDED',
+                                },
+                            },
+                        };
+                    }
+
+                    default:
+                        return state;
+                }
+            });
+        },
+
+        handleReasoningTraceEvent: (event: ReasoningTraceEvent, contextId: string) => {
+            set((state) => {
+                const ctx = resolveContext(state.contextStates, contextId);
+                const currentTrace = (ctx as Partial<ContextVisualizationState>).reasoningTrace
+                    ?? createInitialReasoningTraceState();
+
+                switch (event.type) {
+                    case 'START': {
+                        return {
+                            isReasoningExpanded: true,
+                            contextStates: {
+                                ...state.contextStates,
+                                [contextId]: {
+                                    ...ctx,
+                                    reasoningTrace: {
+                                        content: event.content ?? '',
+                                        isStreaming: true,
+                                        isCompleted: false,
+                                        startedAt: new Date(),
+                                        completedAt: undefined,
+                                    },
+                                },
+                            },
+                        };
+                    }
+
+                    case 'CONTENT': {
+                        return {
+                            isReasoningExpanded: true,
+                            contextStates: {
+                                ...state.contextStates,
+                                [contextId]: {
+                                    ...ctx,
+                                    reasoningTrace: {
+                                        ...currentTrace,
+                                        content: event.content ?? '',
+                                        isStreaming: true,
+                                        isCompleted: false,
+                                        startedAt: currentTrace.startedAt ?? new Date(),
+                                        completedAt: undefined,
+                                    },
+                                },
+                            },
+                        };
+                    }
+
+                    case 'COMPLETE': {
+                        const content = event.content ?? currentTrace.content;
+                        return {
+                            isReasoningExpanded: false,
+                            contextStates: {
+                                ...state.contextStates,
+                                [contextId]: {
+                                    ...ctx,
+                                    reasoningTrace: {
+                                        ...currentTrace,
+                                        content,
+                                        isStreaming: false,
+                                        isCompleted: Boolean(content),
+                                        completedAt: new Date(),
+                                    },
                                 },
                             },
                         };

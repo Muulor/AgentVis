@@ -8,7 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { toolRegistry } from '../../tools/ToolRegistry';
 import { getToolNamesForSchemaFilter } from '../../tools/ToolAliases';
-import type { LLMCaller, LLMResponse, ToolCallProgress } from '../../sub-agents/SubAgentRunner';
+import type { LLMCaller, LLMResponse, ReasoningTraceProgress, ToolCallProgress } from '../../sub-agents/SubAgentRunner';
 import { PLANNING_CONSTANTS } from '../../PlanningConstants';
 import type { AccumulatedMessage } from '../../sub-agents/types';
 import { getLogger } from '@services/logger';
@@ -65,6 +65,12 @@ interface ToolCallProgressPayload {
     sessionId: string;
     toolName: string;
     argBytes: number;
+}
+
+interface ReasoningProgressPayload {
+    sessionId: string;
+    delta: string;
+    done: boolean;
 }
 
 /**
@@ -152,7 +158,8 @@ export class SubAgentLLMCallerFactory {
                 additionalInstructions?: string,
                 signal?: AbortSignal,
                 persistedIntervention?: { message: string; stepsSinceIntervention: number },
-                onToolCallProgress?: (progress: ToolCallProgress) => void
+                onToolCallProgress?: (progress: ToolCallProgress) => void,
+                onReasoningTrace?: (progress: ReasoningTraceProgress) => void
             ): Promise<LLMResponse> => {
                 const messages = this.buildMessagesWithContext(
                     systemPrompt,
@@ -160,7 +167,7 @@ export class SubAgentLLMCallerFactory {
                     additionalInstructions,
                     persistedIntervention
                 );
-                return this.invokeWithMessages(messages, tools, signal, onToolCallProgress);
+                return this.invokeWithMessages(messages, tools, signal, onToolCallProgress, onReasoningTrace);
             },
         };
     }
@@ -250,7 +257,8 @@ export class SubAgentLLMCallerFactory {
         messages: Message[],
         tools: string[],
         signal?: AbortSignal,
-        onToolCallProgress?: (progress: ToolCallProgress) => void
+        onToolCallProgress?: (progress: ToolCallProgress) => void,
+        onReasoningTrace?: (progress: ReasoningTraceProgress) => void
     ): Promise<LLMResponse> {
         // 获取所有已注册的工具 Schema
         const allSchemas = toolRegistry.getSchemas();
@@ -290,6 +298,7 @@ export class SubAgentLLMCallerFactory {
         signal?.addEventListener('abort', abortHandler, { once: true });
 
         let unlistenToolCallProgress: (() => void) | undefined;
+        let unlistenReasoningProgress: (() => void) | undefined;
         if (onToolCallProgress) {
             try {
                 const { listen } = await import('@tauri-apps/api/event');
@@ -310,6 +319,29 @@ export class SubAgentLLMCallerFactory {
         }
 
         // 调试：检查是否有 tool 消息携带 images
+        if (onReasoningTrace) {
+            try {
+                const { listen } = await import('@tauri-apps/api/event');
+                let reasoningContent = '';
+                unlistenReasoningProgress = await listen<ReasoningProgressPayload>(
+                    'llm-reasoning-progress',
+                    (event) => {
+                        const payload = event.payload;
+                        if (payload.sessionId !== sessionId) return;
+                        if (payload.delta) {
+                            reasoningContent += payload.delta;
+                        }
+                        onReasoningTrace({
+                            content: reasoningContent,
+                            done: payload.done,
+                        });
+                    }
+                );
+            } catch (error) {
+                logger.warn('[SubAgentLLMCaller] reasoning trace listener registration failed:', error);
+            }
+        }
+
         const msgsWithImages = messages.filter(m => m.images && m.images.length > 0);
         if (msgsWithImages.length > 0) {
             logger.trace('[SubAgentLLMCaller] 📷 发现', msgsWithImages.length, '条消息包含 images，各含:', msgsWithImages.map(m => `${m.images?.length ?? 0} image(s)`));
@@ -458,6 +490,7 @@ export class SubAgentLLMCallerFactory {
             // 无论成功/失败/取消，都清理 AbortSignal 监听器，避免内存泄漏
             signal?.removeEventListener('abort', abortHandler);
             unlistenToolCallProgress?.();
+            unlistenReasoningProgress?.();
         }
 
         logger.debug('[SubAgentLLMCaller] LLM 响应 - type:', response.type,
@@ -563,6 +596,7 @@ export class SubAgentLLMCallerFactory {
                 error: errorDetail,
                 inputTokens: response.inputTokens,
                 outputTokens: response.outputTokens,
+                reasoningContent: response.reasoningContent,
             };
         }
 
@@ -573,6 +607,7 @@ export class SubAgentLLMCallerFactory {
             toolCalls: [],
             inputTokens: response.inputTokens,
             outputTokens: response.outputTokens,
+            reasoningContent: response.reasoningContent,
         };
     }
 

@@ -8,6 +8,52 @@ export function upsertSubAgentObservationEvent(
     observations: SubAgentObservationEvent[],
     event: SubAgentObservationEvent
 ): void {
+    if (event.reasoningTrace) {
+        if (event.reasoningTrace.content.trim().length > 0) {
+            const transientStepIndex = observations.findIndex(
+                item => item.transient
+                    && !item.reasoningTrace
+                    && item.step === event.step
+                    && item.runId === event.runId
+            );
+            if (transientStepIndex >= 0) {
+                observations.splice(transientStepIndex, 1);
+            }
+        }
+
+        const existingReasoningIndex = observations.findIndex(
+            item => item.reasoningTrace && item.step === event.step && item.runId === event.runId
+        );
+        if (existingReasoningIndex >= 0) {
+            const previous = observations[existingReasoningIndex];
+            if (previous) {
+                const mergedReasoningTrace: NonNullable<SubAgentObservationEvent['reasoningTrace']> = {
+                    content: event.reasoningTrace.content,
+                };
+                const isStreaming = event.reasoningTrace.isStreaming ?? previous.reasoningTrace?.isStreaming;
+                const completed = event.reasoningTrace.completed ?? previous.reasoningTrace?.completed;
+                if (isStreaming !== undefined) {
+                    mergedReasoningTrace.isStreaming = isStreaming;
+                }
+                if (completed !== undefined) {
+                    mergedReasoningTrace.completed = completed;
+                }
+
+                observations[existingReasoningIndex] = {
+                    ...previous,
+                    ...event,
+                    thinking: event.thinking.trim().length > 0 ? event.thinking : previous.thinking,
+                    reasoningTrace: mergedReasoningTrace,
+                    timestamp: event.timestamp,
+                };
+            }
+            return;
+        }
+
+        observations.push(event);
+        return;
+    }
+
     const transientStepIndex = event.step === undefined ? -1 : observations.findIndex(
         item => item.transient && item.step === event.step && item.runId === event.runId
     );

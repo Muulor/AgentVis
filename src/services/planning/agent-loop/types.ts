@@ -33,6 +33,18 @@ export interface ThinkingPhaseEvent {
 }
 
 /**
+ * Master Brain 推理内容流事件
+ *
+ * 用于展示模型 provider 返回的 reasoning_content，与结构化 Decision 流分离。
+ */
+export interface ReasoningTraceEvent {
+    /** 事件类型 */
+    type: 'START' | 'CONTENT' | 'COMPLETE';
+    /** 当前已累计的 reasoning_content */
+    content?: string;
+}
+
+/**
  * Sub-Agent 单步观测事件
  *
  * 用于前端实时监控 Sub-Agent 的思考和行为
@@ -43,6 +55,12 @@ export interface SubAgentObservationEvent {
     runId?: string;
     /** LLM 文字输出（思考/推理/总结） */
     thinking: string;
+    /** UI-only provider reasoning trace, streamed before the structured Sub-Agent decision content is ready. */
+    reasoningTrace?: {
+        content: string;
+        isStreaming?: boolean;
+        completed?: boolean;
+    };
     /** Ephemeral status event that may be replaced by the real observation for the same step. */
     transient?: boolean;
     /** 工具行为（为空表示纯文本步骤） */
@@ -239,6 +257,8 @@ export interface AgentLoopCallbacks {
     onMetricsUpdate?: (snapshot: GovernorSnapshot) => void;
     /** 思维阶段事件（用于混合思维链展示） */
     onThinkingPhase?: (event: ThinkingPhaseEvent) => void;
+    /** Master Brain provider reasoning_content 流事件 */
+    onReasoningTrace?: (event: ReasoningTraceEvent) => void;
 
     // ═══ Sub-Agent 生命周期回调 ═══
 

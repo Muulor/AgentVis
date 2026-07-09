@@ -367,6 +367,7 @@ export async function handleMasterDecision(
                     content: displayContent,
                 });
             },
+            onReasoningTrace: callbacks.onReasoningTrace,
         });
 
         // 缓存 MB 的决策 rationale（跨请求持久化用）

@@ -320,6 +320,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         const {
             startStreaming,
             appendStreamingContent,
+            appendStreamingReasoning,
             finishStreaming,
         } = useChatStore.getState();
 
@@ -857,6 +858,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
 
                 if (event.payload.reasoning) {
                     accumulatedReasoning += event.payload.reasoning;
+                    appendStreamingReasoning(contextId, event.payload.reasoning);
                 }
 
                 // 流结束时提取 API 返回的 token 用量，累加到 statusStore
@@ -972,6 +974,9 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                             agentId: contextId,
                             role: 'assistant',
                             content: accumulatedContent,
+                            metadata: accumulatedReasoning
+                                ? JSON.stringify({ reasoningContent: accumulatedReasoning })
+                                : undefined,
                         },
                     });
                     assistantMessageId = assistantResult.id;

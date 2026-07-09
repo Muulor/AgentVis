@@ -24,6 +24,7 @@ import { AgentModelSelector } from './AgentModelSelector';
 import { Tooltip } from '@components/ui/Tooltip';
 import { FileRevertDialog } from '@components/ui';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
+import { useToast } from '@components/ui/Toast';
 import { useI18n } from '@/i18n';
 import type { ChatMode } from '@/types/chatMode';
 import { normalizeChatMode } from '@/types/chatMode';
@@ -124,6 +125,7 @@ function getMessageAttachments(message: UIMessage) {
  */
 export function AgentChatView() {
     const { t } = useI18n();
+    const { toast } = useToast();
     const currentAgentId = useAgentStore((state) => state.currentAgentId);
     const agents = useAgentStore((state) => state.agents);
     const updateAgent = useAgentStore((state) => state.updateAgent);
@@ -385,6 +387,23 @@ export function AgentChatView() {
         } : undefined,
     });
 
+    const handleStopStreaming = useCallback(() => {
+        if (!currentAgentId) return;
+
+        stopStreaming(currentAgentId);
+        toast({
+            type: 'info',
+            title: t('chat.toastStreamCancelRequestedTitle'),
+            description: t('chat.toastStreamCancelRequestedDescription'),
+            duration: 3000,
+        });
+
+        // Planning 模式额外取消 AgentLoop
+        if (mode === 'planning') {
+            stopPlanningTask();
+        }
+    }, [currentAgentId, mode, stopPlanningTask, stopStreaming, t, toast]);
+
     // 使用 ref 持有 executePlanningTask 最新引用，
     // 避免 cron:execute_planning 监听器 useEffect 因函数重建而频繁注销/重注册，
     // 消除模型切换时监听器竞态导致的潜在重复执行
@@ -516,6 +535,7 @@ export function AgentChatView() {
     }, [currentAgentId, streamingByContext]);
     const isStreaming = currentStreamingState.isStreaming;
     const streamingContent = currentStreamingState.content;
+    const streamingReasoningContent = currentStreamingState.reasoningContent ?? '';
 
     // streaming 结束时自动标记已读：防止用户停留小窗口期间 agent 跑完任务后切走误报未读
     // 注意：此处必须在 isStreaming 声明之后，避免依赖数组求值时触发 TDZ ReferenceError
@@ -1063,6 +1083,7 @@ export function AgentChatView() {
                     agentName={currentAgent.name}
                     isStreaming={isStreaming}
                     streamingContent={streamingContent}
+                    streamingReasoningContent={streamingReasoningContent}
                     mode={mode}
                     contextId={currentAgentId ?? undefined}
                     emptyText={mode === 'planning'
@@ -1098,15 +1119,7 @@ export function AgentChatView() {
                     agentName={currentAgent.name}
                     restoreDraft={restoreDraft}
                     isStreaming={isStreaming}
-                    onStop={() => {
-                        if (currentAgentId) {
-                            stopStreaming(currentAgentId);
-                            // Planning 模式额外取消 AgentLoop
-                            if (mode === 'planning') {
-                                stopPlanningTask();
-                            }
-                        }
-                    }}
+                    onStop={handleStopStreaming}
                     onSend={handleSend}
                     onModeChange={handleModeChange}
                     onRemoveQuote={handleRemoveQuote}

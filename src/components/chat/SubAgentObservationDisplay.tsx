@@ -10,7 +10,7 @@
  * 样式与 ThinkingChainDisplay 保持一致（可折叠面板）
  */
 
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
 import {
     ChevronDown,
     ChevronRight,
@@ -78,11 +78,15 @@ const TOOL_LABEL_MAP: Record<string, string> = {
  * 将扁平的 observation 事件列表按 thinking 文字变化边界分组，
  * 实现 UI 层去重：每步 thinking 文字只显示一次
  */
+type ReasoningTraceView = NonNullable<SubAgentObservationEvent['reasoningTrace']>;
+
 interface ObservationStep {
     /** LLM 思考文字（已去重，仅保留首次出现） */
     thinking: string;
     /** 该步的工具调用列表 */
     toolActions: Array<NonNullable<SubAgentObservationEvent['toolAction']>>;
+    /** Provider reasoning trace shown only in the UI. */
+    reasoningTrace?: ReasoningTraceView;
     /** 最终结果（仅最后一步可能有） */
     result?: string;
     /** 时间戳（取首条事件的时间） */
@@ -123,6 +127,31 @@ function groupObservationsIntoSteps(observations: SubAgentObservationEvent[]): O
     for (const obs of observations) {
         const currentStep = steps[steps.length - 1];
         const isInterventionEvent = getInterventionMessage(obs.thinking) !== undefined;
+
+        if (obs.reasoningTrace) {
+            let reasoningStep: ObservationStep | undefined;
+            for (let i = steps.length - 1; i >= 0; i--) {
+                const candidate = steps[i];
+                if (candidate?._step === obs.step && candidate?._runId === obs.runId) {
+                    reasoningStep = candidate;
+                    break;
+                }
+            }
+
+            if (!reasoningStep) {
+                reasoningStep = {
+                    thinking: '',
+                    toolActions: [],
+                    timestamp: obs.timestamp,
+                    _step: obs.step,
+                    _runId: obs.runId,
+                };
+                steps.push(reasoningStep);
+            }
+
+            reasoningStep.reasoningTrace = obs.reasoningTrace;
+            continue;
+        }
 
         // 判断是否需要开始新步骤
         let shouldStartNewStep = false;
@@ -182,6 +211,14 @@ function groupObservationsIntoSteps(observations: SubAgentObservationEvent[]): O
 
         const activeStep = steps[steps.length - 1];
         if (!activeStep) continue;
+
+        if (
+            !activeStep.thinking
+            && obs.thinking.trim().length > 0
+            && !obs.thinking.includes('TASK_COMPLETE')
+        ) {
+            activeStep.thinking = obs.thinking;
+        }
 
         // 工具行为合并到当前步骤
         if (obs.toolAction) {
@@ -308,6 +345,53 @@ function parseResultText(raw: string): string {
  * 2. 该步所有工具行为指示器
  * 3. 最终结果文字（如果有 result 字段）
  */
+function StaticReasoningTrace({ trace }: { trace: ReasoningTraceView }) {
+    const { t } = useI18n();
+    const [expanded, setExpanded] = useState(trace.isStreaming ?? false);
+
+    useEffect(() => {
+        if (trace.isStreaming) {
+            setExpanded(true);
+        } else if (trace.completed) {
+            setExpanded(false);
+        }
+    }, [trace.completed, trace.isStreaming]);
+
+    const toggleExpanded = () => setExpanded(value => !value);
+    const toggleLabel = expanded
+        ? t('chat.subAgentReasoningCollapse')
+        : t('chat.subAgentReasoningExpand');
+    const title = trace.isStreaming
+        ? t('chat.subAgentReasoningTitle')
+        : t('chat.subAgentReasoningCollapsedTitle');
+
+    return (
+        <div className={cx(
+            styles.reasoningTrace,
+            trace.isStreaming && styles.reasoningTraceStreaming,
+            expanded && styles.reasoningTraceExpanded
+        )}>
+            <Tooltip content={toggleLabel}>
+                <button
+                    type="button"
+                    className={styles.reasoningTraceHeader}
+                    onClick={toggleExpanded}
+                    aria-expanded={expanded}
+                    aria-label={toggleLabel}
+                >
+                    <span className={styles.reasoningTraceTitle}>{title}</span>
+                    {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </button>
+            </Tooltip>
+            {expanded && (
+                <div className={styles.reasoningTraceBody}>
+                    {trace.content || t('chat.subAgentReasoningTitle')}
+                </div>
+            )}
+        </div>
+    );
+}
+
 function StaticStepItem({ step }: StaticStepItemProps) {
     const showThinking = step.thinking.trim().length > 0;
 
@@ -323,6 +407,9 @@ function StaticStepItem({ step }: StaticStepItemProps) {
 
     return (
         <>
+            {step.reasoningTrace && (
+                <StaticReasoningTrace trace={step.reasoningTrace} />
+            )}
             {/* LLM 思考文字：每步只显示一次 */}
             {showThinking && (
                 <div className={styles.thinkingText}>

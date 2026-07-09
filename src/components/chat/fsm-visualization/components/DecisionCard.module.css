@@ -5,31 +5,31 @@
  */
 
 .container {
-    padding: var(--spacing-md);
-    border-radius: var(--radius-surface);
-    border: 1px solid var(--color-border-default);
-    background: var(--color-bg-primary);
+    padding: 4px 0 8px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
 }
 
 /* 颜色变体 */
 .success {
-    border-left: 3px solid var(--color-status-success);
+    border-left: none;
 }
 
 .error {
-    border-left: 3px solid var(--color-status-error);
+    border-left: none;
 }
 
 .primary {
-    border-left: 3px solid var(--color-action-primary);
+    border-left: none;
 }
 
 .warning {
-    border-left: 3px solid var(--color-status-warning);
+    border-left: none;
 }
 
 .neutral {
-    border-left: 3px solid var(--color-text-tertiary);
+    border-left: none;
 }
 
 /* 头部 */
@@ -96,9 +96,9 @@
 /* 理由 */
 .rationale {
     margin-top: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    background: var(--color-bg-secondary);
-    border-radius: var(--radius-control);
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     line-height: var(--line-height-relaxed);

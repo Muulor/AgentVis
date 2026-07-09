@@ -34,6 +34,8 @@ interface ChatHistoryProps {
     isStreaming?: boolean;
     /** 流式内容 */
     streamingContent?: string;
+    /** 流式 reasoning 内容 */
+    streamingReasoningContent?: string;
     /** 当前模式：planning 或 chat */
     mode?: ChatMode;
     /** 空状态提示文本 */
@@ -73,6 +75,7 @@ export const ChatHistory = memo(function ChatHistory({
     agentName,
     isStreaming = false,
     streamingContent = '',
+    streamingReasoningContent = '',
     mode = 'chat',
     emptyText,
     emptyHint,
@@ -139,7 +142,7 @@ export const ChatHistory = memo(function ChatHistory({
                 scrollThrottleRef.current = null;
             }
         };
-    }, [streamingContent, isStreaming, scrollToBottom]);
+    }, [streamingContent, streamingReasoningContent, isStreaming, scrollToBottom]);
 
     // Planning 模式下监听 FSM 可视化内容变化（MB Thought / SA Observations），
     // 驱动外层聊天容器自动滚动到底部。
@@ -269,6 +272,7 @@ export const ChatHistory = memo(function ChatHistory({
                 {isStreaming && (
                     <StreamingMessage
                         content={streamingContent}
+                        reasoningContent={streamingReasoningContent}
                         agentName={agentName}
                         mode={mode}
                         contextId={contextId}

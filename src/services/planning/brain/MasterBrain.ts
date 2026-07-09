@@ -25,6 +25,7 @@ import { DecisionParser } from './DecisionParser';
 
 import { PLANNING_CONSTANTS } from '../PlanningConstants';
 import { getLogger } from '@services/logger';
+import type { ReasoningTraceEvent } from '../agent-loop/types';
 
 const logger = getLogger('MasterBrain');
 
@@ -56,6 +57,8 @@ export interface LLMServiceInterface {
              * LLM 流式生成过程中调用，传递累积的部分内容
              */
             onStreamDelta?: (accumulatedContent: string) => void;
+            /** MB provider reasoning_content 流式回调 */
+            onReasoningTrace?: (event: ReasoningTraceEvent) => void;
         }
     ): Promise<string>;
 }
@@ -93,6 +96,8 @@ export class MasterBrain {
         streamOptions?: {
             /** 流式增量回调：LLM 输出过程中实时推送累积内容到 Thought 卡片 */
             onStreamDelta?: (accumulatedContent: string) => void;
+            /** provider reasoning_content 流式回调 */
+            onReasoningTrace?: (event: ReasoningTraceEvent) => void;
         }
     ): Promise<MasterBrainDecision> {
         // 1. 构建 System Prompt（Prime Directive + 输入契约）
@@ -105,6 +110,7 @@ export class MasterBrain {
         const rawResponse = await this.callLLM(systemPrompt, {
             mbBudgetRemaining: input.mbBudgetRemaining,
             onStreamDelta: streamOptions?.onStreamDelta,
+            onReasoningTrace: streamOptions?.onReasoningTrace,
         });
 
         // 3. 解析并验证决策（JSON Schema）
@@ -125,6 +131,7 @@ export class MasterBrain {
         extra?: {
             mbBudgetRemaining?: number;
             onStreamDelta?: (accumulatedContent: string) => void;
+            onReasoningTrace?: (event: ReasoningTraceEvent) => void;
         }
     ): Promise<string> {
         return this.llmService.generate(prompt, {
@@ -132,6 +139,7 @@ export class MasterBrain {
             temperature: PLANNING_CONSTANTS.MASTER_BRAIN_TEMPERATURE, // 低温度确保决策稳定一致
             mbBudgetRemaining: extra?.mbBudgetRemaining, // 透传预算剐余量，供 AgentLoop 判断是否注入尾部警告
             onStreamDelta: extra?.onStreamDelta, // 透传流式回调，实时推送 LLM 输出到 Thought 卡片
+            onReasoningTrace: extra?.onReasoningTrace,
         });
     }
 }

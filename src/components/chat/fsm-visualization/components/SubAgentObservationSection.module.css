@@ -16,9 +16,69 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs, 4px);
-    max-height: 300px;
-    overflow-y: auto;
-    scroll-behavior: smooth;
+    overflow: visible;
+}
+
+.liveSection {
+    width: 100%;
+    min-width: 0;
+    margin-top: 2px;
+}
+
+.liveHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 30px;
+    padding: 0 0 6px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary, #9CA3AF);
+    cursor: pointer;
+    text-align: left;
+}
+
+.liveHeader:hover {
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.liveHeader:hover .liveRule {
+    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
+}
+
+.liveHeaderLeft {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.liveHeaderIcon {
+    flex-shrink: 0;
+    color: var(--color-action-primary, #3F7BD9);
+}
+
+.liveTitle {
+    font-size: var(--font-size-base, 13px);
+    font-weight: 600;
+}
+
+.liveRule {
+    flex: 1;
+    height: 1px;
+    min-width: 24px;
+    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
+    transition: background-color var(--transition-fast, 150ms ease);
+}
+
+.liveToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--color-text-tertiary, #6B7280);
 }
 
 /* LLM 思考文字 */
@@ -27,6 +87,74 @@
     font-size: var(--font-size-sm, 12px);
     line-height: 1.5;
     padding: 2px 0;
+    word-break: break-word;
+}
+
+/* Provider reasoning trace */
+.reasoningTrace {
+    align-self: flex-start;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+
+.reasoningTraceExpanded,
+.reasoningTraceStreaming {
+    align-self: stretch;
+    background: transparent;
+}
+
+.reasoningTraceStreaming {
+    border-color: transparent;
+}
+
+.reasoningTraceHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    width: auto;
+    min-height: 22px;
+    padding: 2px 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary, #9CA3AF);
+    cursor: pointer;
+    font-size: 11px;
+    text-align: left;
+}
+
+.reasoningTraceExpanded .reasoningTraceHeader,
+.reasoningTraceStreaming .reasoningTraceHeader {
+    width: 100%;
+    min-height: 28px;
+    padding: 2px 0 4px;
+}
+
+.reasoningTraceHeader:hover {
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.reasoningTraceExpanded .reasoningTraceHeader:hover,
+.reasoningTraceStreaming .reasoningTraceHeader:hover {
+    background: transparent;
+}
+
+.reasoningTraceTitle {
+    font-weight: 600;
+    color: var(--color-text-primary, #E5E7EB);
+}
+
+.reasoningTraceBody {
+    max-height: 220px;
+    overflow: auto;
+    padding: 4px 0 8px;
+    border-top: none;
+    color: var(--observation-thinking-text);
+    font-size: var(--font-size-sm, 12px);
+    line-height: 1.55;
+    white-space: pre-wrap;
     word-break: break-word;
 }
 

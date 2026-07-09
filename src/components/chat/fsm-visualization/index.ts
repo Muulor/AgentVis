@@ -12,6 +12,7 @@ export { CollapsibleSection } from './components/CollapsibleSection';
 export type { CollapsibleSectionProps } from './components/CollapsibleSection';
 
 export { ThinkingChainSection } from './components/ThinkingChainSection';
+export { ReasoningTraceSection } from './components/ReasoningTraceSection';
 
 export { ThinkingStream } from './components/ThinkingStream';
 export type { ThinkingStreamProps } from './components/ThinkingStream';

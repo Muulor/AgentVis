@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 
 use super::types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
-    ToolCallProgressCallback, ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
-    TOOL_CALL_PROGRESS_STEP_BYTES,
+    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
+    ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES, TOOL_CALL_PROGRESS_STEP_BYTES,
 };
 use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
 use super::LlmProvider;
@@ -613,6 +613,7 @@ impl OpenAIAdapter {
         &self,
         request: super::types::ToolChatRequest,
         progress_callback: Option<ToolCallProgressCallback>,
+        reasoning_callback: Option<ReasoningTraceCallback>,
     ) -> AppResult<super::types::ToolChatResponse> {
         use super::types::ToolChatResponse;
         use eventsource_stream::Eventsource;
@@ -745,6 +746,12 @@ impl OpenAIAdapter {
                         if let Some(ref delta_reasoning) = choice.delta.reasoning_content {
                             if !delta_reasoning.is_empty() {
                                 has_useful_progress = true;
+                                if let Some(callback) = reasoning_callback.as_ref() {
+                                    callback(ReasoningTraceProgress {
+                                        delta: delta_reasoning.clone(),
+                                        done: false,
+                                    });
+                                }
                             }
                             reasoning_buffer.push_str(delta_reasoning);
                         }
@@ -802,6 +809,15 @@ impl OpenAIAdapter {
                         chunk_count, e
                     )));
                 }
+            }
+        }
+
+        if !reasoning_buffer.is_empty() {
+            if let Some(callback) = reasoning_callback.as_ref() {
+                callback(ReasoningTraceProgress {
+                    delta: String::new(),
+                    done: true,
+                });
             }
         }
 
@@ -1094,6 +1110,10 @@ impl LlmProvider for OpenAIAdapter {
                         .and_then(|c| c.delta.content.as_ref())
                         .cloned()
                         .unwrap_or_default();
+                    let reasoning_delta = choice
+                        .and_then(|c| c.delta.reasoning_content.as_ref())
+                        .filter(|reasoning| !reasoning.is_empty())
+                        .cloned();
 
                     // OpenRouter 图像生成：将 delta.images 转为 markdown 格式，
                     // 与 Gemini adapter 的 inlineData → markdown 处理统一，
@@ -1118,7 +1138,7 @@ impl LlmProvider for OpenAIAdapter {
 
                     Ok(StreamChunk {
                         delta,
-                        reasoning: None, // OpenAI 标准 API 不返回 reasoning
+                        reasoning: reasoning_delta,
                         done,
                         finish_reason,
                         input_tokens,
@@ -1276,7 +1296,11 @@ struct OpenAIStreamChoice {
 
 #[derive(Debug, Deserialize)]
 struct OpenAIDelta {
+    #[serde(default)]
     content: Option<String>,
+    /// OpenAI-compatible reasoning models such as DeepSeek return thought deltas here.
+    #[serde(default)]
+    reasoning_content: Option<String>,
     /// OpenRouter 图像生成模型返回的图片数据
     #[serde(default)]
     images: Option<Vec<OpenRouterImageEntry>>,
@@ -1752,6 +1776,26 @@ mod tests {
         assert_eq!(calls[0].name, "file_write");
         assert_eq!(calls[0].args["path"], "test.md");
         assert_eq!(calls[0].args["content"], "hello");
+    }
+
+    #[test]
+    fn test_plain_stream_chunk_accepts_reasoning_content() {
+        let data = r#"{
+            "choices": [{
+                "delta": {
+                    "content": null,
+                    "reasoning_content": "Thinking through the task"
+                },
+                "finish_reason": null
+            }],
+            "usage": null
+        }"#;
+
+        let chunk: OpenAIStreamChunk = serde_json::from_str(data).unwrap();
+        assert_eq!(
+            chunk.choices[0].delta.reasoning_content.as_deref(),
+            Some("Thinking through the task")
+        );
     }
 
     #[test]

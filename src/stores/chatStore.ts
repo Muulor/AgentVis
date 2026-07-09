@@ -23,6 +23,7 @@ const logger = getLogger('chatStore');
 /** 流式状态（按 contextId 隔离） */
 interface StreamingState {
     content: string;
+    reasoningContent?: string;
     isStreaming: boolean;
     /** 响应中的 Agent 名称（用于 Hub 窗口显示） */
     agentName?: string;
@@ -174,6 +175,8 @@ interface ChatActions {
     startStreaming: (contextId: string, agentName?: string) => void;
     /** 追加流式内容 */
     appendStreamingContent: (contextId: string, chunk: string) => void;
+    /** 追加流式 reasoning 内容 */
+    appendStreamingReasoning: (contextId: string, chunk: string) => void;
     /** 覆盖式设置流式内容（VE 增强等场景，回调传入的是累积内容而非增量 delta） */
     setStreamingContent: (contextId: string, content: string) => void;
 
@@ -398,7 +401,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     // ========== 流式状态操作（按 contextId 隔离）==========
     startStreaming: (contextId: string, agentName?: string) => set((state) => {
         const newMap = new Map(state.streamingByContext);
-        newMap.set(contextId, { content: '', isStreaming: true, agentName });
+        newMap.set(contextId, { content: '', reasoningContent: '', isStreaming: true, agentName });
         return { streamingByContext: newMap };
     }),
 
@@ -408,6 +411,19 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
         // 保留 agentName 不变
         newMap.set(contextId, {
             content: current.content + chunk,
+            reasoningContent: current.reasoningContent,
+            isStreaming: true,
+            agentName: current.agentName,
+        });
+        return { streamingByContext: newMap };
+    }),
+
+    appendStreamingReasoning: (contextId: string, chunk: string) => set((state) => {
+        const newMap = new Map(state.streamingByContext);
+        const current = newMap.get(contextId) ?? { content: '', reasoningContent: '', isStreaming: true, agentName: undefined };
+        newMap.set(contextId, {
+            content: current.content,
+            reasoningContent: (current.reasoningContent ?? '') + chunk,
             isStreaming: true,
             agentName: current.agentName,
         });
@@ -420,6 +436,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
         // 覆盖式设置内容，保留 agentName 和 isStreaming 状态
         newMap.set(contextId, {
             content,
+            reasoningContent: current.reasoningContent,
             isStreaming: true,
             agentName: current.agentName,
         });
@@ -435,6 +452,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             // 清空内容和流式状态，但保留 agentName
             newMap.set(contextId, {
                 content: '',
+                reasoningContent: '',
                 isStreaming: false,
                 agentName: current.agentName,
             });

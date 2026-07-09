@@ -1,67 +1,71 @@
 /**
  * ThinkingChainDisplay 样式
- * 
- * @version 2.1 - 与 ThinkingChainSection 样式统一
+ *
+ * 已完成 Master Brain Thought 的无外框静态展示。
  */
 
 .container {
     --masterbrain-thought-text: var(--color-masterbrain-thought-text, var(--color-text-secondary));
 
-    margin-bottom: 12px;
-    border: 1px solid var(--color-border-secondary);
-    border-radius: 8px;
-    background-color: var(--color-bg-secondary, #1E1E2E);
-    overflow: hidden;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 0;
 }
 
 .embedded {
     margin-bottom: 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    overflow: visible;
 }
 
 .header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     width: 100%;
-    padding: 8px 12px;
+    min-height: 28px;
+    padding: 0 0 4px;
     border: none;
     background: transparent;
+    color: var(--color-text-secondary, #9CA3AF);
     cursor: pointer;
-    color: var(--color-text-secondary);
     font-size: 13px;
     text-align: left;
-    transition: background-color 0.15s ease;
 }
 
 .header:hover {
-    background: var(--color-bg-hover);
+    color: var(--color-text-primary, #E5E7EB);
 }
 
-.headerIcon {
-    color: var(--color-action-primary);
-    flex-shrink: 0;
+.header:hover .headerRule {
+    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
 }
 
 .headerTitle {
-    font-weight: 500;
-    flex-grow: 1;
+    flex-shrink: 0;
+    color: var(--color-text-primary, #E5E7EB);
+    font-weight: 600;
+}
+
+.headerRule {
+    flex: 1;
+    height: 1px;
+    min-width: 24px;
+    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
+    transition: background-color var(--transition-fast, 150ms ease);
 }
 
 .toggle {
-    color: var(--color-text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    color: var(--color-text-tertiary);
 }
 
-/* 步骤容器 - 与 ThinkingChainSection 一致 */
 .stepsContainer {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 8px 12px 12px;
+    gap: 10px;
+    padding: 4px 0 8px;
 }
 
 .embedded .stepsContainer {
@@ -69,57 +73,21 @@
     padding: 0;
 }
 
-/* 单个步骤项 - 与 ThinkingChainSection 一致 */
 .stepItem {
-    display: flex;
-    gap: 8px;
-    padding: 8px;
-    border-radius: 6px;
-    border-left: 2px solid transparent;
-    opacity: 0.85;
+    min-width: 0;
+    padding: 0;
+    opacity: 0.92;
 }
 
 .embedded .stepItem {
-    padding: 4px 0 4px 10px;
-    border-left-color: transparent;
-    border-radius: 0;
     opacity: 1;
 }
 
-/* 步骤指示器（左侧勾选图标） */
-.stepIndicator {
-    flex-shrink: 0;
-    width: 16px;
-    height: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: var(--color-success);
-}
-
-.embedded .stepIndicator {
-    width: 14px;
-    height: 14px;
-    border: 1px solid var(--color-success);
-    background: transparent;
-}
-
-.checkIcon {
-    color: white;
-}
-
-.embedded .checkIcon {
-    color: var(--color-success);
-}
-
-/* 步骤内容区域 */
 .stepContent {
-    flex: 1;
     min-width: 0;
+    color: var(--masterbrain-thought-text);
     font-size: 13px;
     line-height: 1.6;
-    color: var(--masterbrain-thought-text);
     white-space: pre-wrap;
     word-break: break-word;
 }
@@ -127,5 +95,4 @@
 .embedded .stepContent {
     font-size: 12px;
     line-height: 1.55;
-    color: var(--masterbrain-thought-text);
 }
