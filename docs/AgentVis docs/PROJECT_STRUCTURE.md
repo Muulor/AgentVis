@@ -513,6 +513,7 @@ services/
 ├── 📁 fast-apply/                # Fast-Apply 快速应用引擎
 ├── 📁 file-types/                # 文件类型能力注册表（附件/预览/解析/知识库策略）
 ├── 📁 llm/                       # LLM 调用服务
+├── 📁 language/                  # LLM 输出语言解析、来源语言检测与提示合约
 ├── 📁 memory/                    # 记忆系统服务
 ├── 📁 navigation/                # 外部链接与导航边界服务
 ├── 📁 planning/                  # 规划执行服务（Agent Loop）
@@ -587,6 +588,12 @@ llm/
 ├── index.ts                      # 模块导出索引
 ├── types.ts                      # LLM 类型定义
 └── LlmService.ts                 # LLM 统一调用服务
+```
+
+### 📁 services/language/
+```
+language/
+└── OutputLanguagePolicy.ts      # 输出目标、显式排除、拉丁语系/简繁检测、来源语言保真与 Prompt 合约
 ```
 
 ### 📁 services/logger/ - 

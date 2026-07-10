@@ -24,6 +24,13 @@ describe('VisualEnhancerPrompt invariants', () => {
         expect(prompt).not.toMatch(HAN_CHARACTER_PATTERN);
     });
 
+    it('anchors enhancement labels to the report source language', () => {
+        const prompt = buildVisualEnhancerSystemPrompt('这是中文报告，包含三个实施阶段。');
+
+        expect(prompt).toContain('Detected source-language signal: Simplified Chinese');
+        expect(prompt).toContain('do not switch to the runtime or provider language');
+    });
+
     it('preserves required visual fence names', () => {
         const prompt = buildVisualEnhancerSystemPrompt();
         const requiredFences = [

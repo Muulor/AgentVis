@@ -294,6 +294,33 @@ describe('StateHandlers', () => {
             expect(handlerContext.dependencies.decisionMapper.map).toHaveBeenCalled();
         });
 
+        it('should pass the pre-resolved output language hint to DecisionMapper', async () => {
+            const outputLanguageHint = {
+                tag: 'fr',
+                label: 'French',
+                source: 'explicit_target' as const,
+                guidance: 'Use French.',
+            };
+            const inputBuilder = handlerContext.dependencies.masterBrainInputBuilder;
+            (inputBuilder.build as ReturnType<typeof vi.fn>).mockResolvedValue({
+                conversationHistory: [],
+                memory: { taskExperiences: [] },
+                ragEvidence: [],
+                toolCatalog: [],
+                userIntent: { explicit: 'Please answer in French.' },
+                outputLanguageHint,
+            });
+
+            await handleMasterDecision(fsmContext, handlerContext);
+
+            expect(handlerContext.dependencies.decisionMapper.map).toHaveBeenCalledWith(
+                expect.anything(),
+                undefined,
+                undefined,
+                outputLanguageHint
+            );
+        });
+
         it('应该触发 3 阶段思维 UI 回调', async () => {
             await handleMasterDecision(fsmContext, handlerContext);
 

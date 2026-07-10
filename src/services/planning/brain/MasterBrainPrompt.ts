@@ -23,6 +23,11 @@ import { PLANNING_CONSTANTS } from '../PlanningConstants';
 import { MODEL_CONTEXT_WINDOWS } from '../ContextWindowManager';
 import { getLogger } from '@services/logger';
 import { buildCurrentTimePrompt, formatTimestamp, formatRelativeTime } from '@services/utils/TimeUtils';
+import {
+    buildOutputLanguageContract,
+    resolveOutputLanguage,
+    type OutputLanguageHint,
+} from '@services/language/OutputLanguagePolicy';
 import { translate } from '@/i18n';
 
 const logger = getLogger('MasterBrainPrompt');
@@ -64,6 +69,19 @@ export class MasterBrainPrompt {
 
         // ═══ P1: systemState + workdir（不可截断） ═══
         const p1Block = this.buildP1Block(input);
+        const outputLanguageHint = input.outputLanguageHint
+            ?? resolveOutputLanguage(input.userIntent.explicit);
+        const outputLanguageBlock = buildOutputLanguageContract(outputLanguageHint, {
+            fields: [
+                'rationale',
+                'riskAssessment.notes',
+                'nextStep.task',
+                'nextStep.questionsForUser',
+                'questionsForUser',
+                'response',
+            ],
+            additionalRule: 'An explicit output-language request in the latest user message overrides all other language signals.',
+        });
 
         // ═══ P2: agentRules（不可截断） ═══
         const p2Block = this.formatAgentRules(input.agentRules);
@@ -97,7 +115,7 @@ export class MasterBrainPrompt {
         const taskExperienceBlock = this.formatTaskExperience(input.memory.taskExperiences);
 
         // ═══ Footer: 输出格式尾部锚点（对抗 Lost in the Middle，不可截断） ═══
-        const outputFormatFooter = this.buildOutputFormatFooter();
+        const outputFormatFooter = this.buildOutputFormatFooter(outputLanguageHint);
 
         // 预算管理：当 modelId 存在时启用
         if (input.modelId) {
@@ -106,6 +124,7 @@ export class MasterBrainPrompt {
             const fixedTokens = this.estimateTokens(fixedTemplate)
                 + this.estimateTokens(characterBlock)
                 + this.estimateTokens(p1Block)
+                + this.estimateTokens(outputLanguageBlock)
                 + this.estimateTokens(p2Block)
                 + this.estimateTokens(installedSkillCatalogBlock)
                 + this.estimateTokens(installedScriptSkillCatalogBlock)
@@ -145,6 +164,7 @@ export class MasterBrainPrompt {
             fixedTemplate,
             characterBlock,
             p1Block,
+            outputLanguageBlock,
             p2Block,
             toolCatalogBlock,
             historyBlock,
@@ -336,7 +356,7 @@ When dispatching a task, the following optional **three dispatch elements** are 
         return '';
     }
 
-    private buildOutputFormatFooter(): string {
+    private buildOutputFormatFooter(outputLanguageHint: OutputLanguageHint): string {
         return `
 ---OUTPUT_FORMAT_FOOTER---
 
@@ -347,7 +367,8 @@ Remember your loop/memory awareness and align with the user's requirement.
 Are your Prime Directive, decision principles, dispatch protocol, and dispatch heuristics clear in memory? Decide only after you are completely certain.
 For a SPAWN_SUB_AGENT decision, nextStep.task must reference the relevant skill name to guide SA execution.
 Your response **must be exactly and only** one JSON object in this format:
-⚠️ All your outputs, including \`rationale\`, \`riskAssessment.note\`, \`nextStep.task\`, \`nextStep.questionsForUser\`, \`responses\`, must strictly use the user's input language. Strictly forbidden to output in different languages unless the user requests another language.
+Output-language contract: use ${outputLanguageHint.label} for every natural-language JSON field. ${outputLanguageHint.guidance}
+⚠️ All your outputs, including \`rationale\`, \`riskAssessment.notes\`, \`nextStep.task\`, \`nextStep.questionsForUser\`, \`questionsForUser\`, and \`response\`, must strictly follow [OUTPUT_LANGUAGE]. Strictly forbidden to output in a different language unless the user explicitly requests another language.
 
 \`\`\`json
 {
@@ -615,6 +636,7 @@ ${workdirBlock}${workdirSnapshotBlock}${projectContextBlock}`;
         fixedTemplate: string;
         characterBlock: string;
         p1Block: string;
+        outputLanguageBlock: string;
         p2Block: string;
         toolCatalogBlock: string;
         historyBlock: string;
@@ -634,6 +656,7 @@ ${parts.characterBlock}
 ${parts.p2Block}
 ## 5. Current Input
 ${parts.p1Block}
+${parts.outputLanguageBlock}
 
 ** [MEMORY] **
     ${parts.memoryBlock}

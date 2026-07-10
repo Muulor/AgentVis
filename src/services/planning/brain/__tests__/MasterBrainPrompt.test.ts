@@ -10,15 +10,17 @@ import type { MasterBrainInput, MemoryItem, ExternalGuideSkillInfo } from '../ty
 import {
     createEmptyMemorySnapshot,
 } from '../types';
+import { resolveOutputLanguage } from '@services/language/OutputLanguagePolicy';
 
 // ═══════════════════════════════════════════════════════════════
 // 测试辅助函数
 // ═══════════════════════════════════════════════════════════════
 
 const createTestInput = (overrides: Partial<MasterBrainInput> = {}): MasterBrainInput => ({
-    userIntent: {
+    userIntent: overrides.userIntent ?? {
         explicit: 'Test user intent',
     },
+    outputLanguageHint: overrides.outputLanguageHint,
     memory: overrides.memory ?? createEmptyMemorySnapshot(),
     ragEvidence: overrides.ragEvidence ?? [],
     toolCatalog: overrides.toolCatalog ?? [],
@@ -62,6 +64,83 @@ describe('MasterBrainPrompt', () => {
 
             expect(prompt).toContain('[USER_INTENT]');
             expect(prompt).toContain('Test user intent');
+        });
+
+        it('should anchor English output language for English user requests', () => {
+            const input = createTestInput({
+                userIntent: {
+                    explicit: 'Using the Agent SDK, quickly build a browser-based agent application.',
+                },
+            });
+            const prompt = builder.build(input);
+
+            expect(prompt).toContain('[OUTPUT_LANGUAGE]');
+            expect(prompt).toContain('Resolved output language: English');
+            expect(prompt).toContain('Use English for natural-language output');
+        });
+
+        it('should distinguish Japanese output language from Chinese when kana is present', () => {
+            const input = createTestInput({
+                userIntent: {
+                    explicit: '最新のmacOSに触発されたブラウザベースのOSを作成してください。',
+                },
+            });
+            const prompt = builder.build(input);
+
+            expect(prompt).toContain('Resolved output language: Japanese');
+            expect(prompt).toContain('Use Japanese for natural-language output');
+        });
+
+        it('should anchor Korean output language for Hangul user requests', () => {
+            const input = createTestInput({
+                userIntent: {
+                    explicit: '브라우저 기반 에이전트 애플리케이션을 빠르게 만들어 주세요.',
+                },
+            });
+            const prompt = builder.build(input);
+
+            expect(prompt).toContain('Resolved output language: Korean');
+            expect(prompt).toContain('Use Korean for natural-language output');
+        });
+
+        it('should let an explicit Chinese translation target override Japanese quoted text', () => {
+            const input = createTestInput({
+                userIntent: {
+                    explicit: '请翻译“最新のmacOSに触発されたブラウザベースのOSを作成する。”这一段为中文',
+                },
+            });
+            const prompt = builder.build(input);
+
+            expect(prompt).toContain('Resolved output language: Simplified Chinese');
+            expect(prompt).toContain('explicitly requires Simplified Chinese');
+        });
+
+        it('should preserve Traditional Chinese as a distinct output variant', () => {
+            const input = createTestInput({
+                userIntent: {
+                    explicit: '請分析這份檔案，並說明系統狀態、訊息傳送與任務執行風險。',
+                },
+            });
+            const prompt = builder.build(input);
+
+            expect(prompt).toContain('Resolved output language: Traditional Chinese');
+            expect(prompt).toContain('Use Traditional Chinese for natural-language output');
+        });
+
+        it('should prefer a pre-resolved language hint from the original request', () => {
+            const input = createTestInput({
+                userIntent: {
+                    explicit: 'Delegated text was rewritten in English.',
+                },
+                outputLanguageHint: resolveOutputLanguage(
+                    'Please provide the final answer in French.',
+                    { useRuntimePreference: false }
+                ),
+            });
+            const prompt = builder.build(input);
+
+            expect(prompt).toContain('Resolved output language: French');
+            expect(prompt).toContain('explicitly requires French');
         });
 
         it('应该不包含系统状态 Section（已移除，预算由后台管理）', () => {

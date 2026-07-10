@@ -12,6 +12,8 @@
  * @module services/planning/visual-enhancer/VisualEnhancerPrompt
  */
 
+import { buildSourceLanguagePreservationContract } from '@services/language/OutputLanguagePolicy';
+
 // ============================================================================
 // Prompt 模板
 // ============================================================================
@@ -22,8 +24,12 @@
  * 指引 LLM 将纯文本报告增强为带有交互格式的版本，
  * 同时保持原始内容的完整性和准确性。
  */
-export function buildVisualEnhancerSystemPrompt(): string {
+export function buildVisualEnhancerSystemPrompt(sourceContent = ''): string {
+  const sourceLanguageContract = buildSourceLanguagePreservationContract(sourceContent);
+
   return `You are a content enhancer. Your task is to transform a plain-text report into a richer interactive format where necessary to improves readability and user experience.
+
+${sourceLanguageContract}
 
 ## Prime Directive
 - Respect the plain text report content from the input source. You are strictly prohibited from fabricating or expanding upon any facts or data not present in the original text based on your training data. If there is no room for visual enhancement in the original report, please output the original report text verbatim.

@@ -19,6 +19,7 @@ import type {
 import type { TerminationReason } from '../types';
 import { SubAgentSpecBuilder } from '../builders/SubAgentSpecBuilder';
 import { getLogger } from '@services/logger';
+import type { OutputLanguageHint } from '@services/language/OutputLanguagePolicy';
 
 const logger = getLogger('DecisionMapper');
 
@@ -104,14 +105,20 @@ export class DecisionMapper {
     map(
         decision: MasterBrainDecision,
         guideSkills?: ExternalGuideSkillInfo[],
-        scriptSkills?: ExternalScriptSkillInfo[]
+        scriptSkills?: ExternalScriptSkillInfo[],
+        outputLanguageHint?: OutputLanguageHint
     ): DecisionMappingResult {
         switch (decision.decision) {
             case 'RESPOND_TO_USER':
                 return this.mapRespondToUser(decision);
 
             case 'SPAWN_SUB_AGENT':
-                return this.mapSpawnSubAgent(decision, guideSkills, scriptSkills);
+                return this.mapSpawnSubAgent(
+                    decision,
+                    guideSkills,
+                    scriptSkills,
+                    outputLanguageHint
+                );
 
             case 'REQUEST_MORE_INPUT':
                 return this.mapRequestMoreInput(decision);
@@ -155,10 +162,16 @@ export class DecisionMapper {
     private mapSpawnSubAgent(
         decision: SpawnSubAgentDecision,
         guideSkills?: ExternalGuideSkillInfo[],
-        scriptSkills?: ExternalScriptSkillInfo[]
+        scriptSkills?: ExternalScriptSkillInfo[],
+        outputLanguageHint?: OutputLanguageHint
     ): DecisionMappingResult {
         // 统一走 SubAgentSpecBuilder JIT 构建
-        const spec = this.specBuilder.buildFromNextStep(decision, guideSkills, scriptSkills);
+        const spec = this.specBuilder.buildFromNextStep(
+            decision,
+            guideSkills,
+            scriptSkills,
+            outputLanguageHint
+        );
 
         if (spec) {
             const nextStepForLog = decision.nextStep as { task?: string } | undefined;

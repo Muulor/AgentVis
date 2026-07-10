@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { SubAgentSpecBuilder } from '../SubAgentSpecBuilder';
 import type { ExternalScriptSkillInfo, MasterBrainDecision } from '../../../brain/types';
+import { resolveOutputLanguage } from '@services/language/OutputLanguagePolicy';
 
 const BROKER_SCRIPT_SKILL: ExternalScriptSkillInfo = {
     name: 'broker-e2e',
@@ -55,5 +56,22 @@ describe('SubAgentSpecBuilder', () => {
         expect(spec).not.toBeNull();
         expect(spec?.allowedTools).toContain('external_skill_execute');
         expect(spec?.behaviorHint).toBe('careful');
+    });
+
+    it('应将原始用户请求的结构化语言提示传入 SubAgentSpec', () => {
+        const builder = new SubAgentSpecBuilder();
+        const outputLanguageHint = resolveOutputLanguage(
+            'Please provide the result in French.',
+            { useRuntimePreference: false }
+        );
+
+        const spec = builder.buildFromNextStep(
+            createSpawnDecision(),
+            undefined,
+            undefined,
+            outputLanguageHint
+        );
+
+        expect(spec?.outputLanguageHint).toEqual(outputLanguageHint);
     });
 });

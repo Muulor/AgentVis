@@ -139,4 +139,27 @@ describe('SkillAuditService result parsing', () => {
             recommendation: 'Remove shell execution or use a strict allowlist.',
         }]);
     });
+
+    it('localizes parse-failure fallbacks using the requested UI language', () => {
+        const zhResult = parseAuditResultFromOutput('not-json', 'zh-CN');
+        const enResult = parseAuditResultFromOutput('not-json', 'en-US');
+
+        expect(zhResult.summary).toBe('无法解析审查结果，建议人工复核。');
+        expect(zhResult.findings[0]?.description).toContain('输出无法解析为 JSON');
+        expect(zhResult.findings[0]?.recommendation).toBe('请人工检查技能包内容。');
+        expect(enResult.summary).toBe(
+            'The review result could not be parsed. Manual review is recommended.'
+        );
+    });
+
+    it('localizes the missing-summary fallback without changing schema enums', () => {
+        const result = parseAuditResultFromOutput(JSON.stringify({
+            audit_result: 'APPROVED',
+            risk_score: 1,
+            confidence: 'HIGH',
+        }), 'zh-CN');
+
+        expect(result.auditResult).toBe('APPROVED');
+        expect(result.summary).toBe('安全审查已完成。');
+    });
 });

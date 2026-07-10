@@ -507,7 +507,8 @@ export async function handleMasterDecision(
         const mappingResult = decisionMapper.map(
             decision,
             sharedState.externalGuideSkills,
-            sharedState.externalScriptSkills
+            sharedState.externalScriptSkills,
+            input.outputLanguageHint
         );
 
         // 同步副作用到共享状态

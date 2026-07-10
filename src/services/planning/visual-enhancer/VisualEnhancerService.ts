@@ -189,7 +189,7 @@ export async function enhance(
 
     try {
         // 构建增强 Prompt
-        const systemPrompt = buildVisualEnhancerSystemPrompt();
+        const systemPrompt = buildVisualEnhancerSystemPrompt(response);
         const userPrompt = buildVisualEnhancerUserPrompt(response);
 
         const messages = [

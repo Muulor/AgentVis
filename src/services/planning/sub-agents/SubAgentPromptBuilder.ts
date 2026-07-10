@@ -14,6 +14,10 @@ import type { TaskContext } from './types';
 import type { SkillDefinition } from '../skills/types';
 import { getLogger } from '@services/logger';
 import { buildCurrentTimePrompt } from '@services/utils/TimeUtils';
+import {
+    buildOutputLanguageContract,
+    resolveOutputLanguage,
+} from '@services/language/OutputLanguagePolicy';
 import { translate } from '@/i18n';
 import { getCanonicalToolName } from '../tools/ToolAliases';
 export { SAFETY_FOOTER_TEXT } from './SubAgentSafetyFooter';
@@ -60,7 +64,7 @@ Whether the task is simple or complex, maintain a level-headed and patient minds
 - Invoke tools (read, file_write, exec, local_search, etc.) strictly per guidelines and schemas. Since file_write includes syntax checks, skip redundant read verification if no errors are returned.
 
 ### Output And Handoff
-- MB's language is consistent with the user's. You must strictly use this exact same language for reasoning, reports, deliverables, and agent-log.
+- Follow the injected [OUTPUT_LANGUAGE] contract for reasoning, reports, deliverables, and agent-log.
 - When the task is complete, blocked, or a user intervention asks you to stop, include \`TASK_COMPLETE\`.
 - If blocked, report: Status, Completed, Evidence, Blocker, Risk, and Needed decision.
 - If completed, report: Outcome, Key changes/Findings, Verification performed, Problems solved during execution, Next-step suggestions. Keep suggestions scoped to what you actually observed.
@@ -217,6 +221,17 @@ export class SubAgentPromptBuilder {
         if (includeConstraints) {
             sections.push(BASE_TEMPLATE);
         }
+
+        const languageInput = [spec.role, spec.contextSummary]
+            .filter((value): value is string => Boolean(value?.trim()))
+            .join('\n');
+        sections.push(buildOutputLanguageContract(
+            spec.outputLanguageHint ?? resolveOutputLanguage(languageInput),
+            {
+                fields: ['reasoning', 'reports', 'deliverables', 'agent-log'],
+                additionalRule: 'Use the delegated task language as the request signal; preserve source text and code content in their original language.',
+            }
+        ));
 
         // 2. 行为修饰符（由 MasterBrain 通过 behaviorHint 决定）
         const behaviorTemplate = spec.behaviorHint ? BEHAVIOR_TEMPLATES[spec.behaviorHint] : undefined;

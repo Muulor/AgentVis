@@ -23,8 +23,39 @@ describe('useChatSender chat prompt invariants', () => {
 
         expect(prompt).not.toMatch(HAN_CHARACTER_PATTERN);
         expect(prompt).toContain('## Identity Awareness');
-        expect(prompt).toContain('Use the user\'s language for user-visible prose');
+        expect(prompt).toContain('[OUTPUT_LANGUAGE]');
+        expect(prompt).toContain('Apply this contract to: `user-visible prose`');
         expect(prompt).toContain('Current time:');
+    });
+
+    it('anchors an explicit translation target above quoted source text', () => {
+        const prompt = buildChatModeIdentityPrompt(
+            'Astra',
+            '请翻译“最新のmacOSに触発されたOSを作成する。”这一段为中文'
+        );
+
+        expect(prompt).toContain('Resolved output language: Simplified Chinese');
+        expect(prompt).toContain('explicitly requires Simplified Chinese');
+    });
+
+    it('anchors Traditional Chinese independently from Simplified Chinese', () => {
+        const prompt = buildChatModeIdentityPrompt(
+            'Astra',
+            '請分析這份檔案，並說明系統狀態、訊息傳送與任務執行風險。'
+        );
+
+        expect(prompt).toContain('Resolved output language: Traditional Chinese');
+        expect(prompt).toContain('Use Traditional Chinese for natural-language output');
+    });
+
+    it('preserves explicit output-language exclusions in chat mode', () => {
+        const prompt = buildChatModeIdentityPrompt(
+            'Astra',
+            '请不要用英文回答。'
+        );
+
+        expect(prompt).toContain('Resolved output language: Chinese');
+        expect(prompt).toContain('Explicitly forbidden output languages: English');
     });
 
     it('preserves required visual and widget capabilities', () => {

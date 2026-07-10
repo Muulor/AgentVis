@@ -480,7 +480,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             const supportsVisionInput = modelSupportsVision(effectiveModel, effectiveProvider);
 
             // 2.2 构建身份层 (Layer 1) — Character Grounding 人格锚定
-            let identityPrompt = buildChatModeIdentityPrompt(agentName);
+            let identityPrompt = buildChatModeIdentityPrompt(agentName, content);
 
             // Chat 模式优先使用独立的 Chat Mode Rules 文本。
             const chatRules = (agentConfig?.chatRules ?? mentionedAgent?.chatRules)?.trim();

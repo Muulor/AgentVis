@@ -14,6 +14,7 @@ import type {
     Memory,
 } from '../../memory/types';
 import type { ExecutionContract, SkillDependencies, SkillNetworkMode } from '../skills/external/types';
+import type { OutputLanguageHint } from '../../language/OutputLanguagePolicy';
 
 // ═══════════════════════════════════════════════════════════════
 // 记忆系统类型复用（re-export for convenience）
@@ -166,6 +167,8 @@ export interface WorkdirSnapshot {
 export interface MasterBrainInput {
     /** 用户意图 */
     userIntent: UserIntent;
+    /** 从原始用户请求一次性解析出的输出语言提示，供 MB 与后续 SA 共享。 */
+    outputLanguageHint?: OutputLanguageHint;
     /** Agent 名称（用于 Character Grounding Prompt） */
     agentName?: string;
     /** Agent 是否拥有自定义头像（用于 Character Grounding 中条件注入形象感知引导） */
@@ -406,6 +409,8 @@ export interface SubAgentSpec {
     role: string;
     /** 背景上下文摘要（可选） */
     contextSummary?: string;
+    /** 从原始用户请求继承的输出语言提示；独立 SA 可省略并自行回退解析。 */
+    outputLanguageHint?: OutputLanguageHint;
     /** 工具白名单 */
     allowedTools: string[];
     /** 终止条件（可选，系统从 task 自动衍生） */

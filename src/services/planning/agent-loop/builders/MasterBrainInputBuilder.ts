@@ -25,6 +25,7 @@ import type { WorkdirFileInfo } from '../../sub-agents/types';
 
 import type { TaskArtifactStore } from '../../artifact/TaskArtifactStore';
 import { getLogger } from '@services/logger';
+import { resolveOutputLanguage } from '@services/language/OutputLanguagePolicy';
 
 const logger = getLogger('MasterBrainInputBuilder');
 
@@ -308,6 +309,7 @@ export class MasterBrainInputBuilder {
 
         return {
             userIntent,
+            outputLanguageHint: resolveOutputLanguage(userIntent.explicit),
             agentName: this.agentName,
             hasAvatar: this.hasAvatar,
             memory,

@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { SAFETY_FOOTER_TEXT, SubAgentPromptBuilder, subAgentPromptBuilder } from '../SubAgentPromptBuilder';
 import type { SubAgentSpec, ExternalGuideSkillInfo, ExternalScriptSkillInfo } from '../../brain/types';
 import type { TaskContext } from '../types';
+import { resolveOutputLanguage } from '@services/language/OutputLanguagePolicy';
 
 describe('SubAgentPromptBuilder', () => {
     let builder: SubAgentPromptBuilder;
@@ -50,6 +51,35 @@ describe('SubAgentPromptBuilder', () => {
             // 应包含任务信息
             expect(prompt).toContain('测试角色');
             expect(prompt).toContain('read');
+        });
+
+        it('should resolve the delegated task output language independently from MB', () => {
+            const spec = createMockSpec({
+                role: 'Translation agent',
+                contextSummary: '请翻译“新しい製品を作る”这一段为中文。',
+            });
+
+            const prompt = builder.build(spec, createMockContext(), []);
+
+            expect(prompt).toContain('[OUTPUT_LANGUAGE]');
+            expect(prompt).toContain('Resolved output language: Simplified Chinese');
+            expect(prompt).toContain('explicitly requires Simplified Chinese');
+        });
+
+        it('should preserve the language hint resolved from the original user request', () => {
+            const spec = createMockSpec({
+                role: 'English implementation agent',
+                contextSummary: 'Implement the delegated task.',
+                outputLanguageHint: resolveOutputLanguage(
+                    'Please provide the deliverable in French.',
+                    { useRuntimePreference: false }
+                ),
+            });
+
+            const prompt = builder.build(spec, createMockContext(), []);
+
+            expect(prompt).toContain('Resolved output language: French');
+            expect(prompt).toContain('explicitly requires French');
         });
 
         it('应根据 behaviorHint=careful 注入谨慎模式模板', () => {

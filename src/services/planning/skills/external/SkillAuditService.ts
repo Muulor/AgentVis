@@ -24,6 +24,10 @@ import { useSettingsStore } from '@stores/settingsStore';
 import { useRuntimeStore } from '@stores/runtimeStore';
 import { getLogger } from '@services/logger';
 import { getCurrentLanguage, translate, type Language } from '@/i18n';
+import {
+    buildOutputLanguageContract,
+    resolveOutputLanguage,
+} from '@services/language/OutputLanguagePolicy';
 import { getDefaultModelIdForProvider } from '@/config/modelRegistry';
 
 // 构建时嵌入审查 Prompt（避免运行时读取文件）
@@ -195,7 +199,10 @@ function joinPackagePath(basePath: string, relativePath: string): string {
  *
  * 解析失败时降级为 MANUAL_REVIEW_REQUIRED。
  */
-export function parseAuditResultFromOutput(rawOutput: string): SkillAuditResult {
+export function parseAuditResultFromOutput(
+    rawOutput: string,
+    language: Language = getCurrentLanguage()
+): SkillAuditResult {
     const parseResult = parseWithFallback<Record<string, unknown>>(rawOutput, {
         verbose: true,
         logPrefix: '[SkillAuditService]',
@@ -205,13 +212,13 @@ export function parseAuditResultFromOutput(rawOutput: string): SkillAuditResult 
         logger.debug(
                 `[SkillAuditService] JSON 裁决解析成功 (策略: ${parseResult.strategy ?? 'unknown'}, 质量: ${parseResult.quality ?? 'unknown'})`
         );
-        return normalizeAuditResult(parseResult.data);
+        return normalizeAuditResult(parseResult.data, language);
     }
 
     logger.warn(
                 `[SkillAuditService] JSON 裁决解析失败，降级为 MANUAL_REVIEW_REQUIRED: ${parseResult.error ?? 'unknown'}`
     );
-    return createFallbackResult(rawOutput);
+    return createFallbackResult(rawOutput, language);
 }
 
 /**
@@ -219,7 +226,10 @@ export function parseAuditResultFromOutput(rawOutput: string): SkillAuditResult 
  *
  * 处理 snake_case（Prompt 定义的字段名）到 camelCase 的映射
  */
-function normalizeAuditResult(raw: Record<string, unknown>): SkillAuditResult {
+function normalizeAuditResult(
+    raw: Record<string, unknown>,
+    language: Language
+): SkillAuditResult {
     const auditResult = normalizeVerdict(
         (raw.audit_result ?? raw.auditResult) as string | undefined
     );
@@ -233,7 +243,10 @@ function normalizeAuditResult(raw: Record<string, unknown>): SkillAuditResult {
         auditResult,
         riskScore,
         confidence,
-        summary: normalizeString(raw.summary, 'Audit complete'),
+        summary: normalizeString(
+            raw.summary,
+            translate('settings.skills.auditResultDefaultSummary', undefined, language)
+        ),
         intentMismatch: Boolean(raw.intent_mismatch ?? raw.intentMismatch ?? false),
         detectedCapabilities: normalizeStringArray(
             raw.detected_capabilities ?? raw.detectedCapabilities
@@ -315,12 +328,14 @@ function normalizeFindingRiskLevel(value: unknown): FindingRiskLevel {
 }
 
 /** 生成解析失败时的降级结果 */
-function createFallbackResult(rawOutput: string): SkillAuditResult {
+function createFallbackResult(rawOutput: string, language: Language): SkillAuditResult {
+    const outputPreview = `${rawOutput.slice(0, 200)}...`;
+
     return {
         auditResult: 'MANUAL_REVIEW_REQUIRED',
         riskScore: 5,
         confidence: 'LOW',
-        summary: 'Audit result parsing failed. Manual review is recommended.',
+        summary: translate('settings.skills.auditParseFailureSummary', undefined, language),
         intentMismatch: false,
         detectedCapabilities: [],
         findings: [{
@@ -328,9 +343,17 @@ function createFallbackResult(rawOutput: string): SkillAuditResult {
             lineOrLocation: 'N/A',
             riskLevel: 'MEDIUM',
             riskType: 'parse_failure',
-            description: `SA output could not be parsed as JSON: ${rawOutput.slice(0, 200)}...`,
+            description: translate(
+                'settings.skills.auditParseFailureDescription',
+                { output: outputPreview },
+                language
+            ),
             attackScenario: '',
-            recommendation: 'Manually inspect the skill package contents.',
+            recommendation: translate(
+                'settings.skills.auditParseFailureRecommendation',
+                undefined,
+                language
+            ),
         }],
     };
 }
@@ -387,6 +410,9 @@ export function buildAuditOutputLanguageInstruction(language: Language): string 
     const readableLanguage = language === 'zh-CN'
         ? 'Simplified Chinese (zh-CN)'
         : 'English (en-US)';
+    const languageHint = resolveOutputLanguage('', {
+        preferredLanguageTags: [language],
+    });
 
     return [
         `Current UI language: ${readableLanguage}.`,
@@ -396,6 +422,15 @@ export function buildAuditOutputLanguageInstruction(language: Language): string 
         '- `findings[].description`',
         '- `findings[].attack_scenario`',
         '- `findings[].recommendation`',
+        '',
+        buildOutputLanguageContract(languageHint, {
+            fields: [
+                'summary',
+                'findings[].description',
+                'findings[].attack_scenario',
+                'findings[].recommendation',
+            ],
+        }),
         '',
         'Keep JSON keys, enum values, risk levels, file paths, code symbols, environment variable names, function names, package names, and other technical identifiers unchanged.',
         'Keep `detected_capabilities` and `findings[].risk_type` as concise technical identifiers, preferably stable English snake_case or common security terms.',
@@ -685,7 +720,7 @@ export async function auditSkillPackage(
         );
 
         // 9. 解析 SA 输出为结构化审查结果
-        const auditResult = parseAuditResultFromOutput(output.observations);
+        const auditResult = parseAuditResultFromOutput(output.observations, language);
 
         // 10. 更新 Store
         store.setSkillAuditResult(auditResult);
@@ -708,7 +743,11 @@ export async function auditSkillPackage(
             auditResult: 'MANUAL_REVIEW_REQUIRED',
             riskScore: 5,
             confidence: 'LOW',
-            summary: `Audit service execution failed: ${errorMsg}`,
+            summary: translate(
+                'settings.skills.auditExecutionFailed',
+                { error: errorMsg },
+                language
+            ),
             intentMismatch: false,
             detectedCapabilities: [],
             findings: [],

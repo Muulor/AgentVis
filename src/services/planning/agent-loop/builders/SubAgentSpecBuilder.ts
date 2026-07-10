@@ -17,6 +17,7 @@ import { DEFAULT_LOOP_CONFIG } from '../../sub-agents/types';
 import { PLANNING_CONSTANTS } from '../../PlanningConstants';
 import { getLogger } from '@services/logger';
 import { getCanonicalToolName } from '../../tools/ToolAliases';
+import type { OutputLanguageHint } from '@services/language/OutputLanguagePolicy';
 
 const logger = getLogger('SubAgentSpecBuilder');
 
@@ -94,7 +95,8 @@ export class SubAgentSpecBuilder {
     buildFromNextStep(
         decision: MasterBrainDecision,
         guideSkills?: ExternalGuideSkillInfo[],
-        scriptSkills?: ExternalScriptSkillInfo[]
+        scriptSkills?: ExternalScriptSkillInfo[],
+        outputLanguageHint?: OutputLanguageHint
     ): SubAgentSpec | null {
         const flexibleDecision = asFlexibleDecision(decision);
         const nextStep = flexibleDecision.nextStep;
@@ -177,6 +179,7 @@ export class SubAgentSpecBuilder {
             behaviorHint: asBehaviorHint(nextStep.behaviorHint) ?? this.inferBehaviorHint(tools),
             role: role ?? this.inferRoleFromTools(tools, task),
             contextSummary,
+            outputLanguageHint,
             allowedTools: tools,
             terminationCondition: 'Task complete or execution failed',
             loopConfig,
