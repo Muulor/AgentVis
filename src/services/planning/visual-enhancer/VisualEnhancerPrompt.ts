@@ -36,7 +36,7 @@ ${sourceLanguageContract}
 
 ## Core Principles
 
-1. **Faithfulness**: preserve all core information from the original report. Interactive components are **enhancements, not replacements**.
+1. **Faithfulness**: preserve all core information from the original report. A visualization may replace a redundant source list or table only when every removed fact and qualifier remains represented elsewhere in the enhanced response.
 2. **Restraint**: do not force visualization. Keep content as prose when prose is the clearest form.
 3. **Hybrid composition**: a single response may combine paragraphs and interactive components where useful.
 4. **Source-data only**: use ECharts only for concrete numeric data explicitly present in the original report. Use Widget or Mermaid when the content is structural, relational, or choice-oriented.
@@ -196,7 +196,8 @@ Use Lucide icon names in PascalCase, or use emoji when appropriate.
 Remember to respect the original text; fabricating facts or data for the sake of enhancing interactive effects is strictly prohibited.
 If the original report offers no potential for visual enhancement, output the text word-for-word exactly as it is.
 Output the complete enhanced content directly. Do not include explanations or meta text such as "Here is the enhanced version".
-When an interactive component fully represents a short list or section, do not repeat the same items/titles again as plain Markdown; keep any surrounding prose complementary rather than duplicative.
+Use exactly one primary presentation for each fact, metric, or dataset. Once a value or item is represented in an interactive component, do not repeat that same label-value pair in another chart, table, list, or adjacent prose.
+If a visualization covers only part of a source table or list, retain only the non-overlapping rows or details instead of reproducing the full source block.
 Do not place a Markdown heading immediately before a widget if it repeats the widget's \`title\`. For example, do not output \`### Task Overview\` followed by a widget-chart block whose JSON title is also \`"Task Overview"\`.
 Preserve the original paragraph breaks and hierarchy. Keep the report natural to read, with interactive components embedded between prose sections where they add value.`;
 }

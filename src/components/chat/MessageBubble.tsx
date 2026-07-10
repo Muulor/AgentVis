@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, memo, useRef } from 'react';
-import { ChevronRight, FileText, Folder, Play, Toolbox } from 'lucide-react';
+import { ChevronRight, FileText, Folder, Play, Square, Toolbox } from 'lucide-react';
 import { MessageActions } from './MessageActions';
 import { SelectCheckbox } from './SelectCheckbox';
 import { usePreviewStore } from '@stores/previewStore';
@@ -28,6 +28,9 @@ import { InlineGeneratedImages } from './InlineGeneratedImages';
 import type { InputDisplayPart, InputContextToken } from './inputContextTokens';
 import { formatTimestamp } from '@/types/message';
 import { useI18n } from '@/i18n';
+import { getMessageOriginalDisplayContent } from '@utils/quoteContent';
+import { useChatStore } from '@stores/chatStore';
+import { visualEnhancementJobManager } from '@services/planning/visual-enhancer/VisualEnhancementJobManager';
 import type { UIMessage } from '@/types/message';
 import type { ProjectFile } from '@services/preview/types';
 import { inferTemplateFromLanguage, inferTemplateFromLanguages } from '@services/preview';
@@ -263,7 +266,11 @@ interface MessageBubbleProps {
     /** Agent 名称（用于 assistant 消息头像） */
     agentName?: string;
     /** 操作回调 */
-    onAction?: (messageId: string, action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect') => void;
+    onAction?: (
+        messageId: string,
+        action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect',
+        options?: { contentOverride?: string }
+    ) => void;
     /** 是否处于多选模式 */
     multiSelectMode?: boolean;
     /** 是否被选中（多选模式下有效） */
@@ -368,6 +375,10 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
     const { t } = useI18n();
     const [isHovered, setIsHovered] = useState(false);
+    const [visualView, setVisualView] = useState<'enhanced' | 'original'>('enhanced');
+    const visualEnhancementJob = useChatStore(
+        state => state.visualEnhancementJobsByMessage.get(message.id)
+    );
     // 使用 ref 存储 timeout ID，避免悬停时闪烁
     const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -375,7 +386,7 @@ export const MessageBubble = memo(function MessageBubble({
 
     // 静默处理：剥离跨请求持久化上下文标记（rationale + SA observations）
     // 这些信息仅供 MB 下轮决策用，对用户无意义。数据层保留完整内容，仅渲染层过滤。
-    const content = useMemo(() => {
+    const enhancedContent = useMemo(() => {
         if (!rawContent) return rawContent;
         if (role === 'user' && message.metadata?.source === 'im') {
             return stripImUserMessagePrefix(rawContent);
@@ -385,6 +396,19 @@ export const MessageBubble = memo(function MessageBubble({
         const idx = rawContent.indexOf(marker);
         return idx !== -1 ? rawContent.slice(0, idx).trim() : rawContent;
     }, [role, rawContent, message.metadata]);
+
+    const originalContent = useMemo(
+        () => getMessageOriginalDisplayContent(message),
+        [message]
+    );
+    const canSwitchVisualVersion = role === 'assistant'
+        && message.metadata?.visualEnhanced === true
+        && Boolean(originalContent)
+        && originalContent !== enhancedContent;
+    const resolvedVisualView = canSwitchVisualVersion ? visualView : 'enhanced';
+    const content = resolvedVisualView === 'original' && originalContent
+        ? originalContent
+        : enhancedContent;
 
     const displayParts = useMemo(() => {
         if (role !== 'user') return null;
@@ -426,9 +450,13 @@ export const MessageBubble = memo(function MessageBubble({
     // 操作处理
     const handleAction = useCallback(
         (action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect') => {
-            onAction?.(message.id, action);
+            onAction?.(
+                message.id,
+                action,
+                action === 'copy' ? { contentOverride: content } : undefined
+            );
         },
-        [message.id, onAction]
+        [content, message.id, onAction]
     );
 
     // 代码预览回调（点击代码块 ▶ 按钮后在右栏打开 Live Preview）
@@ -720,7 +748,14 @@ export const MessageBubble = memo(function MessageBubble({
                 )}
 
                 {/* 消息内容 */}
-                <div className={cx(styles.content, !isUser && hasRichContent && styles.richContent)}>
+                <div
+                    key={canSwitchVisualVersion ? resolvedVisualView : 'default'}
+                    className={cx(
+                        styles.content,
+                        !isUser && hasRichContent && styles.richContent,
+                        canSwitchVisualVersion && styles.visualVersionTransition
+                    )}
+                >
                     {isUser ? (
                         // 用户消息优先按 metadata 还原内联上下文 chip。
                         renderUserContent()
@@ -772,6 +807,63 @@ export const MessageBubble = memo(function MessageBubble({
                         <span>Preview Project ({previewableBlocks.length} files)</span>
                     </button>
                 )}
+
+                {/* 可视化增强状态和版本切换共用消息底部位置 */}
+                {visualEnhancementJob && !multiSelectMode ? (
+                    <div className={styles.visualEnhancementFooter}>
+                        <div className={styles.visualEnhancementStatus} role="status">
+                            {visualEnhancementJob.status === 'running' && (
+                                <span className={styles.visualEnhancementSpinner} aria-hidden="true" />
+                            )}
+                            <span>
+                                {t(visualEnhancementJob.status === 'queued'
+                                    ? 'chat.visualEnhancementQueued'
+                                    : 'chat.visualEnhancementInProgress')}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            className={styles.stopVisualEnhancementButton}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                visualEnhancementJobManager.cancel(message.id);
+                            }}
+                            aria-label={t('chat.stopVisualEnhancement')}
+                        >
+                            <Square size={10} fill="currentColor" />
+                            <span>{t('chat.stopVisualEnhancement')}</span>
+                        </button>
+                    </div>
+                ) : canSwitchVisualVersion && !multiSelectMode ? (
+                    <div
+                        className={styles.visualVersionSwitcher}
+                        role="group"
+                        aria-label={t('chat.visualViewSwitcher')}
+                    >
+                        <button
+                            type="button"
+                            className={cx(
+                                styles.visualVersionButton,
+                                resolvedVisualView === 'enhanced' && styles.visualVersionButtonActive
+                            )}
+                            aria-pressed={resolvedVisualView === 'enhanced'}
+                            onClick={() => setVisualView('enhanced')}
+                        >
+                            {t('chat.visualViewEnhanced')}
+                        </button>
+                        <button
+                            type="button"
+                            className={cx(
+                                styles.visualVersionButton,
+                                resolvedVisualView === 'original' && styles.visualVersionButtonActive
+                            )}
+                            aria-pressed={resolvedVisualView === 'original'}
+                            onClick={() => setVisualView('original')}
+                        >
+                            {t('chat.visualViewOriginal')}
+                        </button>
+                    </div>
+                ) : null}
 
                 {/* 操作栏 - 非多选模式下悬停时显示 */}
                 {isHovered && !multiSelectMode && (

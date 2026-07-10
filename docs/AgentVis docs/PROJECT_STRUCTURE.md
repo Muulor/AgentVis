@@ -873,9 +873,11 @@ planning/
 ├── 📁 visual-enhancer/           # 可视化增强服务
 │   ├── index.ts                  # 模块导出索引
 │   ├── stripVisualCodeBlocks.ts  # 可视化代码块剥离工具
+│   ├── VisualEnhancementJobManager.ts # 消息级增强后台队列与独立取消管理
 │   ├── VisualEnhancerService.ts  # 可视化增强主服务
 │   ├── VisualEnhancerPostProcess.ts  #可视化增强结果后处理
-│   └── VisualEnhancerPrompt.ts   # 可视化增强 Prompt 模板
+│   ├── VisualEnhancerPrompt.ts   # 可视化增强 Prompt 模板
+│   └── 📁 __tests__/             # 可视化增强与后台队列测试
 │
 └── 📁 utils/                     # 规划工具函数
     ├── index.ts                  # 工具导出

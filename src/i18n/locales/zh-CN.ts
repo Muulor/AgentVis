@@ -123,7 +123,7 @@ export const zhCN = {
             resetLoopTitle: '恢复默认（{max} 轮）',
             resetDefault: '恢复默认',
             visualEnhancement: 'Planning 可视化增强',
-            visualEnhancementHint: 'Planning模式的最终回复使用启发式指标组合来判断是否调用一次LLM将内容增强为 ECharts、Mermaid 或交互组件。关闭后将跳过此步骤，直接展示 Agent 原始的回复内容，获得更快的响应。',
+            visualEnhancementHint: 'Planning 模式会先展示 MB 原始回复，再根据启发式指标判断是否在后台调用一次 LLM，将同一条消息增强为 ECharts、Mermaid 或交互组件。增强期间可以继续对话，也可以在消息底部单独停止增强；关闭后将只保留原始回复。',
             sandboxMode: '沙箱权限',
             sandboxModes: {
                 LocalAudit: {
@@ -354,6 +354,12 @@ export const zhCN = {
         multiSelect: '多选',
         multiSelectMessages: '多选消息',
         copyMessage: '复制消息',
+        visualEnhancementInProgress: '正在生成可视化版本…',
+        visualEnhancementQueued: '等待生成可视化版本…',
+        stopVisualEnhancement: '停止增强',
+        visualViewSwitcher: '回复显示版本',
+        visualViewEnhanced: '增强',
+        visualViewOriginal: '原文',
         quoteMessage: '引用消息',
         deleteMessage: '删除消息',
         revokeMessage: '撤回消息',

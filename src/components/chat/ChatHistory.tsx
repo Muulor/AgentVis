@@ -43,7 +43,11 @@ interface ChatHistoryProps {
     /** 空状态描述 */
     emptyHint?: string;
     /** 消息操作回调 */
-    onMessageAction?: (messageId: string, action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect') => void;
+    onMessageAction?: (
+        messageId: string,
+        action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect',
+        options?: { contentOverride?: string }
+    ) => void;
 
     // ========== 多选相关 ==========
     /** 是否处于多选模式 */

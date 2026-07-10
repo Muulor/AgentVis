@@ -22,6 +22,7 @@ import { getLogger } from '@services/logger';
 import { useI18n } from '@/i18n';
 import { getMessageQuoteContent } from '@utils/quoteContent';
 import { refreshAgentMessagesFromDb, refreshHubMessagesFromDb } from '@utils/messageReload';
+import { visualEnhancementJobManager } from '@services/planning/visual-enhancer/VisualEnhancementJobManager';
 
 const logger = getLogger('useMessageActions');
 
@@ -64,7 +65,11 @@ export interface UseMessageActionsOptions {
 /** Hook 返回值 */
 export interface UseMessageActionsReturn {
     /** 执行消息操作（options.skipConfirm 为 true 时跳过确认弹窗，供批量删除等已有外层确认的场景使用） */
-    handleMessageAction: (messageId: string, action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect', options?: { skipConfirm?: boolean }) => Promise<void>;
+    handleMessageAction: (
+        messageId: string,
+        action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect',
+        options?: { skipConfirm?: boolean; contentOverride?: string }
+    ) => Promise<void>;
     /** 回滚确认弹窗状态（仅 Agent 模式使用） */
     revertDialogState: RevertDialogState;
     /** 设置回滚确认弹窗状态 */
@@ -160,7 +165,11 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
     // ==================== 核心操作方法 ====================
 
     const handleMessageAction = useCallback(
-        async (messageId: string, action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect', options?: { skipConfirm?: boolean }) => {
+        async (
+            messageId: string,
+            action: 'copy' | 'quote' | 'delete' | 'revoke' | 'multiselect',
+            options?: { skipConfirm?: boolean; contentOverride?: string }
+        ) => {
             if (!contextId) return;
 
             const msg = messages.find((m) => m.id === messageId);
@@ -169,7 +178,7 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                 // ==================== 复制消息 ====================
                 case 'copy': {
                     if (msg) {
-                        await navigator.clipboard.writeText(msg.content);
+                        await navigator.clipboard.writeText(options?.contentOverride ?? msg.content);
                         logger.trace('[useMessageActions] 已复制消息');
                     }
                     break;
@@ -262,6 +271,10 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                                 }
                             }
 
+                            for (const id of idsToDelete) {
+                                visualEnhancementJobManager.cancel(id);
+                            }
+
                             // 从 Store 中移除所有待删消息
                             const newMessages = currentMessages.filter(m => !idsToDelete.includes(m.id));
                             useChatStore.getState().setMessages(contextId, newMessages);
@@ -321,6 +334,7 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                             }
                         } else {
                             // Hub 模式：更新 Store 并调用后端持久化删除
+                            visualEnhancementJobManager.cancel(messageId);
                             const currentMessages = useChatStore.getState().messagesByHub.get(contextId) ?? [];
                             const filteredMessages = currentMessages.filter((m) => m.id !== messageId);
                             useChatStore.getState().setHubMessages(contextId, filteredMessages);
@@ -392,6 +406,9 @@ export function useMessageActions(options: UseMessageActionsOptions): UseMessage
                             const idx = allMessages.findIndex((m) => m.id === messageId);
                             if (idx !== -1) {
                                 const messagesToRevoke = allMessages.slice(idx);
+                                for (const message of messagesToRevoke) {
+                                    visualEnhancementJobManager.cancel(message.id);
+                                }
                                 useChatStore.getState().setHubMessages(contextId, allMessages.slice(0, idx));
                                 destroyAgentService(contextId);
 
@@ -523,6 +540,9 @@ async function handleAgentRevoke(
         // 2.2 获取要删除的消息 ID 列表
         const messagesToDelete = currentMessages.slice(idx);
         const messageIdsToDelete = messagesToDelete.map(m => m.id);
+        for (const id of messageIdsToDelete) {
+            visualEnhancementJobManager.cancel(id);
+        }
 
         // 2.3 更新 UI 状态
         useChatStore.getState().setMessages(agentId, currentMessages.slice(0, idx));

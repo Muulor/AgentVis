@@ -7,6 +7,15 @@
 export { shouldEnhance, enhance } from './VisualEnhancerService';
 export type { VisualEnhanceOptions, VisualEnhanceResult } from './VisualEnhancerService';
 export {
+    visualEnhancementJobManager,
+    VisualEnhancementJobManager,
+} from './VisualEnhancementJobManager';
+export type {
+    VisualEnhancementJob,
+    VisualEnhancementJobState,
+    VisualEnhancementJobStatus,
+} from './VisualEnhancementJobManager';
+export {
     buildVisualEnhancerSystemPrompt,
     buildVisualEnhancerUserPrompt,
 } from './VisualEnhancerPrompt';

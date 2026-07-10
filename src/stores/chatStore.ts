@@ -15,6 +15,7 @@ import type { QuoteInfo } from '../types/message';
 import { getLogger } from '@services/logger';
 import type { ChatMode, LegacyChatMode } from '@/types/chatMode';
 import { normalizeChatMode } from '@/types/chatMode';
+import type { VisualEnhancementJobState } from '@services/planning/visual-enhancer/VisualEnhancementJobManager';
 
 const logger = getLogger('chatStore');
 
@@ -88,6 +89,8 @@ interface ChatState {
     pendingQuotesByAgent: Map<string, QuoteInfo[]>;
     /** 流式响应状态（按 contextId 隔离：Agent ID 或 Hub ID） */
     streamingByContext: Map<string, StreamingState>;
+    /** 消息级可视化增强后台任务状态（按 messageId 隔离） */
+    visualEnhancementJobsByMessage: Map<string, VisualEnhancementJobState>;
     /** 中断控制器（按 contextId 隔离） */
     abortControllers: Map<string, AbortController>;
     /** 流式请求 session ID（按 contextId 隔离，用于后端取消） */
@@ -114,6 +117,8 @@ interface ChatActions {
     addMessage: (agentId: string, message: Message) => void;
     /** 设置 Agent 消息列表 */
     setMessages: (agentId: string, messages: Message[]) => void;
+    /** 更新指定 Agent 消息 */
+    updateMessage: (agentId: string, messageId: string, updates: Partial<Message>) => void;
     /** 向头部插入更早的历史消息（"加载更多"用） */
     prependMessages: (agentId: string, olderMessages: Message[]) => void;
     /** 清空 Agent 消息 */
@@ -128,6 +133,8 @@ interface ChatActions {
     addHubMessage: (hubId: string, message: Message) => void;
     /** 设置 Hub 消息列表 */
     setHubMessages: (hubId: string, messages: Message[]) => void;
+    /** 更新指定 Hub 消息 */
+    updateHubMessage: (hubId: string, messageId: string, updates: Partial<Message>) => void;
     /** 向头部插入更早的 Hub 历史消息（"加载更多"用） */
     prependHubMessages: (hubId: string, olderMessages: Message[]) => void;
     /** 获取 Hub 消息列表 */
@@ -191,6 +198,13 @@ interface ChatActions {
     /** 停止流式输出（触发中断） */
     stopStreaming: (contextId: string) => void;
 
+    // ========== 可视化增强后台任务状态 ==========
+    /** 设置或清理指定消息的增强任务状态 */
+    setVisualEnhancementJobState: (
+        messageId: string,
+        jobState: VisualEnhancementJobState | null
+    ) => void;
+
     // ========== 搜索操作（按 contextId 隔离）==========
     /** 打开搜索栏 */
     openSearch: (contextId: string) => void;
@@ -236,6 +250,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     pendingQuotesByHub: new Map(),    // Hub 窗口引用存储
     pendingQuotesByAgent: new Map(),  // Agent 窗口引用存储（隔离）
     streamingByContext: new Map(),    // 流式状态（按 contextId 隔离）
+    visualEnhancementJobsByMessage: new Map(), // VE 后台任务状态（按 messageId 隔离）
     abortControllers: new Map(),      // 中断控制器（按 contextId 隔离）
     sessionIdByContext: new Map(),    // 流式 session ID（用于后端取消）
     searchByContext: new Map(),       // 搜索状态（按 contextId 隔离）
@@ -257,6 +272,15 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     setMessages: (agentId, messages) => set((state) => {
         const newMap = new Map(state.messagesByAgent);
         newMap.set(agentId, messages);
+        return { messagesByAgent: newMap };
+    }),
+
+    updateMessage: (agentId, messageId, updates) => set((state) => {
+        const newMap = new Map(state.messagesByAgent);
+        const messages = newMap.get(agentId) ?? [];
+        newMap.set(agentId, messages.map(message => (
+            message.id === messageId ? { ...message, ...updates } : message
+        )));
         return { messagesByAgent: newMap };
     }),
 
@@ -295,6 +319,15 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     setHubMessages: (hubId, messages) => set((state) => {
         const newMap = new Map(state.messagesByHub);
         newMap.set(hubId, messages);
+        return { messagesByHub: newMap };
+    }),
+
+    updateHubMessage: (hubId, messageId, updates) => set((state) => {
+        const newMap = new Map(state.messagesByHub);
+        const messages = newMap.get(hubId) ?? [];
+        newMap.set(hubId, messages.map(message => (
+            message.id === messageId ? { ...message, ...updates } : message
+        )));
         return { messagesByHub: newMap };
     }),
 
@@ -401,7 +434,12 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     // ========== 流式状态操作（按 contextId 隔离）==========
     startStreaming: (contextId: string, agentName?: string) => set((state) => {
         const newMap = new Map(state.streamingByContext);
-        newMap.set(contextId, { content: '', reasoningContent: '', isStreaming: true, agentName });
+        newMap.set(contextId, {
+            content: '',
+            reasoningContent: '',
+            isStreaming: true,
+            agentName,
+        });
         return { streamingByContext: newMap };
     }),
 
@@ -442,8 +480,6 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
         });
         return { streamingByContext: newMap };
     }),
-
-
 
     finishStreaming: (contextId: string) => set((state) => {
         const newMap = new Map(state.streamingByContext);
@@ -532,6 +568,16 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
             };
         });
     },
+
+    setVisualEnhancementJobState: (messageId, jobState) => set((state) => {
+        const next = new Map(state.visualEnhancementJobsByMessage);
+        if (jobState) {
+            next.set(messageId, jobState);
+        } else {
+            next.delete(messageId);
+        }
+        return { visualEnhancementJobsByMessage: next };
+    }),
 
     // ========== 搜索操作（按 contextId 隔离）==========
     openSearch: (contextId) => set((state) => {

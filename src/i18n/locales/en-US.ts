@@ -125,7 +125,7 @@ export const enUS = {
             resetLoopTitle: 'Reset to default ({max} rounds)',
             resetDefault: 'Reset Default',
             visualEnhancement: 'Planning Visual Enhancement',
-            visualEnhancementHint: 'In Planning mode, the final response uses combined heuristic metrics to decide whether to call the LLM to upgrade the content into ECharts, Mermaid, or interactive components. When disabled, this step is skipped to directly show the Agent\'s original response, delivering faster performance.',
+            visualEnhancementHint: 'Planning mode shows the raw MB response first, then uses heuristic signals to decide whether to enhance the same message in the background with ECharts, Mermaid, or interactive components. You can keep chatting or stop that message\'s enhancement independently. When disabled, only the original response is kept.',
             sandboxMode: 'Sandbox Permission',
             sandboxModes: {
                 LocalAudit: {
@@ -356,6 +356,12 @@ export const enUS = {
         multiSelect: 'Multi-select',
         multiSelectMessages: 'Multi-select messages',
         copyMessage: 'Copy message',
+        visualEnhancementInProgress: 'Generating visual version…',
+        visualEnhancementQueued: 'Waiting to generate visual version…',
+        stopVisualEnhancement: 'Stop enhancement',
+        visualViewSwitcher: 'Response display version',
+        visualViewEnhanced: 'Enhanced',
+        visualViewOriginal: 'Original',
         quoteMessage: 'Quote message',
         deleteMessage: 'Delete message',
         revokeMessage: 'Revoke message',

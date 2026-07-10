@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getMessageQuoteContent, getQuoteContextContent, serializeQuoteForMessage } from '../quoteContent';
+import {
+    getMessageOriginalDisplayContent,
+    getMessageQuoteContent,
+    getQuoteContextContent,
+    serializeQuoteForMessage,
+} from '../quoteContent';
 
 describe('quoteContent', () => {
     it('prefers persisted Planning content for assistant quote context', () => {
@@ -20,6 +25,24 @@ describe('quoteContent', () => {
             role: 'assistant',
             content: 'Enhanced answer',
             metadata: {
+                persistContent: [
+                    'Original visible answer',
+                    '',
+                    'MB decision progress (system-injected context for the next decision):',
+                    'hidden rationale',
+                ].join('\n'),
+            },
+        });
+
+        expect(result).toBe('Original visible answer');
+    });
+
+    it('reuses persisted Planning content as the original UI version', () => {
+        const result = getMessageOriginalDisplayContent({
+            role: 'assistant',
+            content: 'Enhanced answer',
+            metadata: {
+                visualEnhanced: true,
                 persistContent: [
                     'Original visible answer',
                     '',

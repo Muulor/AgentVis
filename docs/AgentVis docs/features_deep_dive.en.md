@@ -11,7 +11,7 @@
 
 `VisualEnhancerService` is a **post-processing enhancement layer** for Planning mode. After the Master Brain produces a plain-text response, this service decides whether the content is suitable for visualization. If it is, the service drives the LLM to convert the response into a rich-media version containing ECharts charts, Mermaid flowcharts, and Widget interactive components.
 
-**Design principle**: if enhancement fails, degrade silently and never affect the main response output path.
+**Design principle**: show the raw MB response first; if enhancement fails, degrade silently and never affect the main response output path.
 
 ---
 
@@ -38,23 +38,33 @@ Enhancement is not triggered unconditionally. `VisualEnhancerService.ts` defines
 ```text
 MB raw response
      |
-shouldEnhance() --- false ---> Return original content directly
+Update the checkpoint into a finalized original-response message immediately
+     |
+End foreground streaming, collapse the FSM into the static Processed trace, and unlock input
+     |
+shouldEnhance() --- false ---> Keep the original response as the final message
      | true
      v
+Enqueue a message-scoped background enhancement job (serialized per context)
+     |
 buildVisualEnhancerSystemPrompt()   // Inject format rules
 buildVisualEnhancerUserPrompt()     // Wrap original content
      |
 llm_chat_stream (streaming call)     // Use sessionId to filter multiplexed events
      |
-Streaming collection Promise with internal 120s timeout
+Collect the stream in the background while the UI keeps the original response stable
      |
 Enhanced-result length check (>= 60% of original)
      |                              // Prevent LLM from emitting an empty summary-like result
      |
-Return VisualEnhanceResult { content, enhanced: true }
+Use the enhanced result as the final message and retain the Enhanced / Original switch
 ```
 
-**Why streaming is used**: non-streaming interfaces from providers such as Volcengine may time out on large payloads. All LLM calls in the system (MB/SA/Chat modes) use streaming consistently, and Visual Enhancer follows the same convention.
+**Why streaming is used**: non-streaming interfaces from providers such as Volcengine may time out on large payloads. All LLM calls in the system (MB/SA/Chat modes) use streaming consistently, and Visual Enhancer follows the same convention. VE deltas are collected only in the background, so incomplete Markdown, Mermaid, or ECharts output no longer overwrites the readable MB response.
+
+**UI display strategy**: after the MB response is persisted, the dynamic FSM panel ends immediately and becomes the default-collapsed static Processed PlanningTrace, while the input is unlocked. Enhancement continues in the background. The message footer shows a queued/running visual status and a message-scoped Stop enhancement button. After validation succeeds, the same message is updated in place, defaults to the enhanced version, and replaces that footer with the persistent Original / Enhanced switch. The original version reuses the existing `metadata.persistContent`; no new cross-session or memory-persistence field is introduced.
+
+**Stop and concurrency semantics**: the message-level Stop enhancement action cancels only that message's VE job; the composer stop action cancels only the current foreground AgentLoop. The two actions are independent. Each Agent/Hub runs at most one VE job while later jobs queue; different contexts may run concurrently. Deleting or revoking a message, or deleting its context, cancels the associated enhancement job.
 
 ---
 
@@ -87,6 +97,8 @@ Suitable for process steps, hierarchical relationships, and sequence displays. U
 - Optional directions / suggestions -> `widget-choices` or `widget-tree`
 - Trends / time series -> ECharts line chart
 - Multi-dimensional information points -> `widget-chart` (`info`)
+
+**Content deduplication constraint**: each fact, metric, or dataset must have one primary presentation. Labels and values already represented by a visualization must not be repeated in adjacent tables, lists, or prose. If a visualization covers only part of a source table, only the non-overlapping rows and complementary details are retained.
 
 ---
 
@@ -148,8 +160,9 @@ Pipeline position: `buildSafeEChartsOption()` runs after JSON parsing -> `stripR
 
 | Scenario | Behavior |
 |------|------|
-| `shouldEnhance` returns false | Return original content with `enhanced: false`. |
+| `shouldEnhance` returns false | Keep the already visible original response as the final message with `enhanced: false`. |
 | Planning task is cancelled | Skip enhancement and directly keep the result before cancellation. |
+| User selects Stop enhancement | Cancel only that message's background VE job and keep the persisted original. |
 | LLM call throws an exception | Catch it with `catch` and return original content. |
 | 120s streaming collection timeout | Fall back on timeout and return original content. |
 | Enhanced result is too short (< 60% of original) | Validation fails and original content is returned. |

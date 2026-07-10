@@ -6,6 +6,7 @@ import { useToast } from '@components/ui/Toast';
 import { useI18n } from '@/i18n';
 import styles from './AgentContextMenu.module.css';
 import { getLogger } from '@services/logger';
+import { visualEnhancementJobManager } from '@services/planning/visual-enhancer/VisualEnhancementJobManager';
 
 const logger = getLogger('AgentContextMenu');
 
@@ -160,6 +161,7 @@ export function AgentContextMenu({ agentId, agentName, position, onClose }: Agen
         try {
             // 调用Tauri命令删除Agent（软删除到回收站）
             await invoke('agent_delete', { id: agentId });
+            visualEnhancementJobManager.cancelContext(agentId);
 
             // 从Store移除
             removeAgent(agentId);

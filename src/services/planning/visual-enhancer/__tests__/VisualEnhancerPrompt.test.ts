@@ -69,6 +69,14 @@ describe('VisualEnhancerPrompt invariants', () => {
         expect(userPrompt).toContain('Do not add inferred, estimated, example, or background data.');
     });
 
+    it('requires a single presentation for visually represented facts', () => {
+        const prompt = buildVisualEnhancerSystemPrompt();
+
+        expect(prompt).toContain('Use exactly one primary presentation for each fact, metric, or dataset.');
+        expect(prompt).toContain('do not repeat that same label-value pair in another chart, table, list, or adjacent prose.');
+        expect(prompt).toContain('retain only the non-overlapping rows or details');
+    });
+
     it('wraps the original report without altering it', () => {
         const originalContent = [
             '# Quarterly Report',

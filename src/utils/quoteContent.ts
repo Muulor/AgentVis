@@ -45,6 +45,20 @@ export function getQuoteContextContent(quote: QuoteContentLike): string {
     return stripVisualCodeBlocks(stripPlanningPersistContext(quote.content)).trim() || quote.content;
 }
 
+/**
+ * 获取 Planning assistant 在可视化增强前的 UI 原文。
+ * 原文复用既有 persistContent，不新增消息持久化字段。
+ */
+export function getMessageOriginalDisplayContent(message: QuoteSourceMessage): string | undefined {
+    if (message.role !== 'assistant') return undefined;
+
+    const metadata = parseMetadata(message.metadata);
+    const persistContent = getStringField(metadata, 'persistContent');
+    if (!persistContent) return undefined;
+
+    return stripPlanningPersistContext(persistContent) || undefined;
+}
+
 export function getMessageQuoteContent(message: QuoteSourceMessage): string {
     if (message.role !== 'assistant') {
         return message.content;

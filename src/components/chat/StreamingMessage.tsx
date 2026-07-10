@@ -117,8 +117,6 @@ export const StreamingMessage = memo(function StreamingMessage({
                     <FSMVisualizationPanel contextId={contextId} />
                 )}
 
-
-
                 {/* 流式内容区域 */}
                 {mode === 'planning' ? (
                     // Planning 模式：无内容时显示 Working... 跳动效果

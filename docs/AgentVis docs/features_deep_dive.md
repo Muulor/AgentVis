@@ -11,7 +11,7 @@
 
 `VisualEnhancerService` 是 Planning 模式的**后处理增强层**。当 Master Brain 给出纯文本响应后，该服务判断内容是否适合可视化，若适合则驱动 LLM 将其转化为包含 ECharts 图表、Mermaid 流程图、Widget 交互组件的富媒体版本。
 
-**设计原则**：增强失败时无声降级，绝不影响主流程的响应输出。
+**设计原则**：MB 原始回复优先展示；增强失败时无声降级，绝不影响主流程的响应输出。
 
 ---
 
@@ -38,22 +38,32 @@
 ```
 MB 原始 response
      │
-shouldEnhance() ─── false ──→ 直接返回原始内容
+立即更新 checkpoint 为正式原文消息
+     │
+结束 foreground streaming，FSM 面板折叠为静态“已处理”，输入框解锁
+     │
+shouldEnhance() ─── false ──→ 原文保持为最终消息
      │ true
      ▼
+按 messageId 加入后台增强队列（同一 context 串行）
+     │
 buildVisualEnhancerSystemPrompt()   // 格式规范注入
 buildVisualEnhancerUserPrompt()     // 原始内容包装
      │
 llm_chat_stream (流式调用)           // 使用 sessionId 过滤多路事件
      │
-流式收集 Promise 内部超时 120s
+后台流式收集，UI 继续稳定展示原文
      │
 增强结果长度校验 (≥ 原始 60%)        // 防止 LLM 输出摘要式空内容
      │
-返回 VisualEnhanceResult { content, enhanced: true }
+增强版成为最终消息，并保留“增强 / 原文”切换
 ```
 
-**流式调用设计理由**：火山引擎等 provider 的非流式接口对大 payload 有超时问题，系统所有 LLM 调用（MB/SA/Chat 模式）统一使用流式，Visual Enhancer 跟随此约定。
+**流式调用设计理由**：火山引擎等 provider 的非流式接口对大 payload 有超时问题，系统所有 LLM 调用（MB/SA/Chat 模式）统一使用流式，Visual Enhancer 跟随此约定。VE 的增量片段只在后台收集，不再用未完成的 Markdown、Mermaid 或 ECharts 内容覆盖已可阅读的 MB 原文。
+
+**UI 显示策略**：MB 原文持久化后，动态 FSM 面板立即结束并切换为默认收起的静态“已处理” PlanningTrace，输入框同时恢复可用。增强调用在后台继续，消息底部左侧显示“等待/正在生成可视化版本”和独立的“停止增强”按钮。增强通过校验后，同一条消息原位更新并默认显示增强版，底部同一位置变为常驻版本切换控件。原文直接复用消息已有的 `metadata.persistContent`，不新增跨会话或记忆持久化字段。
+
+**停止与并发语义**：消息底部“停止增强”只取消对应 messageId 的 VE；输入框终止按钮只取消当前 foreground AgentLoop，两者不联动。同一 Agent/Hub 仅运行一个 VE，其余任务排队；不同 context 可并行。删除、撤回消息或删除 context 时会自动取消关联的后台增强任务。
 
 ---
 
@@ -83,6 +93,8 @@ Prompt 精简控制在 ~2000 tokens，包含 3 类格式的完整规范与示例
 - 可选方向/建议 → widget-choices 或 widget-tree
 - 趋势/时序 → ECharts 折线图
 - 多维信息点 → widget-chart (info)
+
+**内容去重约束**：同一事实、指标或数据集只能保留一种主呈现形式。可视化已覆盖的标签和值不得再次出现在相邻表格、列表或正文中；如果可视化只覆盖源表的一部分，只保留尚未覆盖的行和补充信息。
 
 ---
 
@@ -145,8 +157,9 @@ Visual Enhancer 的增强链路分为两层：**Prompt 层**（1.4 节）驱动 
 
 | 场景 | 行为 |
 |------|------|
-| `shouldEnhance` 返回 false | 返回原始内容，`enhanced: false` |
+| `shouldEnhance` 返回 false | 已展示的原文直接成为最终消息，`enhanced: false` |
 | Planning 任务被取消 | 跳过增强，直接保留取消前结果 |
+| 用户点击“停止增强” | 仅取消对应消息的后台 VE，保留已持久化原文 |
 | LLM 调用抛出异常 | `catch` 捕获，返回原始内容 |
 | 120s 流式收集超时 | 超时回退，返回原始内容 |
 | 增强结果过短（< 原始 60%） | 校验不通过，返回原始内容 |

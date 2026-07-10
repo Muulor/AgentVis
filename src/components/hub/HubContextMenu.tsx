@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { useI18n } from '@/i18n';
 import styles from './HubContextMenu.module.css';
 import { getLogger } from '@services/logger';
+import { visualEnhancementJobManager } from '@services/planning/visual-enhancer/VisualEnhancementJobManager';
 
 const logger = getLogger('HubContextMenu');
 
@@ -138,6 +139,7 @@ export function HubContextMenu({ hubId, position, onClose }: HubContextMenuProps
         try {
             // 调用Tauri命令删除Hub（软删除到回收站）
             await invoke('hub_delete', { id: hubId });
+            visualEnhancementJobManager.cancelContext(hubId);
 
             // 从Store移除
             removeHub(hubId);
@@ -208,4 +210,3 @@ export function HubContextMenu({ hubId, position, onClose }: HubContextMenuProps
         </>
     );
 }
-

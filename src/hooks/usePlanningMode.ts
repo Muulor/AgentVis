@@ -817,6 +817,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         const {
             startStreaming,
             finishStreaming,
+            setStreamingContent,
         } = useChatStore.getState();
 
         // 用于追踪 onDiffData 回调中创建的临时 messageId
@@ -1567,6 +1568,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 throw new Error(result.error ?? t('chat.processingFailed'));
             }
 
+            // MB 原始回复已经完成，立即展示给用户，避免 Visual Enhancer 的额外调用
+            // 让界面长时间停留在 Working 状态。这里只更新临时 UI，不改变最终持久化内容。
+            if (result.content) {
+                setStreamingContent(contextId, result.content);
+            }
+
             // ====== 步骤 5.2: IM 通道提前回复（可视化增强前发送原始纯文本到飞书）======
             // 飞书手机端不支持渲染 echarts/mermaid 代码块，可视化增强后的内容在飞书会
             // 显示为原始的长篇代码块，体验极差。
@@ -1597,64 +1604,11 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 }
             }
 
-            // ====== 步骤 5.5: 可视化增强（Post-Processor） ======
-            // MB 输出纯文本 response 后，调用轻量级 LLM 将内容增强为带有
-            // Widget/ECharts/Mermaid 交互格式的版本。增强失败时安全降级为原始内容。
-            // cancelled 场景跳过增强：中断恢复消息无需美化，且节省一次 LLM 调用
-            const shouldEnhance = result.terminationReason !== 'cancelled' && visualEnhancementEnabled;
-            let finalContent = result.content;
-            let visualEnhanced = false;
-            if (shouldEnhance) try {
-                const { enhance } = await import(
-                    '@services/planning/visual-enhancer'
-                );
-                // 获取 chatStore 的流式内容覆盖方法，用于实时推送 VE 增强内容到 UI
-                const {
-                    setAbortController,
-                    setSessionId,
-                    setStreamingContent,
-                } = useChatStore.getState();
-                const visualEnhanceAbortController = new AbortController();
-                if (contextId) {
-                    setAbortController(contextId, visualEnhanceAbortController);
-                }
-                const enhanceResult = await enhance(
-                    result.content,
-                    {
-                        provider: effectiveProvider,
-                        model: effectiveModel,
-                        tokenContextId: contextId,
-                        baseUrl: effectiveProvider === 'local' ? localApiUrl : undefined,
-                        signal: visualEnhanceAbortController.signal,
-                        onSessionStart: (sessionId) => {
-                            if (contextId && !visualEnhanceAbortController.signal.aborted) {
-                                setSessionId(contextId, sessionId);
-                            }
-                        },
-                        // 流式回调：VE 每收到一个 delta 就将累积内容推到 StreamingMessage
-                        onStreamDelta: (accumulatedContent) => {
-                            // 用户停止或外层任务已结束后，绝不允许过期 VE 流复活 StreamingMessage。
-                            if (
-                                contextId &&
-                                !visualEnhanceAbortController.signal.aborted &&
-                                sendingContextsRef.current.has(contextId)
-                            ) {
-                                setStreamingContent(contextId, accumulatedContent);
-                            }
-                        },
-                    }
-                );
-                if (enhanceResult.enhanced) {
-                    finalContent = enhanceResult.content;
-                    visualEnhanced = true;
-                    logger.debug('[usePlanningMode] ✨ 可视化增强成功');
-                } else {
-                    logger.debug('[usePlanningMode] 跳过可视化增强:', enhanceResult.reason);
-                }
-            } catch (enhanceError) {
-                // 增强失败不影响主流程，降级使用原始内容
-                logger.warn('[usePlanningMode] 可视化增强失败，使用原始内容:', enhanceError);
-            }
+            // ====== 步骤 5.5: 标记可视化增强后台调度意图 ======
+            // MB 原文先进入正式消息并结束 Planning 前台生命周期；VE 会在消息持久化后
+            // 按 messageId 进入独立队列，不再阻塞输入框或占用 FSM 流式面板。
+            const shouldScheduleVisualEnhancement = result.terminationReason !== 'cancelled'
+                && visualEnhancementEnabled;
 
             // ====== 步骤 6: 创建并添加助手消息 ======
             // Hub 模式的消息需要标记 sourceType 以便加载时过滤
@@ -1683,9 +1637,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 //  持久化 Sub-Agent 观测数据（用于刷新后恢复显示）
                 subAgentObservations: subAgentObservationsData.length > 0 ? subAgentObservationsData : undefined,
                 // 可视化增强标记（调试/统计用途）
-                visualEnhanced,
+                visualEnhanced: false,
                 // 跨请求上下文恢复：含 rationale + SA observations 的完整内容
-                // chatStore 中 content 使用 finalContent（UI 剥离版），但下一轮
+                // chatStore 中 content 先使用 MB 原文（UI 剥离版），但下一轮
                 // loadChatHistory 需要完整版供 MB 的 conversationHistory 读取
                 // 使用 ?? 而非 ||：空字符串也是有效值，需要写入 metadata
                 // 避免下次加载时因 persistContent 缺失而回退到增强版 content
@@ -1721,9 +1675,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                         assistantMessageResult = await invoke<PersistedMessageResult>('message_update', {
                             request: {
                                 id: planningCheckpointMessage.id,
-                                // DB 存储可视化增强后的版本，确保重启后 UI 显示一致
-                                // 跨请求上下文恢复所需的 persistContent 已冗余存储在 metadata 中
-                                content: finalContent,
+                                // MB 完成后立即把 checkpoint 正式化为原文消息；VE 后台任务
+                                // 成功后会再次更新同一 messageId，不影响 persistContent。
+                                content: result.content,
                                 metadata: JSON.stringify(messageMetadata),
                                 createdAt: Date.now(),
                             },
@@ -1735,7 +1689,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                             request: {
                                 agentId: messageAgentId,
                                 role: 'assistant',
-                                content: finalContent,
+                                content: result.content,
                                 metadata: JSON.stringify(messageMetadata),
                             },
                         });
@@ -1746,7 +1700,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                         request: {
                             agentId: messageAgentId,
                             role: 'assistant',
-                            content: finalContent,
+                            content: result.content,
                             metadata: JSON.stringify(messageMetadata),
                         },
                     });
@@ -1768,7 +1722,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
             const assistantMessage = {
                 id: assistantMessageResult.id,
-                content: finalContent,
+                content: result.content,
                 role: 'assistant' as const,
                 agentId: messageAgentId,
                 createdAt: assistantMessageResult.createdAt,
@@ -1779,6 +1733,102 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 addMessage(contextId, assistantMessage);
             } else {
                 addHubMessage(contextId, assistantMessage);
+            }
+
+            // ====== 步骤 6.5: 消息级 Visual Enhancer 后台调度 ======
+            // 此处不 await：原文消息已经持久化并可切换为静态 PlanningTrace，
+            // finally 会立即释放前台 sending/streaming 状态。VE 按 context 串行、按 messageId 可取消。
+            if (shouldScheduleVisualEnhancement) {
+                void (async () => {
+                    try {
+                        const {
+                            enhance,
+                            shouldEnhance,
+                            visualEnhancementJobManager,
+                        } = await import('@services/planning/visual-enhancer');
+
+                        if (!shouldEnhance(result.content)) {
+                            logger.debug('[usePlanningMode] 跳过可视化增强: content_not_suitable');
+                            return;
+                        }
+
+                        visualEnhancementJobManager.enqueue({
+                            messageId: assistantMessageResult.id,
+                            contextId,
+                            execute: async (signal) => {
+                                const enhanceResult = await enhance(result.content, {
+                                    provider: effectiveProvider,
+                                    model: effectiveModel,
+                                    tokenContextId: contextId,
+                                    baseUrl: effectiveProvider === 'local' ? localApiUrl : undefined,
+                                    signal,
+                                });
+
+                                if (!enhanceResult.enhanced || signal.aborted) {
+                                    logger.debug(
+                                        '[usePlanningMode] 后台可视化增强未更新消息:',
+                                        enhanceResult.reason ?? 'cancelled'
+                                    );
+                                    return;
+                                }
+
+                                const chatState = useChatStore.getState();
+                                const messages = contextType === 'agent'
+                                    ? chatState.messagesByAgent.get(contextId) ?? []
+                                    : chatState.messagesByHub.get(contextId) ?? [];
+                                const currentMessage = messages.find(
+                                    message => message.id === assistantMessageResult.id
+                                );
+                                if (!currentMessage) {
+                                    logger.debug(
+                                        '[usePlanningMode] 增强完成时原消息已不存在，跳过更新:',
+                                        assistantMessageResult.id
+                                    );
+                                    return;
+                                }
+
+                                const currentMetadata = currentMessage.metadata
+                                    && typeof currentMessage.metadata === 'object'
+                                    ? currentMessage.metadata
+                                    : messageMetadata;
+                                const enhancedMetadata = {
+                                    ...currentMetadata,
+                                    visualEnhanced: true,
+                                };
+                                const updatedMessage = await invoke<PersistedMessageResult>('message_update', {
+                                    request: {
+                                        id: assistantMessageResult.id,
+                                        content: enhanceResult.content,
+                                        metadata: JSON.stringify(enhancedMetadata),
+                                    },
+                                });
+
+                                const messageUpdates = {
+                                    content: enhanceResult.content,
+                                    metadata: enhancedMetadata,
+                                    createdAt: updatedMessage.createdAt,
+                                };
+                                if (contextType === 'agent') {
+                                    useChatStore.getState().updateMessage(
+                                        contextId,
+                                        assistantMessageResult.id,
+                                        messageUpdates
+                                    );
+                                } else {
+                                    useChatStore.getState().updateHubMessage(
+                                        contextId,
+                                        assistantMessageResult.id,
+                                        messageUpdates
+                                    );
+                                }
+                                logger.debug('[usePlanningMode] ✨ 后台可视化增强成功:', assistantMessageResult.id);
+                            },
+                        });
+                    } catch (enhanceError) {
+                        // 后台增强失败不影响已经展示和持久化的 MB 原文。
+                        logger.warn('[usePlanningMode] 后台可视化增强调度失败:', enhanceError);
+                    }
+                })();
             }
 
             logger.debug('[usePlanningMode]  Planning 模式完成:', {
@@ -1795,7 +1845,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                     agentId: messageAgentId,
                     agentName: effectiveAgentConfig.name,
                     hubId: effectiveAgentConfig.hubId,
-                    content: finalContent,
+                    content: result.content,
                     source: resolveTaskCompletionNotificationSource(userMessageMeta?.source),
                     mode: 'planning',
                     createdAt: assistantMessageResult.createdAt,
@@ -1807,69 +1857,66 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             // 此处无需重复发射：ImTaskBridge.handleTaskCompleted 在收到第一次事件后已
             // cleanupBotTask（activeTasks.delete），后续重复事件会被幂等保护拦截，
             // 但主动消除此冗余调用可杜绝无效日志噪音。
-            // 本地 UI 已由 chatStore.addMessage(finalContent) 完成增强后内容的更新。
+            // 本地 UI 已先由 chatStore.addMessage(result.content) 完成原文展示；
+            // Visual Enhancer 后台任务会按同一 messageId 原位更新增强内容。
 
             // ====== 更新临时 messageId 为真实 ID ======
             if (tempMessageIdForDiff) {
-                try {
-                    const { useDiffStore } = await import('@stores/diffStore');
-                    await useDiffStore.getState().updateMessageId(
-                        contextId,
-                        tempMessageIdForDiff,
-                        assistantMessageResult.id
-                    );
-                    logger.trace('[usePlanningMode]  messageId 已更新:',
-                        tempMessageIdForDiff, '->', assistantMessageResult.id);
-                } catch (updateError) {
-                    logger.warn('[usePlanningMode] 更新 tempMessageId 失败:', updateError);
-                    // 不阻塞主流程
-                }
+                void (async () => {
+                    try {
+                        const { useDiffStore } = await import('@stores/diffStore');
+                        await useDiffStore.getState().updateMessageId(
+                            contextId,
+                            tempMessageIdForDiff,
+                            assistantMessageResult.id
+                        );
+                        logger.trace('[usePlanningMode]  messageId 已更新:',
+                            tempMessageIdForDiff, '->', assistantMessageResult.id);
+                    } catch (updateError) {
+                        logger.warn('[usePlanningMode] 更新 tempMessageId 失败:', updateError);
+                    }
+                })();
             }
 
             // ====== 步骤 7: 添加到记忆系统（仅 Agent 模式） ======
             // Hub @提及模式不更新记忆，避免污染 Agent 的短期缓冲
             if (contextType === 'agent') {
-                try {
-                    const { getOrCreateMemoryService } = await import('@services/memory');
-                    const { createLLMAdapter } = await import('@services/memory/LLMAdapter');
+                void (async () => {
+                    try {
+                        const { getOrCreateMemoryService } = await import('@services/memory');
+                        const { createLLMAdapter } = await import('@services/memory/LLMAdapter');
 
-                    // dynamic 模式：LLMAdapter 在每次 generate 调用时从 settingsStore
-                    // 实时解析 provider/model，UI 切换设置后无需重建实例即可生效
-                    const llmService = createLLMAdapter({
-                        dynamic: true,
-                    });
+                        // dynamic 模式：LLMAdapter 在每次 generate 调用时从 settingsStore
+                        // 实时解析 provider/model，UI 切换设置后无需重建实例即可生效
+                        const llmService = createLLMAdapter({
+                            dynamic: true,
+                        });
+                        const memoryService = getOrCreateMemoryService(messageAgentId, llmService);
 
-                    // 使用全局工厂获取或创建 MemoryService 实例
-                    const memoryService = getOrCreateMemoryService(messageAgentId, llmService);
-
-                    // fire-and-forget：记忆处理（含水位线摘要生成）在后台异步进行，
-                    // 不阻塞 setIsSending(false)，避免输入框在记忆整理期间被禁用
-                    memoryService.addInteraction(
-                        {
-                            id: userMessageResult.id,
-                            agentId: messageAgentId,
-                            role: 'user',
-                            content: content,
-                            createdAt: userMessageResult.createdAt,
-                        },
-                        {
-                            id: assistantMessageResult.id,
-                            agentId: messageAgentId,
-                            role: 'assistant',
-                            // 记忆系统只接收原始/安全文本，避免可视化增强代码块进入摘要和召回证据
-                            content: stripVisualCodeBlocks(
-                                result.persistContent.trim() ? result.persistContent : result.content
-                            ),
-                            createdAt: assistantMessageResult.createdAt,
-                        }
-                    ).then(() => {
+                        await memoryService.addInteraction(
+                            {
+                                id: userMessageResult.id,
+                                agentId: messageAgentId,
+                                role: 'user',
+                                content: content,
+                                createdAt: userMessageResult.createdAt,
+                            },
+                            {
+                                id: assistantMessageResult.id,
+                                agentId: messageAgentId,
+                                role: 'assistant',
+                                // 记忆系统只接收原始/安全文本，避免可视化增强代码块进入摘要和召回证据
+                                content: stripVisualCodeBlocks(
+                                    result.persistContent.trim() ? result.persistContent : result.content
+                                ),
+                                createdAt: assistantMessageResult.createdAt,
+                            }
+                        );
                         logger.trace('[usePlanningMode]  Planning 模式已添加到记忆系统');
-                    }).catch((memoryError: unknown) => {
+                    } catch (memoryError) {
                         logger.warn('[usePlanningMode] Planning 模式记忆系统调用失败:', memoryError);
-                    });
-                } catch (memoryError) {
-                    logger.warn('[usePlanningMode] Planning 模式记忆系统调用失败:', memoryError);
-                }
+                    }
+                })();
             } else {
                 logger.trace('[usePlanningMode] Hub @提及模式，跳过记忆系统更新');
             }
