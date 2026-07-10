@@ -33,12 +33,52 @@ interface StreamPayload {
     delta: string;
     reasoning?: string;
     done: boolean;
+    finishReason?: string;
     error: string | null;
     inputTokens?: number;
     outputTokens?: number;
 }
 
 type StreamHandler = (event: { payload: StreamPayload }) => void;
+
+function installSequentialStreamResponses(
+    streamResponses: Array<Array<Omit<StreamPayload, 'sessionId'>>>,
+): void {
+    let activeHandler: StreamHandler | undefined;
+
+    vi.mocked(listen).mockImplementation(((_eventName: string, handler: StreamHandler) => {
+        activeHandler = handler;
+        return Promise.resolve(vi.fn());
+    }) as unknown as typeof listen);
+
+    vi.mocked(invoke).mockImplementation((async (command: string, args: unknown) => {
+        if (command === 'llm_cancel_stream') {
+            return undefined;
+        }
+        if (command !== 'llm_chat_stream') {
+            return {
+                type: 'text',
+                content: '{"decision":"RESPOND_TO_USER"}',
+            };
+        }
+
+        const { sessionId } = args as { sessionId: string };
+        const payloads = streamResponses.shift();
+        queueMicrotask(() => {
+            const handler = activeHandler;
+            if (!handler || !payloads) return;
+            for (const payload of payloads) {
+                handler({
+                    payload: {
+                        sessionId,
+                        ...payload,
+                    },
+                });
+            }
+        });
+        return undefined;
+    }) as unknown as typeof invoke);
+}
 
 describe('AgentLoop MB vision fallback', () => {
     beforeEach(() => {
@@ -290,6 +330,61 @@ describe('AgentLoop MB vision fallback', () => {
         expect(extractImageData(thirdRequest.request.messages)).not.toContain('history-image');
     });
 
+    it('reuses current-turn images for parser correction retries without leaking them to the next decision', async () => {
+        const session = createSession([{ role: 'user', content: 'inspect this screenshot' }]);
+        const loop = new AgentLoop(
+            {
+                providerId: 'local',
+                modelId: 'gpt-5.4',
+                imageAttachments: [{ mime_type: 'image/jpeg', data: 'current-image' }],
+            },
+            session,
+        );
+        const saveAndPassImagesToSA = vi.spyOn(
+            loop as unknown as {
+                saveAndPassImagesToSA: (
+                    images: Array<{ mimeType: string; data: string }>
+                ) => Promise<void>;
+            },
+            'saveAndPassImagesToSA',
+        ).mockResolvedValue(undefined);
+        const llmService = (loop as unknown as {
+            createLLMService: () => {
+                generate: (
+                    prompt: string,
+                    options?: {
+                        mbDecisionCorrection?: {
+                            reason: 'schema_invalid';
+                            detail?: string;
+                        };
+                    }
+                ) => Promise<string>;
+            };
+        }).createLLMService();
+
+        await llmService.generate('system prompt');
+        await llmService.generate('system prompt', {
+            mbDecisionCorrection: {
+                reason: 'schema_invalid',
+                detail: 'nextStep.task is required',
+            },
+        });
+        await llmService.generate('system prompt');
+
+        const llmCalls = vi.mocked(invoke).mock.calls.filter(
+            ([command]) => command === 'llm_chat_with_tools'
+        );
+        const requests = llmCalls.map(([, args]) => args as {
+            request: { messages: Array<{ images?: Array<{ data?: string }> }> };
+        });
+
+        expect(llmCalls).toHaveLength(3);
+        expect(extractImageData(requests[0]!.request.messages)).toContain('current-image');
+        expect(extractImageData(requests[1]!.request.messages)).toContain('current-image');
+        expect(extractImageData(requests[2]!.request.messages)).not.toContain('current-image');
+        expect(saveAndPassImagesToSA).toHaveBeenCalledTimes(1);
+    });
+
     it('retries MB stream once when the final decision delta is empty', async () => {
         const streamResponses: Array<Array<Omit<StreamPayload, 'sessionId'>>> = [
             [
@@ -371,9 +466,162 @@ describe('AgentLoop MB vision fallback', () => {
 
         expect(streamCalls).toHaveLength(2);
         expect(result).toContain('"decision":"RESPOND_TO_USER"');
-        expect(secondRequest.request.messages.at(-1)?.content).toContain(
-            'previous Master Brain streaming call finished without final decision content'
+        expect(secondRequest.request.messages.at(-1)?.content).toBe(
+            translate('chat.mbEmptyDecisionRetryInstruction')
         );
+    });
+
+    it('cancels and retries when one MB chunk contains an XML tool-call envelope before valid JSON', async () => {
+        installSequentialStreamResponses([
+            [
+                {
+                    delta: '<function=web_search>\n<parameter=query>strands-agents</parameter>\n</function>\n' +
+                        '{"decision":"RESPOND_TO_USER","rationale":"premature","riskAssessment":{"level":"low","notes":"ok"},"response":"premature"}',
+                    done: false,
+                    error: null,
+                },
+                {
+                    delta: '',
+                    done: true,
+                    error: null,
+                },
+            ],
+            [
+                {
+                    delta: '{"decision":"SPAWN_SUB_AGENT","rationale":"delegate","riskAssessment":{"level":"low","notes":"ok"},"nextStep":{"task":"Research strands-agents"}}',
+                    done: true,
+                    error: null,
+                },
+            ],
+        ]);
+
+        const session = createSession([{ role: 'user', content: 'current task' }]);
+        const loop = new AgentLoop(
+            {
+                providerId: 'local',
+                modelId: 'generic-compatible-model',
+            },
+            session,
+        );
+        const llmService = (loop as unknown as {
+            createLLMService: () => {
+                generate: (
+                    prompt: string,
+                    options?: { onStreamDelta?: (content: string) => void }
+                ) => Promise<string>;
+            };
+        }).createLLMService();
+
+        const result = await llmService.generate('system prompt', {
+            onStreamDelta: vi.fn(),
+        });
+
+        const streamCalls = vi.mocked(invoke).mock.calls.filter(([command]) => command === 'llm_chat_stream');
+        const cancelCalls = vi.mocked(invoke).mock.calls.filter(([command]) => command === 'llm_cancel_stream');
+        const secondRequest = streamCalls[1]?.[1] as {
+            request: { messages: Array<{ content: string }> };
+        };
+
+        expect(streamCalls).toHaveLength(2);
+        expect(cancelCalls).toHaveLength(1);
+        expect(result).toContain('"decision":"SPAWN_SUB_AGENT"');
+        expect(secondRequest.request.messages.at(-1)?.content).toContain('SPAWN_SUB_AGENT');
+        expect(secondRequest.request.messages.at(-1)?.content).not.toContain('<function=web_search>');
+    });
+
+    it('does not cancel valid JSON when rationale mentions function syntax before decision', async () => {
+        const validResponse = '{"rationale":"Explain the literal <function=web_search> syntax",' +
+            '"decision":"RESPOND_TO_USER","riskAssessment":{"level":"low","notes":"ok"},' +
+            '"response":"done"}';
+        installSequentialStreamResponses([
+            [
+                {
+                    delta: validResponse,
+                    done: true,
+                    finishReason: 'stop',
+                    error: null,
+                },
+            ],
+        ]);
+
+        const session = createSession([{ role: 'user', content: 'current task' }]);
+        const loop = new AgentLoop(
+            {
+                providerId: 'local',
+                modelId: 'generic-compatible-model',
+            },
+            session,
+        );
+        const llmService = (loop as unknown as {
+            createLLMService: () => {
+                generate: (
+                    prompt: string,
+                    options?: { onStreamDelta?: (content: string) => void }
+                ) => Promise<string>;
+            };
+        }).createLLMService();
+
+        const result = await llmService.generate('system prompt', {
+            onStreamDelta: vi.fn(),
+        });
+
+        const streamCalls = vi.mocked(invoke).mock.calls.filter(([command]) => command === 'llm_chat_stream');
+        const cancelCalls = vi.mocked(invoke).mock.calls.filter(([command]) => command === 'llm_cancel_stream');
+
+        expect(streamCalls).toHaveLength(1);
+        expect(cancelCalls).toHaveLength(0);
+        expect(result).toBe(validResponse);
+    });
+
+    it('retries MB stream when finishReason reports token truncation', async () => {
+        installSequentialStreamResponses([
+            [
+                {
+                    delta: '{"decision":"RESPOND_TO_USER","rationale":"partial',
+                    done: true,
+                    finishReason: 'length',
+                    error: null,
+                },
+            ],
+            [
+                {
+                    delta: '{"decision":"RESPOND_TO_USER","rationale":"done","riskAssessment":{"level":"low","notes":"ok"},"response":"done"}',
+                    done: true,
+                    finishReason: 'stop',
+                    error: null,
+                },
+            ],
+        ]);
+
+        const session = createSession([{ role: 'user', content: 'current task' }]);
+        const loop = new AgentLoop(
+            {
+                providerId: 'local',
+                modelId: 'generic-compatible-model',
+            },
+            session,
+        );
+        const llmService = (loop as unknown as {
+            createLLMService: () => {
+                generate: (
+                    prompt: string,
+                    options?: { onStreamDelta?: (content: string) => void }
+                ) => Promise<string>;
+            };
+        }).createLLMService();
+
+        const result = await llmService.generate('system prompt', {
+            onStreamDelta: vi.fn(),
+        });
+
+        const streamCalls = vi.mocked(invoke).mock.calls.filter(([command]) => command === 'llm_chat_stream');
+        const secondRequest = streamCalls[1]?.[1] as {
+            request: { messages: Array<{ content: string }> };
+        };
+
+        expect(streamCalls).toHaveLength(2);
+        expect(result).toContain('"response":"done"');
+        expect(secondRequest.request.messages.at(-1)?.content).toContain('JSON');
     });
 
     it('retries non-stream MB calls after transient 524 API errors', async () => {

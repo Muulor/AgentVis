@@ -70,6 +70,13 @@ import {
     getLlmRetryDelayMs,
     MASTER_BRAIN_LLM_RETRY_DELAYS_MS,
 } from '../utils/LlmRetryPolicy';
+import {
+    createMbDecisionRetryState,
+    tryConsumeMbDecisionRetry,
+    type MbDecisionRetryCorrection,
+    type MbDecisionRetryReason,
+    type MbDecisionRetryState,
+} from '../brain/MasterBrainDecisionGuard';
 
 const logger = getLogger('AgentLoop');
 
@@ -82,6 +89,10 @@ const MB_STREAM_UI_FLUSH_INTERVAL_MS = 64;
 const REPETITION_SEGMENT_MIN_CHARS = 16;
 const REPETITION_SEGMENT_MIN_COUNT = 8;
 const REPETITION_SEGMENT_MIN_TOTAL_CHARS = 900;
+const MB_TOOL_CALL_ENVELOPE_SCAN_CHARS = 2000;
+const MB_TOOL_CALL_ENVELOPE_PATTERN =
+    /<\s*\/?\s*(?:tool_call|function(?:_call)?)\b[^>]*>|\[\s*tool_call\s*\]/i;
+const MB_TRUNCATED_FINISH_REASONS = new Set(['length', 'max_tokens', 'max_output_tokens', 'incomplete']);
 
 const VISION_UNSUPPORTED_ERROR_PATTERNS = [
     'no endpoints found that support image input',
@@ -96,12 +107,6 @@ const VISION_UNSUPPORTED_ERROR_PATTERNS = [
     '400 bad request',
 ];
 
-const MB_EMPTY_DECISION_RETRY_INSTRUCTION =
-    '[SYSTEM: The previous Master Brain streaming call finished without final decision content. ' +
-    'Use the exact same task context above and return exactly one valid JSON decision object now. ' +
-    'Do not output only reasoning, analysis, markdown prose, or an empty response. ' +
-    'The JSON must include decision, rationale, riskAssessment, and the required fields for the chosen decision.]';
-
 function retryErrorFromToolResponse(response: LLMResponseWithTools): unknown {
     return response.type === 'error'
         ? response.error ?? response.content ?? 'LLM call failed'
@@ -109,6 +114,8 @@ function retryErrorFromToolResponse(response: LLMResponseWithTools): unknown {
 }
 
 class MbEmptyDecisionContentError extends Error {
+    readonly retryCorrection: MbDecisionRetryCorrection = { reason: 'empty_content' };
+
     constructor(reasoningLength: number) {
         super(`MB_EMPTY_DECISION_CONTENT: stream finished without final decision content (reasoningLength=${reasoningLength})`);
         this.name = 'MbEmptyDecisionContentError';
@@ -116,9 +123,12 @@ class MbEmptyDecisionContentError extends Error {
 }
 
 class MbAnomalousDecisionContentError extends Error {
-    constructor(reason: string, contentLength: number) {
-        super(`MB_ANOMALOUS_DECISION_CONTENT: ${reason} (contentLength=${contentLength})`);
+    readonly retryCorrection: MbDecisionRetryCorrection;
+
+    constructor(reason: MbDecisionRetryReason, detail: string, contentLength: number) {
+        super(`MB_ANOMALOUS_DECISION_CONTENT: ${detail} (contentLength=${contentLength})`);
         this.name = 'MbAnomalousDecisionContentError';
+        this.retryCorrection = { reason, detail };
     }
 }
 
@@ -171,6 +181,14 @@ export class AgentLoop {
 
     /** 跨轮历史图片是否已透传给 SA（确保只传递一次，避免多轮 MB 迭代重复注入） */
     private hasPassedHistoryImagesToSA = false;
+
+    /**
+     * 当前 MB 决策首次调用携带的图片快照。
+     *
+     * 仅供同一次 MasterBrain.decide() 的解析层纠错重试复用；下一次正常 MB
+     * 决策开始时立即清空，避免图片泄漏到后续决策轮次。
+     */
+    private mbDecisionRetryImageAttachments?: Array<{ mime_type: string; data: string }>;
 
     private visionFallbackMode: VisionFallbackMode = 'none';
 
@@ -506,6 +524,10 @@ export class AgentLoop {
                     onStreamDelta?: (accumulatedContent: string) => void;
                     /** provider reasoning_content 流式回调 */
                     onReasoningTrace?: (event: ReasoningTraceEvent) => void;
+                    /** 流式异常与解析异常共用的 MB 语义重试状态 */
+                    mbDecisionRetryState?: MbDecisionRetryState;
+                    /** 追加到 messages 尾部的定向纠错原因 */
+                    mbDecisionCorrection?: MbDecisionRetryCorrection;
                 }
             ): Promise<string> => {
                 try {
@@ -620,6 +642,10 @@ export class AgentLoop {
                     // 因此 messages 数组只需包含"当轮新增消息"，避免重复和预算失效。
                     //
                     // 例外：带图片的历史 user 消息仍保留（System Prompt 纯文本无法承载 base64 图片）
+                    if (!options?.mbDecisionCorrection) {
+                        this.mbDecisionRetryImageAttachments = undefined;
+                    }
+
                     const sessionMessages = this.session.getMessages();
                     const historyBoundary = this.historyMessageCount;
                     const mbSupportsVisionInput = modelSupportsVision(this.config.modelId ?? '', this.config.providerId);
@@ -766,11 +792,21 @@ export class AgentLoop {
                     //   导致"已有 images"检查跳过注入，新图片无法传递给 MB。
                     // - 采用 append 而非替换：理论上当轮 user 消息不应已有 images，
                     //   但使用 append 保证在极端情况下不丢失既有数据。
-                    if (this.config.imageAttachments?.length) {
+                    const pendingImageAttachments = this.config.imageAttachments;
+                    const retryImageAttachments = options?.mbDecisionCorrection
+                        ? this.mbDecisionRetryImageAttachments
+                        : undefined;
+                    const decisionImageAttachments = pendingImageAttachments?.length
+                        ? pendingImageAttachments
+                        : retryImageAttachments;
+                    const isDecisionRetryImageReuse =
+                        !pendingImageAttachments?.length && Boolean(retryImageAttachments?.length);
+
+                    if (decisionImageAttachments?.length) {
                         // llm_chat_with_tools 后端 ImageAttachment 使用 camelCase（mimeType），
                         // 而 imageAttachments 来源于 llm_chat_stream 的 snake_case 格式（mime_type），
                         // 这里做格式转换以确保反序列化正确
-                        const camelCaseImages = this.config.imageAttachments.map(img => ({
+                        const camelCaseImages = decisionImageAttachments.map(img => ({
                             mimeType: img.mime_type,
                             data: img.data,
                         }));
@@ -796,17 +832,28 @@ export class AgentLoop {
                             });
                         }
 
-                        // 缓存图片到系统临时目录并透传给 SA
-                        // 必须 await：确保 fsmIntegration.setImageAttachments() 在 MB LLM 调用前完成，
-                        // 否则 DISPATCH 触发时 pendingImageAttachments 仍为 undefined
-                        try {
-                            await this.saveAndPassImagesToSA(camelCaseImages);
-                        } catch (saveErr: unknown) {
-                            logger.warn('[AgentLoop] 图片持久化/透传失败（不影响 MB 调用）:', saveErr);
-                        }
+                        if (!isDecisionRetryImageReuse) {
+                            this.mbDecisionRetryImageAttachments = decisionImageAttachments.map(image => ({
+                                ...image,
+                            }));
 
-                        // 清除引用，避免后续 AgentLoop 迭代重复发送给 MB
-                        this.config.imageAttachments = undefined;
+                            // 缓存图片到系统临时目录并透传给 SA
+                            // 必须 await：确保 fsmIntegration.setImageAttachments() 在 MB LLM 调用前完成，
+                            // 否则 DISPATCH 触发时 pendingImageAttachments 仍为 undefined
+                            try {
+                                await this.saveAndPassImagesToSA(camelCaseImages);
+                            } catch (saveErr: unknown) {
+                                logger.warn('[AgentLoop] 图片持久化/透传失败（不影响 MB 调用）:', saveErr);
+                            }
+
+                            // 清除一次性配置引用；解析层纠错通过专用快照复用。
+                            this.config.imageAttachments = undefined;
+                        } else {
+                            logger.trace('[AgentLoop] 📷 MB 解析层纠错重试沿用当轮图片:', {
+                                imageCount: camelCaseImages.length,
+                                reason: options?.mbDecisionCorrection?.reason,
+                            });
+                        }
                     } else if (!this.hasPassedHistoryImagesToSA) {
                         // 跨轮图片透传给 SA（配对模式）：当轮没有新图片时，从 Session 历史 user 消息提取
                         // 与 MB convertedMessages 对齐：图片绑定到各自原始消息，而非堆在首条消息
@@ -875,6 +922,18 @@ export class AgentLoop {
                         this.hasPassedHistoryImagesToSA = true;
                     }
 
+                    if (options?.mbDecisionCorrection) {
+                        messages.push({
+                            role: 'user',
+                            content: this.buildMbDecisionRetryInstruction(options.mbDecisionCorrection),
+                        });
+                        logger.warn('[AgentLoop] 已在 MB messages 尾部追加决策协议纠错提示:', {
+                            providerId: this.config.providerId,
+                            modelId: this.config.modelId,
+                            reason: options.mbDecisionCorrection.reason,
+                        });
+                    }
+
                     // ── 流式路径（有 onStreamDelta 回调时启用）──
                     // 使用 llm_chat_stream + Tauri Event 实现 MB 决策的实时流式输出，
                     // 参考 VisualEnhancerService.collectStreamResponse 的成熟模式。
@@ -925,7 +984,8 @@ export class AgentLoop {
                         const onReasoningTrace = options.onReasoningTrace;
                         const maxTokens = options.maxTokens ?? 24576;
                         const temperature = options.temperature;
-                        let decisionContentRetryUsed = false;
+                        const semanticRetryState = options.mbDecisionRetryState
+                            ?? createMbDecisionRetryState();
                         const collectMbDecisionStream = async (
                             messagesForCall: AgentLoopLLMMessage[]
                         ): Promise<string> => {
@@ -945,29 +1005,25 @@ export class AgentLoop {
                                     throw streamError;
                                 }
 
-                                if (decisionContentRetryUsed) {
-                                    throw new Error(
-                                        this.isMbAnomalousDecisionContentError(streamError)
-                                            ? translate('chat.mbAnomalousDecisionRetryFailed')
-                                            : translate('chat.mbEmptyDecisionRetryFailed')
-                                    );
+                                const correction = this.getMbDecisionRetryCorrection(streamError);
+                                if (
+                                    !correction ||
+                                    !tryConsumeMbDecisionRetry(semanticRetryState, correction.reason)
+                                ) {
+                                    throw new Error(this.getMbDecisionRetryFailedMessage(correction));
                                 }
 
-                                decisionContentRetryUsed = true;
-                                const isAnomalousOutput = this.isMbAnomalousDecisionContentError(streamError);
                                 logger.warn('[AgentLoop] MB 流式调用返回不可执行决策正文，追加强约束后重试一次:', {
                                     providerId: this.config.providerId,
                                     modelId: this.config.modelId,
-                                    kind: isAnomalousOutput ? 'anomalous_content' : 'empty_content',
+                                    kind: correction.reason,
                                     error: streamError instanceof Error ? streamError.message : String(streamError),
                                 });
 
-                                const retryMessages = isAnomalousOutput
-                                    ? this.buildMbAnomalousDecisionRetryMessages(
-                                        messagesForCall,
-                                        streamError instanceof Error ? streamError.message : String(streamError)
-                                    )
-                                    : this.buildMbEmptyDecisionRetryMessages(messagesForCall);
+                                const retryMessages = this.buildMbDecisionRetryMessages(
+                                    messagesForCall,
+                                    correction,
+                                );
 
                                 try {
                                     return await this.collectMBStreamResponse(
@@ -979,11 +1035,9 @@ export class AgentLoop {
                                     );
                                 } catch (retryError) {
                                     if (this.isMbRetryableDecisionContentError(retryError)) {
-                                        throw new Error(
-                                            this.isMbAnomalousDecisionContentError(retryError) || isAnomalousOutput
-                                                ? translate('chat.mbAnomalousDecisionRetryFailed')
-                                                : translate('chat.mbEmptyDecisionRetryFailed')
-                                        );
+                                        throw new Error(this.getMbDecisionRetryFailedMessage(
+                                            this.getMbDecisionRetryCorrection(retryError) ?? correction
+                                        ));
                                     }
                                     throw retryError;
                                 }
@@ -1246,33 +1300,69 @@ export class AgentLoop {
             this.isMbAnomalousDecisionContentError(error);
     }
 
+    private getMbDecisionRetryCorrection(error: unknown): MbDecisionRetryCorrection | null {
+        if (error instanceof MbEmptyDecisionContentError) {
+            return error.retryCorrection;
+        }
+        if (error instanceof MbAnomalousDecisionContentError) {
+            return error.retryCorrection;
+        }
+        if (this.isMbEmptyDecisionContentError(error)) {
+            return { reason: 'empty_content' };
+        }
+        if (this.isMbAnomalousDecisionContentError(error)) {
+            return {
+                reason: 'anomalous_content',
+                detail: error instanceof Error ? error.message : String(error),
+            };
+        }
+        return null;
+    }
+
+    private getMbDecisionRetryFailedMessage(
+        correction: MbDecisionRetryCorrection | null,
+    ): string {
+        if (correction?.reason === 'empty_content') {
+            return translate('chat.mbEmptyDecisionRetryFailed');
+        }
+        if (correction?.reason === 'tool_call_envelope') {
+            return translate('chat.mbToolCallDecisionRetryFailed');
+        }
+        return translate('chat.mbAnomalousDecisionRetryFailed');
+    }
+
     private isDeepSeekV4MbModel(): boolean {
         return DEEPSEEK_V4_MODEL_IDS.has((this.config.modelId ?? '').trim().toLowerCase());
     }
 
-    private buildMbEmptyDecisionRetryMessages(
-        messages: AgentLoopLLMMessage[]
+    private buildMbDecisionRetryMessages(
+        messages: AgentLoopLLMMessage[],
+        correction: MbDecisionRetryCorrection,
     ): AgentLoopLLMMessage[] {
         return [
             ...messages,
             {
                 role: 'user',
-                content: MB_EMPTY_DECISION_RETRY_INSTRUCTION,
+                content: this.buildMbDecisionRetryInstruction(correction),
             },
         ];
     }
 
-    private buildMbAnomalousDecisionRetryMessages(
-        messages: AgentLoopLLMMessage[],
-        reason: string,
-    ): AgentLoopLLMMessage[] {
-        return [
-            ...messages,
-            {
-                role: 'user',
-                content: translate('chat.mbAnomalousDecisionRetryInstruction', { reason }),
-            },
-        ];
+    private buildMbDecisionRetryInstruction(correction: MbDecisionRetryCorrection): string {
+        const reason = (correction.detail ?? correction.reason).slice(0, 500);
+        switch (correction.reason) {
+            case 'empty_content':
+                return translate('chat.mbEmptyDecisionRetryInstruction');
+            case 'tool_call_envelope':
+                return translate('chat.mbToolCallDecisionRetryInstruction', { reason });
+            case 'truncated_output':
+            case 'aggressive_repair':
+                return translate('chat.mbTruncatedDecisionRetryInstruction', { reason });
+            case 'anomalous_content':
+                return translate('chat.mbAnomalousDecisionRetryInstruction', { reason });
+            default:
+                return translate('chat.mbMalformedDecisionRetryInstruction', { reason });
+        }
     }
 
     private stripThinkTags(content: string): string {
@@ -1324,6 +1414,33 @@ export class AgentLoop {
         }
 
         return normalized;
+    }
+
+    private getUniversalMbProtocolRetryCorrection(
+        content: string,
+    ): MbDecisionRetryCorrection | null {
+        const withoutThinkTags = this.stripThinkTags(content);
+        // 只检查 JSON 根对象开始前的协议文本。一旦出现首个 "{"，后续标签可能只是
+        // rationale/response 字符串中的字面内容，应交给完整 JSON 解析器处理。
+        // 这也确保同一 chunk 中 "伪工具协议 + 决策 JSON" 仍会命中前缀 guard。
+        const jsonStart = withoutThinkTags.indexOf('{');
+        const scanEnd = jsonStart >= 0
+            ? jsonStart
+            : Math.min(withoutThinkTags.length, MB_TOOL_CALL_ENVELOPE_SCAN_CHARS);
+        const prefix = withoutThinkTags.slice(0, scanEnd);
+        if (!MB_TOOL_CALL_ENVELOPE_PATTERN.test(prefix)) {
+            return null;
+        }
+
+        return {
+            reason: 'tool_call_envelope',
+            detail: 'tool-call/function-call envelope detected before JSON decision',
+        };
+    }
+
+    private isTruncatedMbFinishReason(finishReason: string | undefined): boolean {
+        return finishReason !== undefined &&
+            MB_TRUNCATED_FINISH_REASONS.has(finishReason.trim().toLowerCase());
     }
 
     private getDeepSeekV4MbStreamRetryReason(content: string): string | null {
@@ -1601,16 +1718,17 @@ export class AgentLoop {
                 resolve(content);
             };
 
-            const cancelForDeepSeekV4Guard = (reason: string) => {
+            const cancelForMbGuard = (correction: MbDecisionRetryCorrection) => {
                 if (guardCancellationError || settled) return;
 
                 guardCancellationError = new MbAnomalousDecisionContentError(
-                    reason,
+                    correction.reason,
+                    correction.detail ?? correction.reason,
                     deltaContent.length
                 );
                 void invoke('llm_cancel_stream', { sessionId: streamSessionId })
                     .catch((err: unknown) => {
-                        logger.warn('[AgentLoop] DeepSeek V4 MB guard 取消旧流失败:', err);
+                        logger.warn('[AgentLoop] MB 决策输出 guard 取消旧流失败:', err);
                     });
 
                 guardCancelTimer = setTimeout(() => {
@@ -1627,6 +1745,7 @@ export class AgentLoop {
                 delta: string;
                 reasoning?: string;
                 done: boolean;
+                finishReason?: string;
                 error: string | null;
                 inputTokens?: number;
                 outputTokens?: number;
@@ -1658,10 +1777,19 @@ export class AgentLoop {
                     emitReasoningTraceComplete();
                 }
 
+                const protocolCorrection = this.getUniversalMbProtocolRetryCorrection(deltaContent);
+                if (protocolCorrection) {
+                    cancelForMbGuard(protocolCorrection);
+                    return;
+                }
+
                 if (useDeepSeekV4MbGuard) {
                     const retryReason = this.getDeepSeekV4MbStreamRetryReason(deltaContent);
                     if (retryReason) {
-                        cancelForDeepSeekV4Guard(retryReason);
+                        cancelForMbGuard({
+                            reason: 'anomalous_content',
+                            detail: retryReason,
+                        });
                         return;
                     }
                 }
@@ -1691,10 +1819,23 @@ export class AgentLoop {
                             deltaLength: deltaContent.length,
                             normalizedDeltaLength: finalDeltaContent.length,
                             reasoningLength: reasoningContent.length,
+                            finishReason: event.payload.finishReason,
                             deepSeekV4Guard: useDeepSeekV4MbGuard,
                         });
+                    if (this.isTruncatedMbFinishReason(event.payload.finishReason)) {
+                        settleReject(new MbAnomalousDecisionContentError(
+                            'truncated_output',
+                            `provider finish reason: ${event.payload.finishReason ?? 'unknown'}`,
+                            deltaContent.length,
+                        ));
+                        return;
+                    }
                     if (finalRetryReason) {
-                        settleReject(new MbAnomalousDecisionContentError(finalRetryReason, deltaContent.length));
+                        settleReject(new MbAnomalousDecisionContentError(
+                            'anomalous_content',
+                            finalRetryReason,
+                            deltaContent.length,
+                        ));
                         return;
                     }
                     if (!finalDeltaContent.trim()) {

@@ -8,6 +8,14 @@
 export { MasterBrain, type LLMServiceInterface } from './MasterBrain';
 export { MasterBrainPrompt } from './MasterBrainPrompt';
 export { DecisionParser, DecisionParseError } from './DecisionParser';
+export {
+    createMbDecisionRetryState,
+    tryConsumeMbDecisionRetry,
+    MB_DECISION_SEMANTIC_RETRY_LIMIT,
+    type MbDecisionRetryCorrection,
+    type MbDecisionRetryReason,
+    type MbDecisionRetryState,
+} from './MasterBrainDecisionGuard';
 
 export {
     parseCheckpointDecision,

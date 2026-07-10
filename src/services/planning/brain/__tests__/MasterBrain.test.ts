@@ -120,6 +120,94 @@ describe('MasterBrain', () => {
 
             expect(decision.decision).toBe('RESPOND_TO_USER');
             expect(decision.rationale).toContain('downgraded to a user reply');
+            expect(mockLLM.generate).toHaveBeenCalledTimes(2);
+            expect(mockLLM.generate.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+                mbDecisionCorrection: expect.objectContaining({
+                    reason: 'plain_text',
+                }),
+            }));
+        });
+
+        it('MB 输出伪工具调用协议时应定向纠错并重试一次', async () => {
+            const mockLLM = {
+                generate: vi.fn()
+                    .mockResolvedValueOnce(
+                        '<function=web_search><parameter=query>strands-agents</parameter></function>'
+                    )
+                    .mockResolvedValueOnce(createValidLLMResponse('SPAWN_SUB_AGENT', {
+                        nextStep: {
+                            task: 'Research strands-agents through a Sub-Agent',
+                        },
+                    })),
+            };
+            const brain = new MasterBrain(promptBuilder, decisionParser, mockLLM);
+
+            const decision = await brain.decide(createTestInput());
+
+            expect(decision.decision).toBe('SPAWN_SUB_AGENT');
+            expect(mockLLM.generate).toHaveBeenCalledTimes(2);
+            expect(mockLLM.generate.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+                mbDecisionCorrection: expect.objectContaining({
+                    reason: 'tool_call_envelope',
+                }),
+            }));
+        });
+
+        it('嵌套决策依赖截断修复时应消费共享语义额度重试', async () => {
+            const nestedDecision = JSON.stringify({
+                decision: 'RESPOND_TO_USER',
+                rationale: 'Recovered but truncated.',
+                riskAssessment: { level: 'low', notes: 'No risk' },
+                response: 'Recovered response',
+            }).slice(0, -1);
+            const malformedWrapper = `\`\`\`json
+{
+  "decision": "RESPOND_TO_USER": ${JSON.stringify(nestedDecision)}
+}
+\`\`\``;
+            const mockLLM = {
+                generate: vi.fn()
+                    .mockResolvedValueOnce(malformedWrapper)
+                    .mockResolvedValueOnce(createValidLLMResponse('RESPOND_TO_USER', {
+                        response: 'Safe retry response',
+                    })),
+            };
+            const brain = new MasterBrain(promptBuilder, decisionParser, mockLLM);
+
+            const decision = await brain.decide(createTestInput());
+
+            expect(decision.decision).toBe('RESPOND_TO_USER');
+            if (decision.decision === 'RESPOND_TO_USER') {
+                expect(decision.response).toBe('Safe retry response');
+            }
+            expect(mockLLM.generate).toHaveBeenCalledTimes(2);
+            expect(mockLLM.generate.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+                mbDecisionCorrection: expect.objectContaining({
+                    reason: 'truncated_output',
+                }),
+            }));
+        });
+
+        it('流式层已消费语义重试额度时，解析失败不得再叠加重试', async () => {
+            const mockLLM = {
+                generate: vi.fn().mockImplementation((
+                    _prompt: string,
+                    options?: { mbDecisionRetryState?: { attemptsUsed: number; lastReason?: string } },
+                ) => {
+                    if (options?.mbDecisionRetryState) {
+                        options.mbDecisionRetryState.attemptsUsed = 1;
+                        options.mbDecisionRetryState.lastReason = 'anomalous_content';
+                    }
+                    return Promise.resolve('{"decision":"RESPOND_TO_USER"');
+                }),
+            };
+            const brain = new MasterBrain(promptBuilder, decisionParser, mockLLM);
+
+            const decision = await brain.decide(createTestInput());
+
+            expect(decision.decision).toBe('RESPOND_TO_USER');
+            expect(decision.rationale).toContain('malformed');
+            expect(mockLLM.generate).toHaveBeenCalledTimes(1);
         });
 
         it('LLM 调用失败时应该抛出错误', async () => {

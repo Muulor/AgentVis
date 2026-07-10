@@ -34,6 +34,10 @@ import { MasterBrainPrompt } from '../brain/MasterBrainPrompt';
 import { DecisionParser } from '../brain/DecisionParser';
 import { parseCheckpointDecision } from '../brain/CheckpointDecisionParser';
 import type {
+    MbDecisionRetryCorrection,
+    MbDecisionRetryState,
+} from '../brain/MasterBrainDecisionGuard';
+import type {
     MemorySnapshot,
     RAGEvidence,
     ToolCatalogEntry,
@@ -194,6 +198,10 @@ export interface LLMServiceInterface {
             onStreamDelta?: (accumulatedContent: string) => void;
             /** provider reasoning_content 流式回调 */
             onReasoningTrace?: (event: ReasoningTraceEvent) => void;
+            /** 流式异常与解析异常共用的 MB 语义重试状态 */
+            mbDecisionRetryState?: MbDecisionRetryState;
+            /** 追加到 messages 尾部的定向纠错原因 */
+            mbDecisionCorrection?: MbDecisionRetryCorrection;
         }
     ): Promise<string>;
 }

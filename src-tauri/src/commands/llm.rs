@@ -976,6 +976,9 @@ pub struct StreamChunkEvent {
     pub reasoning: Option<String>,
     /// 是否完成
     pub done: bool,
+    /// 完成原因（仅最终 chunk 携带，例如 stop / length / MAX_TOKENS）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
     /// 错误信息（如有）
     pub error: Option<String>,
     /// 输入 token 数（仅最终 chunk 携带，来自 API usage）
@@ -1169,6 +1172,7 @@ pub async fn llm_chat_stream(
                     delta: String::new(),
                     reasoning: None,
                     done: true,
+                    finish_reason: None,
                     error: Some(format!("Unsupported provider: {}", provider)),
                     input_tokens: None,
                     output_tokens: None,
@@ -1190,6 +1194,7 @@ pub async fn llm_chat_stream(
                 delta: String::new(),
                 reasoning: None,
                 done: true,
+                finish_reason: None,
                 error: Some("User cancelled".to_string()),
                 input_tokens: None,
                 output_tokens: None,
@@ -1215,6 +1220,7 @@ pub async fn llm_chat_stream(
                             delta: String::new(),
                             reasoning: None,
                             done: true,
+                            finish_reason: None,
                             error: Some("User cancelled".to_string()),
                             input_tokens: None,
                             output_tokens: None,
@@ -1244,6 +1250,7 @@ pub async fn llm_chat_stream(
                                                 delta: String::new(),
                                                 reasoning: None,
                                                 done: true,
+                                                finish_reason: None,
                                                 error: Some(error.to_string()),
                                                 input_tokens: None,
                                                 output_tokens: None,
@@ -1259,6 +1266,7 @@ pub async fn llm_chat_stream(
                                     delta: chunk.delta,
                                     reasoning: chunk.reasoning,
                                     done: chunk.done,
+                                    finish_reason: chunk.finish_reason,
                                     error: None,
                                     input_tokens: chunk.input_tokens,
                                     output_tokens: chunk.output_tokens,
@@ -1277,6 +1285,7 @@ pub async fn llm_chat_stream(
                                     delta: String::new(),
                                     reasoning: None,
                                     done: true,
+                                    finish_reason: None,
                                     error: Some(e.to_string()),
                                     input_tokens: None,
                                     output_tokens: None,
@@ -1299,6 +1308,7 @@ pub async fn llm_chat_stream(
                                     delta: String::new(),
                                     reasoning: None,
                                     done: true,
+                                    finish_reason: None,
                                     error: Some(error.to_string()),
                                     input_tokens: None,
                                     output_tokens: None,
@@ -1325,6 +1335,7 @@ pub async fn llm_chat_stream(
                 delta: String::new(),
                 reasoning: None,
                 done: true,
+                finish_reason: None,
                 error: Some(e.to_string()),
                 input_tokens: None,
                 output_tokens: None,

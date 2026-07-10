@@ -22,6 +22,12 @@ import type {
 } from './types';
 import { MasterBrainPrompt } from './MasterBrainPrompt';
 import { DecisionParser } from './DecisionParser';
+import {
+    createMbDecisionRetryState,
+    tryConsumeMbDecisionRetry,
+    type MbDecisionRetryCorrection,
+    type MbDecisionRetryState,
+} from './MasterBrainDecisionGuard';
 
 import { PLANNING_CONSTANTS } from '../PlanningConstants';
 import { getLogger } from '@services/logger';
@@ -59,6 +65,10 @@ export interface LLMServiceInterface {
             onStreamDelta?: (accumulatedContent: string) => void;
             /** MB provider reasoning_content 流式回调 */
             onReasoningTrace?: (event: ReasoningTraceEvent) => void;
+            /** 流式异常与解析异常共用的 MB 语义重试状态 */
+            mbDecisionRetryState?: MbDecisionRetryState;
+            /** 追加到 messages 尾部的定向纠错原因 */
+            mbDecisionCorrection?: MbDecisionRetryCorrection;
         }
     ): Promise<string>;
 }
@@ -107,14 +117,43 @@ export class MasterBrain {
         logger.debug(`[MasterBrain] System Prompt:\n${systemPrompt}`);
 
         // 2. 调用 LLM（透传 mbBudgetRemaining 供 AgentLoop 注入 messages 尾部警告）
-        const rawResponse = await this.callLLM(systemPrompt, {
+        const retryState = createMbDecisionRetryState();
+        let rawResponse = await this.callLLM(systemPrompt, {
             mbBudgetRemaining: input.mbBudgetRemaining,
             onStreamDelta: streamOptions?.onStreamDelta,
             onReasoningTrace: streamOptions?.onReasoningTrace,
+            mbDecisionRetryState: retryState,
         });
 
         // 3. 解析并验证决策（JSON Schema）
-        const decision = this.decisionParser.parse(rawResponse);
+        let parseOutcome = this.decisionParser.parseDetailed(rawResponse);
+
+        if (parseOutcome.retryCorrection) {
+            const correction = parseOutcome.retryCorrection;
+            if (tryConsumeMbDecisionRetry(retryState, correction.reason)) {
+                logger.warn('[MasterBrain] MB 决策协议校验失败，使用共享语义额度纠错重试一次:', {
+                    reason: correction.reason,
+                    detail: correction.detail,
+                });
+                rawResponse = await this.callLLM(systemPrompt, {
+                    mbBudgetRemaining: input.mbBudgetRemaining,
+                    onStreamDelta: streamOptions?.onStreamDelta,
+                    onReasoningTrace: streamOptions?.onReasoningTrace,
+                    mbDecisionRetryState: retryState,
+                    mbDecisionCorrection: correction,
+                });
+                parseOutcome = this.decisionParser.parseDetailed(rawResponse);
+            } else {
+                logger.warn('[MasterBrain] MB 决策协议校验失败，但共享语义重试额度已用尽:', {
+                    reason: correction.reason,
+                    previousReason: retryState.lastReason,
+                });
+            }
+        }
+
+        const decision = parseOutcome.retryCorrection
+            ? parseOutcome.safeFallback ?? parseOutcome.decision
+            : parseOutcome.decision;
 
         // 4. 返回决策（风险增强已移除，由 LLM 自评的 riskAssessment 直接返回）
         return decision;
@@ -132,6 +171,8 @@ export class MasterBrain {
             mbBudgetRemaining?: number;
             onStreamDelta?: (accumulatedContent: string) => void;
             onReasoningTrace?: (event: ReasoningTraceEvent) => void;
+            mbDecisionRetryState?: MbDecisionRetryState;
+            mbDecisionCorrection?: MbDecisionRetryCorrection;
         }
     ): Promise<string> {
         return this.llmService.generate(prompt, {
@@ -140,6 +181,8 @@ export class MasterBrain {
             mbBudgetRemaining: extra?.mbBudgetRemaining, // 透传预算剐余量，供 AgentLoop 判断是否注入尾部警告
             onStreamDelta: extra?.onStreamDelta, // 透传流式回调，实时推送 LLM 输出到 Thought 卡片
             onReasoningTrace: extra?.onReasoningTrace,
+            mbDecisionRetryState: extra?.mbDecisionRetryState,
+            mbDecisionCorrection: extra?.mbDecisionCorrection,
         });
     }
 }

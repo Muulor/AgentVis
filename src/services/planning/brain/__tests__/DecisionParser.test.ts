@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { DecisionParser } from '../DecisionParser';
+import { translate } from '@/i18n';
 
 // ═══════════════════════════════════════════════════════════════
 // 测试数据
@@ -71,9 +72,58 @@ describe('DecisionParser', () => {
             expect(decision.decision).toBe('RESPOND_TO_USER');
             expect(decision.rationale).toContain('malformed');
             if (decision.decision === 'RESPOND_TO_USER') {
-                expect(decision.response).toContain('malformed decision');
+                expect(decision.response).toBe(translate('chat.mbMalformedDecisionFallback'));
                 expect(decision.response).not.toContain('response. response. response');
             }
+        });
+
+        it('应将 MB XML 伪工具调用识别为可重试协议异常', () => {
+            const response = `<function=web_search>
+<parameter=query>strands-agents/harness-sdk</parameter>
+</function>
+</tool_call><tool_call>
+<function=exec>
+<parameter=command>dir "C:\\Users\\Muulo" /s /b</parameter>
+</function>
+</tool_call>`;
+
+            const outcome = parser.parseDetailed(response);
+
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+            expect(outcome.retryCorrection?.reason).toBe('tool_call_envelope');
+            if (outcome.decision.decision === 'RESPOND_TO_USER') {
+                expect(outcome.decision.response).toBe(translate('chat.mbToolCallDecisionFallback'));
+                expect(outcome.decision.response).not.toContain('dir "C:');
+            }
+        });
+
+        it('伪工具调用后即使跟随合法 JSON 也应优先判定为协议异常', () => {
+            const response = `<function=web_search>
+<parameter=query>strands-agents</parameter>
+</function>
+{"decision":"RESPOND_TO_USER","rationale":"done","riskAssessment":{"level":"low","notes":"ok"},"response":"done"}`;
+
+            const outcome = parser.parseDetailed(response);
+
+            expect(outcome.retryCorrection?.reason).toBe('tool_call_envelope');
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+            if (outcome.decision.decision === 'RESPOND_TO_USER') {
+                expect(outcome.decision.response).toBe(translate('chat.mbToolCallDecisionFallback'));
+            }
+        });
+
+        it('合法 JSON 在 decision 字段之前讨论 tool_call 时不应误判', () => {
+            const response = JSON.stringify({
+                rationale: 'The <tool_call> tag is only an example.',
+                decision: 'RESPOND_TO_USER',
+                riskAssessment: { level: 'low', notes: 'No risk' },
+                response: 'Done',
+            });
+
+            const outcome = parser.parseDetailed(response);
+
+            expect(outcome.retryCorrection).toBeUndefined();
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
         });
 
         it('应该处理多个 JSON 块（取第一个）', () => {
@@ -104,6 +154,42 @@ describe('DecisionParser', () => {
             const decision = parser.parse(response);
             expect(decision.decision).toBe('RESPOND_TO_USER');
             expect(decision.rationale).toContain('downgraded');
+        });
+
+        it('可用的纯文本用户回复应保留为兜底并触发一次语义重试', () => {
+            const response = '任务已经处理完成，结果已保存。';
+
+            const outcome = parser.parseDetailed(response);
+
+            expect(outcome.retryCorrection?.reason).toBe('plain_text');
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+            if (outcome.decision.decision === 'RESPOND_TO_USER') {
+                expect(outcome.decision.response).toBe(response);
+            }
+        });
+
+        it('空白正文仍应请求一次 empty_content 纠错重试', () => {
+            const outcome = parser.parseDetailed('  \n\t  ');
+
+            expect(outcome.retryCorrection?.reason).toBe('empty_content');
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+            if (outcome.decision.decision === 'RESPOND_TO_USER') {
+                expect(outcome.decision.response).toBe(translate('chat.mbMalformedDecisionFallback'));
+            }
+        });
+
+        it('截断修复即使字段完整也应标记为可重试并提供安全兜底', () => {
+            const response = '{"decision":"RESPOND_TO_USER","rationale":"done",' +
+                '"riskAssessment":{"level":"low","notes":"ok"},"response":"done"';
+
+            const outcome = parser.parseDetailed(response);
+
+            expect(outcome.quality).toBe('repaired');
+            expect(outcome.retryCorrection?.reason).toBe('truncated_output');
+            expect(outcome.safeFallback?.decision).toBe('RESPOND_TO_USER');
+            if (outcome.safeFallback?.decision === 'RESPOND_TO_USER') {
+                expect(outcome.safeFallback.response).toBe(translate('chat.mbMalformedDecisionFallback'));
+            }
         });
     });
 
@@ -223,10 +309,12 @@ describe('DecisionParser', () => {
     });
 
     describe('SPAWN_SUB_AGENT 增强简化模式', () => {
-        it('SPAWN_SUB_AGENT 无 nextStep 应接受（由 SubAgentSpecBuilder JIT 构建）', () => {
+        it('SPAWN_SUB_AGENT 无 nextStep.task 应降级并标记为可重试', () => {
             const response = createValidDecisionJson('SPAWN_SUB_AGENT');
-            const decision = parser.parse(response);
-            expect(decision.decision).toBe('SPAWN_SUB_AGENT');
+            const outcome = parser.parseDetailed(response);
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+            expect(outcome.retryCorrection?.reason).toBe('schema_invalid');
+            expect(outcome.retryCorrection?.detail).toContain('nextStep.task');
         });
 
         it('SPAWN_SUB_AGENT 带 nextStep.task + tools 应接受', () => {
@@ -238,6 +326,32 @@ describe('DecisionParser', () => {
             });
             const decision = parser.parse(response);
             expect(decision.decision).toBe('SPAWN_SUB_AGENT');
+        });
+
+        it('SPAWN_SUB_AGENT 应将兼容字段 nextStep.description 规范化为 task', () => {
+            const outcome = parser.parseDetailed(createValidDecisionJson('SPAWN_SUB_AGENT', {
+                nextStep: {
+                    description: '检查旧版项目结构',
+                    tools: ['read'],
+                },
+            }));
+            const nextStep = outcome.decision.nextStep as Record<string, unknown> | undefined;
+
+            expect(outcome.retryCorrection).toBeUndefined();
+            expect(outcome.decision.decision).toBe('SPAWN_SUB_AGENT');
+            expect(nextStep?.task).toBe('检查旧版项目结构');
+        });
+
+        it('已有 nextStep 但缺少任务字段时仍应标记为可重试', () => {
+            const outcome = parser.parseDetailed(createValidDecisionJson('SPAWN_SUB_AGENT', {
+                nextStep: {
+                    tools: ['read'],
+                },
+            }));
+
+            expect(outcome.retryCorrection?.reason).toBe('schema_invalid');
+            expect(outcome.retryCorrection?.detail).toContain('nextStep.task');
+            expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
         });
 
         it('repairs malformed MB task JSON missing a quote before tools', () => {
@@ -286,6 +400,26 @@ in a cozy kitchen, cooking a delicious-looking meal.
             expect(decision.decision).toBe('SPAWN_SUB_AGENT');
             expect(nextStep?.task).toContain('abyssinian kitten');
             expect(nextStep?.tools).toEqual(['generate_image']);
+        });
+
+        it('嵌套转义决策需要截断修复时应保留 repaired 质量并请求重试', () => {
+            const nestedDecision = JSON.stringify({
+                decision: 'RESPOND_TO_USER',
+                rationale: 'Recovered but truncated.',
+                riskAssessment: { level: 'low', notes: 'No risk' },
+                response: 'Recovered response',
+            }).slice(0, -1);
+            const response = `\`\`\`json
+{
+  "decision": "RESPOND_TO_USER": ${JSON.stringify(nestedDecision)}
+}
+\`\`\``;
+
+            const outcome = parser.parseDetailed(response);
+
+            expect(outcome.quality).toBe('repaired');
+            expect(outcome.retryCorrection?.reason).toBe('truncated_output');
+            expect(outcome.safeFallback?.decision).toBe('RESPOND_TO_USER');
         });
 
         it('recovers malformed MB JSON with duplicated rationale and missing value terminators', () => {

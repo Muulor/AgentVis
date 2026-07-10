@@ -101,6 +101,28 @@ mod tests {
     }
 
     #[test]
+    fn message_delta_preserves_max_tokens_stop_reason() {
+        let data = r#"{
+            "type": "message_delta",
+            "delta": {
+                "stop_reason": "max_tokens",
+                "stop_sequence": null
+            },
+            "usage": {
+                "output_tokens": 8192
+            }
+        }"#;
+
+        let message: AnthropicStreamMessageDelta = serde_json::from_str(data).unwrap();
+
+        assert_eq!(
+            message.delta.and_then(|delta| delta.stop_reason),
+            Some("max_tokens".to_string())
+        );
+        assert_eq!(message.usage.map(|usage| usage.output_tokens), Some(8192));
+    }
+
+    #[test]
     fn native_adaptive_thinking_request_omits_temperature() {
         let adapter = AnthropicAdapter::new(ProviderConfig::new("test-key"));
         let request = ChatRequest {
@@ -1206,9 +1228,13 @@ impl LlmProvider for AnthropicAdapter {
 
         let stream = response.bytes_stream().eventsource();
 
-        // 跨 SSE 事件累积 usage 数据（message_start 含 input_tokens，message_delta 含 output_tokens）
+        // 跨 SSE 事件累积 usage 与 stop_reason。
+        // Anthropic 将真实结束原因放在 message_delta.delta.stop_reason，
+        // message_stop 本身不再携带该字段。
         let usage_state: Arc<Mutex<(Option<u32>, Option<u32>)>> = Arc::new(Mutex::new((None, None)));
         let usage_clone = usage_state.clone();
+        let finish_reason_state: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let finish_reason_clone = finish_reason_state.clone();
 
         let mapped_stream = stream.map(move |event| {
             match event {
@@ -1236,11 +1262,16 @@ impl LlmProvider for AnthropicAdapter {
                             })
                         }
                         "message_delta" => {
-                            // 提取 output_tokens
+                            // 提取 output_tokens 与真实 stop_reason
                             if let Ok(msg) = serde_json::from_str::<AnthropicStreamMessageDelta>(&data) {
                                 if let Some(usage) = msg.usage {
                                     if let Ok(mut state) = usage_clone.lock() {
                                         state.1 = Some(usage.output_tokens as u32);
+                                    }
+                                }
+                                if let Some(stop_reason) = msg.delta.and_then(|delta| delta.stop_reason) {
+                                    if let Ok(mut state) = finish_reason_clone.lock() {
+                                        *state = Some(stop_reason);
                                     }
                                 }
                             }
@@ -1259,11 +1290,16 @@ impl LlmProvider for AnthropicAdapter {
                                 .lock()
                                 .map(|s| (s.0, s.1))
                                 .unwrap_or((None, None));
+                            let finish_reason = finish_reason_clone
+                                .lock()
+                                .ok()
+                                .and_then(|state| state.as_ref().cloned())
+                                .unwrap_or_else(|| "end_turn".to_string());
                             Ok(StreamChunk {
                                 delta: String::new(),
                                 reasoning: None,
                                 done: true,
-                                finish_reason: Some("end_turn".to_string()),
+                                finish_reason: Some(finish_reason),
                                 input_tokens,
                                 output_tokens,
                             })
@@ -1563,11 +1599,18 @@ struct AnthropicStreamMessageInfo {
     usage: Option<AnthropicStreamUsage>,
 }
 
-/// message_delta 事件数据（包含 output_tokens）
+/// message_delta 事件数据（包含 output_tokens 与真实结束原因）
 #[derive(Debug, Deserialize)]
 struct AnthropicStreamMessageDelta {
+    /// 结束原因位于 delta.stop_reason；message_stop 事件本身不携带该值。
+    delta: Option<AnthropicStreamMessageDeltaPayload>,
     /// usage 信息（包含 output_tokens）
     usage: Option<AnthropicStreamUsage>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicStreamMessageDeltaPayload {
+    stop_reason: Option<String>,
 }
 
 /// SSE 事件中的 usage 数据

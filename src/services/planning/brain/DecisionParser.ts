@@ -11,10 +11,12 @@
 import type {
     MasterBrainDecision,
 } from './types';
+import type { MbDecisionRetryCorrection } from './MasterBrainDecisionGuard';
 
 // 复用项目统一的 JSON 解析工具
 import { extractJsonFromText, sanitizeJson, parseWithFallback } from '../../memory/utils/JsonParser';
 import { getLogger } from '@services/logger';
+import { translate } from '@/i18n';
 
 const logger = getLogger('DecisionParser');
 
@@ -91,6 +93,21 @@ const DECISION_META_SELF_TALK_PATTERNS = [
     /the spec says/i,
 ] as const;
 
+const TOOL_CALL_ENVELOPE_PATTERN =
+    /<\s*\/?\s*(?:tool_call|function(?:_call)?)\b[^>]*>|\[\s*tool_call\s*\]/i;
+
+export interface DecisionParseOutcome {
+    decision: MasterBrainDecision;
+    safeFallback?: MasterBrainDecision;
+    quality?: 'perfect' | 'sanitized' | 'aggressive' | 'structural' | 'repaired';
+    retryCorrection?: MbDecisionRetryCorrection;
+}
+
+interface NestedDecisionRecovery {
+    decision: Record<string, unknown>;
+    quality: NonNullable<DecisionParseOutcome['quality']>;
+}
+
 /** 有效的记忆访问权限 */
 
 
@@ -112,6 +129,20 @@ export class DecisionParser {
      * @throws DecisionParseError - 解析或验证失败时抛出
      */
     parse(rawResponse: string): MasterBrainDecision {
+        return this.parseDetailed(rawResponse).decision;
+    }
+
+    /**
+     * 解析决策并保留修复质量与可重试失败原因，供 MasterBrain 统一消费
+     * 一次语义纠错额度。
+     */
+    parseDetailed(rawResponse: string): DecisionParseOutcome {
+        // 在提取 JSON 前先检查根对象之前的伪工具协议。否则非流式响应或单个
+        // 大 chunk 中的 "<function...> + valid JSON" 会被 JSON 提取器静默接受。
+        if (this.looksLikeToolCallEnvelope(rawResponse.trim())) {
+            return this.buildFallbackOutcome(rawResponse);
+        }
+
         // 1. 使用增强的 parseWithFallback 解析，支持截断 JSON 修复
         const parseResult = parseWithFallback<Record<string, unknown>>(rawResponse, {
             verbose: false,
@@ -125,18 +156,18 @@ export class DecisionParser {
                 const cleanedJson = sanitizeJson(jsonString);
                 const decision = JSON.parse(cleanedJson) as Record<string, unknown>;
                 this.validateAndRepairSchema(decision);
-                return this.processDecision(decision);
+                return this.buildSuccessfulOutcome(decision, 'sanitized');
             } catch {
-                const recoveredDecision = this.tryRecoverNestedEscapedDecision(rawResponse);
-                if (recoveredDecision) {
+                const recovery = this.tryRecoverNestedEscapedDecision(rawResponse);
+                if (recovery) {
                     logger.warn('[DecisionParser] 从嵌套转义 JSON 中恢复决策');
-                    return this.processDecision(recoveredDecision);
+                    return this.buildSuccessfulOutcome(recovery.decision, recovery.quality);
                 }
 
                 // 兜底：LLM 返回了纯文本（无 JSON），自动包装为 RESPOND_TO_USER
                 // 常见于 Sub-Agent 完成后 MasterBrain 直接用自然语言总结
                 logger.warn('[DecisionParser] JSON 解析全部失败，启用纯文本兜底 → RESPOND_TO_USER');
-                return this.buildFallbackDecision(rawResponse);
+                return this.buildFallbackOutcome(rawResponse);
             }
         }
 
@@ -160,13 +191,20 @@ export class DecisionParser {
                 logger.warn(
                     `[DecisionParser] Schema 验证/修复均失败，降级为纯文本兜底: ${err.message}`
                 );
-                return this.buildFallbackDecision(rawResponse);
+                return {
+                    decision: this.buildMalformedDecisionFallback('Schema validation failure fallback'),
+                    quality: parseResult.quality,
+                    retryCorrection: {
+                        reason: 'schema_invalid',
+                        detail: err.message,
+                    },
+                };
             }
             throw err;
         }
 
         // 4. 处理决策（包括 SPAWN_SUB_AGENT 特殊处理）
-        return this.processDecision(decision);
+        return this.buildSuccessfulOutcome(decision, parseResult.quality);
     }
 
     /**
@@ -189,7 +227,7 @@ export class DecisionParser {
      * 这里不尝试猜测坏外层的语义，只接受内层字符串中能被解析且通过
      * MasterBrainDecision schema 校验的对象，避免把普通文本误判为决策。
      */
-    private tryRecoverNestedEscapedDecision(rawResponse: string): Record<string, unknown> | null {
+    private tryRecoverNestedEscapedDecision(rawResponse: string): NestedDecisionRecovery | null {
         const candidates = this.extractNestedJsonStringCandidates(rawResponse);
 
         for (const candidate of candidates) {
@@ -205,13 +243,45 @@ export class DecisionParser {
 
             try {
                 this.validateAndRepairSchema(parseResult.data);
-                return parseResult.data;
+                const quality = parseResult.quality === 'aggressive' || parseResult.quality === 'repaired'
+                    ? parseResult.quality
+                    : 'structural';
+                return {
+                    decision: parseResult.data,
+                    quality,
+                };
             } catch {
                 continue;
             }
         }
 
         return null;
+    }
+
+    private buildSuccessfulOutcome(
+        decision: Record<string, unknown>,
+        quality: DecisionParseOutcome['quality'],
+    ): DecisionParseOutcome {
+        const outcome: DecisionParseOutcome = {
+            decision: this.processDecision(decision),
+            quality,
+        };
+
+        if (quality === 'repaired') {
+            outcome.retryCorrection = {
+                reason: 'truncated_output',
+                detail: 'JSON required truncated-input repair',
+            };
+            outcome.safeFallback = this.buildMalformedDecisionFallback('Truncated JSON repair fallback');
+        } else if (quality === 'aggressive') {
+            outcome.retryCorrection = {
+                reason: 'aggressive_repair',
+                detail: 'JSON required aggressive sanitization',
+            };
+            outcome.safeFallback = this.buildMalformedDecisionFallback('Aggressive JSON repair fallback');
+        }
+
+        return outcome;
     }
 
     private extractNestedJsonStringCandidates(rawResponse: string): string[] {
@@ -288,8 +358,33 @@ export class DecisionParser {
      * 2. LLM 返回了格式异常的 JSON → 解析失败,给用户明确错误提示
      *    而非把原始 JSON 碎片搬给用户造成误导
      */
-    private buildFallbackDecision(rawText: string): MasterBrainDecision {
+    private buildFallbackOutcome(rawText: string): DecisionParseOutcome {
         const trimmed = rawText.trim();
+
+        if (!trimmed) {
+            logger.warn('[DecisionParser] MB 返回空正文，返回安全兜底并请求纠错重试');
+            return {
+                decision: this.buildMalformedDecisionFallback('Empty decision content fallback'),
+                retryCorrection: {
+                    reason: 'empty_content',
+                    detail: 'Master Brain returned empty decision content',
+                },
+            };
+        }
+
+        if (this.looksLikeToolCallEnvelope(trimmed)) {
+            logger.warn('[DecisionParser] 检测到 MB 伪工具调用协议，返回安全兜底');
+            return {
+                decision: this.buildMalformedDecisionFallback(
+                    'Tool-call envelope fallback',
+                    translate('chat.mbToolCallDecisionFallback'),
+                ),
+                retryCorrection: {
+                    reason: 'tool_call_envelope',
+                    detail: 'Master Brain emitted a tool-call/function-call envelope instead of JSON',
+                },
+            };
+        }
 
         // 检测是否为 JSON 解析失败（而非真正的纯文本回复）
         // 覆盖两种情况：
@@ -303,30 +398,58 @@ export class DecisionParser {
         if (looksLikeJson) {
             // JSON 解析失败场景：给用户明确的错误提示
             logger.warn('[DecisionParser] 检测到 JSON 碎片，返回错误提示而非原始文本');
-            return this.buildMalformedDecisionFallback('JSON parse failure fallback');
+            return {
+                decision: this.buildMalformedDecisionFallback('JSON parse failure fallback'),
+                retryCorrection: {
+                    reason: 'malformed_json',
+                    detail: 'The decision JSON could not be parsed',
+                },
+            };
         }
 
         if (this.looksLikeDecisionMetaGarbage(trimmed)) {
             logger.warn('[DecisionParser] 检测到决策元输出或重复坍缩，返回错误提示而非原始文本');
-            return this.buildMalformedDecisionFallback('Decision meta-output fallback');
+            return {
+                decision: this.buildMalformedDecisionFallback('Decision meta-output fallback'),
+                retryCorrection: {
+                    reason: 'meta_output',
+                    detail: 'The response contained decision meta-analysis instead of a JSON decision',
+                },
+            };
         }
 
-        // 纯文本回复：LLM 直接用自然语言总结，保留原文
+        // 纯文本回复：保留原文作为安全兜底，同时请求一次结构化纠错重试，
+        // 避免把模型夹杂过程描述的杂乱文本直接展示给用户。
         return {
-            decision: 'RESPOND_TO_USER',
-            rationale: '(The LLM did not return a JSON decision, so the response was downgraded to a user reply)',
-            riskAssessment: { level: 'low', notes: 'Fallback from plain text response' },
-            response: trimmed,
+            decision: {
+                decision: 'RESPOND_TO_USER',
+                rationale: '(The LLM did not return a JSON decision, so the response was downgraded to a user reply)',
+                riskAssessment: { level: 'low', notes: 'Fallback from plain text response' },
+                response: trimmed,
+            },
+            retryCorrection: {
+                reason: 'plain_text',
+                detail: 'Master Brain returned plain text instead of the required JSON decision',
+            },
         };
     }
 
-    private buildMalformedDecisionFallback(notes: string): MasterBrainDecision {
+    private buildMalformedDecisionFallback(
+        notes: string,
+        response = translate('chat.mbMalformedDecisionFallback'),
+    ): MasterBrainDecision {
         return {
             decision: 'RESPOND_TO_USER',
             rationale: '(The LLM returned a malformed JSON decision and parsing failed)',
             riskAssessment: { level: 'low', notes },
-            response: '⚠️ The AI returned a malformed decision, so the task cannot be executed. Please retry or switch models.',
+            response,
         };
+    }
+
+    private looksLikeToolCallEnvelope(text: string): boolean {
+        const jsonStart = text.indexOf('{');
+        const scanEnd = jsonStart >= 0 ? jsonStart : text.length;
+        return TOOL_CALL_ENVELOPE_PATTERN.test(text.slice(0, scanEnd));
     }
 
     private looksLikeDecisionMetaGarbage(text: string): boolean {
@@ -432,7 +555,60 @@ export class DecisionParser {
             }
         }
 
+        // ── decision 专属必需字段 ───────────────────────────────────────
+        if (d.decision === 'SPAWN_SUB_AGENT') {
+            const nextStep = this.asRecord(d.nextStep);
+            if (!nextStep) {
+                throw new DecisionParseError(
+                    'Schema validation failed: nextStep.task is required for SPAWN_SUB_AGENT'
+                );
+            }
+
+            const task = [nextStep.task, nextStep.description]
+                .find(value => typeof value === 'string' && value.trim().length > 0);
+            if (typeof task !== 'string') {
+                throw new DecisionParseError(
+                    'Schema validation failed: nextStep.task is required for SPAWN_SUB_AGENT'
+                );
+            }
+
+            // 统一成标准字段，避免日志、连续性上下文等只读取 task 的下游丢失信息。
+            nextStep.task = task;
+        } else if (d.decision === 'REQUEST_MORE_INPUT') {
+            const nextStep = this.asRecord(d.nextStep);
+            const questions = nextStep?.questionsForUser ?? d.questionsForUser;
+            if (!this.hasNonEmptyQuestion(questions)) {
+                throw new DecisionParseError(
+                    'Schema validation failed: questionsForUser is required for REQUEST_MORE_INPUT'
+                );
+            }
+        } else if (
+            d.decision === 'RESPOND_TO_USER' &&
+            (typeof d.response !== 'string' || d.response.trim().length === 0)
+        ) {
+            throw new DecisionParseError(
+                'Schema validation failed: response is required for RESPOND_TO_USER'
+            );
+        }
+
         // 进展和预算由 LoopGovernor 后台维护，MB 输出中不再要求循环状态字段。
+    }
+
+    private asRecord(value: unknown): Record<string, unknown> | undefined {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return undefined;
+        }
+        return value as Record<string, unknown>;
+    }
+
+    private hasNonEmptyQuestion(value: unknown): boolean {
+        if (typeof value === 'string') {
+            return value.trim().length > 0;
+        }
+        if (Array.isArray(value)) {
+            return value.some(item => typeof item === 'string' && item.trim().length > 0);
+        }
+        return false;
     }
 
 }
