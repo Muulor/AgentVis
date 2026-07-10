@@ -8,8 +8,10 @@
 export type MbDecisionRetryReason =
     | 'empty_content'
     | 'anomalous_content'
+    | 'reasoning_repetition'
     | 'tool_call_envelope'
     | 'truncated_output'
+    | 'reasoning_transport_truncated'
     | 'aggressive_repair'
     | 'malformed_json'
     | 'schema_invalid'

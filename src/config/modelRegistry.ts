@@ -102,11 +102,16 @@ const BUILTIN_MODELS: ModelDefinition[] = [
     { id: 'gpt-5.4-mini', name: 'GPT-5.4-Mini', providerId: 'openai', contextWindow: 400000, supportsVision: true },
     { id: 'gpt-5.4-nano', name: 'GPT-5.4-Nano', providerId: 'openai', contextWindow: 400000, supportsVision: true },
     { id: 'gpt-5.5', name: 'GPT-5.5', providerId: 'openai', contextWindow: 1050000, supportsVision: true },
+    { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', providerId: 'openai', contextWindow: 1050000, supportsVision: true },
+    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', providerId: 'openai', contextWindow: 1050000, supportsVision: true },
+    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', providerId: 'openai', contextWindow: 1050000, supportsVision: true },
 
     // ━━ Anthropic ━━
     { id: 'claude-sonnet-4-6', name: 'Claude-4.6-Sonnet', providerId: 'anthropic', contextWindow: 200000, supportsVision: true },
+    { id: 'claude-sonnet-5', name: 'Claude-5-Sonnet', providerId: 'anthropic', contextWindow: 1000000, supportsVision: true },
     { id: 'claude-opus-4-7', name: 'Claude-4.7-Opus', providerId: 'anthropic', contextWindow: 200000, supportsVision: true },
     { id: 'claude-opus-4-8', name: 'Claude-4.8-Opus', providerId: 'anthropic', contextWindow: 1000000, supportsVision: true },
+    { id: 'claude-fable-5', name: 'Claude-5-Fable', providerId: 'anthropic', contextWindow: 1000000, supportsVision: true },
 
     // ━━ Gemini ━━
     { id: 'gemini-3-flash-preview', name: 'Gemini-3-Flash', providerId: 'gemini', contextWindow: 200000, supportsVision: true },
@@ -115,7 +120,6 @@ const BUILTIN_MODELS: ModelDefinition[] = [
 
     // ━━ ZhipuAI ━━
     { id: 'glm-4-flash', name: 'GLM-4-Flash(free)', providerId: 'zhipu', contextWindow: 128000, supportsVision: false },
-    { id: 'glm-4.7-flash', name: 'GLM-4.7-Flash(free)', providerId: 'zhipu', contextWindow: 200000, supportsVision: false },
     { id: 'glm-4.6v-flash', name: 'GLM-4.6V-Flash(free)', providerId: 'zhipu', contextWindow: 128000, supportsVision: true },
     { id: 'glm-5.1', name: 'GLM-5.1', providerId: 'zhipu', contextWindow: 204800, supportsVision: false },
     { id: 'glm-5.2', name: 'GLM-5.2', providerId: 'zhipu', contextWindow: 1000000, supportsVision: false },
@@ -157,7 +161,8 @@ const BUILTIN_MODELS: ModelDefinition[] = [
     { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', providerId: 'volcengine', contextWindow: 1000000, supportsVision: false },
     { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', providerId: 'volcengine', contextWindow: 1000000, supportsVision: false },
     { id: 'kimi-k2.6', name: 'Kimi K2.6', providerId: 'volcengine', contextWindow: 256000, supportsVision: true },
-    { id: 'MiniMax-M3', name: 'MiniMax M3', providerId: 'volcengine', contextWindow: 1000000, supportsVision: true },
+    { id: 'Kimi-K2.7-Code', name: 'Kimi K2.7 Code', providerId: 'volcengine', contextWindow: 256000, supportsVision: true },
+    { id: 'MiniMax-M3', name: 'MiniMax M3', providerId: 'volcengine', contextWindow: 512000, supportsVision: true },
     { id: 'glm-5.2', name: 'GLM-5.2', providerId: 'volcengine', contextWindow: 1000000, supportsVision: false },
 
     // ━━ OpenRouter ━━
@@ -185,6 +190,44 @@ const CONFIG_FILE_NAME = 'model-config.json';
 
 /** 当前配置文件版本 */
 const CONFIG_VERSION = 1;
+
+/**
+ * Built-in models whose generated reasoning shares the provider output budget.
+ *
+ * Keep this provider-scoped: the same model ID routed through a compatible local
+ * endpoint does not necessarily expose or account for reasoning the same way.
+ */
+const SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS = new Set([
+    'openai::gpt-5.4',
+    'openai::gpt-5.4-mini',
+    'openai::gpt-5.4-nano',
+    'openai::gpt-5.5',
+    'openai::gpt-5.6-luna',
+    'openai::gpt-5.6-terra',
+    'openai::gpt-5.6-sol',   
+    'anthropic::claude-sonnet-4-6',
+    'anthropic::claude-sonnet-5',
+    'anthropic::claude-opus-4-7',
+    'anthropic::claude-opus-4-8',
+    'anthropic::claude-fable-5',
+    'gemini::gemini-3-flash-preview',
+    'gemini::gemini-3.1-pro-preview',
+    'gemini::gemini-3.5-flash',
+    'zhipu::glm-5.1',
+    'zhipu::glm-5.2',
+    'stepfun::step-3.7-flash',
+    'deepseek::deepseek-v4-pro',
+    'deepseek::deepseek-v4-flash',
+    'xiaomi-mimo::mimo-v2.5',
+    'xiaomi-mimo::mimo-v2.5-pro',
+    'zhipu-coding::glm-5.2',
+    'volcengine::deepseek-v4-flash',
+    'volcengine::deepseek-v4-pro',
+    'volcengine::kimi-k2.6',
+    'volcengine::Kimi-K2.7-Code',
+    'volcengine::MiniMax M3',
+    'volcengine::glm-5.2',
+]);
 
 // ==================== 用户自定义模型（运行时状态） ====================
 
@@ -316,6 +359,18 @@ export function modelSupportsVision(modelId: string, providerId?: string): boole
     const model = models.find(m => m.id === modelId && (!providerId || m.providerId === providerId))
         ?? models.find(m => m.id === modelId);
     return model?.supportsVision === true;
+}
+
+/**
+ * Whether the built-in provider/model route generates reasoning that consumes
+ * the same transport output budget as the final response.
+ */
+export function modelUsesSharedReasoningOutputBudget(
+    modelId: string,
+    providerId: string,
+): boolean {
+    const normalizedKey = `${providerId.trim().toLowerCase()}::${modelId.trim().toLowerCase()}`;
+    return SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS.has(normalizedKey);
 }
 
 /**

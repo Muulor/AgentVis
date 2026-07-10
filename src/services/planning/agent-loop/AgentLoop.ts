@@ -62,7 +62,10 @@ import type {
 } from '../brain/types';
 import { useRuntimeStore } from '@stores/runtimeStore';
 import { getLogger } from '@services/logger';
-import { modelSupportsVision } from '@/config/modelRegistry';
+import {
+    modelSupportsVision,
+    modelUsesSharedReasoningOutputBudget,
+} from '@/config/modelRegistry';
 import { formatTimestamp } from '@services/utils/TimeUtils';
 import type { VisionFallbackMode } from './callers/SubAgentLLMCaller';
 import {
@@ -77,6 +80,12 @@ import {
     type MbDecisionRetryReason,
     type MbDecisionRetryState,
 } from '../brain/MasterBrainDecisionGuard';
+import {
+    MbEstimatedTokenCounter,
+    MasterBrainReasoningGuard,
+    type MbReasoningGuardResult,
+    type MbReasoningPreview,
+} from '../brain/MasterBrainReasoningGuard';
 
 const logger = getLogger('AgentLoop');
 
@@ -84,8 +93,11 @@ interface AgentLoopLLMMessage { role: string; content: string; images?: unknown 
 
 const DEEPSEEK_V4_MODEL_IDS = new Set(['deepseek-v4-pro', 'deepseek-v4-flash']);
 const DEEPSEEK_V4_MB_PRE_JSON_RETRY_CHARS = 2600;
-const DEEPSEEK_V4_MB_GUARD_CANCEL_GRACE_MS = 1200;
+const MB_GUARD_CANCEL_GRACE_MS = 1200;
 const MB_STREAM_UI_FLUSH_INTERVAL_MS = 64;
+const MB_REASONING_GUARD_CHECK_INTERVAL_CHARS = 512;
+const MB_REASONING_APPROXIMATE_CHECK_INTERVAL_CHARS = 1024;
+const MB_REASONING_DETECTION_WINDOW_CHARS = 16 * 1024;
 const REPETITION_SEGMENT_MIN_CHARS = 16;
 const REPETITION_SEGMENT_MIN_COUNT = 8;
 const REPETITION_SEGMENT_MIN_TOTAL_CHARS = 900;
@@ -125,12 +137,27 @@ class MbEmptyDecisionContentError extends Error {
 class MbAnomalousDecisionContentError extends Error {
     readonly retryCorrection: MbDecisionRetryCorrection;
 
-    constructor(reason: MbDecisionRetryReason, detail: string, contentLength: number) {
-        super(`MB_ANOMALOUS_DECISION_CONTENT: ${detail} (contentLength=${contentLength})`);
+    constructor(reason: MbDecisionRetryReason, detail: string, observedLength: number) {
+        super(`MB_ANOMALOUS_DECISION_CONTENT: ${detail} (observedLength=${observedLength})`);
         this.name = 'MbAnomalousDecisionContentError';
         this.retryCorrection = { reason, detail };
     }
 }
+
+type MbReasoningHardFuseReason = 'reasoning_token_hard_limit' | 'reasoning_time_hard_limit';
+
+class MbReasoningHardFuseError extends Error {
+    constructor(
+        readonly reason: MbReasoningHardFuseReason,
+        readonly detail: string,
+        readonly observedLength: number,
+    ) {
+        super(translate('chat.mbReasoningHardLimitFailed'));
+        this.name = 'MbReasoningHardFuseError';
+    }
+}
+
+type MbLocalStreamGuardError = MbAnomalousDecisionContentError | MbReasoningHardFuseError;
 
 /**
  * 默认配置
@@ -563,6 +590,12 @@ export class AgentLoop {
                                 }
                                 return response;
                             } catch (error) {
+                                if (
+                                    this.isMbEmptyDecisionContentError(error) ||
+                                    this.isMbLocalStreamGuardError(error)
+                                ) {
+                                    throw error;
+                                }
                                 const retryClassification = classifyLlmRetry(error);
                                 if (
                                     retryClassification.shouldRetry &&
@@ -982,24 +1015,64 @@ export class AgentLoop {
                     if (options?.onStreamDelta) {
                         const onStreamDelta = options.onStreamDelta;
                         const onReasoningTrace = options.onReasoningTrace;
-                        const maxTokens = options.maxTokens ?? 24576;
+                        const finalDecisionMaxTokens = options.maxTokens ??
+                            PLANNING_CONSTANTS.MASTER_BRAIN_MAX_OUTPUT_TOKENS;
+                        let activeTransportMaxTokens = this.getMbTransportMaxTokens(
+                            finalDecisionMaxTokens,
+                        );
+                        let transportFallbackUsed = false;
                         const temperature = options.temperature;
                         const semanticRetryState = options.mbDecisionRetryState
                             ?? createMbDecisionRetryState();
+                        const collectWithTransportFallback = async (
+                            messagesForCall: AgentLoopLLMMessage[]
+                        ): Promise<string> => {
+                            const collect = () => callMasterBrainWithRetry(
+                                'MB stream',
+                                () => this.collectMBStreamResponse(
+                                    messagesForCall,
+                                    onStreamDelta,
+                                    activeTransportMaxTokens,
+                                    finalDecisionMaxTokens,
+                                    temperature,
+                                    onReasoningTrace,
+                                )
+                            );
+
+                            try {
+                                return await collect();
+                            } catch (streamError) {
+                                const fallbackMaxTokens = transportFallbackUsed ||
+                                    !this.isMbMaxTokensParameterRejection(streamError)
+                                    ? null
+                                    : this.getMbTransportFallbackMaxTokens(
+                                        activeTransportMaxTokens,
+                                        finalDecisionMaxTokens,
+                                    );
+                                if (fallbackMaxTokens === null) {
+                                    throw streamError;
+                                }
+
+                                const rejectedMaxTokens = activeTransportMaxTokens;
+                                activeTransportMaxTokens = fallbackMaxTokens;
+                                transportFallbackUsed = true;
+                                logger.warn('[AgentLoop] MB transport token 参数被 provider 拒绝，降低预算后重试一次:', {
+                                    providerId: this.config.providerId,
+                                    modelId: this.config.modelId,
+                                    rejectedMaxTokens,
+                                    fallbackMaxTokens,
+                                    error: streamError instanceof Error
+                                        ? streamError.message
+                                        : String(streamError),
+                                });
+                                return await collect();
+                            }
+                        };
                         const collectMbDecisionStream = async (
                             messagesForCall: AgentLoopLLMMessage[]
                         ): Promise<string> => {
                             try {
-                                return await callMasterBrainWithRetry(
-                                    'MB stream',
-                                    () => this.collectMBStreamResponse(
-                                        messagesForCall,
-                                        onStreamDelta,
-                                        maxTokens,
-                                        temperature,
-                                        onReasoningTrace,
-                                    )
-                                );
+                                return await collectWithTransportFallback(messagesForCall);
                             } catch (streamError) {
                                 if (!this.isMbRetryableDecisionContentError(streamError)) {
                                     throw streamError;
@@ -1026,13 +1099,7 @@ export class AgentLoop {
                                 );
 
                                 try {
-                                    return await this.collectMBStreamResponse(
-                                        retryMessages,
-                                        onStreamDelta,
-                                        maxTokens,
-                                        temperature,
-                                        onReasoningTrace,
-                                    );
+                                    return await collectWithTransportFallback(retryMessages);
                                 } catch (retryError) {
                                     if (this.isMbRetryableDecisionContentError(retryError)) {
                                         throw new Error(this.getMbDecisionRetryFailedMessage(
@@ -1295,6 +1362,16 @@ export class AgentLoop {
             (error instanceof Error && error.name === 'MbAnomalousDecisionContentError');
     }
 
+    private isMbReasoningHardFuseError(error: unknown): boolean {
+        return error instanceof MbReasoningHardFuseError ||
+            (error instanceof Error && error.name === 'MbReasoningHardFuseError');
+    }
+
+    private isMbLocalStreamGuardError(error: unknown): boolean {
+        return this.isMbAnomalousDecisionContentError(error) ||
+            this.isMbReasoningHardFuseError(error);
+    }
+
     private isMbRetryableDecisionContentError(error: unknown): boolean {
         return this.isMbEmptyDecisionContentError(error) ||
             this.isMbAnomalousDecisionContentError(error);
@@ -1328,11 +1405,68 @@ export class AgentLoop {
         if (correction?.reason === 'tool_call_envelope') {
             return translate('chat.mbToolCallDecisionRetryFailed');
         }
+        if (correction?.reason === 'reasoning_transport_truncated') {
+            return translate('chat.mbReasoningTransportRetryFailed');
+        }
+        if (correction?.reason === 'truncated_output') {
+            return translate('chat.mbTruncatedDecisionRetryFailed');
+        }
         return translate('chat.mbAnomalousDecisionRetryFailed');
     }
 
     private isDeepSeekV4MbModel(): boolean {
         return DEEPSEEK_V4_MODEL_IDS.has((this.config.modelId ?? '').trim().toLowerCase());
+    }
+
+    private getMbTransportMaxTokens(finalDecisionMaxTokens: number): number {
+        // Reasoning-capable routes share provider output budget between thinking and
+        // the final body. Keep the final decision locally bounded while allowing
+        // the reasoning stream enough transport headroom to reach that body.
+        const defaultTransportMaxTokens = Math.max(
+            finalDecisionMaxTokens,
+            PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
+        );
+        if (!modelUsesSharedReasoningOutputBudget(
+            this.config.modelId ?? '',
+            this.config.providerId ?? '',
+        )) {
+            return defaultTransportMaxTokens;
+        }
+
+        return Math.max(
+            defaultTransportMaxTokens,
+            PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_TRANSPORT_MAX_TOKENS,
+        );
+    }
+
+    private getMbTransportFallbackMaxTokens(
+        currentTransportMaxTokens: number,
+        finalDecisionMaxTokens: number,
+    ): number | null {
+        const defaultTransportMaxTokens = Math.max(
+            finalDecisionMaxTokens,
+            PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
+        );
+        if (currentTransportMaxTokens > defaultTransportMaxTokens) {
+            return defaultTransportMaxTokens;
+        }
+        if (currentTransportMaxTokens > finalDecisionMaxTokens) {
+            return finalDecisionMaxTokens;
+        }
+        return null;
+    }
+
+    private isMbMaxTokensParameterRejection(error: unknown): boolean {
+        if (this.isMbLocalStreamGuardError(error)) return false;
+
+        const message = error instanceof Error ? error.message : String(error);
+        const mentionsMaxTokensParameter =
+            /\bmax_(?:completion_|output_)?tokens?\b|\bmaximum\s+(?:number\s+of\s+)?(?:completion\s+|output\s+)?tokens?\b/i
+                .test(message);
+        if (!mentionsMaxTokensParameter) return false;
+
+        return /\b400\b|bad\s*request|invalid|unsupported|not\s+support|must\s+be|should\s+be|at\s+most|less\s+than|too\s+(?:large|high)|exceed|out\s+of\s+range|maximum\s+allowed|参数|最大|不能超过|取值范围|超出/i
+            .test(message);
     }
 
     private buildMbDecisionRetryMessages(
@@ -1358,6 +1492,10 @@ export class AgentLoop {
             case 'truncated_output':
             case 'aggressive_repair':
                 return translate('chat.mbTruncatedDecisionRetryInstruction', { reason });
+            case 'reasoning_transport_truncated':
+                return translate('chat.mbReasoningTransportRetryInstruction');
+            case 'reasoning_repetition':
+                return translate('chat.mbReasoningDecisionRetryInstruction');
             case 'anomalous_content':
                 return translate('chat.mbAnomalousDecisionRetryInstruction', { reason });
             default:
@@ -1530,6 +1668,34 @@ export class AgentLoop {
         return false;
     }
 
+    private createMbReasoningGuard(): MasterBrainReasoningGuard {
+        return new MasterBrainReasoningGuard({
+            softEstimatedTokens: PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_SOFT_TOKENS,
+            softDurationMs: PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_SOFT_DURATION_MS,
+            hardEstimatedTokens: PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_HARD_TOKENS,
+            hardDurationMs: PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_HARD_DURATION_MS,
+            detectionWindowChars: MB_REASONING_DETECTION_WINDOW_CHARS,
+            exactCheckStepChars: MB_REASONING_GUARD_CHECK_INTERVAL_CHARS,
+            approximateCheckStepChars: MB_REASONING_APPROXIMATE_CHECK_INTERVAL_CHARS,
+            previewHeadChars: PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_PREVIEW_HEAD_CHARS,
+            previewTailChars: PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_PREVIEW_TAIL_CHARS,
+        });
+    }
+
+    private formatMbReasoningPreview(preview: MbReasoningPreview): string {
+        if (!preview.truncated) {
+            return preview.content;
+        }
+
+        return [
+            preview.head,
+            translate('chat.mbReasoningTraceOmitted', {
+                count: preview.omittedChars.toLocaleString(),
+            }),
+            preview.tail,
+        ].join('\n\n');
+    }
+
     private stripImagesForVisionFallback(
         messages: AgentLoopLLMMessage[],
         options: { preserveMessages?: WeakSet<AgentLoopLLMMessage> } = {},
@@ -1587,7 +1753,8 @@ export class AgentLoop {
     private async collectMBStreamResponse(
         messages: Array<{ role: string; content: string; images?: unknown }>,
         onStreamDelta: (accumulatedContent: string) => void,
-        maxTokens: number,
+        transportMaxTokens: number,
+        finalDecisionMaxTokens: number,
         temperature?: number,
         onReasoningTrace?: (event: ReasoningTraceEvent) => void,
     ): Promise<string> {
@@ -1600,12 +1767,15 @@ export class AgentLoop {
         const useDeepSeekV4MbGuard = this.isDeepSeekV4MbModel();
 
         return new Promise<string>((resolve, reject) => {
+            const reasoningGuard = this.createMbReasoningGuard();
+            const finalDecisionTokenCounter = new MbEstimatedTokenCounter();
             let deltaContent = '';
-            let reasoningContent = '';
+            let reasoningTracePreview = '';
             let unlistenFn: (() => void) | null = null;
             let settled = false;
-            let guardCancellationError: MbAnomalousDecisionContentError | null = null;
+            let guardCancellationError: MbLocalStreamGuardError | null = null;
             let guardCancelTimer: ReturnType<typeof setTimeout> | null = null;
+            let reasoningHardDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
             let hasReasoningTraceStarted = false;
             let reasoningTraceCompleted = false;
             let reasoningTraceFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1634,7 +1804,7 @@ export class AgentLoop {
                 emitReasoningTraceStart();
                 onReasoningTrace({
                     type: 'CONTENT',
-                    content: reasoningContent,
+                    content: reasoningTracePreview,
                 });
             };
 
@@ -1656,7 +1826,7 @@ export class AgentLoop {
                 reasoningTraceCompleted = true;
                 onReasoningTrace({
                     type: 'COMPLETE',
-                    content: reasoningContent,
+                    content: reasoningTracePreview,
                 });
             };
 
@@ -1694,6 +1864,10 @@ export class AgentLoop {
                     clearTimeout(guardCancelTimer);
                     guardCancelTimer = null;
                 }
+                if (reasoningHardDeadlineTimer) {
+                    clearTimeout(reasoningHardDeadlineTimer);
+                    reasoningHardDeadlineTimer = null;
+                }
                 clearReasoningTraceFlushTimer();
                 clearStreamDisplayFlushTimer();
                 pendingReasoningTraceContent = false;
@@ -1718,15 +1892,14 @@ export class AgentLoop {
                 resolve(content);
             };
 
-            const cancelForMbGuard = (correction: MbDecisionRetryCorrection) => {
+            const cancelForMbGuardError = (error: MbLocalStreamGuardError) => {
                 if (guardCancellationError || settled) return;
 
-                guardCancellationError = new MbAnomalousDecisionContentError(
-                    correction.reason,
-                    correction.detail ?? correction.reason,
-                    deltaContent.length
-                );
-                void invoke('llm_cancel_stream', { sessionId: streamSessionId })
+                guardCancellationError = error;
+                void invoke('llm_cancel_stream', {
+                    sessionId: streamSessionId,
+                    attemptId: streamAttemptId,
+                })
                     .catch((err: unknown) => {
                         logger.warn('[AgentLoop] MB 决策输出 guard 取消旧流失败:', err);
                     });
@@ -1735,7 +1908,94 @@ export class AgentLoop {
                     if (guardCancellationError) {
                         settleReject(guardCancellationError);
                     }
-                }, DEEPSEEK_V4_MB_GUARD_CANCEL_GRACE_MS);
+                }, MB_GUARD_CANCEL_GRACE_MS);
+            };
+
+            const cancelForMbGuard = (
+                correction: MbDecisionRetryCorrection,
+                observedLength = deltaContent.length,
+            ) => {
+                cancelForMbGuardError(new MbAnomalousDecisionContentError(
+                    correction.reason,
+                    correction.detail ?? correction.reason,
+                    observedLength
+                ));
+            };
+
+            const createFinalDecisionLimitError = (): MbAnomalousDecisionContentError =>
+                new MbAnomalousDecisionContentError(
+                    'truncated_output',
+                    `final decision exceeded the local ${finalDecisionMaxTokens}-token limit ` +
+                        `(estimated=${finalDecisionTokenCounter.estimatedTokens})`,
+                    deltaContent.length,
+                );
+
+            const createReasoningGuardError = (
+                result: Exclude<MbReasoningGuardResult, { action: 'continue' }>
+            ): MbLocalStreamGuardError => {
+                if (result.action === 'retry') {
+                    return new MbAnomalousDecisionContentError(
+                        'reasoning_repetition',
+                        result.evidence.detail,
+                        result.metrics.totalChars,
+                    );
+                }
+
+                const reason: MbReasoningHardFuseReason = result.reason === 'hard_token_fuse'
+                    ? 'reasoning_token_hard_limit'
+                    : 'reasoning_time_hard_limit';
+                const detail = result.reason === 'hard_token_fuse'
+                    ? `reasoning reached the ${PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_HARD_TOKENS}-token hard fuse (estimated=${result.metrics.estimatedTokens})`
+                    : `reasoning reached the ${Math.round(PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_HARD_DURATION_MS / 60000)}-minute hard fuse`;
+                return new MbReasoningHardFuseError(
+                    reason,
+                    detail,
+                    result.metrics.totalChars,
+                );
+            };
+
+            const handleReasoningGuardResult = (
+                result: MbReasoningGuardResult,
+                streamDone: boolean,
+            ): boolean => {
+                if (result.action === 'continue') {
+                    if (result.softEntered) {
+                        logger.debug('[AgentLoop] MB reasoning 进入软门槛，启用近似停滞检测:', {
+                            providerId: this.config.providerId,
+                            modelId: this.config.modelId,
+                            estimatedTokens: result.metrics.estimatedTokens,
+                            elapsedMs: result.metrics.elapsedMs,
+                        });
+                    }
+                    return false;
+                }
+
+                // A completed final body can override semantic loop detection, but never a hard fuse.
+                if (
+                    result.action === 'retry' &&
+                    streamDone &&
+                    deltaContent.trim()
+                ) {
+                    return false;
+                }
+
+                const guardError = createReasoningGuardError(result);
+                if (guardError instanceof MbReasoningHardFuseError) {
+                    logger.warn('[AgentLoop] MB reasoning 命中不可重试硬保险丝:', {
+                        providerId: this.config.providerId,
+                        modelId: this.config.modelId,
+                        reason: guardError.reason,
+                        detail: guardError.detail,
+                        observedLength: guardError.observedLength,
+                    });
+                }
+
+                if (streamDone) {
+                    settleReject(guardError);
+                } else {
+                    cancelForMbGuardError(guardError);
+                }
+                return true;
             };
 
             // 注册 Tauri 事件监听器（与 VisualEnhancerService 一致）
@@ -1767,14 +2027,41 @@ export class AgentLoop {
                     return;
                 }
 
-                // 累积 reasoning（思考模型的推理过程）和 delta（JSON 输出）
+                const eventNow = Date.now();
+                if (event.payload.delta) {
+                    reasoningGuard.noteFinalDelta(event.payload.delta, eventNow);
+                }
+
+                let reasoningResult: MbReasoningGuardResult | null = null;
                 if (event.payload.reasoning) {
-                    reasoningContent += event.payload.reasoning;
+                    reasoningResult = reasoningGuard.appendReasoning(
+                        event.payload.reasoning,
+                        eventNow,
+                    );
+                    reasoningTracePreview = this.formatMbReasoningPreview(
+                        reasoningGuard.getPreview()
+                    );
+
+                    if (!event.payload.done && !reasoningHardDeadlineTimer) {
+                        reasoningHardDeadlineTimer = setTimeout(() => {
+                            reasoningHardDeadlineTimer = null;
+                            const timeResult = reasoningGuard.evaluateTime(Date.now());
+                            handleReasoningGuardResult(timeResult, false);
+                        }, PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_HARD_DURATION_MS);
+                    }
                     scheduleReasoningTraceContent();
                 }
                 if (event.payload.delta) {
                     deltaContent += event.payload.delta;
+                    finalDecisionTokenCounter.append(event.payload.delta);
                     emitReasoningTraceComplete();
+                }
+
+                if (
+                    reasoningResult &&
+                    handleReasoningGuardResult(reasoningResult, event.payload.done)
+                ) {
+                    return;
                 }
 
                 const protocolCorrection = this.getUniversalMbProtocolRetryCorrection(deltaContent);
@@ -1794,6 +2081,14 @@ export class AgentLoop {
                     }
                 }
 
+                if (
+                    !event.payload.done &&
+                    finalDecisionTokenCounter.estimatedTokens > finalDecisionMaxTokens
+                ) {
+                    cancelForMbGuardError(createFinalDecisionLimitError());
+                    return;
+                }
+
                 if (useDeepSeekV4MbGuard) {
                     const guardedDisplayContent = this.buildDeepSeekV4MbDisplayContent(deltaContent);
                     if (guardedDisplayContent) {
@@ -1807,6 +2102,11 @@ export class AgentLoop {
                 }
 
                 if (event.payload.done) {
+                    const reasoningMetrics = reasoningGuard.getMetrics(Date.now());
+                    const reasoningPreview = reasoningGuard.getPreview();
+                    const retainedReasoningLength = reasoningPreview.truncated
+                        ? reasoningPreview.head.length + reasoningPreview.tail.length
+                        : reasoningPreview.content.length;
                     const finalDeltaContent = useDeepSeekV4MbGuard
                         ? this.normalizeDeepSeekV4MbContent(deltaContent)
                         : deltaContent;
@@ -1818,16 +2118,32 @@ export class AgentLoop {
                         {
                             deltaLength: deltaContent.length,
                             normalizedDeltaLength: finalDeltaContent.length,
-                            reasoningLength: reasoningContent.length,
+                            reasoningLength: reasoningMetrics.totalChars,
+                            estimatedReasoningTokens: reasoningMetrics.estimatedTokens,
+                            reasoningPhase: reasoningMetrics.phase,
+                            retainedReasoningLength,
+                            reasoningPreviewTruncated: reasoningPreview.truncated,
                             finishReason: event.payload.finishReason,
                             deepSeekV4Guard: useDeepSeekV4MbGuard,
                         });
                     if (this.isTruncatedMbFinishReason(event.payload.finishReason)) {
+                        const reasoningTransportTruncated =
+                            reasoningMetrics.totalChars > 0 &&
+                            !finalDeltaContent.trim();
                         settleReject(new MbAnomalousDecisionContentError(
-                            'truncated_output',
-                            `provider finish reason: ${event.payload.finishReason ?? 'unknown'}`,
-                            deltaContent.length,
+                            reasoningTransportTruncated
+                                ? 'reasoning_transport_truncated'
+                                : 'truncated_output',
+                            `provider finish reason: ${event.payload.finishReason ?? 'unknown'}; ` +
+                                `reasoningChars=${reasoningMetrics.totalChars}; ` +
+                                `estimatedReasoningTokens=${reasoningMetrics.estimatedTokens}; ` +
+                                `finalContentChars=${deltaContent.length}`,
+                            reasoningMetrics.totalChars + deltaContent.length,
                         ));
+                        return;
+                    }
+                    if (finalDecisionTokenCounter.estimatedTokens > finalDecisionMaxTokens) {
+                        settleReject(createFinalDecisionLimitError());
                         return;
                     }
                     if (finalRetryReason) {
@@ -1839,7 +2155,7 @@ export class AgentLoop {
                         return;
                     }
                     if (!finalDeltaContent.trim()) {
-                        settleReject(new MbEmptyDecisionContentError(reasoningContent.length));
+                        settleReject(new MbEmptyDecisionContentError(reasoningMetrics.totalChars));
                         return;
                     }
 
@@ -1871,7 +2187,7 @@ export class AgentLoop {
                         } : {}),
                     })),
                     temperature,
-                    max_tokens: maxTokens,
+                    max_tokens: transportMaxTokens,
                 };
                 if (this.config.baseUrl) {
                     request.base_url = this.config.baseUrl;

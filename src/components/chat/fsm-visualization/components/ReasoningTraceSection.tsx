@@ -27,7 +27,7 @@ export function ReasoningTraceSection({ contextId }: { contextId: string }) {
     useEffect(() => {
         if (!traceContainerRef.current) return;
         traceContainerRef.current.scrollTop = traceContainerRef.current.scrollHeight;
-    }, [content.length]);
+    }, [content]);
 
     useEffect(() => {
         if (isStreaming) {

@@ -40,7 +40,7 @@ export interface ThinkingPhaseEvent {
 export interface ReasoningTraceEvent {
     /** 事件类型 */
     type: 'START' | 'CONTENT' | 'COMPLETE';
-    /** 当前已累计的 reasoning_content */
+    /** 当前用于 UI 展示的有界 reasoning_content 快照 */
     content?: string;
 }
 

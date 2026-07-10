@@ -732,6 +732,7 @@ planning/
 │   │                             # - CheckpointCallback（回调类型）
 │   ├── MasterBrain.ts            # 主脑封装（决策协调器）
 │   ├── MasterBrainDecisionGuard.ts # MB 决策异常分类与共享语义重试额度
+│   ├── MasterBrainReasoningGuard.ts # MB 推理循环检测、硬熔断与有界展示快照
 │   ├── MasterBrainPrompt.ts      # Prompt 构建器
 │   │                             # - build()：主决策 Prompt
 │   │                             # - buildCheckpointEvaluationPrompt()：Checkpoint 评估

@@ -176,7 +176,8 @@ export class MasterBrain {
         }
     ): Promise<string> {
         return this.llmService.generate(prompt, {
-            maxTokens: PLANNING_CONSTANTS.MASTER_BRAIN_MAX_OUTPUT_TOKENS, // Limit MB output loops while leaving room for complete decisions
+            // Local final-decision cap; AgentLoop may expand the provider transport for reasoning models.
+            maxTokens: PLANNING_CONSTANTS.MASTER_BRAIN_MAX_OUTPUT_TOKENS,
             temperature: PLANNING_CONSTANTS.MASTER_BRAIN_TEMPERATURE, // 低温度确保决策稳定一致
             mbBudgetRemaining: extra?.mbBudgetRemaining, // 透传预算剐余量，供 AgentLoop 判断是否注入尾部警告
             onStreamDelta: extra?.onStreamDelta, // 透传流式回调，实时推送 LLM 输出到 Thought 卡片

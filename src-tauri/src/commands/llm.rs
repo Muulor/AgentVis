@@ -25,6 +25,7 @@ use crate::AppState;
 /// 键: session_id, 值: 当前活跃的取消通道列表
 struct CancelRegistration {
     id: u64,
+    attempt_id: Option<String>,
     sender: oneshot::Sender<()>,
 }
 
@@ -59,7 +60,11 @@ fn apply_model_vision_support(config: ProviderConfig, supports_vision: Option<bo
     }
 }
 
-fn register_cancel_sender(session_id: &str, sender: oneshot::Sender<()>) -> u64 {
+fn register_cancel_sender(
+    session_id: &str,
+    attempt_id: Option<String>,
+    sender: oneshot::Sender<()>,
+) -> u64 {
     let registration_id = NEXT_CANCEL_REGISTRATION_ID.fetch_add(1, Ordering::Relaxed);
     let mut senders = lock_cancel_senders();
     let entry = senders.entry(session_id.to_string()).or_default();
@@ -75,6 +80,7 @@ fn register_cancel_sender(session_id: &str, sender: oneshot::Sender<()>) -> u64 
 
     entry.push(CancelRegistration {
         id: registration_id,
+        attempt_id,
         sender,
     });
 
@@ -124,6 +130,30 @@ fn cancel_session(session_id: &str) -> usize {
         }
         None => 0,
     }
+}
+
+fn cancel_attempt(session_id: &str, attempt_id: &str) -> usize {
+    let matching_entries = {
+        let mut senders = lock_cancel_senders();
+        let Some(entries) = senders.remove(session_id) else {
+            return 0;
+        };
+        let (matching, remaining): (Vec<_>, Vec<_>) = entries
+            .into_iter()
+            .partition(|entry| entry.attempt_id.as_deref() == Some(attempt_id));
+
+        if !remaining.is_empty() {
+            senders.insert(session_id.to_string(), remaining);
+        }
+
+        matching
+    };
+
+    let count = matching_entries.len();
+    for entry in matching_entries {
+        let _ = entry.sender.send(());
+    }
+    count
 }
 
 /// 聊天消息
@@ -642,7 +672,7 @@ pub async fn gpt_image_generate(
     let session_id = request.session_id.clone();
     let (mut cancel_rx, cancel_registration_id) = if let Some(ref sid) = session_id {
         let (tx, rx) = oneshot::channel::<()>();
-        let registration_id = register_cancel_sender(sid, tx);
+        let registration_id = register_cancel_sender(sid, None, tx);
         log::debug!("[GPT Image] registered cancel channel: {}", sid);
         (Some(rx), Some(registration_id))
     } else {
@@ -1050,7 +1080,7 @@ pub async fn llm_chat_stream(
     // 在流创建之前注册取消通道，确保模型"思考"期间（chat_stream 尚未返回）
     // 用户点击取消时信号不会丢失。流创建完成后进入 select! 循环会立即捕获已到达的取消信号。
     let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
-    let cancel_registration_id = register_cancel_sender(&session_id, cancel_tx);
+    let cancel_registration_id = register_cancel_sender(&session_id, attempt_id.clone(), cancel_tx);
     
     // 在流创建阶段以及分块读取阶段都要保持取消机制处于激活状态。
     // 部分提供商在响应头到达之前不会产出流，因此直接 await chat_stream() 
@@ -1349,21 +1379,32 @@ pub async fn llm_chat_stream(
 
 /// 取消流式聊天请求
 /// 
-/// 发送取消信号给指定 session_id 的流式请求
+/// 发送取消信号给指定 session_id 的流式请求。
+/// 提供 attempt_id 时只取消匹配的单次流；省略时保留原有的整会话取消语义。
 #[tauri::command]
-pub async fn llm_cancel_stream(session_id: String) -> CommandResult<()> {
-    // 从存储中移除并获取取消信号发送器
-    let cancelled_count = cancel_session(&session_id);
+pub async fn llm_cancel_stream(
+    session_id: String,
+    attempt_id: Option<String>,
+) -> CommandResult<()> {
+    let cancelled_count = match attempt_id.as_deref() {
+        Some(attempt_id) => cancel_attempt(&session_id, attempt_id),
+        None => cancel_session(&session_id),
+    };
     
     if cancelled_count > 0 {
         // 发送取消信号（忽略发送失败，可能接收端已关闭）
         log::info!(
-            "[LLM] sent cancel signal: {} (channels: {})",
+            "[LLM] sent cancel signal: {} (attempt: {:?}, channels: {})",
             session_id,
+            attempt_id,
             cancelled_count
         );
     } else {
-        log::warn!("[LLM] 未找到会话的取消通道: {}", session_id);
+        log::warn!(
+            "[LLM] 未找到匹配的取消通道: {} (attempt: {:?})",
+            session_id,
+            attempt_id
+        );
     }
     
     Ok(())
@@ -1401,11 +1442,16 @@ pub async fn llm_list_models(
             "gpt-5.4-mini".to_string(),
             "gpt-5.4-nano".to_string(),
             "gpt-5.5".to_string(),
+            "gpt-5.6-luna".to_string(),
+            "gpt-5.6-terra".to_string(),
+            "gpt-5.6-sol".to_string(),                                    
         ],
         "anthropic" => vec![
             "claude-sonnet-4-6".to_string(),
+            "claude-sonnet-5".to_string(),
             "claude-opus-4-7".to_string(),
             "claude-opus-4-8".to_string(),
+            "claude-fable-5".to_string(),
         ],
         "gemini" => vec![
             "gemini-3-flash-preview".to_string(),
@@ -1415,7 +1461,6 @@ pub async fn llm_list_models(
         ],
         "zhipu" => vec![
             "glm-4-flash".to_string(),
-            "glm-4.7-flash".to_string(),
             "glm-4.6v-flash".to_string(),
             "glm-5.1".to_string(),
             "glm-5.2".to_string(),
@@ -1446,6 +1491,7 @@ pub async fn llm_list_models(
             "deepseek-v4-flash".to_string(),
             "deepseek-v4-pro".to_string(),
             "kimi-k2.6".to_string(),
+            "Kimi-K2.7-Code".to_string(),
             "MiniMax-M3".to_string(),
             "glm-5.2".to_string(),
         ],
@@ -1634,7 +1680,7 @@ pub async fn llm_chat_with_tools(
     // 如果提供了 session_id，注册取消通道
     let (cancel_rx, cancel_registration_id) = if let Some(ref sid) = session_id {
         let (tx, rx) = oneshot::channel::<()>();
-        let registration_id = register_cancel_sender(sid, tx);
+        let registration_id = register_cancel_sender(sid, None, tx);
         log::debug!("[LLM] 已注册 chat_with_tools 取消通道: {}", sid);
         (Some(rx), Some(registration_id))
     } else {
@@ -2189,4 +2235,35 @@ pub async fn zhipu_image_generate(
     log::info!("[Zhipu] 图像生成成功，共 {} 张，MIME: {}", images_base64.len(), mime_type);
 
     Ok(ZhipuImageGenerateResponse { images_base64, mime_type })
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+
+    #[test]
+    fn attempt_scoped_cancel_keeps_other_session_registrations_alive() {
+        let session_id = "test-attempt-scoped-cancel";
+        cancel_session(session_id);
+
+        let (first_sender, mut first_receiver) = oneshot::channel();
+        let (second_sender, mut second_receiver) = oneshot::channel();
+        register_cancel_sender(
+            session_id,
+            Some("attempt-a".to_string()),
+            first_sender,
+        );
+        register_cancel_sender(
+            session_id,
+            Some("attempt-b".to_string()),
+            second_sender,
+        );
+
+        assert_eq!(cancel_attempt(session_id, "attempt-a"), 1);
+        assert_eq!(first_receiver.try_recv(), Ok(()));
+        assert!(second_receiver.try_recv().is_err());
+
+        assert_eq!(cancel_session(session_id), 1);
+        assert_eq!(second_receiver.try_recv(), Ok(()));
+    }
 }

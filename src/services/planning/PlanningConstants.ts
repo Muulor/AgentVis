@@ -43,8 +43,30 @@ export const PLANNING_CONSTANTS = {
     /** Master Brain 决策温度 */
     MASTER_BRAIN_TEMPERATURE: 1,
 
-    /** Master Brain output cap; keeps degenerate text loops from running to provider maxTokens. */
+    /** Local cap for the final Master Brain decision body, independent of reasoning transport. */
     MASTER_BRAIN_MAX_OUTPUT_TOKENS: 8192,
+
+    /** Default MB transport budget for unknown or non-reasoning model routes. */
+    MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS: 16384,
+
+    /** Transport budget for reasoning models (shared reasoning plus final decision output). */
+    MASTER_BRAIN_REASONING_TRANSPORT_MAX_TOKENS: 32768,
+
+    /** Soft reasoning threshold: enables stricter loop detection without cancelling. */
+    MASTER_BRAIN_REASONING_SOFT_TOKENS: 6144,
+
+    /** Soft reasoning duration: enables stricter loop detection without cancelling. */
+    MASTER_BRAIN_REASONING_SOFT_DURATION_MS: 120000,
+
+    /** Non-retryable local reasoning fuse, independent of the provider transport budget. */
+    MASTER_BRAIN_REASONING_HARD_TOKENS: 16384,
+
+    /** Non-retryable reasoning wall-clock fuse, measured from the first reasoning chunk. */
+    MASTER_BRAIN_REASONING_HARD_DURATION_MS: 8 * 60 * 1000,
+
+    /** Independent live UI preview budget: 8K head plus a rolling 16K tail. */
+    MASTER_BRAIN_REASONING_PREVIEW_HEAD_CHARS: 8 * 1024,
+    MASTER_BRAIN_REASONING_PREVIEW_TAIL_CHARS: 16 * 1024,
 
     /** Sub-Agent 执行温度 */
     SUB_AGENT_TEMPERATURE: 1,

@@ -64,17 +64,21 @@ BUILTIN_MODELS: list[dict] = [
     {"id": "gpt-5.4-mini", "name": "GPT-5.4-Mini", "providerId": "openai", "contextWindow": 400000, "supportsVision": True},
     {"id": "gpt-5.4-nano", "name": "GPT-5.4-Nano", "providerId": "openai", "contextWindow": 400000, "supportsVision": True},
     {"id": "gpt-5.5", "name": "GPT-5.5", "providerId": "openai", "contextWindow": 1050000, "supportsVision": True},
+    {"id": "gpt-5.6-luna", "name": "GPT-5.6 Luna", "providerId": "openai", "contextWindow": 1050000, "supportsVision": True},
+    {"id": "gpt-5.6-terra", "name": "GPT-5.6 Terra", "providerId": "openai", "contextWindow": 1050000, "supportsVision": True},
+    {"id": "gpt-5.6-sol", "name": "GPT-5.6 Sol", "providerId": "openai", "contextWindow": 1050000, "supportsVision": True},
     # Anthropic
     {"id": "claude-sonnet-4-6", "name": "Claude-4.6-Sonnet", "providerId": "anthropic", "contextWindow": 200000, "supportsVision": True},
+    {"id": "claude-sonnet-5", "name": "Claude-5-Sonnet", "providerId": "anthropic", "contextWindow": 1000000, "supportsVision": True},
     {"id": "claude-opus-4-7", "name": "Claude-4.7-Opus", "providerId": "anthropic", "contextWindow": 200000, "supportsVision": True},
     {"id": "claude-opus-4-8", "name": "Claude-4.8-Opus", "providerId": "anthropic", "contextWindow": 1000000, "supportsVision": True},
+    {"id": "claude-fable-5", "name": "Claude-5-Fable", "providerId": "anthropic", "contextWindow": 1000000, "supportsVision": True},
     # Gemini
     {"id": "gemini-3-flash-preview", "name": "Gemini-3-Flash", "providerId": "gemini", "contextWindow": 200000, "supportsVision": True},
     {"id": "gemini-3.1-pro-preview", "name": "Gemini-3.1-Pro", "providerId": "gemini", "contextWindow": 200000, "supportsVision": True},
     {"id": "gemini-3.5-flash", "name": "Gemini-3.5-Flash", "providerId": "gemini", "contextWindow": 1000000, "supportsVision": True},
     # ZhipuAI
     {"id": "glm-4-flash", "name": "GLM-4-Flash(free)", "providerId": "zhipu", "contextWindow": 128000, "supportsVision": False},
-    {"id": "glm-4.7-flash", "name": "GLM-4.7-Flash(free)", "providerId": "zhipu", "contextWindow": 200000, "supportsVision": False},
     {"id": "glm-4.6v-flash", "name": "GLM-4.6V-Flash(free)", "providerId": "zhipu", "contextWindow": 128000, "supportsVision": True},
     {"id": "glm-5.1", "name": "GLM-5.1", "providerId": "zhipu", "contextWindow": 204800, "supportsVision": False},
     {"id": "glm-5.2", "name": "GLM-5.2", "providerId": "zhipu", "contextWindow": 1000000, "supportsVision": False},
@@ -104,7 +108,8 @@ BUILTIN_MODELS: list[dict] = [
     {"id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "providerId": "volcengine", "contextWindow": 1000000, "supportsVision": False},
     {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "providerId": "volcengine", "contextWindow": 1000000, "supportsVision": False},
     {"id": "kimi-k2.6", "name": "Kimi K2.6", "providerId": "volcengine", "contextWindow": 256000, "supportsVision": True},
-    {"id": "MiniMax-M3", "name": "MiniMax M3", "providerId": "volcengine", "contextWindow": 10000000, "supportsVision": False},
+    {"id": "Kimi-K2.7-Code", "name": "Kimi K2.7 Code", "providerId": "volcengine", "contextWindow": 256000, "supportsVision": True},
+    {"id": "MiniMax-M3", "name": "MiniMax M3", "providerId": "volcengine", "contextWindow": 512000, "supportsVision": False},
     {"id": "glm-5.2", "name": "GLM-5.2", "providerId": "volcengine", "contextWindow": 1000000, "supportsVision": False},
     # OpenRouter (routes to free models from various providers through an OpenAI-compatible protocol)
     # Context windows have been converted to tokens: 262K→262144, 131K→131072, 196K→196608
