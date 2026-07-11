@@ -15,11 +15,14 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{js,ts,tsx,css}\" \"scripts/**/*.{js,mjs}\" \"{vite,vitest}.config.ts\" \"package.json\" \".github/**/*.yml\"",
-    "format:check": "prettier --check \"src/**/*.{js,ts,tsx,css}\" \"scripts/**/*.{js,mjs}\" \"{vite,vitest}.config.ts\" \"package.json\" \".github/**/*.yml\"",
+    "format": "prettier --write \"src/**/*.{js,ts,tsx,css}\" \"scripts/**/*.{js,mjs}\" \"{vite,vitest}.config.ts\" \"package.json\" \".eslintrc.cjs\" \".prettierrc\" \".github/**/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{js,ts,tsx,css}\" \"scripts/**/*.{js,mjs}\" \"{vite,vitest}.config.ts\" \"package.json\" \".eslintrc.cjs\" \".prettierrc\" \".github/**/*.yml\"",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --all-targets",
+    "quality": "npm run format:check && npm run lint && tsc --noEmit && npm run test:run",
+    "quality:full": "npm run quality && npm run build && npm run check:rust-boundaries && npm run test:rust",
     "prepare": "husky"
   },
   "dependencies": {
@@ -61,6 +64,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^8.57.0",
+    "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
     "husky": "^9.1.7",
@@ -78,17 +82,19 @@
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
-      "prettier --write",
-      "eslint --fix --quiet"
+      "eslint --fix --quiet",
+      "prettier --write"
     ],
     "src/**/*.js": "prettier --write",
     "src/**/*.css": "prettier --write",
     "scripts/**/*.{js,mjs}": "prettier --write",
     "{vite,vitest}.config.ts": [
-      "prettier --write",
-      "eslint --fix --quiet"
+      "eslint --fix --quiet",
+      "prettier --write"
     ],
     "package.json": "prettier --write",
+    ".eslintrc.cjs": "prettier --write",
+    ".prettierrc": "prettier --write",
     ".github/**/*.yml": "prettier --write"
   }
 }

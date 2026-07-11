@@ -16,6 +16,13 @@
 *.yaml text eol=lf
 *.yml text eol=lf
 
+# Root configuration files without a conventional extension also stay on LF.
+.editorconfig text eol=lf
+.git-blame-ignore-revs text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.prettierrc text eol=lf
+
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf

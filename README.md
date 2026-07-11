@@ -203,7 +203,12 @@ For a source-code index, see [PROJECT_STRUCTURE.md](<docs/AgentVis docs/PROJECT_
 | `npm run build:broker-helper` | Build release broker helper and WFP helper. |
 | `npm run preview` | Preview Vite build output. |
 | `npm run lint` | Run ESLint checks for TS/TSX files. |
+| `npm run format` | Apply the repository Prettier baseline to its configured file set. |
+| `npm run format:check` | Check the configured file set without rewriting files. |
 | `npm run test:run` | Run Vitest once. |
+| `npm run test:rust` | Run all Rust unit and integration test targets. |
+| `npm run quality` | Run formatting, ESLint, TypeScript, and frontend test checks. |
+| `npm run quality:full` | Run all quality checks, the frontend build, and Rust validation. |
 | `npm run tauri <cmd>` | Call the Tauri CLI, for example `npm run tauri dev` or `npm run tauri build`. |
 
 ## Documentation Map
@@ -229,8 +234,13 @@ AgentVis is an open-source project maintained by an individual developer, and ma
 
 To keep Agent-related changes auditable, please follow these conventions:
 
-- After modifying TS/TSX files, run `eslint --fix --quiet` only on the changed files, then run `tsc --noEmit`.
-- After modifying Rust files, run `cargo check`.
+- During normal feature work, format only files changed by the task. Run the global formatter only for an explicit formatting migration on a clean, dedicated `style/` or `chore/` branch, and do not mix business changes into that commit.
+- After modifying TS/TSX files, run `eslint --fix --quiet` and Prettier on the changed files, then run `tsc --noEmit`. Run affected tests for behavioral changes.
+- After modifying JS/MJS/CSS files, run Prettier on the changed files and verify affected scripts or UI behavior.
+- After modifying Rust files, run `cargo check`; run affected Rust tests for behavioral changes.
+- Before merging, run `npm run quality`. Before releases or broad refactors, run `npm run quality:full`.
+- Treat `.gitattributes` as the source of truth for line endings and `.editorconfig` as the editor baseline. Avoid unrelated line-ending-only changes.
+- Change Prettier versions or formatting rules only in dedicated `style/` or `chore/` commits.
 - New feature components must include a header comment and be added to `PROJECT_STRUCTURE.md`.
 - When adding or changing user-visible copy, Toast messages, error messages, chat bubble content, tool observations, or system/tool return messages that affect Agent decisions, prefer the existing i18n system instead of hardcoding Chinese or English.
 - Internal logs and pure debug messages are not required to use i18n.
@@ -240,7 +250,9 @@ Examples:
 
 ```powershell
 npx eslint --fix --quiet src\path\to\changed-file.tsx
+npx prettier --write src\path\to\changed-file.tsx
 npx tsc --noEmit
+npm run quality
 cargo check --manifest-path src-tauri\Cargo.toml
 ```
 

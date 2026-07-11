@@ -9,12 +9,16 @@
 ```
 AgentVis/
 ├── 📁 .agent/                    # Agent 项目规则
+├── 📁 .github/workflows/         # GitHub Actions 质量门禁
 ├── 📁 .husky
 ├── 📁 public/                    # 静态资源目录
 ├── 📁 scripts/                   # 脚本工具目录
 ├── 📁 src/                       # 前端源代码（React + TypeScript）
 ├── 📁 src-tauri/                 # Tauri 后端源代码（Rust）
+├── .editorconfig                 # 编辑器编码、缩进与换行基线
 ├── .eslintrc.cjs                 # ESLint 配置文件
+├── .git-blame-ignore-revs        # Git blame 忽略的机械格式化提交
+├── .gitattributes                # 跨平台换行与文本属性规则
 ├── .gitignore                    # Git 忽略规则
 ├── .prettierrc                   # Prettier 代码格式化配置
 ├── index.html                    # 应用入口 HTML
