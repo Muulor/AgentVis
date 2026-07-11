@@ -3,6 +3,7 @@
 > Applicable version: current code implementation  
 > Module paths: `src/services/rag/`, `src/types/rag.ts`  
 > Related pipelines: `src/services/memory/MemorySummaryRetriever.ts`, `src/services/memory/MemoryVectorIndex.ts`, `src/services/memory/MemoryContextProvider.ts`
+> Naming note: “Task mode” in the UI maps to the internal mode value and path `planning`; existing code identifiers remain unchanged.
 
 ---
 
@@ -364,7 +365,7 @@ Facts are retrieved by `MemoryContextProvider.getMemoryContext()` through `memor
 
 - `buildBindingFactsPrompt()`: identity and preferences, injected into the identity layer.
 - `buildContextFactsPrompt()`: long-term goals, knowledge background, interaction signals, and similar background context.
-- `buildTaskExperiencePrompt()`: task experience for Planning / SA reference.
+- `buildTaskExperiencePrompt()`: task experience for MB / SA task reasoning.
 
 Although fact vectors are written into `chunk_embeddings` by `MemoryVectorIndex.indexFact()`, normal memory-context injection does not depend on BM25 and does not go through Knowledge Base `RagService`.
 
@@ -415,7 +416,7 @@ Agent settings page adds Knowledge Base files
         |
         +-- On save, reads text content -> RagService.indexDocument()
 
-Agent-mode document attachment upload
+Document attachment upload in an Agent window
         |
         +-- useAttachmentManager -> AttachmentService.indexToKnowledge()
             +-- RagService.indexDocument()
@@ -441,7 +442,7 @@ Notes:
 
 ### Pipeline 2: Agent Reads During Reasoning
 
-In Planning mode, `AgentService.processMessage()` calls `loadRuntimeContext()` before creating `AgentLoop`:
+In Task mode (the internal path is `planning`), `AgentService.processMessage()` calls `loadRuntimeContext()` before creating `AgentLoop`:
 
 ```text
 User message
@@ -454,7 +455,7 @@ User message
           +-- RuntimeContext.ragResults
 ```
 
-The regular Chat sending path also executes a similar flow in Agent mode:
+The regular Chat sending path in an Agent window also executes a similar flow:
 
 ```text
 useChatSender

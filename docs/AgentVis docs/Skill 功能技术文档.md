@@ -2,6 +2,7 @@
 
 > 更新时间：2026-06-21
 > 面向对象：开发者 / 技能包开发者 / 产品团队
+> 命名说明：用户界面中的「Task 模式」对应内部模式值与路径 `planning`，既有代码标识保持不变。
 
 ---
 
@@ -117,7 +118,7 @@ requiresAuth: true     # 是否需要用户授权
 
 ### 扫描与注册
 
-应用启动后，`App` 会提前预加载外部技能扫描；Planning 路径中 `SkillLoader.loadAllSkills()` 也会触发同一个 `bootstrapExternalSkills()` Promise，保证并发调用只执行一次。扫描注册完成后即解锁 Planning，额外依赖安装在后台异步进行：
+应用启动后，`App` 会提前预加载外部技能扫描；Task 模式的内部 `planning` 路径中，`SkillLoader.loadAllSkills()` 也会触发同一个 `bootstrapExternalSkills()` Promise，保证并发调用只执行一次。扫描注册完成后即解锁 Task 模式，额外依赖安装在后台异步进行：
 
 ```
 App 预加载 / SkillLoader.loadAllSkills()

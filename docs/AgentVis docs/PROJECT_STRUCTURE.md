@@ -1,6 +1,6 @@
 # AgentVis 项目结构图
 
-> 说明: 此文档描述项目的完整目录结构，每个组件后面附有中文说明
+> 说明: 此文档描述项目的完整目录结构，每个组件后面附有中文说明。用户界面中的「Task 模式」对应内部模式值 `planning`；既有目录、组件、Hook 与事件名保持不变。
 
 ---
 
@@ -136,9 +136,9 @@ chat/
 ├── MessageActions.module.css     # 操作按钮样式
 ├── MessageBubble.tsx             # 消息气泡组件（支持多选模式、多文件项目预览收集）
 ├── MessageBubble.module.css      # 消息气泡样式（含 multiFilePreviewBtn）
-├── PlanningTraceDetails.tsx      # Planning 持久化执行详情轻量收纳组件
-├── PlanningTraceDetails.module.css # Planning 执行详情收纳样式
-├── ModeSelector.tsx              # 模式选择器（普通/规划）
+├── PlanningTraceDetails.tsx      # Task 模式持久化执行详情轻量收纳组件
+├── PlanningTraceDetails.module.css # Task 模式执行详情收纳样式
+├── ModeSelector.tsx              # Chat / Task 模式选择器（内部 chat / planning）
 ├── ModeSelector.module.css       # 模式选择器样式
 ├── MultiSelectBar.tsx            # 多选浮动操作栏（批量复制/引用/删除）
 ├── MultiSelectBar.module.css     # 多选操作栏样式
@@ -393,7 +393,7 @@ hooks/
 ├── chatAttachmentContext.ts      # Chat 模式附件上下文辅助函数
 ├── useChatSender.ts              # Chat 模式消息发送 Hook
 ├── useChatSenderPrompt.ts        # Chat 模式Prompt Hook
-├── usePlanningMode.ts            # Planning 模式消息发送 Hook
+├── usePlanningMode.ts            # Task 模式消息发送 Hook（内部 planning）
 ├── useDataLoader.ts              # 数据加载 Hook（Hub/Agent 初始化）
 └── useTheme.ts                   # 主题切换 Hook
 
@@ -941,7 +941,7 @@ cron/
 ├── types.ts                      # 定时任务类型定义（CronJob/CronJobCreateParams/CronJobUpdateParams）
 ├── cronExpression.ts             # Cron 表达式工具（解析/描述/构建/ScheduleConfig 双向转换）
 ├── CronScheduler.ts              # 定时任务调度器（轮询/执行/自动关闭/生命周期管理）
-└── CronExecutor.ts               # 定时任务执行器（Planning 模式 + 跨 Hub Agent 切换 + 事件触发）
+└── CronExecutor.ts               # 定时任务执行器（Task 模式 + 跨 Hub Agent 切换 + 事件触发）
 ```
 
 ### 📁 services/im-channel/ - IM 通信通道服务
@@ -1130,13 +1130,13 @@ crypto/
 
 | 模块 | 说明 |
 |------|------|
-| **Planning** | Agent 规划执行系统，基于 FSM + Master Brain + Sub-Agent 实现自主任务完成 |
+| **Planning（Task 模式内部实现）** | Agent 规划执行系统，基于 FSM + Master Brain + Sub-Agent 实现自主任务完成 |
 | **Memory** | 三层记忆系统：短期记忆、摘要记忆、事实记忆 |
 | **RAG** | 混合检索增强生成，结合向量相似度与 BM25 关键词搜索 |
 | **Fast-Apply** | 代码快速应用引擎，支持 XML 协议解析与差异预览 |
 | **Attachment** | 多格式文档处理（PDF/DOCX/XLSX/PPTX/TXT/MD） |
 | **Preview** | Vite 实时多文件项目预览（React+Tailwind / Vue+Tailwind / Vanilla） |
-| **Cron** | Agent 定时任务系统，支持频率驱动调度 UI + 高级 Cron 表达式，以 Planning 模式触发执行 |
+| **Cron** | Agent 定时任务系统，支持频率驱动调度 UI + 高级 Cron 表达式，以 Task 模式触发执行 |
 | **IM Channel** | IM 通信通道（多 Bot 工厂模式），支持飞书/Slack 长连接，手机端下发任务并实时查看思维链与执行结果 |
 
 ---

@@ -2,6 +2,8 @@
 
 Last updated: 2026-06-01
 
+> Naming note: “Task mode” in the UI maps to the internal mode value and path `planning`; existing code identifiers remain unchanged.
+
 ## 1. Document Scope
 
 This is the main document for the AgentVis sandbox mechanism. It describes the currently supportable product boundaries, backend mapping, execution chain, audit model, and refactoring notes.
@@ -56,7 +58,7 @@ Current non-goals:
 
 ```mermaid
 flowchart TD
-  A["Agent Settings: sandboxMode"] --> B["Planning / ToolExecutionContext"]
+  A["Agent Settings: sandboxMode"] --> B["Task mode (internal: planning) / ToolExecutionContext"]
   B --> C["TS tool layer: read / file_write / exec / external_skill_execute"]
   C --> D["TS pre-flight protection: path boundary, ExecSafetyPolicy, direct-audit UI"]
   D --> E["Tauri shell_execute / native IPC"]

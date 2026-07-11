@@ -13,11 +13,11 @@ const translate = (
     'chat.chatHistoricalAttachmentContextHeader': [
       '## Historical User Attachments',
       'Chat mode cannot reread local paths.',
-      'Planning mode can inspect and read the workspace attachment.',
+      'Task mode can inspect and read the workspace attachment.',
       String(params?.items ?? ''),
     ].join('\n'),
     'chat.chatHistoricalAttachmentContentBlock': `Historical attachment excerpt [${String(params?.fileName ?? '')}]:\n${String(params?.content ?? '')}`,
-    'chat.chatHistoricalAttachmentContextTruncatedNotice': `[Chat historical attachment context truncated to about ${String(params?.maxTokens ?? '')} tokens; switch to Planning mode to inspect the workspace attachment.]`,
+    'chat.chatHistoricalAttachmentContextTruncatedNotice': `[Chat historical attachment context truncated to about ${String(params?.maxTokens ?? '')} tokens; switch to Task mode to inspect the workspace attachment.]`,
   };
 
   return values[key] ?? key;
@@ -67,7 +67,7 @@ describe('chatAttachmentContext', () => {
     expect(context).not.toContain('Sub-Agent');
   });
 
-  it('truncates large Chat historical attachment context and keeps Planning guidance', () => {
+  it('truncates large Chat historical attachment context and keeps Task guidance', () => {
     const context = buildChatHistoricalAttachmentContext(
       [
         {
@@ -86,7 +86,7 @@ describe('chatAttachmentContext', () => {
 
     expect(context).toBeDefined();
     expect(context).toContain('Chat historical attachment context truncated');
-    expect(context).toContain('Planning mode');
+    expect(context).toContain('Task mode');
     expect(context).toContain('workspace attachment');
   });
 });

@@ -217,7 +217,7 @@
   color: var(--color-text-tertiary);
 }
 
-/* Planning 模式浮层 */
+/* Task 模式浮层 */
 .planningOverlay {
   position: absolute;
   left: 0;

@@ -3,13 +3,15 @@
 > Version: Pre-release technical document  
 > Last updated: 2026-06-21
 
+> Naming note: “Task mode” in the UI maps to the internal mode value `planning`; existing identifiers such as `usePlanningMode`, `services/planning`, and `cron:execute_planning` remain unchanged.
+
 ---
 
 ## 1. Interactive Visualization Enhancement (Visual Enhancer)
 
 ### 1.1 Feature Positioning
 
-`VisualEnhancerService` is a **post-processing enhancement layer** for Planning mode. After the Master Brain produces a plain-text response, this service decides whether the content is suitable for visualization. If it is, the service drives the LLM to convert the response into a rich-media version containing ECharts charts, Mermaid flowcharts, and Widget interactive components.
+`VisualEnhancerService` is a **post-processing enhancement layer** for Task mode. After the Master Brain produces a plain-text response, this service decides whether the content is suitable for visualization. If it is, the service drives the LLM to convert the response into a rich-media version containing ECharts charts, Mermaid flowcharts, and Widget interactive components.
 
 **Design principle**: show the raw MB response first; if enhancement fails, degrade silently and never affect the main response output path.
 
@@ -161,7 +163,7 @@ Pipeline position: `buildSafeEChartsOption()` runs after JSON parsing -> `stripR
 | Scenario | Behavior |
 |------|------|
 | `shouldEnhance` returns false | Keep the already visible original response as the final message with `enhanced: false`. |
-| Planning task is cancelled | Skip enhancement and directly keep the result before cancellation. |
+| Task mode execution is cancelled | Skip enhancement and directly keep the result before cancellation. |
 | User selects Stop enhancement | Cancel only that message's background VE job and keep the persisted original. |
 | LLM call throws an exception | Catch it with `catch` and return original content. |
 | 120s streaming collection timeout | Fall back on timeout and return original content. |
@@ -264,7 +266,7 @@ Uses `fetch` probing rather than `bind` attempts. The range is 3100-3199. A `Set
 
 ### 3.1 Feature Positioning
 
-The Agent scheduled task system allows users to configure an **automatically triggered task Prompt** for any Agent. At the specified time, the Agent autonomously executes it in Planning mode. Execution results are persisted to that Agent's chat history so users can review them at any time.
+The Agent scheduled task system allows users to configure an **automatically triggered task Prompt** for any Agent. At the specified time, the Agent autonomously executes it in Task mode. Execution results are persisted to that Agent's chat history so users can review them at any time.
 
 ---
 
@@ -286,7 +288,7 @@ CronScheduler                  // Singleton, initialized at app startup
 CronExecutor.executeCronJob()
   +-- Mark running
   +-- emit('cron:execute_planning', payload)
-  +-- AgentChatView <- usePlanningMode takes over Planning execution
+  +-- AgentChatView <- usePlanningMode takes over Task mode execution
 ```
 
 ---
@@ -339,10 +341,10 @@ After `executeAndCleanup` finishes, whether it succeeds or fails, it runs `execu
 
 ### 3.5 Execution Engine (`CronExecutor`)
 
-Scheduled tasks uniformly run in **Planning mode** (Full Agent Loop):
+Scheduled tasks uniformly run in **Task mode** (Full Agent Loop):
 
 ```text
-setModeFor(agentId, 'planning')          // chatStore switches mode
+setModeFor(agentId, 'planning')          // chatStore switches to Task mode (internal value: planning)
 Switch Hub if needed and wait for target Agent to load
 setCurrentAgentId(agentId)               // Switch current Agent
 await sleep(800ms)                       // Wait for React re-render to avoid old listeners dropping the event
@@ -351,7 +353,7 @@ emit('cron:execute_planning', payload)   // AgentChatView's usePlanningMode take
 
 **Key race-condition handling**: the 800ms delay waits for React to re-mount listeners, preventing a listener for the old `agentId` from ignoring the new event.
 
-**Execution-state semantics**: `CronExecutor` marks the job as `running`, then triggers `cron:execute_planning`. Once the event is sent successfully, the CronJob status is updated to `success`. The actual Agent Loop execution result is written to chat history by `AgentChatView` / `usePlanningMode`; the current CronJob `success/failed` status is closer to "whether Planning execution was successfully triggered" and is not equivalent to the Agent's final task result.
+**Execution-state semantics**: `CronExecutor` marks the job as `running`, then triggers `cron:execute_planning`. Once the event is sent successfully, the CronJob status is updated to `success`. The actual Agent Loop execution result is written to chat history by `AgentChatView` / `usePlanningMode`; the current CronJob `success/failed` status is closer to "whether Task mode execution was successfully triggered" and is not equivalent to the Agent's final task result.
 
 ---
 
@@ -511,5 +513,5 @@ Active task metadata (`taskId`, `chatId`, `platform`, `botId`) is written to `Ap
 |------|---------|------------|
 | **Visual Enhancer** | Heuristic scoring + LLM post-processing + render-layer Recipe | 5-signal scoring / end-to-end degradation guarantees / low-risk TS visual injection / dark-light mode adaptation |
 | **Vite Live Preview** | Junction + Dev Server management | Zero-cost dependency sharing / automatic CSS downgrade / race protection / lazy orphan-process cleanup |
-| **Scheduled Tasks** | Cron polling + Planning event trigger chain | Bidirectional UI mapping / re-entry prevention / one-time task auto-disable / cross-Hub Agent switching |
+| **Scheduled Tasks** | Cron polling + `cron:execute_planning` event trigger chain | Bidirectional UI mapping / re-entry prevention / one-time task auto-disable / cross-Hub Agent switching |
 | **IM Channels** | Multi-Bot Channel factory + platform long connections + throttled push | Feishu/Slack adapters / Bot-level task isolation / unified attachment persistence / 2s throttled card updates |

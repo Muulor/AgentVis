@@ -95,11 +95,11 @@ export const zhCN = {
       searchAria: '搜索聊天记录',
       searchTitle: '搜索 (Ctrl+F)',
       settingsAria: 'Agent 设置',
-      planningEmptyText: '向 {name} 发送任务描述',
-      chatEmptyText: '开始与 {name} 对话',
-      planningEmptyHint: 'Planning 模式将执行复杂任务',
-      chatEmptyHint: '发送消息开始对话，或切换到 Planning 模式执行复杂任务',
-      inputPlaceholder: '与 {name} 对话...',
+      emptyTitle: '接下来，想和 {name} 一起完成什么？',
+      planningEmptyHint: '把目标交给 {name}：先规划，再行动，过程中你可以随时补充要求、调整方向。',
+      chatEmptyHint: '问题、想法或还没成形的目标，都可以从这里聊起。',
+      planningInputPlaceholder: '描述你想完成的事...',
+      chatInputPlaceholder: '说说你的想法、问题或目标...',
       batchDeleteTitle: '批量删除消息',
       batchDeleteDescription: '确认删除选中的 {count} 条消息？此操作无法恢复。',
     },
@@ -119,15 +119,15 @@ export const zhCN = {
       name: 'Agent 名称',
       loopBudget: '决策轮次',
       loopBudgetHint:
-        'Planning 模式下单次 Query 调用 Master Agent 的最大决策轮次。默认值覆盖绝大多数场景，超长链路编程任务可适当提高。留空使用默认值（{max} 轮）。',
+        'Task 模式下，单次请求可调用 Master Agent 的最大决策轮次。默认值适用于大多数场景；超长链路的编程任务可适当提高。留空使用默认值（{max} 轮）。',
       increase: '增加',
       decrease: '减少',
       loopUnit: '轮',
       resetLoopTitle: '恢复默认（{max} 轮）',
       resetDefault: '恢复默认',
-      visualEnhancement: 'Planning 可视化增强',
+      visualEnhancement: 'Task 可视化增强',
       visualEnhancementHint:
-        'Planning 模式会先展示 MB 原始回复，再根据启发式指标判断是否在后台调用一次 LLM，将同一条消息增强为 ECharts、Mermaid 或交互组件。增强期间可以继续对话，也可以在消息底部单独停止增强；关闭后将只保留原始回复。',
+        'Task 模式会先展示 Master Agent 的原始回复，再根据启发式指标判断是否在后台调用一次 LLM，将同一条消息增强为 ECharts、Mermaid 或交互组件。增强期间可以继续对话，也可以在消息底部单独停止增强；关闭后只保留原始回复。',
       sandboxMode: '沙箱权限',
       sandboxModes: {
         LocalAudit: {
@@ -152,10 +152,10 @@ export const zhCN = {
       subAgentSafetyFooterPrompt: '系统提醒Prompt',
       mbRulesLabel: 'Master Agent Rules',
       mbRulesHint:
-        '决策层规则：影响 Master Agent 的任务分解和决策行为、回复风格（仅 Planning 模式生效）',
+        '决策层规则：影响 Master Agent 的任务分解、决策行为和回复风格（仅在 Task 模式生效）',
       saRulesLabel: 'Sub-Agent Rules',
       saRulesHint:
-        '执行层规则：影响 Sub-Agent 的工具使用和代码风格等执行行为（仅 Planning 模式生效）',
+        '执行层规则：影响 Sub-Agent 的工具使用、代码风格等执行行为（仅在 Task 模式生效）',
       chatRulesLabel: 'Chat Mode Rules',
       chatRulesHint: 'Chat 模式的独立规则：影响LLM的思考方式与回复风格（仅 Chat 模式生效）',
       rulesPlaceholder: '直接粘贴提示词或规则...',
@@ -167,7 +167,7 @@ export const zhCN = {
         '两份 Rules 会合并注入到对话上下文中，不区分 Master Agent 和 Sub-Agent 角色。',
       autoIndexDeliverables: '交付物自动同步',
       autoIndexHint:
-        'Planning 模式的文档类交付物会自动索引到知识库，关闭后交付物仍保存到本地但不会被 RAG 检索',
+        'Task 模式生成的文档类交付物会自动索引到知识库；关闭后，交付物仍会保存到本地，但不会被 RAG 检索。',
       autoIndexTip:
         '定时交付物任务场景（如每日新闻生成报告）建议关闭，避免检索到过时信息干扰新任务',
       knowledgeFiles: '知识库文件',
@@ -184,7 +184,7 @@ export const zhCN = {
       indexingProgressSaving: '索引中 {current}/{total}...',
       pinnedMode: '精准命中模式',
       pinnedHint: '绑定 1-{max} 个技能直接注入上下文，忽略其他技能的检索与注入',
-      pinnedTip: '启用后全局技能开关对此 Agent 无效，仅 Planning 模式生效',
+      pinnedTip: '启用后，全局技能开关对此 Agent 无效（仅在 Task 模式生效）。',
       selectedSkills: '已选 {count}/{max} 个技能',
       emptySkills: '暂无已安装的外部技能',
       saving: '保存中...',
@@ -288,16 +288,16 @@ export const zhCN = {
     },
   },
   chat: {
-    planningExecutionFailed: 'Planning 执行失败',
+    planningExecutionFailed: '任务执行失败',
     processingFailed: '处理失败',
     processingFailedWithError: '处理失败: {error}',
     planningCheckpointRunningContent:
-      '**因意外中断，任务可能仍未完成。**\n\n系统已保存当前 Planning 任务的进展快照。',
+      '**因意外中断，任务可能仍未完成。**\n\n系统已保存当前任务的进展快照。',
     planningCheckpointNoObservations: '暂无可恢复的 Sub-Agent 观测记录。',
     planningCheckpointOmittedOlderObservations:
       '[SYSTEM: 为了让上下文保留最新可恢复进展，较早的 checkpoint observation 已省略。]',
     planningCheckpointPersistContent:
-      '[SYSTEM: 上一次 Planning 任务在执行中断前保存了以下进展。请把这些内容视为已发生的历史执行记录，不要当作新的用户需求；如果用户要求继续，请根据下方 Master Brain 决策进展和 Sub-Agent 执行记录判断断点，先核对现有文件/产物，再从最后可靠状态续接。]\n\n{observations}',
+      '[SYSTEM: 上一次任务在执行中断前保存了以下进展。请把这些内容视为已发生的历史执行记录，不要当作新的用户需求；如果用户要求继续，请根据下方 Master Brain 决策进展和 Sub-Agent 执行记录判断断点，先核对现有文件/产物，再从最后可靠状态续接。]\n\n{observations}',
     planningCheckpointMbProgressHeader: 'Master Brain 已保存的决策进展：',
     planningCheckpointSaProgressHeader: 'Sub-Agent 已保存的执行进展：',
     planningCheckpointUnknownStepLabel: '[未知步骤]',
@@ -402,10 +402,10 @@ export const zhCN = {
     deleteMessage: '删除消息',
     revokeMessage: '撤回消息',
     deletePlanningRecordDescription:
-      '确认删除这条 Planning 任务记录？\n\n此消息包含任务执行进度快照。删除后，如果之后需要续接此任务，相关上下文将无法恢复。',
+      '确认删除这条任务记录？\n\n此消息包含任务执行进度快照。删除后，如果之后需要续接此任务，相关上下文将无法恢复。',
     deleteMessageDescription: '确认删除这条消息？此操作无法恢复。',
     revokePlanningDescription:
-      '确认撤回这条消息？\n\n此操作将移除该消息及其后所有对话记录（含 Planning 任务进度快照）。如果任务曾被中断，下次发送相同任务时将无法从断点续接，需要重新执行完整任务。',
+      '确认撤回这条消息？\n\n此操作将移除该消息及其后所有对话记录（含任务进度快照）。如果任务曾被中断，下次发送相同任务时将无法从断点续接，需要重新执行完整任务。',
     revokeMessageDescription:
       '确认撤回这条消息？此操作将同时移除紧随其后的 Agent 回复，且无法恢复。',
     confirmRevoke: '确认撤回',
@@ -571,8 +571,10 @@ export const zhCN = {
     phasePlanning: '规划中',
     phaseDecided: '决策中',
     stepPhase: '第 {step} 步 · {phase}',
-    modeChatTitle: '直接对话模式(非任务)',
-    modePlanningTitle: '规划完成复杂任务',
+    modeChatLabel: 'Chat',
+    modePlanningLabel: 'Task',
+    modeChatTitle: '交流、分析与构思',
+    modePlanningTitle: '规划并执行任务',
     selectMode: '选择模式',
     imageModelChatOnly: '图像生成模型仅支持 Chat 模式',
     projectSelectTitle: '选择项目文件夹',
@@ -609,7 +611,7 @@ export const zhCN = {
     toastEmbeddingDegradedTitle: '语义检索降级',
     toastEmbeddingDegradedDescription:
       '向量化服务超时或不可用，记忆检索已跳过，正常消息流程已降级继续。如仍持续，请检查网络或 Embedding API 配置。',
-    toastPlanningFailed: 'Planning 处理失败',
+    toastPlanningFailed: '任务执行失败',
     toastSendFailed: '发送失败',
     toastStreamCancelRequestedTitle: '已请求中断模型输出',
     toastStreamCancelRequestedDescription: '前端已停止接收流式内容，并会通知后端取消当前请求。',
@@ -637,7 +639,7 @@ export const zhCN = {
     attachmentManifestHeader:
       '## 用户上传的附件文件\n以下文件已保存到本地。若下方内联内容不完整或被截断，请让 Sub-Agent 使用 read/搜索工具直接查看这些路径。\n{items}',
     chatAttachmentManifestHeader:
-      '## 用户上传的附件文件\n以下是用户本轮上传附件的本地保存路径和内联摘录。Chat 模式无法直接读取本地路径；若下方内容不完整或被截断，只能基于摘录回答。需要完整文件依据时，请建议用户切换到 Planning 模式检查并读取工作间中的完整附件（前提是附件未被删除）。\n{items}',
+      '## 用户上传的附件文件\n以下是用户本轮上传附件的本地保存路径和内联摘录。Chat 模式无法直接读取本地路径；若下方内容不完整或被截断，只能基于摘录回答。需要完整文件依据时，请建议用户切换到 Task 模式检查并读取工作间中的完整附件（前提是附件未被删除）。\n{items}',
     attachmentManifestItem: '- {fileName} ({type}, .{extension}, {size}KB): {path}',
     attachmentContextBlock: '📎 附件 [{fileName}]\n路径: {path}\n内容:\n{content}',
     historicalAttachmentContextHeader:
@@ -647,10 +649,10 @@ export const zhCN = {
     historicalAttachmentContextTruncatedNotice:
       '[附件历史上下文已按约 {maxTokens} tokens 截断；如当前请求需要完整内容，请派发 Sub-Agent 直接读取上述附件路径。]',
     chatHistoricalAttachmentContextHeader:
-      '## 历史用户附件上下文\n这条历史用户消息曾上传以下附件。当前是 Chat 模式：模型无法重新读取本地路径，只能基于下方历史摘录和对话摘要判断。若当前问题需要完整附件内容，请说明证据不足，并建议用户切换到 Planning 模式检查并读取工作间中的完整附件（前提是附件未被删除）。\n{items}',
+      '## 历史用户附件上下文\n这条历史用户消息曾上传以下附件。当前是 Chat 模式：模型无法重新读取本地路径，只能基于下方历史摘录和对话摘要判断。若当前问题需要完整附件内容，请说明证据不足，并建议用户切换到 Task 模式检查并读取工作间中的完整附件（前提是附件未被删除）。\n{items}',
     chatHistoricalAttachmentContentBlock: '历史附件内容摘录 [{fileName}]:\n{content}',
     chatHistoricalAttachmentContextTruncatedNotice:
-      '[历史附件上下文已按约 {maxTokens} tokens 截断；Chat 模式无法重新读取本地附件完整内容。若当前问题需要全文依据，请说明只能基于摘录回答，并建议切换到 Planning 模式检查并读取工作间中的完整附件（前提是附件未被删除）。]',
+      '[历史附件上下文已按约 {maxTokens} tokens 截断；Chat 模式无法重新读取本地附件完整内容。若当前问题需要全文依据，请说明只能基于摘录回答，并建议切换到 Task 模式检查并读取工作间中的完整附件（前提是附件未被删除）。]',
     encodingDetectionFailed: '无法识别文件编码，请确保文件使用 UTF-8、GBK 或 GB2312 编码',
     emptyDocument: '文档内容为空',
     documentParseFailed: '{format} 文档解析失败: {reason}',
@@ -1968,7 +1970,7 @@ export const zhCN = {
         'SiliconFlow 不可用时自动降级使用。同样使用免费的 {model} 模型（1024 维），向量完全兼容。',
       tavilyTitle: '网络搜索 (Tavily + DuckDuckGo)',
       tavilyDesc:
-        '用于 Planning 模式的网络搜索。已配置 Tavily 时优先使用 Tavily；未配置或不可用时使用无需 API Key 的 DuckDuckGo(国内需VPN) 免费后备。',
+        '供 Task 模式联网搜索使用。已配置 Tavily 时优先使用；未配置或不可用时，使用无需 API Key 的免费 DuckDuckGo 后备（国内使用可能需要 VPN）。',
       githubTitle: 'GitHub (API 访问)',
       githubDesc:
         '可选 Token，用于安装 GitHub 技能时避开未认证 API 限流。安装公开技能时，细粒度 Token 只需要公开仓库读取权限。',

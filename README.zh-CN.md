@@ -52,9 +52,9 @@ AgentVis 是一个从零构建的本地 AI Agent 运行平台。它把 Agent 的
 | 三层记忆体系 | 短期缓冲、状态摘要、长期事实和任务经验共同组成跨轮上下文。 |
 | RAG 知识库 | Parent-Child 分块、Embedding、BM25、RRF 融合和 Rerank 支撑私有文档召回。 |
 | Fast Apply + Diff 审批 | XML 修改协议、四级内容匹配、Myers Diff、快照和回滚让代码改动可审阅、可撤销。 |
-| 可视化增强 | Planning 回复可自动增强为 ECharts、Mermaid 和交互式 Widget。 |
+| 可视化增强 | Task 模式回复可自动增强为 ECharts、Mermaid 和交互式 Widget。 |
 | Vite 实时预览 | Agent 生成的 React、Vue、Vanilla 前端项目可在应用内启动 Vite Dev Server 预览。 |
-| 定时任务 | Agent 可配置频率驱动或高级 Cron 任务，自动以 Planning 模式执行。 |
+| 定时任务 | Agent 可配置频率驱动或高级 Cron 任务，自动以 Task 模式执行。 |
 | 飞书 / Slack 远程控制 | 通过 IM 消息向 Agent 下发任务，在消息卡片里查看进度并随时停止。 |
 | 外部 Skill 生态 | 支持 Guide / Script 两类外部技能包，安装前接入 AI 驱动安全审查。 |
 | 五层安全防护 | LLM 软约束、TypeScript 工具拦截、Rust 命令硬阻断、进程 / 网络沙箱、Trash Bin 软删除。 |

@@ -2,6 +2,8 @@
 
 更新日期：2026-06-01
 
+> 命名说明：用户界面中的「Task 模式」对应内部模式值与路径 `planning`，既有代码标识保持不变。
+
 ## 一、文档定位
 
 本文是 AgentVis 沙箱机制的总文档，用来描述当前产品可承诺的功能边界、后端映射、执行链路、审计模型和重构注意事项。
@@ -56,7 +58,7 @@
 
 ```mermaid
 flowchart TD
-  A["Agent 设置: sandboxMode"] --> B["Planning / ToolExecutionContext"]
+  A["Agent 设置: sandboxMode"] --> B["Task 模式（内部 planning）/ ToolExecutionContext"]
   B --> C["TS 工具层: read / file_write / exec / external_skill_execute"]
   C --> D["TS 前置防护: 路径边界、ExecSafetyPolicy、direct-audit UI"]
   D --> E["Tauri shell_execute / native IPC"]

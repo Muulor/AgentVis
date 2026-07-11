@@ -27,6 +27,9 @@ describe('useChatSender chat prompt invariants', () => {
     expect(prompt).toContain('[OUTPUT_LANGUAGE]');
     expect(prompt).toContain('Apply this contract to: `user-visible prose`');
     expect(prompt).toContain('Current time:');
+    expect(prompt).toContain('two user-facing modes: Chat and Task');
+    expect(prompt).toContain('switch to Task mode');
+    expect(prompt).not.toContain('Planning mode');
   });
 
   it('anchors an explicit translation target above quoted source text', () => {

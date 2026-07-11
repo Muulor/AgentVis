@@ -224,7 +224,7 @@ The following lifecycle events call `triggerOnLifecycleEvent()` and perform a **
 
 - The Agent is switched back to, and `AgentChatView` calls `checkWatermarkOnResume()` when mounted.
 - The user closes the chat window through `onSessionEnd()`.
-- Planning mode task completion.
+- Task mode task completion.
 
 Lifecycle triggers compare `latestMessageId` with `lastProcessedMessageId`. If they differ, processing is triggered, preventing duplicate handling of the same content.
 

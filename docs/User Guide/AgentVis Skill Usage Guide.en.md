@@ -53,7 +53,7 @@ This page configures the skill strategy dedicated to that Agent:
 
 - Enable or disable "Pinned Skill Mode".
 - Select 1-5 skills to bind directly to the current Agent.
-- After saving, this Agent will prioritize your bound skills in Planning mode.
+- After saving, this Agent will prioritize your bound skills in Task mode.
 
 ### 2.3 Skill Selection Through `/` in Chat
 
@@ -224,7 +224,7 @@ Avoid enabling it when:
 Notes:
 
 - Pinned Skill Mode only affects the current Agent.
-- Pinned Skill Mode mainly takes effect in Planning mode.
+- Pinned Skill Mode mainly takes effect in Task mode.
 - After it is enabled, the Agent cannot use other globally enabled skills. Bind only the skills you truly want it to use.
 
 ---

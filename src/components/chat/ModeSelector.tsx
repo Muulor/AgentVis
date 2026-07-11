@@ -2,12 +2,12 @@
  * ModeSelector - 模式选择器组件
  *
  * 功能：
- * - Chat / Planning 模式切换
+ * - Chat / Task 模式切换（Task 继续使用内部值 planning）
  * - 下拉菜单形式
  */
 
 import { useState, useCallback, useRef, useEffect, memo } from 'react';
-import { useI18n } from '@/i18n';
+import { useI18n, type TranslationKey } from '@/i18n';
 import { Tooltip } from '@components/ui/Tooltip';
 import type { ChatMode } from '@/types/chatMode';
 import styles from './ModeSelector.module.css';
@@ -21,24 +21,27 @@ interface ModeSelectorProps {
   onChange: (mode: ChatMode) => void;
   /** 是否禁用 */
   disabled?: boolean;
-  /** 当前模型名称（用于检测图像生成模型并禁用 Planning 模式） */
+  /** 当前模型名称（用于检测图像生成模型并禁用 Task 模式） */
   modelName?: string;
 }
 
 // ==================== 模式配置 ====================
 
-const MODE_CONFIG: Record<ChatMode, { label: string }> = {
-  chat: {
-    label: 'Chat',
-  },
-  planning: {
-    label: 'Planning',
-  },
-};
+const MODE_CONFIG: Record<ChatMode, { labelKey: TranslationKey; descriptionKey: TranslationKey }> =
+  {
+    chat: {
+      labelKey: 'chat.modeChatLabel',
+      descriptionKey: 'chat.modeChatTitle',
+    },
+    planning: {
+      labelKey: 'chat.modePlanningLabel',
+      descriptionKey: 'chat.modePlanningTitle',
+    },
+  };
 
 /**
  * 检测模型是否为图像生成模型（模型名含 image 关键字）
- * 图像生成模型仅支持 Chat 模式，Planning 模式被禁用
+ * 图像生成模型仅支持 Chat 模式，Task 模式被禁用
  */
 function isImageGenerationModel(modelName?: string): boolean {
   if (!modelName) return false;
@@ -113,7 +116,7 @@ export const ModeSelector = memo(function ModeSelector({
           aria-expanded={isOpen}
           aria-label={t('chat.selectMode')}
         >
-          <span className={styles.modeLabel}>{currentConfig.label}</span>
+          <span className={styles.modeLabel}>{t(currentConfig.labelKey)}</span>
           <svg
             className={styles.arrow}
             width="12"
@@ -141,10 +144,8 @@ export const ModeSelector = memo(function ModeSelector({
                 aria-selected={mode === key}
                 data-selected={mode === key}
               >
-                <span className={styles.optionLabel}>{config.label}</span>
-                <span className={styles.optionDescription}>
-                  {key === 'chat' ? t('chat.modeChatTitle') : t('chat.modePlanningTitle')}
-                </span>
+                <span className={styles.optionLabel}>{t(config.labelKey)}</span>
+                <span className={styles.optionDescription}>{t(config.descriptionKey)}</span>
               </button>
             )
           )}

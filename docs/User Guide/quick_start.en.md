@@ -107,17 +107,17 @@ Recommendations:
 
 After creating an Agent, configure its basic capabilities before giving it complex tasks.
 
-### 6.1 Basic Settings, Safety Footer, and Planning Rounds
+### 6.1 Basic Settings, Safety Footer, and Decision Rounds
 
-Go to "Agent Settings -> Basic" to adjust the Sub-Agent Safety Footer and the Planning Decision Rounds limit.
+Go to "Agent Settings -> Basic" to adjust the Sub-Agent Safety Footer and the Decision Rounds limit.
 
 The Safety Footer is a fixed system reminder appended to the attention area at the end of each Sub-Agent LLM call. When enabled, it continuously influences the Agent's execution preferences. It is suitable as an experimental switch for task correction, delivery-quality testing, or safety reminders. Most users can leave it off by default.
 
-Planning decision rounds limit the number of Master Brain decisions. The default is 8, the minimum is 3, and the maximum is 20. More complex tasks may need more rounds, but higher limits also increase cost and waiting time.
+Decision rounds limit the number of Master Brain decisions during Task mode execution. The default is 8, the minimum is 3, and the maximum is 20. More complex tasks may need more rounds, but higher limits also increase cost and waiting time.
 
 ### 6.2 Rules: Define the Agent's Role and Boundaries
 
-Go to "Agent Settings -> Rules" to configure prompts or rules separately for Planning mode and Chat mode.
+Go to "Agent Settings -> Rules" to configure prompts or rules separately for Chat mode and Task mode.
 
 Good content for Rules includes:
 
@@ -155,7 +155,7 @@ You can create scheduled tasks manually, or ask an Agent in natural language. Fo
 I have a meeting tomorrow at 2:30 PM. Send me a Feishu reminder one hour in advance.
 ```
 
-The Agent generates a task plan from the description. After saving, AgentVis runs it in Planning mode at the specified time.
+The Agent generates a task plan from the description. After saving, AgentVis runs it in Task mode at the specified time.
 
 Scheduled tasks are suitable for:
 

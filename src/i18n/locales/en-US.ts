@@ -98,12 +98,12 @@ export const enUS = {
       searchAria: 'Search chat history',
       searchTitle: 'Search (Ctrl+F)',
       settingsAria: 'Agent Settings',
-      planningEmptyText: 'Send a task description to {name}',
-      chatEmptyText: 'Start chatting with {name}',
-      planningEmptyHint: 'Planning mode executes complex tasks',
-      chatEmptyHint:
-        'Send a message to start chatting, or switch to Planning mode for complex tasks',
-      inputPlaceholder: 'Chat with {name}...',
+      emptyTitle: 'What would you like to accomplish with {name}?',
+      planningEmptyHint:
+        "Give {name} a goal. They'll plan first, then act, you can add requirements or adjust direction at any time.",
+      chatEmptyHint: "Start here with a question, an idea, or a goal that's still taking shape.",
+      planningInputPlaceholder: "Describe what you'd like to accomplish...",
+      chatInputPlaceholder: 'Share an idea, question, or goal...',
       batchDeleteTitle: 'Delete Messages',
       batchDeleteDescription: 'Delete the selected {count} messages? This cannot be undone.',
     },
@@ -123,15 +123,15 @@ export const enUS = {
       name: 'Agent Name',
       loopBudget: 'Decision Rounds',
       loopBudgetHint:
-        'Maximum Master Agent decision rounds for a single Query call in Planning mode. The default works for most cases; raise it for long programming task chains. Leave blank to use the default ({max} rounds).',
+        'Maximum Master Agent decision rounds for a single request in Task mode. The default works for most cases; increase it for very long, multi-step programming tasks. Leave blank to use the default ({max} rounds).',
       increase: 'Increase',
       decrease: 'Decrease',
       loopUnit: 'rounds',
       resetLoopTitle: 'Reset to default ({max} rounds)',
       resetDefault: 'Reset Default',
-      visualEnhancement: 'Planning Visual Enhancement',
+      visualEnhancement: 'Task Visual Enhancement',
       visualEnhancementHint:
-        "Planning mode shows the raw MB response first, then uses heuristic signals to decide whether to enhance the same message in the background with ECharts, Mermaid, or interactive components. You can keep chatting or stop that message's enhancement independently. When disabled, only the original response is kept.",
+        "Task mode shows the Master Agent's original response first, then uses heuristic signals to decide whether to enhance the same message in the background with ECharts, Mermaid, or interactive components. You can continue chatting or stop enhancement for that message independently. When disabled, only the original response is kept.",
       sandboxMode: 'Sandbox Permission',
       sandboxModes: {
         LocalAudit: {
@@ -156,10 +156,10 @@ export const enUS = {
       subAgentSafetyFooterPrompt: 'System Reminder Prompt',
       mbRulesLabel: 'Master Agent Rules',
       mbRulesHint:
-        'Decision-layer rules that affect Master Agent task decomposition and decisions、response style (Planning mode only)',
+        "Decision-layer rules that shape the Master Agent's task decomposition, decisions, and response style (Task mode only).",
       saRulesLabel: 'Sub-Agent Rules',
       saRulesHint:
-        'Execution-layer rules that affect Sub-Agent tool use and code style (Planning mode only)',
+        'Execution-layer rules that shape Sub-Agent tool use, code style, and other execution behavior (Task mode only).',
       chatRulesLabel: 'Chat Mode Rules',
       chatRulesHint:
         'Independent rules for Chat mode. Shapes how the LLM thinks and responds (Chat mode only)',
@@ -172,7 +172,7 @@ export const enUS = {
         'Both Rules files are merged into the chat context without separating Master Agent and Sub-Agent roles.',
       autoIndexDeliverables: 'Auto-sync Deliverables',
       autoIndexHint:
-        'Document deliverables in Planning mode are automatically indexed into the knowledge base. When disabled, they are still saved locally but will not be retrieved by RAG.',
+        'Document deliverables created in Task mode are automatically indexed into the knowledge base. When disabled, they are still saved locally but will not be retrieved by RAG.',
       autoIndexTip:
         'For scheduled deliverable tasks, such as daily news reports, consider disabling this to avoid retrieving stale information in new tasks.',
       knowledgeFiles: 'Knowledge Files',
@@ -190,7 +190,7 @@ export const enUS = {
       pinnedMode: 'Pinned Skill Mode',
       pinnedHint:
         'Bind 1-{max} skills directly into context and ignore retrieval or injection for other skills',
-      pinnedTip: 'When enabled, global skill toggles do not affect this Agent. Planning mode only.',
+      pinnedTip: 'When enabled, global skill toggles do not affect this Agent (Task mode only).',
       selectedSkills: '{count}/{max} skills selected',
       emptySkills: 'No installed external skills',
       saving: 'Saving...',
@@ -295,16 +295,16 @@ export const enUS = {
     },
   },
   chat: {
-    planningExecutionFailed: 'Planning execution failed',
+    planningExecutionFailed: 'Task execution failed',
     processingFailed: 'Processing failed',
     processingFailedWithError: 'Processing failed: {error}',
     planningCheckpointRunningContent:
-      '**The task may be incomplete after an unexpected interruption.**\n\nAgentVis saved a progress snapshot for this Planning task.',
+      '**The task may be incomplete after an unexpected interruption.**\n\nAgentVis saved a progress snapshot for the current task.',
     planningCheckpointNoObservations: 'No recoverable Sub-Agent observations yet.',
     planningCheckpointOmittedOlderObservations:
       '[SYSTEM: Older checkpoint observations were omitted to keep the latest recoverable progress in context.]',
     planningCheckpointPersistContent:
-      '[SYSTEM: The previous Planning task saved the following progress before it was interrupted. Treat this as historical execution state that already happened, not as a new user request. If the user asks to continue, use the Master Brain decision progress and Sub-Agent execution records below to identify the interruption point; first verify existing files/artifacts, then resume from the last reliable state.]\n\n{observations}',
+      '[SYSTEM: The previous task saved the following progress before it was interrupted. Treat this as historical execution state that already happened, not as a new user request. If the user asks to continue, use the Master Brain decision progress and Sub-Agent execution records below to identify the interruption point; first verify existing files/artifacts, then resume from the last reliable state.]\n\n{observations}',
     planningCheckpointMbProgressHeader: 'Saved Master Brain decision progress:',
     planningCheckpointSaProgressHeader: 'Saved Sub-Agent execution progress:',
     planningCheckpointUnknownStepLabel: '[Unknown step]',
@@ -414,10 +414,10 @@ export const enUS = {
     deleteMessage: 'Delete message',
     revokeMessage: 'Revoke message',
     deletePlanningRecordDescription:
-      'Delete this Planning task record?\n\nThis message contains a task progress snapshot. After deletion, the related context cannot be restored if you need to continue this task later.',
+      'Delete this task record?\n\nThis message contains a task progress snapshot. After deletion, the related context cannot be restored if you need to continue this task later.',
     deleteMessageDescription: 'Delete this message? This cannot be undone.',
     revokePlanningDescription:
-      'Revoke this message?\n\nThis will remove this message and all following conversation records, including Planning task progress snapshots. If the task was interrupted, sending the same task later will not be able to resume from the checkpoint and must run from the beginning.',
+      'Revoke this message?\n\nThis will remove this message and all following conversation records, including task progress snapshots. If the task was interrupted, sending the same task later will not be able to resume from the checkpoint and must run from the beginning.',
     revokeMessageDescription:
       'Revoke this message? This will also remove the following Agent reply and cannot be undone.',
     confirmRevoke: 'Revoke',
@@ -588,8 +588,10 @@ export const enUS = {
     phasePlanning: 'Planning',
     phaseDecided: 'Deciding',
     stepPhase: 'Step {step} · {phase}',
-    modeChatTitle: 'Direct chat mode (not task mode)',
-    modePlanningTitle: 'Plan and complete complex tasks',
+    modeChatLabel: 'Chat',
+    modePlanningLabel: 'Task',
+    modeChatTitle: 'Discuss, analyze, and explore ideas',
+    modePlanningTitle: 'Plan and carry out tasks',
     selectMode: 'Select mode',
     imageModelChatOnly: 'Image generation models only support Chat mode',
     projectSelectTitle: 'Select Project Folder',
@@ -627,7 +629,7 @@ export const enUS = {
     toastEmbeddingDegradedTitle: 'Semantic Search Degraded',
     toastEmbeddingDegradedDescription:
       'The embedding service timed out or is unavailable, so memory retrieval was skipped. The message flow has continued in degraded mode. If this keeps happening, check your network or Embedding API settings.',
-    toastPlanningFailed: 'Planning Failed',
+    toastPlanningFailed: 'Task execution failed',
     toastSendFailed: 'Send Failed',
     toastStreamCancelRequestedTitle: 'Model output interruption requested',
     toastStreamCancelRequestedDescription:
@@ -658,7 +660,7 @@ export const enUS = {
     attachmentManifestHeader:
       '## User-uploaded attachment files\nThe following files are saved locally. If the inline content below is incomplete or truncated, have a Sub-Agent use the read/search tools to inspect these paths directly.\n{items}',
     chatAttachmentManifestHeader:
-      '## User-uploaded attachment files\nThe following files were uploaded in this turn and saved locally. Chat mode cannot directly read local paths; if the inline content below is incomplete or truncated, answer only from the excerpt. If the task needs full-file evidence, tell the user to switch to Planning mode to inspect and read the complete attachment from the workspace, provided the attachment has not been deleted.\n{items}',
+      '## User-uploaded attachment files\nThe following files were uploaded in this turn and saved locally. Chat mode cannot directly read local paths; if the inline content below is incomplete or truncated, answer only from the excerpt. If the task needs full-file evidence, tell the user to switch to Task mode to inspect and read the complete attachment from the workspace, provided the attachment has not been deleted.\n{items}',
     attachmentManifestItem: '- {fileName} ({type}, .{extension}, {size}KB): {path}',
     attachmentContextBlock: '📎 Attachment [{fileName}]\nPath: {path}\nContent:\n{content}',
     historicalAttachmentContextHeader:
@@ -668,10 +670,10 @@ export const enUS = {
     historicalAttachmentContextTruncatedNotice:
       '[Historical attachment context was truncated to about {maxTokens} tokens. If the current request needs full content, dispatch a Sub-Agent to read the attachment path above directly.]',
     chatHistoricalAttachmentContextHeader:
-      '## Historical User Attachments\nThis historical user message included the following attachments. This is Chat mode: the model cannot reread local paths and can only reason from the historical excerpts and conversation summary below. If the current question needs complete attachment content, state that the evidence is insufficient and suggest switching to Planning mode to inspect and read the complete attachment from the workspace, provided the attachment has not been deleted.\n{items}',
+      '## Historical User Attachments\nThis historical user message included the following attachments. This is Chat mode: the model cannot reread local paths and can only reason from the historical excerpts and conversation summary below. If the current question needs complete attachment content, state that the evidence is insufficient and suggest switching to Task mode to inspect and read the complete attachment from the workspace, provided the attachment has not been deleted.\n{items}',
     chatHistoricalAttachmentContentBlock: 'Historical attachment excerpt [{fileName}]:\n{content}',
     chatHistoricalAttachmentContextTruncatedNotice:
-      '[Historical attachment context was truncated to about {maxTokens} tokens. Chat mode cannot reread the full local attachment. If the current question needs full-text evidence, say you can only answer from the excerpt and suggest switching to Planning mode to inspect and read the complete attachment from the workspace, provided the attachment has not been deleted.]',
+      '[Historical attachment context was truncated to about {maxTokens} tokens. Chat mode cannot reread the full local attachment. If the current question needs full-text evidence, say you can only answer from the excerpt and suggest switching to Task mode to inspect and read the complete attachment from the workspace, provided the attachment has not been deleted.]',
     encodingDetectionFailed:
       'Could not detect the file encoding. Make sure the file uses UTF-8, GBK, or GB2312.',
     emptyDocument: 'Document content is empty',
@@ -2055,7 +2057,7 @@ export const enUS = {
         'Fallback when SiliconFlow is unavailable. Uses the same free {model} model (1024 dimensions), with compatible vectors.',
       tavilyTitle: 'Web Search (Tavily + DuckDuckGo)',
       tavilyDesc:
-        'Used by Planning mode for web search. Tavily is preferred when configured; DuckDuckGo is used as a free fallback without an API key.',
+        'Used for web search in Task mode. Tavily is preferred when configured; DuckDuckGo is used as a free fallback without an API key.',
       githubTitle: 'GitHub (API Access)',
       githubDesc:
         'Optional token used by GitHub skill installation to avoid unauthenticated API rate limits. Fine-grained tokens only need public repository read access for public skills.',

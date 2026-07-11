@@ -2,6 +2,7 @@
 
 > Last updated: 2026-06-21
 > Audience: developers / skill-package developers / product team
+> Naming note: “Task mode” in the UI maps to the internal mode value and path `planning`; existing code identifiers remain unchanged.
 
 ---
 
@@ -117,7 +118,7 @@ External skill packages are ultimately stored as directories under `packages/` i
 
 ### Scanning and Registration
 
-After app startup, `App` preloads external skill scanning. In the Planning path, `SkillLoader.loadAllSkills()` also triggers the same `bootstrapExternalSkills()` Promise, ensuring concurrent calls only execute once. Planning is unblocked after scanning and registration complete, while additional dependency installation continues asynchronously in the background:
+After app startup, `App` preloads external skill scanning. In Task mode's internal `planning` path, `SkillLoader.loadAllSkills()` also triggers the same `bootstrapExternalSkills()` Promise, ensuring concurrent calls only execute once. Task mode is unblocked after scanning and registration complete, while additional dependency installation continues asynchronously in the background:
 
 ```text
 App preload / SkillLoader.loadAllSkills()

@@ -130,7 +130,7 @@ function getMessageAttachments(message: UIMessage) {
  * - 标题区显示模型选择器、搜索与设置入口
  * - 对话历史区（使用 ChatHistory 组件）
  * - 输入区（使用 ChatInput 组件）
- * - 模式选择器（Planning/Chat）
+ * - 模式选择器（Task/Chat）
  */
 export function AgentChatView() {
   const { t } = useI18n();
@@ -386,7 +386,7 @@ export function AgentChatView() {
     enableRag: true,
   });
 
-  // Planning 模式消息发送（由 usePlanningMode Hook 管理）
+  // Task 模式消息发送（由 usePlanningMode Hook 管理）
   const { executePlanningTask, stopPlanningTask } = usePlanningMode({
     contextType: 'agent',
     contextId: currentAgentId,
@@ -420,7 +420,7 @@ export function AgentChatView() {
       duration: 3000,
     });
 
-    // Planning 模式额外取消 AgentLoop
+    // Task 模式额外取消 AgentLoop
     if (mode === 'planning') {
       stopPlanningTask();
     }
@@ -1204,7 +1204,7 @@ export function AgentChatView() {
           />
         )}
 
-        {/* 对话历史区 - 始终显示，Chat/Planning 共用 */}
+        {/* 对话历史区 - 始终显示，Chat / Task 共用（Task 内部值为 planning） */}
         <ChatHistory
           messages={agentMessages}
           agentName={currentAgent.name}
@@ -1213,13 +1213,11 @@ export function AgentChatView() {
           streamingReasoningContent={streamingReasoningContent}
           mode={mode}
           contextId={currentAgentId ?? undefined}
-          emptyText={
-            mode === 'planning'
-              ? t('agent.chat.planningEmptyText', { name: currentAgent.name })
-              : t('agent.chat.chatEmptyText', { name: currentAgent.name })
-          }
+          emptyText={t('agent.chat.emptyTitle', { name: currentAgent.name })}
           emptyHint={
-            mode === 'planning' ? t('agent.chat.planningEmptyHint') : t('agent.chat.chatEmptyHint')
+            mode === 'planning'
+              ? t('agent.chat.planningEmptyHint', { name: currentAgent.name })
+              : t('agent.chat.chatEmptyHint')
           }
           onMessageAction={handleMessageAction}
           multiSelectActive={isMultiSelectActive}
@@ -1234,7 +1232,11 @@ export function AgentChatView() {
 
         {/* 输入区 - Agent 窗口禁用 @提及功能 */}
         <ChatInput
-          placeholder={t('agent.chat.inputPlaceholder', { name: currentAgent.name })}
+          placeholder={
+            mode === 'planning'
+              ? t('agent.chat.planningInputPlaceholder')
+              : t('agent.chat.chatInputPlaceholder')
+          }
           disabled={isStreaming || isSending || isAddingAttachment}
           mode={mode}
           pendingQuotes={pendingQuotes}
