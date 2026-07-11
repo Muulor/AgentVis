@@ -231,7 +231,6 @@ To keep Agent-related changes auditable, please follow these conventions:
 
 - After modifying TS/TSX files, run `eslint --fix --quiet` only on the changed files, then run `tsc --noEmit`.
 - After modifying Rust files, run `cargo check`.
-- Do not run a global formatter. Only format changed files when needed.
 - New feature components must include a header comment and be added to `PROJECT_STRUCTURE.md`.
 - When adding or changing user-visible copy, Toast messages, error messages, chat bubble content, tool observations, or system/tool return messages that affect Agent decisions, prefer the existing i18n system instead of hardcoding Chinese or English.
 - Internal logs and pure debug messages are not required to use i18n.
