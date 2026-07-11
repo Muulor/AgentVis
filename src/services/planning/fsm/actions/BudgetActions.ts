@@ -26,22 +26,22 @@ export const DEFAULT_LOOP_BUDGET = PLANNING_CONSTANTS.LOOP_GOVERNOR_INITIAL_BUDG
  * @param initialBudget - 初始预算，默认从 PLANNING_CONSTANTS 取值
  */
 export const initLoopBudget = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    initialBudget: number = DEFAULT_LOOP_BUDGET
+  ctx: FSMContext,
+  _event: FSMEvent,
+  initialBudget: number = DEFAULT_LOOP_BUDGET
 ): void => {
-    ctx.loopBudget = initialBudget;
+  ctx.loopBudget = initialBudget;
 };
 
 /**
  * 创建初始化预算 Action（可绑定参数）
  */
 export const createInitLoopBudgetAction = (
-    initialBudget: number = DEFAULT_LOOP_BUDGET
+  initialBudget: number = DEFAULT_LOOP_BUDGET
 ): ActionFn<FSMEvent> => {
-    return (ctx: FSMContext) => {
-        ctx.loopBudget = initialBudget;
-    };
+  return (ctx: FSMContext) => {
+    ctx.loopBudget = initialBudget;
+  };
 };
 
 /**
@@ -50,9 +50,9 @@ export const createInitLoopBudgetAction = (
  * 预算不会变为负数
  */
 export const decrementBudget: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
-    if (ctx.loopBudget > 0) {
-        ctx.loopBudget--;
-    }
+  if (ctx.loopBudget > 0) {
+    ctx.loopBudget--;
+  }
 };
 
 /**
@@ -62,12 +62,8 @@ export const decrementBudget: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
  * @param _event - 事件（未使用）
  * @param amount - 增加的数量
  */
-export const incrementBudget = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    amount: number = 1
-): void => {
-    ctx.loopBudget += amount;
+export const incrementBudget = (ctx: FSMContext, _event: FSMEvent, amount: number = 1): void => {
+  ctx.loopBudget += amount;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -83,17 +79,13 @@ export const incrementBudget = (
  * @param _event - 事件（未使用）
  * @param delta - 变化量（可正可负）
  */
-export const updateRiskScore = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    delta: number
-): void => {
-    ctx.riskScore = Math.max(0, Math.min(1, ctx.riskScore + delta));
+export const updateRiskScore = (ctx: FSMContext, _event: FSMEvent, delta: number): void => {
+  ctx.riskScore = Math.max(0, Math.min(1, ctx.riskScore + delta));
 };
 
 /**
  * 重置风险分数
  */
 export const resetRiskScore: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
-    ctx.riskScore = 0;
+  ctx.riskScore = 0;
 };

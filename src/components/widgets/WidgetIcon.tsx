@@ -21,12 +21,12 @@ import type { LucideIcon } from 'lucide-react';
 // ============================================================================
 
 interface WidgetIconProps {
-    /** 图标标识：Emoji 字符串或 Lucide 图标名（PascalCase，如 Palette、Building2） */
-    icon: string;
-    /** 图标尺寸（px），默认 18 */
-    size?: number;
-    /** 自定义 CSS className */
-    className?: string;
+  /** 图标标识：Emoji 字符串或 Lucide 图标名（PascalCase，如 Palette、Building2） */
+  icon: string;
+  /** 图标尺寸（px），默认 18 */
+  size?: number;
+  /** 自定义 CSS className */
+  className?: string;
 }
 
 // ============================================================================
@@ -44,7 +44,7 @@ interface WidgetIconProps {
 const LUCIDE_NAME_PATTERN = /^[A-Z][a-zA-Z0-9]+$/;
 
 function isLucideIconName(value: string): boolean {
-    return LUCIDE_NAME_PATTERN.test(value);
+  return LUCIDE_NAME_PATTERN.test(value);
 }
 
 /**
@@ -54,11 +54,11 @@ function isLucideIconName(value: string): boolean {
  * key 是 PascalCase 图标名
  */
 function resolveLucideIcon(name: string): LucideIcon | null {
-    // 直接查找（PascalCase 完全匹配）
-    const icon = (icons as Record<string, LucideIcon>)[name];
-    if (icon) return icon;
+  // 直接查找（PascalCase 完全匹配）
+  const icon = (icons as Record<string, LucideIcon>)[name];
+  if (icon) return icon;
 
-    return null;
+  return null;
 }
 
 // ============================================================================
@@ -66,44 +66,38 @@ function resolveLucideIcon(name: string): LucideIcon | null {
 // ============================================================================
 
 export const WidgetIcon = memo(function WidgetIcon({
-    icon,
-    size = 18,
-    className,
+  icon,
+  size = 18,
+  className,
 }: WidgetIconProps) {
-    // 尝试解析为 Lucide 图标
-    const resolved = useMemo(() => {
-        if (isLucideIconName(icon)) {
-            const found = resolveLucideIcon(icon);
-            // 找到 → 渲染对应图标；未找到 → 标记为 Lucide 类型但 fallback
-            return { isLucideName: true, component: found };
-        }
-        return { isLucideName: false, component: null };
-    }, [icon]);
-
-    // 渲染 Lucide 图标
-    if (resolved.component) {
-        return (
-            <resolved.component
-                size={size}
-                className={className}
-                strokeWidth={1.75}
-            />
-        );
+  // 尝试解析为 Lucide 图标
+  const resolved = useMemo(() => {
+    if (isLucideIconName(icon)) {
+      const found = resolveLucideIcon(icon);
+      // 找到 → 渲染对应图标；未找到 → 标记为 Lucide 类型但 fallback
+      return { isLucideName: true, component: found };
     }
+    return { isLucideName: false, component: null };
+  }, [icon]);
 
-    // PascalCase 但 lucide-react 中未找到 → 使用 Circle 作为通用 fallback
-    // 避免将 "AlignCenter" 等文本原样显示
-    if (resolved.isLucideName) {
-        const Fallback = resolveLucideIcon('Circle');
-        if (Fallback) {
-            return <Fallback size={size} className={className} strokeWidth={1.75} />;
-        }
+  // 渲染 Lucide 图标
+  if (resolved.component) {
+    return <resolved.component size={size} className={className} strokeWidth={1.75} />;
+  }
+
+  // PascalCase 但 lucide-react 中未找到 → 使用 Circle 作为通用 fallback
+  // 避免将 "AlignCenter" 等文本原样显示
+  if (resolved.isLucideName) {
+    const Fallback = resolveLucideIcon('Circle');
+    if (Fallback) {
+      return <Fallback size={size} className={className} strokeWidth={1.75} />;
     }
+  }
 
-    // 渲染 Emoji / 文本
-    return (
-        <span className={className} style={{ fontSize: size, lineHeight: 1 }}>
-            {icon}
-        </span>
-    );
+  // 渲染 Emoji / 文本
+  return (
+    <span className={className} style={{ fontSize: size, lineHeight: 1 }}>
+      {icon}
+    </span>
+  );
 });

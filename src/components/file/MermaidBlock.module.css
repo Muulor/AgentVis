@@ -1,19 +1,19 @@
 /* MermaidBlock - Mermaid 图表渲染样式 */
 
 .container {
-    width: 100%;
-    overflow-x: auto;
-    padding: 8px 0;
-    display: flex;
-    justify-content: center;
+  width: 100%;
+  overflow-x: auto;
+  padding: 8px 0;
+  display: flex;
+  justify-content: center;
 }
 
 /* mermaid SVG 自适应容器宽度 */
 .container :global(svg) {
-    max-width: 100%;
-    height: auto;
-    font-size: 13px;
-    line-height: 1.35;
+  max-width: 100%;
+  height: auto;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .container :global(.node rect),
@@ -21,9 +21,9 @@
 .container :global(.node circle),
 .container :global(.node ellipse),
 .container :global(.node path) {
-    rx: 6px;
-    ry: 6px;
-    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.12));
+  rx: 6px;
+  ry: 6px;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.12));
 }
 
 .container :global(.edgePath path),
@@ -31,80 +31,80 @@
 .container :global(.messageLine0),
 .container :global(.messageLine1),
 .container :global(.transition) {
-    stroke-width: 1.4px;
-    opacity: 0.88;
+  stroke-width: 1.4px;
+  opacity: 0.88;
 }
 
 .container :global(.edgeLabel),
 .container :global(.labelBkg) {
-    border-radius: 4px;
+  border-radius: 4px;
 }
 
 .container :global(.edgeLabel),
 .container :global(.edgeLabel p),
 .container :global(.edgeLabel span),
 .container :global(.edgeLabel div) {
-    background: transparent !important;
+  background: transparent !important;
 }
 
 .container :global(.edgeLabel rect),
 .container :global(.edgeLabel polygon),
 .container :global(rect.labelBkg),
 .container :global(polygon.labelBkg) {
-    fill: transparent !important;
-    stroke: transparent !important;
+  fill: transparent !important;
+  stroke: transparent !important;
 }
 
 .container :global(.edgeLabel),
 .container :global(.edgeLabel *) {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .container :global(.cluster rect) {
-    rx: 8px;
-    ry: 8px;
-    stroke-dasharray: 4 3;
+  rx: 8px;
+  ry: 8px;
+  stroke-dasharray: 4 3;
 }
 
 .container :global(.actor) {
-    rx: 6px;
-    ry: 6px;
+  rx: 6px;
+  ry: 6px;
 }
 
 .container :global(.note) {
-    rx: 6px;
-    ry: 6px;
+  rx: 6px;
+  ry: 6px;
 }
 
 /* 等待渲染时的占位区域 */
 .placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
-    border-radius: var(--radius-lg, 8px);
-    background: var(--color-bg-secondary, #F7F7F7);
-    border: 1px dashed var(--color-border-default, #E5E5E5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  border-radius: var(--radius-lg, 8px);
+  background: var(--color-bg-secondary, #f7f7f7);
+  border: 1px dashed var(--color-border-default, #e5e5e5);
 }
 
 .placeholderText {
-    font-size: var(--font-size-sm, 12px);
-    color: var(--color-text-tertiary, #999999);
+  font-size: var(--font-size-sm, 12px);
+  color: var(--color-text-tertiary, #999999);
 }
 
 /* 图表语法错误时的错误提示区域（替代"等待图表内容"） */
 .errorPlaceholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 16px;
-    border-radius: var(--radius-lg, 8px);
-    background: var(--color-bg-secondary, #F7F7F7);
-    border: 1px dashed var(--color-warning, #C98D2E);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-lg, 8px);
+  background: var(--color-bg-secondary, #f7f7f7);
+  border: 1px dashed var(--color-warning, #c98d2e);
 }
 
 .errorIcon {
-    font-size: 14px;
-    flex-shrink: 0;
+  font-size: 14px;
+  flex-shrink: 0;
 }

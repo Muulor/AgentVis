@@ -10,191 +10,191 @@
 /* ==================== 基础气泡样式 ==================== */
 
 .bubble {
-    display: flex;
-    gap: var(--spacing-sm);
-    max-width: 85%;
-    position: relative;
+  display: flex;
+  gap: var(--spacing-sm);
+  max-width: 85%;
+  position: relative;
 }
 
 .userBubble {
-    flex-direction: row-reverse;
-    align-self: flex-end;
-    max-width: min(85%, 820px);
+  flex-direction: row-reverse;
+  align-self: flex-end;
+  max-width: min(85%, 820px);
 }
 
 .agentBubble {
-    flex-direction: row;
-    align-self: flex-start;
+  flex-direction: row;
+  align-self: flex-start;
 }
 
 /* ==================== 头像 ==================== */
 
 .avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: white;
-    flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: white;
+  flex-shrink: 0;
 }
 
 /* ==================== 内容区域 ==================== */
 
 .contentWrapper {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-    position: relative;
-    /* 关键：允许 flex 子元素收缩，解决代码块不自适应的问题 */
-    min-width: 0;
-    /* 注意：保持 overflow 为 visible 以允许 MessageActions 正常显示在外部 */
-    overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  position: relative;
+  /* 关键：允许 flex 子元素收缩，解决代码块不自适应的问题 */
+  min-width: 0;
+  /* 注意：保持 overflow 为 visible 以允许 MessageActions 正常显示在外部 */
+  overflow: visible;
 }
 
 .header {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .senderName {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .timestamp {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
 }
 
 .content {
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-message-bubble);
-    line-height: var(--line-height-normal);
-    word-break: break-word;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-message-bubble);
+  line-height: var(--line-height-normal);
+  word-break: break-word;
 }
 
 /* 用户消息样式 */
 .userBubble .content {
-    --user-message-bg: #e9e9e9;
-    --user-message-color: #181818;
-    --user-message-selection-bg: rgba(0, 0, 0, 0.16);
-    --user-message-selection-color: #1A1A1A;
+  --user-message-bg: #e9e9e9;
+  --user-message-color: #181818;
+  --user-message-selection-bg: rgba(0, 0, 0, 0.16);
+  --user-message-selection-color: #1a1a1a;
 
-    background-color: var(--user-message-bg);
-    color: var(--user-message-color);
-    border-bottom-right-radius: var(--radius-message-bubble);
-    overflow-wrap: anywhere;
-    text-wrap: pretty;
-    /* 用户消息是纯文本，保留换行符 */
-    white-space: pre-wrap;
+  background-color: var(--user-message-bg);
+  color: var(--user-message-color);
+  border-bottom-right-radius: var(--radius-message-bubble);
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  /* 用户消息是纯文本，保留换行符 */
+  white-space: pre-wrap;
 }
 
 :global([data-theme='dark']) .userBubble .content {
-    --user-message-bg: #2E2E31;
-    --user-message-color: white;
-    --user-message-selection-bg: rgba(255, 255, 255, 0.4);
-    --user-message-selection-color: white;
+  --user-message-bg: #2e2e31;
+  --user-message-color: white;
+  --user-message-selection-bg: rgba(255, 255, 255, 0.4);
+  --user-message-selection-color: white;
 }
 
 /* 用户消息选中样式 - 使用高对比度颜色以区分背景 */
 .userBubble .content::selection {
-    background-color: var(--user-message-selection-bg);
-    color: var(--user-message-selection-color);
+  background-color: var(--user-message-selection-bg);
+  color: var(--user-message-selection-color);
 }
 
 .userBubble .content *::selection {
-    background-color: var(--user-message-selection-bg);
-    color: var(--user-message-selection-color);
+  background-color: var(--user-message-selection-bg);
+  color: var(--user-message-selection-color);
 }
 
 /* Agent 消息样式 */
 .inlineMessageContent {
-    white-space: pre-wrap;
+  white-space: pre-wrap;
 }
 
 .inlineTokenChip {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 4px;
-    max-width: min(100%, 640px);
-    margin: 0 1px;
-    padding: 0 2px;
-    appearance: none;
-    border: none;
-    background: transparent;
-    color: var(--color-inline-token-on-action);
-    font: inherit;
-    font-weight: var(--font-weight-semibold);
-    line-height: inherit;
-    vertical-align: baseline;
-    cursor: pointer;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(100%, 640px);
+  margin: 0 1px;
+  padding: 0 2px;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-inline-token-on-action);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  line-height: inherit;
+  vertical-align: baseline;
+  cursor: pointer;
 }
 
 .inlineTokenChip:hover:not(:disabled),
 .inlineTokenChip:focus-visible:not(:disabled) {
-    text-decoration: underline;
-    text-decoration-color: color-mix(in srgb, currentColor 58%, transparent);
-    text-underline-offset: 2px;
-    outline: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 58%, transparent);
+  text-underline-offset: 2px;
+  outline: none;
 }
 
 .userBubble .inlineTokenChip {
-    color: var(--color-inline-token-on-action);
+  color: var(--color-inline-token-on-action);
 }
 
 .inlineTokenChip:disabled {
-    cursor: default;
+  cursor: default;
 }
 
 .inlineTokenChip span {
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    white-space: normal;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  white-space: normal;
 }
 
 .inlineTokenChip svg {
-    flex-shrink: 0;
-    margin-top: 0.2em;
+  flex-shrink: 0;
+  margin-top: 0.2em;
 }
 
 .agentBubble .content {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
-    border-bottom-left-radius: var(--radius-message-bubble);
-    /* Agent 消息使用 Markdown 渲染，由 react-markdown 控制排版 */
-    white-space: normal;
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border-bottom-left-radius: var(--radius-message-bubble);
+  /* Agent 消息使用 Markdown 渲染，由 react-markdown 控制排版 */
+  white-space: normal;
 }
 
 /* 包含富内容（mermaid/echarts/widget/表格）的 Agent 消息，
    确保气泡有足够最小宽度以正确渲染图表和可视化元素 */
 .richContent {
-    min-width: min(560px, 85vw);
+  min-width: min(560px, 85vw);
 }
 
 /* ==================== 系统消息 ==================== */
 
 .systemMessage {
-    display: flex;
-    justify-content: center;
-    padding: var(--spacing-md) 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-md) 0;
 }
 
 .systemContent {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-tertiary);
-    background-color: transparent;
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  background-color: transparent;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-md);
 }
 
 /* ==================== 悬停效果已在 MessageActions 中处理 ==================== */
@@ -202,225 +202,231 @@
 /* ==================== 消息状态 ==================== */
 
 .pending {
-    opacity: 0.7;
+  opacity: 0.7;
 }
 
 .failed {
-    border-left: 3px solid var(--color-status-error);
+  border-left: 3px solid var(--color-status-error);
 }
 
 /* ==================== 引用溯源卡片 ==================== */
 
 .quotedFromBlock {
-    margin-bottom: var(--spacing-sm);
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
 
 .quotedFromItem {
-    display: flex;
-    flex-direction: column;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    /* 使用语义化 token，同时支持浅色和深色主题 */
-    background-color: var(--color-bg-secondary);
-    border-radius: var(--radius-message-bubble);
-    border-left: none;
-    font-size: var(--font-size-xs);
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  /* 使用语义化 token，同时支持浅色和深色主题 */
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-message-bubble);
+  border-left: none;
+  font-size: var(--font-size-xs);
 }
 
 .visualVersionSwitcher {
-    display: inline-flex;
-    align-self: flex-start;
-    margin-top: 2px;
-    padding: 2px;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-full);
-    background-color: var(--color-bg-secondary);
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-secondary);
 }
 
 .visualEnhancementFooter {
-    display: flex;
-    align-items: center;
-    align-self: flex-start;
-    flex-wrap: wrap;
-    gap: var(--spacing-xs);
-    margin-top: 2px;
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: 2px;
 }
 
 .visualEnhancementStatus,
 .stopVisualEnhancementButton {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: 28px;
-    padding: 3px 9px;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-full);
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
 }
 
 .stopVisualEnhancementButton {
-    appearance: none;
-    color: var(--color-text-secondary);
-    font: inherit;
-    font-size: var(--font-size-xs);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
+  appearance: none;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .stopVisualEnhancementButton:hover,
 .stopVisualEnhancementButton:focus-visible {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .stopVisualEnhancementButton:focus-visible {
-    outline: 2px solid var(--color-action-primary);
-    outline-offset: 1px;
+  outline: 2px solid var(--color-action-primary);
+  outline-offset: 1px;
 }
 
 .visualEnhancementSpinner {
-    width: 10px;
-    height: 10px;
-    border: 1.5px solid color-mix(in srgb, var(--color-action-primary) 30%, transparent);
-    border-top-color: var(--color-action-primary);
-    border-radius: 50%;
-    animation: visualEnhancementSpin 0.9s linear infinite;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--color-action-primary) 30%, transparent);
+  border-top-color: var(--color-action-primary);
+  border-radius: 50%;
+  animation: visualEnhancementSpin 0.9s linear infinite;
 }
 
 @keyframes visualEnhancementSpin {
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .visualVersionButton {
-    min-height: 24px;
-    padding: 3px 9px;
-    border: none;
-    border-radius: var(--radius-full);
-    background: transparent;
-    color: var(--color-text-tertiary);
-    font: inherit;
-    font-size: var(--font-size-xs);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
+  min-height: 24px;
+  padding: 3px 9px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .visualVersionButton:hover,
 .visualVersionButton:focus-visible {
-    color: var(--color-text-primary);
+  color: var(--color-text-primary);
 }
 
 .visualVersionButton:focus-visible {
-    outline: 2px solid var(--color-action-primary);
-    outline-offset: 1px;
+  outline: 2px solid var(--color-action-primary);
+  outline-offset: 1px;
 }
 
 .visualVersionButtonActive {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .visualVersionTransition {
-    animation: visualVersionFadeIn 180ms ease-out;
+  animation: visualVersionFadeIn 180ms ease-out;
 }
 
 @keyframes visualVersionFadeIn {
-    from {
-        opacity: 0.45;
-        transform: translateY(2px);
-    }
+  from {
+    opacity: 0.45;
+    transform: translateY(2px);
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .visualVersionTransition {
-        animation: none;
-    }
+  .visualVersionTransition {
+    animation: none;
+  }
 }
 
 .quotedFromHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
 }
 
 .quotedFromLabel {
-    color: var(--color-action-primary);
-    font-weight: var(--font-weight-medium);
+  color: var(--color-action-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 展开/收起方向指示器 */
 .expandIndicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-text-tertiary);
-    user-select: none;
-    flex-shrink: 0;
-    transition: transform var(--transition-fast), color var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  user-select: none;
+  flex-shrink: 0;
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .expandIndicatorExpanded {
-    transform: rotate(90deg);
+  transform: rotate(90deg);
 }
 
 /* 收起态：单行截断（默认） */
 .quotedFromContent {
-    display: block;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: var(--line-height-tight);
+  display: block;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: var(--line-height-tight);
 }
 
 /* 展开态：完整内容 + 滚动条 */
 .quotedFromContentExpanded {
-    white-space: pre-wrap;
-    word-break: break-word;
-    overflow: hidden;
-    text-overflow: unset;
-    max-height: 200px;
-    overflow-y: auto;
-    padding-right: var(--spacing-xs);
-    /* 精简滚动条 */
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  text-overflow: unset;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: var(--spacing-xs);
+  /* 精简滚动条 */
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar {
-    width: 6px;
+  width: 6px;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar-thumb {
-    background-color: var(--color-border-hover);
-    border-radius: 3px;
+  background-color: var(--color-border-hover);
+  border-radius: 3px;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar-button {
-    display: none;
-    width: 0;
-    height: 0;
-    min-width: 0;
-    min-height: 0;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    background-image: none;
-    border: 0;
+  display: none;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  background-image: none;
+  border: 0;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar-button:single-button,
@@ -431,74 +437,74 @@
 .quotedFromContentExpanded::-webkit-scrollbar-button:vertical:end:increment,
 .quotedFromContentExpanded::-webkit-scrollbar-button:horizontal:start:decrement,
 .quotedFromContentExpanded::-webkit-scrollbar-button:horizontal:end:increment {
-    display: none;
-    width: 0;
-    height: 0;
-    min-width: 0;
-    min-height: 0;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    background-image: none;
-    border: 0;
+  display: none;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  background-image: none;
+  border: 0;
 }
 
 .quotedFromContentExpanded::-webkit-scrollbar-corner {
-    background: transparent;
+  background: transparent;
 }
 
 /* ==================== 多选模式 ==================== */
 
 .multiSelectBubble {
-    cursor: pointer;
-    transition: background-color var(--transition-fast);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-xs);
-    margin: calc(-1 * var(--spacing-xs));
-    /* 关键：多选模式下统一 flex-direction: row，确保 SelectCheckbox 始终在左侧 */
-    flex-direction: row !important;
-    /* 多选模式下统一左对齐，避免用户消息右对齐导致圆圈跟着跑到右侧 */
-    align-self: flex-start !important;
-    /* 多选模式下放宽 max-width，保持内容完整显示 */
-    max-width: 90%;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-xs);
+  margin: calc(-1 * var(--spacing-xs));
+  /* 关键：多选模式下统一 flex-direction: row，确保 SelectCheckbox 始终在左侧 */
+  flex-direction: row !important;
+  /* 多选模式下统一左对齐，避免用户消息右对齐导致圆圈跟着跑到右侧 */
+  align-self: flex-start !important;
+  /* 多选模式下放宽 max-width，保持内容完整显示 */
+  max-width: 90%;
 }
 
 .multiSelectBubble:hover {
-    background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .selectedBubble {
-    background-color: rgba(37, 99, 235, 0.08);
+  background-color: rgba(37, 99, 235, 0.08);
 }
 
 .selectedBubble:hover {
-    background-color: rgba(37, 99, 235, 0.12);
+  background-color: rgba(37, 99, 235, 0.12);
 }
 
 /* ==================== 多文件预览按钮 ==================== */
 
 .multiFilePreviewBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    padding: 6px 14px;
-    margin-top: var(--spacing-xs);
-    background: rgba(166, 227, 161, 0.12);
-    border: 1px solid rgba(166, 227, 161, 0.25);
-    border-radius: var(--radius-full);
-    color: #a6e3a1;
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 6px 14px;
+  margin-top: var(--spacing-xs);
+  background: rgba(166, 227, 161, 0.12);
+  border: 1px solid rgba(166, 227, 161, 0.25);
+  border-radius: var(--radius-full);
+  color: #a6e3a1;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .multiFilePreviewBtn:hover {
-    background: rgba(166, 227, 161, 0.2);
-    border-color: rgba(166, 227, 161, 0.4);
-    transform: translateY(-1px);
+  background: rgba(166, 227, 161, 0.2);
+  border-color: rgba(166, 227, 161, 0.4);
+  transform: translateY(-1px);
 }
 
 .multiFilePreviewBtn:active {
-    transform: translateY(0);
+  transform: translateY(0);
 }

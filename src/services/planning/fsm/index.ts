@@ -10,9 +10,9 @@ export { FSMEngine } from './FSMEngine';
 
 // FSM 定义
 export {
-    parseFSMDefinition,
-    createAgentServiceFSMDefinition,
-    createSubAgentFSMDefinition,
+  parseFSMDefinition,
+  createAgentServiceFSMDefinition,
+  createSubAgentFSMDefinition,
 } from './FSMDefinitions';
 
 // Guard 函数

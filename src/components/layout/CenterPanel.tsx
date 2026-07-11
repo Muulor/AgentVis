@@ -10,22 +10,21 @@ import styles from './CenterPanel.module.css';
  * 根据当前选中状态显示 Hub 讨论区或 Agent 对话视图
  */
 export function CenterPanel() {
-    const currentAgentId = useAgentStore((state) => state.currentAgentId);
-    const setupChecklistState = useSetupChecklistState();
+  const currentAgentId = useAgentStore((state) => state.currentAgentId);
+  const setupChecklistState = useSetupChecklistState();
 
-    // 根据是否有选中的Agent来决定显示哪个视图
-    // 如果有选中的Agent，显示AgentChatView
-    // 否则显示HubChatView（Hub讨论区）
-    const showAgentView = currentAgentId !== null;
+  // 根据是否有选中的Agent来决定显示哪个视图
+  // 如果有选中的Agent，显示AgentChatView
+  // 否则显示HubChatView（Hub讨论区）
+  const showAgentView = currentAgentId !== null;
 
-    return (
-        <div className={styles.centerPanel}>
-            {showAgentView ? (
-                <AgentChatView />
-            ) : (
-                <HubChatView setupChecklistState={setupChecklistState} />
-            )}
-        </div>
-    );
+  return (
+    <div className={styles.centerPanel}>
+      {showAgentView ? (
+        <AgentChatView />
+      ) : (
+        <HubChatView setupChecklistState={setupChecklistState} />
+      )}
+    </div>
+  );
 }
-

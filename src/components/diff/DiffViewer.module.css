@@ -7,131 +7,131 @@
 /* ==================== 容器 ==================== */
 
 .container {
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--bg-primary);
-    overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  overflow: hidden;
 }
 
 /* ==================== 头部 ==================== */
 
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 12px;
-    background: var(--bg-tertiary);
-    border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .fileName {
-    font-size: 13px;
-    font-family: var(--font-mono);
-    color: var(--text-primary);
-    font-weight: 500;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* ==================== 统计信息 ==================== */
 
 .stats {
-    display: flex;
-    gap: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: var(--font-mono);
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
 }
 
 .statsAdded {
-    color: #3d9256;
+  color: #3d9256;
 }
 
 .statsRemoved {
-    color: #b7472a;
+  color: #b7472a;
 }
 
 /* ==================== 手动定位提示 ==================== */
 
 .locatingHint {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    background: rgba(59, 130, 246, 0.1);
-    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
-    color: var(--color-primary);
-    font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--color-primary);
+  font-size: 13px;
 }
 
 .locatingHint svg {
-    flex-shrink: 0;
+  flex-shrink: 0;
 }
 
 /* ==================== Diff 内容区 ==================== */
 
 .diffContent {
-    overflow-y: auto;
-    overflow-x: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 自定义滚动条 */
 .diffContent::-webkit-scrollbar {
-    width: 8px;
+  width: 8px;
 }
 
 .diffContent::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+  background: var(--bg-secondary);
 }
 
 .diffContent::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 4px;
+  background: var(--border-color);
+  border-radius: 4px;
 }
 
 .diffContent::-webkit-scrollbar-thumb:hover {
-    background: var(--text-disabled);
+  background: var(--text-disabled);
 }
 
 /* ==================== Hunk 块 ==================== */
 
 .hunk {
-    border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .hunk:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .hunkHeader {
-    padding: 8px 12px;
-    background: var(--bg-tertiary);
-    font-size: 12px;
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border-color);
-    user-select: none;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
 }
 
 .hunkContent {
-    /* 行内容由 DiffLine 组件渲染 */
+  /* 行内容由 DiffLine 组件渲染 */
 }
 
 /* ==================== 无变更状态 ==================== */
 
 .noChanges {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
 }
 
 .noChanges svg {
-    margin-bottom: 12px;
-    opacity: 0.5;
+  margin-bottom: 12px;
+  opacity: 0.5;
 }
 
 .noChanges p {
-    margin: 0;
-    font-size: 14px;
+  margin: 0;
+  font-size: 14px;
 }

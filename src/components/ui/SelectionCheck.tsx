@@ -9,33 +9,33 @@ import { cx } from '@utils/classNames';
 import styles from './SelectionCheck.module.css';
 
 interface SelectionCheckProps {
-    checked: boolean;
-    indeterminate?: boolean;
-    disabled?: boolean;
-    shape?: 'rounded' | 'circle';
-    size?: 'sm' | 'md';
-    className?: string;
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  shape?: 'rounded' | 'circle';
+  size?: 'sm' | 'md';
+  className?: string;
 }
 
 export function SelectionCheck({
-    checked,
-    indeterminate = false,
-    disabled = false,
-    shape = 'rounded',
-    size = 'md',
-    className,
+  checked,
+  indeterminate = false,
+  disabled = false,
+  shape = 'rounded',
+  size = 'md',
+  className,
 }: SelectionCheckProps) {
-    const active = checked || indeterminate;
-    const Icon = indeterminate ? Minus : Check;
+  const active = checked || indeterminate;
+  const Icon = indeterminate ? Minus : Check;
 
-    return (
-        <span
-            className={cx(styles.indicator, styles[shape], styles[size], className)}
-            data-checked={active ? 'true' : 'false'}
-            data-disabled={disabled ? 'true' : 'false'}
-            aria-hidden="true"
-        >
-            <Icon className={styles.icon} strokeWidth={3} />
-        </span>
-    );
+  return (
+    <span
+      className={cx(styles.indicator, styles[shape], styles[size], className)}
+      data-checked={active ? 'true' : 'false'}
+      data-disabled={disabled ? 'true' : 'false'}
+      aria-hidden="true"
+    >
+      <Icon className={styles.icon} strokeWidth={3} />
+    </span>
+  );
 }

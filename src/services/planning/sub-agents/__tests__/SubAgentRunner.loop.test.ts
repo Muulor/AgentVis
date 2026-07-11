@@ -16,367 +16,372 @@ import { translate } from '@/i18n';
 // ═══════════════════════════════════════════════════════════════
 
 const createMockSpec = (overrides: Partial<SubAgentSpec> = {}): SubAgentSpec => ({
-    role: '测试智能体',
-    allowedTools: ['read', 'web_search'],
-    terminationCondition: '收集到足够信息',
-    ...overrides,
+  role: '测试智能体',
+  allowedTools: ['read', 'web_search'],
+  terminationCondition: '收集到足够信息',
+  ...overrides,
 });
 
 const createMockContext = (): TaskContext => ({
-    cwd: '/test',
-    files: [],
+  cwd: '/test',
+  files: [],
 });
 
 const createMockLoopConfig = (overrides: Partial<SubAgentLoopConfig> = {}): SubAgentLoopConfig => ({
-    ...DEFAULT_LOOP_CONFIG,
-    ...overrides,
+  ...DEFAULT_LOOP_CONFIG,
+  ...overrides,
 });
-
 
 // ═══════════════════════════════════════════════════════════════
 // 新架构 Checkpoint 功能测试
 // ═══════════════════════════════════════════════════════════════
 
 describe('SubAgentRunner 新架构 Checkpoint', () => {
-    /**
-     * 创建支持 callWithContext 的 Mock LLMCaller 
-     */
-    const createExtendedMockCaller = (responses: LLMResponse[]) => {
-        let callIndex = 0;
-        return {
-            async callWithContext(
-                _systemPrompt: string,
-                _tools: string[],
-                _context: any[],
-                additionalInstructions?: string
-            ): Promise<LLMResponse> {
-                if (responses.length === 0) {
-                    throw new Error('Mock responses array is empty');
-                }
-                const response = responses[Math.min(callIndex, responses.length - 1)]!;
-                // 记录是否传递了额外指令（用于验证）
-                if (additionalInstructions) {
-                    (response as any)._receivedInstructions = additionalInstructions;
-                }
-                callIndex++;
-                return response;
-            }
-        };
+  /**
+   * 创建支持 callWithContext 的 Mock LLMCaller
+   */
+  const createExtendedMockCaller = (responses: LLMResponse[]) => {
+    let callIndex = 0;
+    return {
+      async callWithContext(
+        _systemPrompt: string,
+        _tools: string[],
+        _context: any[],
+        additionalInstructions?: string
+      ): Promise<LLMResponse> {
+        if (responses.length === 0) {
+          throw new Error('Mock responses array is empty');
+        }
+        const response = responses[Math.min(callIndex, responses.length - 1)]!;
+        // 记录是否传递了额外指令（用于验证）
+        if (additionalInstructions) {
+          (response as any)._receivedInstructions = additionalInstructions;
+        }
+        callIndex++;
+        return response;
+      },
     };
+  };
 
-    it('[新架构] Master Brain ADJUST_STRATEGY 决策注入动态指令', async () => {
-        const responses: LLMResponse[] = [
-            { content: 'Step 1', rawToolCalls: [{ name: 'read', args: {} }] },
-            { content: 'Step 2', rawToolCalls: [{ name: 'read', args: {} }] },
-            { content: 'Step 3 TASK_COMPLETE', rawToolCalls: [] },
-        ];
+  it('[新架构] Master Brain ADJUST_STRATEGY 决策注入动态指令', async () => {
+    const responses: LLMResponse[] = [
+      { content: 'Step 1', rawToolCalls: [{ name: 'read', args: {} }] },
+      { content: 'Step 2', rawToolCalls: [{ name: 'read', args: {} }] },
+      { content: 'Step 3 TASK_COMPLETE', rawToolCalls: [] },
+    ];
 
-        const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
 
-        const spec = createMockSpec({
-            loopConfig: createMockLoopConfig({ initialBudget: 3, checkpointInterval: 1 }),
-        });
-
-        const checkpointFn = vi.fn().mockResolvedValueOnce({
-            type: 'ADJUST_STRATEGY',
-            refinedInstructions: '请专注于 API 文档',
-        } as CheckpointDecision);
-
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
-
-        expect(checkpointFn).toHaveBeenCalled();
-        expect(result.status).toBe('completed');
+    const spec = createMockSpec({
+      loopConfig: createMockLoopConfig({ initialBudget: 3, checkpointInterval: 1 }),
     });
 
-    it('[新架构] 初始 user 消息使用当前界面语言', async () => {
-        let firstContext: unknown[] | undefined;
-        const mockCaller: LLMCaller = {
-            async callWithContext(
-                _systemPrompt,
-                _tools,
-                accumulatedContext
-            ): Promise<LLMResponse> {
-                firstContext ??= accumulatedContext;
-                return { content: 'TASK_COMPLETE', rawToolCalls: [] };
-            },
-        };
-        const runner = new SubAgentRunner(mockCaller);
-        runner.setToolExecutor(vi.fn());
+    const checkpointFn = vi.fn().mockResolvedValueOnce({
+      type: 'ADJUST_STRATEGY',
+      refinedInstructions: '请专注于 API 文档',
+    } as CheckpointDecision);
 
-        const spec = createMockSpec({
-            loopConfig: createMockLoopConfig({ initialBudget: 1 }),
-        });
-        const checkpointFn = vi.fn();
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+    expect(checkpointFn).toHaveBeenCalled();
+    expect(result.status).toBe('completed');
+  });
 
-        expect(result.status).toBe('completed');
-        expect(firstContext?.[0]).toMatchObject({
-            role: 'user',
-            content: translate('planning.subAgent.initialUserMessage'),
-        });
+  it('[新架构] 初始 user 消息使用当前界面语言', async () => {
+    let firstContext: unknown[] | undefined;
+    const mockCaller: LLMCaller = {
+      async callWithContext(_systemPrompt, _tools, accumulatedContext): Promise<LLMResponse> {
+        firstContext ??= accumulatedContext;
+        return { content: 'TASK_COMPLETE', rawToolCalls: [] };
+      },
+    };
+    const runner = new SubAgentRunner(mockCaller);
+    runner.setToolExecutor(vi.fn());
+
+    const spec = createMockSpec({
+      loopConfig: createMockLoopConfig({ initialBudget: 1 }),
+    });
+    const checkpointFn = vi.fn();
+
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+
+    expect(result.status).toBe('completed');
+    expect(firstContext?.[0]).toMatchObject({
+      role: 'user',
+      content: translate('planning.subAgent.initialUserMessage'),
+    });
+  });
+
+  it('[新架构] Master Brain EXTEND_BUDGET 决策延长工具调用上限', async () => {
+    const responses: LLMResponse[] = [
+      { content: 'Step 1', rawToolCalls: [{ name: 'read', args: {} }] },
+      { content: 'Step 2', rawToolCalls: [{ name: 'read', args: {} }] },
+      { content: 'Step 3 TASK_COMPLETE', rawToolCalls: [] },
+    ];
+
+    const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
+
+    const spec = createMockSpec({
+      loopConfig: createMockLoopConfig({ initialBudget: 3, checkpointInterval: 1 }),
     });
 
-    it('[新架构] Master Brain EXTEND_BUDGET 决策延长工具调用上限', async () => {
-        const responses: LLMResponse[] = [
-            { content: 'Step 1', rawToolCalls: [{ name: 'read', args: {} }] },
-            { content: 'Step 2', rawToolCalls: [{ name: 'read', args: {} }] },
-            { content: 'Step 3 TASK_COMPLETE', rawToolCalls: [] },
-        ];
+    const checkpointFn = vi.fn().mockResolvedValueOnce({
+      type: 'EXTEND_BUDGET',
+      additionalIterations: 2,
+    } as CheckpointDecision);
 
-        const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const spec = createMockSpec({
-            loopConfig: createMockLoopConfig({ initialBudget: 3, checkpointInterval: 1 }),
-        });
+    expect(checkpointFn).toHaveBeenCalled();
+    expect(result.status).toBe('completed');
+  });
 
-        const checkpointFn = vi.fn().mockResolvedValueOnce({
-            type: 'EXTEND_BUDGET',
-            additionalIterations: 2,
-        } as CheckpointDecision);
+  it('[新架构] 剩余 5 步且仍在推进时触发预算兜底 Checkpoint', async () => {
+    const responses: LLMResponse[] = [
+      ...Array.from({ length: 46 }, (_, index) => ({
+        content: `Step ${index + 1}`,
+        rawToolCalls: [{ name: 'read', args: { path: `/file-${index + 1}.ts` } }],
+      })),
+      { content: 'Step 47 TASK_COMPLETE', rawToolCalls: [] },
+    ];
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+    const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
 
-        expect(checkpointFn).toHaveBeenCalled();
-        expect(result.status).toBe('completed');
+    const spec = createMockSpec({
+      loopConfig: createMockLoopConfig({
+        initialBudget: 3,
+        checkpointInterval: 999,
+        maxSteps: 50,
+      }),
     });
 
-    it('[新架构] 剩余 5 步且仍在推进时触发预算兜底 Checkpoint', async () => {
-        const responses: LLMResponse[] = [
-            ...Array.from({ length: 46 }, (_, index) => ({
-                content: `Step ${index + 1}`,
-                rawToolCalls: [{ name: 'read', args: { path: `/file-${index + 1}.ts` } }],
-            })),
-            { content: 'Step 47 TASK_COMPLETE', rawToolCalls: [] },
-        ];
+    const checkpointFn = vi.fn().mockResolvedValueOnce({
+      type: 'EXTEND_BUDGET',
+      additionalIterations: 20,
+      reason: 'Still making progress',
+    } as CheckpointDecision);
 
-        const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const spec = createMockSpec({
-            loopConfig: createMockLoopConfig({
-                initialBudget: 3,
-                checkpointInterval: 999,
-                maxSteps: 50,
-            }),
-        });
+    expect(checkpointFn).toHaveBeenCalledTimes(1);
+    expect(checkpointFn.mock.calls[0]?.[0].checkpointTrigger).toBe('budget_near_exhaustion');
+    expect(checkpointFn.mock.calls[0]?.[0].remainingBudget).toBe(5);
+    expect(checkpointFn.mock.calls[0]?.[0].requestedAdditionalBudget).toBe(20);
+    expect(result.status).toBe('completed');
+  });
 
-        const checkpointFn = vi.fn().mockResolvedValueOnce({
-            type: 'EXTEND_BUDGET',
-            additionalIterations: 20,
-            reason: 'Still making progress',
-        } as CheckpointDecision);
+  it('[新架构] 单次 SA 派遣最多只追加两次预算', async () => {
+    const responses: LLMResponse[] = [
+      { content: 'Keep working', rawToolCalls: [{ name: 'read', args: { path: '/loop.ts' } }] },
+    ];
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+    const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
 
-        expect(checkpointFn).toHaveBeenCalledTimes(1);
-        expect(checkpointFn.mock.calls[0]?.[0].checkpointTrigger).toBe('budget_near_exhaustion');
-        expect(checkpointFn.mock.calls[0]?.[0].remainingBudget).toBe(5);
-        expect(checkpointFn.mock.calls[0]?.[0].requestedAdditionalBudget).toBe(20);
-        expect(result.status).toBe('completed');
+    const spec = createMockSpec({
+      loopConfig: createMockLoopConfig({
+        initialBudget: 3,
+        checkpointInterval: 999,
+        maxSteps: 10,
+      }),
     });
 
-    it('[新架构] 单次 SA 派遣最多只追加两次预算', async () => {
-        const responses: LLMResponse[] = [
-            { content: 'Keep working', rawToolCalls: [{ name: 'read', args: { path: '/loop.ts' } }] },
-        ];
+    const checkpointFn = vi.fn().mockResolvedValue({
+      type: 'EXTEND_BUDGET',
+      additionalIterations: 2,
+      reason: 'Still making progress',
+    } as CheckpointDecision);
 
-        const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'Tool executed' });
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const spec = createMockSpec({
-            loopConfig: createMockLoopConfig({
-                initialBudget: 3,
-                checkpointInterval: 999,
-                maxSteps: 10,
-            }),
-        });
+    expect(checkpointFn).toHaveBeenCalledTimes(2);
+    expect(mockExecutor).toHaveBeenCalledTimes(14);
+    expect(result.status).toBe('completed');
+  });
 
-        const checkpointFn = vi.fn().mockResolvedValue({
-            type: 'EXTEND_BUDGET',
-            additionalIterations: 2,
-            reason: 'Still making progress',
-        } as CheckpointDecision);
+  it('[新架构] 高风险操作前触发 Checkpoint 可被 Master Brain 拒绝', async () => {
+    const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'OK' });
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+    const responses: LLMResponse[] = [
+      { content: 'Attempting high-risk operation', rawToolCalls: [{ name: 'read', args: {} }] },
+      { content: 'Preparing write', rawToolCalls: [{ name: 'file_write', args: {} }] },
+    ];
 
-        expect(checkpointFn).toHaveBeenCalledTimes(2);
-        expect(mockExecutor).toHaveBeenCalledTimes(14);
-        expect(result.status).toBe('completed');
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
+
+    const spec = createMockSpec({
+      allowedTools: ['read'], // file_write 不在白名单中，会触发高风险 checkpoint
+      loopConfig: createMockLoopConfig({ initialBudget: 5, checkpointInterval: 10 }),
     });
 
-    it('[新架构] 高风险操作前触发 Checkpoint 可被 Master Brain 拒绝', async () => {
-        const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'OK' });
+    const checkpointFn = vi.fn().mockResolvedValueOnce({
+      type: 'TERMINATE_SUB_AGENT',
+      reason: 'High-risk operation rejected',
+    } as CheckpointDecision);
 
-        const responses: LLMResponse[] = [
-            { content: 'Attempting high-risk operation', rawToolCalls: [{ name: 'read', args: {} }] },
-            { content: 'Preparing write', rawToolCalls: [{ name: 'file_write', args: {} }] },
-        ];
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    expect(checkpointFn).toHaveBeenCalled();
+    // read 工具正常执行（非高风险），file_write 被 Checkpoint 拦截
+    expect(mockExecutor).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('completed');
+  });
 
-        const spec = createMockSpec({
-            allowedTools: ['read'],  // file_write 不在白名单中，会触发高风险 checkpoint
-            loopConfig: createMockLoopConfig({ initialBudget: 5, checkpointInterval: 10 }),
-        });
+  it('[新架构] 高风险操作获批准后可继续执行', async () => {
+    const mockExecutor = vi
+      .fn()
+      .mockResolvedValue({ success: true, content: 'File written successfully' });
 
-        const checkpointFn = vi.fn().mockResolvedValueOnce({
-            type: 'TERMINATE_SUB_AGENT',
-            reason: 'High-risk operation rejected',
-        } as CheckpointDecision);
+    const responses: LLMResponse[] = [
+      { content: 'Attempting file write', rawToolCalls: [{ name: 'read', args: {} }] },
+      {
+        content: 'Writing file',
+        rawToolCalls: [{ name: 'file_write', args: { path: 'test.txt' } }],
+      },
+      { content: 'Operation complete TASK_COMPLETE', rawToolCalls: [] },
+    ];
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
 
-        expect(checkpointFn).toHaveBeenCalled();
-        // read 工具正常执行（非高风险），file_write 被 Checkpoint 拦截
-        expect(mockExecutor).toHaveBeenCalledTimes(1);
-        expect(result.status).toBe('completed');
+    const spec = createMockSpec({
+      allowedTools: ['read'], // file_write 不在白名单中，会触发高风险 checkpoint
+      loopConfig: createMockLoopConfig({ initialBudget: 5, checkpointInterval: 10 }),
     });
 
-    it('[新架构] 高风险操作获批准后可继续执行', async () => {
-        const mockExecutor = vi.fn().mockResolvedValue({ success: true, content: 'File written successfully' });
+    const checkpointFn = vi.fn().mockResolvedValueOnce({
+      type: 'EXTEND_BUDGET',
+      additionalIterations: 2,
+      reason: 'Approved high-risk operation',
+    } as CheckpointDecision);
 
-        const responses: LLMResponse[] = [
-            { content: 'Attempting file write', rawToolCalls: [{ name: 'read', args: {} }] },
-            { content: 'Writing file', rawToolCalls: [{ name: 'file_write', args: { path: 'test.txt' } }] },
-            { content: 'Operation complete TASK_COMPLETE', rawToolCalls: [] },
-        ];
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    expect(checkpointFn).toHaveBeenCalled();
+    expect(mockExecutor).toHaveBeenCalled(); // 高风险操作被批准并执行
+    expect(result.status).toBe('completed');
+  });
 
-        const spec = createMockSpec({
-            allowedTools: ['read'],  // file_write 不在白名单中，会触发高风险 checkpoint
-            loopConfig: createMockLoopConfig({ initialBudget: 5, checkpointInterval: 10 }),
-        });
+  it('[新架构] 同一步多个并发工具失败只累计 1 次连续失败', async () => {
+    const responses: LLMResponse[] = [
+      {
+        content: 'Resolving docs in parallel',
+        rawToolCalls: [
+          {
+            name: 'external_skill_execute',
+            args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+          },
+          {
+            name: 'external_skill_execute',
+            args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+          },
+          {
+            name: 'external_skill_execute',
+            args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+          },
+        ],
+      },
+      { content: 'Task complete TASK_COMPLETE', rawToolCalls: [] },
+    ];
 
-        const checkpointFn = vi.fn().mockResolvedValueOnce({
-            type: 'EXTEND_BUDGET',
-            additionalIterations: 2,
-            reason: 'Approved high-risk operation',
-        } as CheckpointDecision);
+    const mockExecutor = vi.fn().mockResolvedValue({
+      success: false,
+      content: '[External Script Skill: context7-docs]\nExit code: 2',
+    });
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
-
-        expect(checkpointFn).toHaveBeenCalled();
-        expect(mockExecutor).toHaveBeenCalled(); // 高风险操作被批准并执行
-        expect(result.status).toBe('completed');
+    const spec = createMockSpec({
+      allowedTools: ['external_skill_execute'],
+      loopConfig: createMockLoopConfig({
+        initialBudget: 3,
+        checkpointInterval: 999,
+        maxSteps: 5,
+      }),
     });
 
-    it('[新架构] 同一步多个并发工具失败只累计 1 次连续失败', async () => {
-        const responses: LLMResponse[] = [
-            {
-                content: 'Resolving docs in parallel',
-                rawToolCalls: [
-                    {
-                        name: 'external_skill_execute',
-                        args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
-                    },
-                    {
-                        name: 'external_skill_execute',
-                        args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
-                    },
-                    {
-                        name: 'external_skill_execute',
-                        args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
-                    },
-                ],
-            },
-            { content: 'Task complete TASK_COMPLETE', rawToolCalls: [] },
-        ];
+    const checkpointFn = vi.fn();
 
-        const mockExecutor = vi.fn().mockResolvedValue({
-            success: false,
-            content: '[External Script Skill: context7-docs]\nExit code: 2',
-        });
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const spec = createMockSpec({
-            allowedTools: ['external_skill_execute'],
-            loopConfig: createMockLoopConfig({
-                initialBudget: 3,
-                checkpointInterval: 999,
-                maxSteps: 5,
-            }),
-        });
+    expect(mockExecutor).toHaveBeenCalledTimes(3);
+    expect(checkpointFn).not.toHaveBeenCalled();
+    expect(result.status).toBe('completed');
+  });
 
-        const checkpointFn = vi.fn();
+  it('[新架构] 连续 3 个工具调用步失败才触发连续失败 Checkpoint', async () => {
+    const responses: LLMResponse[] = [
+      {
+        content: 'Attempt 1',
+        rawToolCalls: [
+          {
+            name: 'external_skill_execute',
+            args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+          },
+        ],
+      },
+      {
+        content: 'Attempt 2',
+        rawToolCalls: [
+          {
+            name: 'external_skill_execute',
+            args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+          },
+        ],
+      },
+      {
+        content: 'Attempt 3',
+        rawToolCalls: [
+          {
+            name: 'external_skill_execute',
+            args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
+          },
+        ],
+      },
+    ];
 
-        const result = await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
+    const mockExecutor = vi.fn().mockResolvedValue({
+      success: false,
+      content: '[External Script Skill: context7-docs]\nExit code: 2',
+    });
+    const mockCaller = createExtendedMockCaller(responses);
+    const runner = new SubAgentRunner(mockCaller as LLMCaller);
+    runner.setToolExecutor(mockExecutor);
 
-        expect(mockExecutor).toHaveBeenCalledTimes(3);
-        expect(checkpointFn).not.toHaveBeenCalled();
-        expect(result.status).toBe('completed');
+    const spec = createMockSpec({
+      allowedTools: ['external_skill_execute'],
+      loopConfig: createMockLoopConfig({
+        initialBudget: 3,
+        checkpointInterval: 999,
+        maxSteps: 5,
+      }),
     });
 
-    it('[新架构] 连续 3 个工具调用步失败才触发连续失败 Checkpoint', async () => {
-        const responses: LLMResponse[] = [
-            {
-                content: 'Attempt 1',
-                rawToolCalls: [{
-                    name: 'external_skill_execute',
-                    args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
-                }],
-            },
-            {
-                content: 'Attempt 2',
-                rawToolCalls: [{
-                    name: 'external_skill_execute',
-                    args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
-                }],
-            },
-            {
-                content: 'Attempt 3',
-                rawToolCalls: [{
-                    name: 'external_skill_execute',
-                    args: { skillName: 'context7-docs', args: { action: 'resolve-docs' } },
-                }],
-            },
-        ];
+    const checkpointFn = vi.fn().mockResolvedValueOnce({
+      type: 'TERMINATE_SUB_AGENT',
+      reason: 'Repeated failed steps',
+    } as CheckpointDecision);
 
-        const mockExecutor = vi.fn().mockResolvedValue({
-            success: false,
-            content: '[External Script Skill: context7-docs]\nExit code: 2',
-        });
-        const mockCaller = createExtendedMockCaller(responses);
-        const runner = new SubAgentRunner(mockCaller as LLMCaller);
-        runner.setToolExecutor(mockExecutor);
+    await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
 
-        const spec = createMockSpec({
-            allowedTools: ['external_skill_execute'],
-            loopConfig: createMockLoopConfig({
-                initialBudget: 3,
-                checkpointInterval: 999,
-                maxSteps: 5,
-            }),
-        });
-
-        const checkpointFn = vi.fn().mockResolvedValueOnce({
-            type: 'TERMINATE_SUB_AGENT',
-            reason: 'Repeated failed steps',
-        } as CheckpointDecision);
-
-        await runner.runWithDynamicLoop(spec, createMockContext(), checkpointFn, []);
-
-        expect(mockExecutor).toHaveBeenCalledTimes(3);
-        expect(checkpointFn).toHaveBeenCalledTimes(1);
-        expect(checkpointFn.mock.calls[0]?.[0].checkpointTrigger).toBe('consecutive_failures');
-        expect(checkpointFn.mock.calls[0]?.[0].completedIterations).toBe(3);
-    });
+    expect(mockExecutor).toHaveBeenCalledTimes(3);
+    expect(checkpointFn).toHaveBeenCalledTimes(1);
+    expect(checkpointFn.mock.calls[0]?.[0].checkpointTrigger).toBe('consecutive_failures');
+    expect(checkpointFn.mock.calls[0]?.[0].completedIterations).toBe(3);
+  });
 });
-

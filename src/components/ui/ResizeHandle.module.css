@@ -1,49 +1,49 @@
 .handle {
-    flex-shrink: 0;
-    /* 容器透明：handle 两侧均显示中栏背景，不产生额外色块 */
-    background-color: transparent;
-    position: relative;
-    z-index: 1;
+  flex-shrink: 0;
+  /* 容器透明：handle 两侧均显示中栏背景，不产生额外色块 */
+  background-color: transparent;
+  position: relative;
+  z-index: 1;
 }
 
 .handle::after {
-    content: '';
-    position: absolute;
-    /* 默认使用边界色，悬停时高亮 */
-    background-color: var(--color-border-default);
-    transition: background-color var(--transition-fast);
+  content: '';
+  position: absolute;
+  /* 默认使用边界色，悬停时高亮 */
+  background-color: var(--color-border-default);
+  transition: background-color var(--transition-fast);
 }
 
 .handle:hover::after {
-    background-color: var(--color-action-primary);
+  background-color: var(--color-action-primary);
 }
 
 /* 水平方向：容器 8px 宽（方便抓取），中间居中 1px 可见线 */
 .horizontal {
-    width: 4px;
-    cursor: col-resize;
-    height: 100%;
+  width: 4px;
+  cursor: col-resize;
+  height: 100%;
 }
 
 .horizontal::after {
-    /* 水平居中：left = (8px - 1px) / 2 = 3.5px */
-    left: 3.5px;
-    top: 0;
-    width: 1px;
-    height: 100%;
+  /* 水平居中：left = (8px - 1px) / 2 = 3.5px */
+  left: 3.5px;
+  top: 0;
+  width: 1px;
+  height: 100%;
 }
 
 /* 垂直方向：容器 8px 高（方便抓取），中间居中 1px 可见线 */
 .vertical {
-    height: 4px;
-    cursor: row-resize;
-    width: 100%;
+  height: 4px;
+  cursor: row-resize;
+  width: 100%;
 }
 
 .vertical::after {
-    /* 垂直居中：top = (8px - 1px) / 2 = 3.5px */
-    top: 3.5px;
-    left: 0;
-    height: 1px;
-    width: 100%;
+  /* 垂直居中：top = (8px - 1px) / 2 = 3.5px */
+  top: 3.5px;
+  left: 0;
+  height: 1px;
+  width: 100%;
 }

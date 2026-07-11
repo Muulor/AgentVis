@@ -3,155 +3,155 @@
  */
 
 .container {
-    --memory-positive-color: #7CB342;
+  --memory-positive-color: #7cb342;
 
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
 }
 
 /* 加载中 / 错误 / 空状态 */
 .loading,
 .empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 80px;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    padding: 24px;
-    color: var(--color-status-error);
-    font-size: var(--font-size-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--color-status-error);
+  font-size: var(--font-size-sm);
 }
 
 .error button {
-    padding: 6px 12px;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-button);
-    cursor: pointer;
+  padding: 6px 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-button);
+  cursor: pointer;
 }
 
 /* 头部 */
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .title {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
 .refreshBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-button);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-button);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
 }
 
 .refreshBtn:hover {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
-    border-color: var(--color-border-hover);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
 }
 
 /* 摘要列表 */
 .summaryList {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* 摘要卡片 */
 .summaryCard {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px;
-    background-color: var(--color-bg-tertiary);
-    border-radius: var(--radius-surface);
-    border: 1px solid var(--color-border-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-surface);
+  border: 1px solid var(--color-border-primary);
 }
 
 /* 卡片头部 */
 .cardHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .summaryNumber {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .turnRange {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 /* 摘要内容 - 支持滚动查看完整内容 */
 .summaryContent {
-    font-size: var(--font-size-base);
-    color: var(--color-text-primary);
-    line-height: 1.5;
-    /* 设置最大高度，超出时显示滚动条 */
-    max-height: 120px;
-    overflow-y: auto;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  /* 设置最大高度，超出时显示滚动条 */
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 /* 原文消息区 */
 .originalMessages,
 .statusDetails {
-    margin-top: 8px;
-    padding: 12px;
-    background-color: var(--color-bg-secondary);
-    border-radius: var(--radius-control);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 200px;
-    overflow-y: auto;
+  margin-top: 8px;
+  padding: 12px;
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-control);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .summaryContent::-webkit-scrollbar,
 .originalMessages::-webkit-scrollbar,
 .statusDetails::-webkit-scrollbar {
-    width: 6px;
-    background: transparent;
+  width: 6px;
+  background: transparent;
 }
 
 .summaryContent::-webkit-scrollbar-button,
 .originalMessages::-webkit-scrollbar-button,
 .statusDetails::-webkit-scrollbar-button {
-    width: 0;
-    height: 0;
-    display: none;
-    background: transparent;
+  width: 0;
+  height: 0;
+  display: none;
+  background: transparent;
 }
 
 .summaryContent::-webkit-scrollbar-track,
@@ -160,160 +160,160 @@
 .originalMessages::-webkit-scrollbar-track-piece,
 .statusDetails::-webkit-scrollbar-track,
 .statusDetails::-webkit-scrollbar-track-piece {
-    border: 0;
-    background: transparent;
+  border: 0;
+  background: transparent;
 }
 
 .summaryContent::-webkit-scrollbar-corner,
 .originalMessages::-webkit-scrollbar-corner,
 .statusDetails::-webkit-scrollbar-corner {
-    background: transparent;
+  background: transparent;
 }
 
 .summaryContent::-webkit-scrollbar-thumb,
 .originalMessages::-webkit-scrollbar-thumb,
 .statusDetails::-webkit-scrollbar-thumb {
-    min-height: 28px;
-    border: 0;
-    background-color: var(--color-border-default);
-    background-clip: padding-box;
-    border-radius: 3px;
+  min-height: 28px;
+  border: 0;
+  background-color: var(--color-border-default);
+  background-clip: padding-box;
+  border-radius: 3px;
 }
 
 .summaryContent::-webkit-scrollbar-thumb:hover,
 .originalMessages::-webkit-scrollbar-thumb:hover,
 .statusDetails::-webkit-scrollbar-thumb:hover {
-    background-color: var(--color-border-hover);
+  background-color: var(--color-border-hover);
 }
 
 .originalMessage {
-    display: flex;
-    gap: 8px;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-primary);
+  display: flex;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
 
 .originalTurn {
-    min-width: 24px;
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-mono);
+  min-width: 24px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
 }
 
 .originalRole {
-    min-width: 40px;
-    color: var(--color-text-secondary);
-    font-weight: var(--font-weight-medium);
+  min-width: 40px;
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 卡片底部 */
 .cardFooter {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
 }
 
 /* 重要性标签 */
 .importance {
-    font-size: var(--font-size-sm);
+  font-size: var(--font-size-sm);
 }
 
 .importanceHigh {
-    color: var(--memory-positive-color);
+  color: var(--memory-positive-color);
 }
 
 .importanceMedium {
-    color: #3F7BD9;
+  color: #3f7bd9;
 }
 
 .importanceLow {
-    color: #6B7280;
+  color: #6b7280;
 }
 
 /* 操作按钮 */
 .cardActions {
-    display: flex;
-    gap: 8px;
+  display: flex;
+  gap: 8px;
 }
 
 .actionBtn {
-    padding: 4px 12px;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    background: transparent;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    transition: all 150ms ease;
+  padding: 4px 12px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: all 150ms ease;
 }
 
 .actionBtn:hover {
-    color: var(--color-text-primary);
-    border-color: var(--color-border-hover);
-    background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-secondary);
 }
 
 .actionBtn.danger:hover {
-    color: var(--color-status-error);
-    border-color: var(--color-status-error);
+  color: var(--color-status-error);
+  border-color: var(--color-status-error);
 }
 
 /* 状态详情按钮激活态 */
 .actionBtn.activeStatus {
-    color: var(--color-accent-primary);
-    border-color: var(--color-accent-primary);
+  color: var(--color-accent-primary);
+  border-color: var(--color-accent-primary);
 }
 
 /* ==================== 状态详情面板 ==================== */
 
 /* 每个状态类别区块 */
 .statusSection {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* 区块标题（带图标颜色区分） */
 .statusSectionTitle {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    margin-bottom: 2px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: 2px;
 }
 
 /* 已确认决策 */
 .statusSectionTitle.confirmed {
-    color: var(--memory-positive-color);
+  color: var(--memory-positive-color);
 }
 
 /* 待决问题 - Marigold */
 .statusSectionTitle.pending {
-    color: #CA8A04;
+  color: #ca8a04;
 }
 
 /* 已失效观点 - Terracotta */
 .statusSectionTitle.invalidated {
-    color: #b7472a;
+  color: #b7472a;
 }
 
 /* 每条状态项 */
 .statusItem {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-primary);
-    padding-left: 16px;
-    line-height: 1.5;
-    position: relative;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  padding-left: 16px;
+  line-height: 1.5;
+  position: relative;
 }
 
 /* 状态项前的圆点指示器 */
 .statusItem::before {
-    content: '•';
-    position: absolute;
-    left: 4px;
-    color: var(--color-text-tertiary);
+  content: '•';
+  position: absolute;
+  left: 4px;
+  color: var(--color-text-tertiary);
 }
 
 /* scope 标签 */
 .statusScope {
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
 }

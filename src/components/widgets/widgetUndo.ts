@@ -5,87 +5,87 @@
  */
 
 export interface WidgetUndoMessage {
-    id: string;
-    agentId: string;
-    role: string;
-    metadata?: unknown;
+  id: string;
+  agentId: string;
+  role: string;
+  metadata?: unknown;
 }
 
 export interface WidgetUndoAgentGroup {
-    firstId: string;
-    messageIds: string[];
+  firstId: string;
+  messageIds: string[];
 }
 
 export interface WidgetUndoRetractionPlan<T extends WidgetUndoMessage> {
-    startIndex: number;
-    retainedMessages: T[];
-    messagesToRetract: T[];
-    agentGroups: Map<string, WidgetUndoAgentGroup>;
+  startIndex: number;
+  retainedMessages: T[];
+  messagesToRetract: T[];
+  agentGroups: Map<string, WidgetUndoAgentGroup>;
 }
 
 export interface WidgetUndoOptions {
-    widgetBubbleId?: string;
+  widgetBubbleId?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function parseMetadata(metadata: unknown): Record<string, unknown> | null {
-    if (isRecord(metadata)) return metadata;
-    if (typeof metadata !== 'string') return null;
+  if (isRecord(metadata)) return metadata;
+  if (typeof metadata !== 'string') return null;
 
-    try {
-        const parsed: unknown = JSON.parse(metadata);
-        return isRecord(parsed) ? parsed : null;
-    } catch {
-        return null;
-    }
+  try {
+    const parsed: unknown = JSON.parse(metadata);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function isWidgetUserMessage(message: WidgetUndoMessage, options: WidgetUndoOptions): boolean {
-    const metadata = parseMetadata(message.metadata);
-    if (message.role !== 'user' || metadata?.source !== 'widget') return false;
-    if (!options.widgetBubbleId) return true;
-    return metadata.widgetBubbleId === options.widgetBubbleId;
+  const metadata = parseMetadata(message.metadata);
+  if (message.role !== 'user' || metadata?.source !== 'widget') return false;
+  if (!options.widgetBubbleId) return true;
+  return metadata.widgetBubbleId === options.widgetBubbleId;
 }
 
 export function buildWidgetUndoRetractionPlan<T extends WidgetUndoMessage>(
-    messages: T[],
-    options: WidgetUndoOptions = {}
+  messages: T[],
+  options: WidgetUndoOptions = {}
 ): WidgetUndoRetractionPlan<T> | null {
-    let startIndex = -1;
+  let startIndex = -1;
 
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const message = messages[i];
-        if (message && isWidgetUserMessage(message, options)) {
-            startIndex = i;
-            break;
-        }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message && isWidgetUserMessage(message, options)) {
+      startIndex = i;
+      break;
     }
+  }
 
-    if (startIndex === -1) return null;
+  if (startIndex === -1) return null;
 
-    const retainedMessages = messages.slice(0, startIndex);
-    const messagesToRetract = messages.slice(startIndex);
-    const agentGroups = new Map<string, WidgetUndoAgentGroup>();
+  const retainedMessages = messages.slice(0, startIndex);
+  const messagesToRetract = messages.slice(startIndex);
+  const agentGroups = new Map<string, WidgetUndoAgentGroup>();
 
-    for (const message of messagesToRetract) {
-        const existing = agentGroups.get(message.agentId);
-        if (existing) {
-            existing.messageIds.push(message.id);
-        } else {
-            agentGroups.set(message.agentId, {
-                firstId: message.id,
-                messageIds: [message.id],
-            });
-        }
+  for (const message of messagesToRetract) {
+    const existing = agentGroups.get(message.agentId);
+    if (existing) {
+      existing.messageIds.push(message.id);
+    } else {
+      agentGroups.set(message.agentId, {
+        firstId: message.id,
+        messageIds: [message.id],
+      });
     }
+  }
 
-    return {
-        startIndex,
-        retainedMessages,
-        messagesToRetract,
-        agentGroups,
-    };
+  return {
+    startIndex,
+    retainedMessages,
+    messagesToRetract,
+    agentGroups,
+  };
 }

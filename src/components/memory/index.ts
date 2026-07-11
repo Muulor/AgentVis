@@ -12,17 +12,17 @@ export { WatermarkIndicator } from './WatermarkIndicator';
 
 // 类型导出
 export type {
-    MemoryPanelProps,
-    ShortTermViewProps,
-    SummaryViewProps,
-    FactsViewProps,
-    FactCardProps,
-    FactEditModalProps,
-    WatermarkIndicatorProps,
-    ShortTermMessageItem,
-    SummaryItem,
-    FactItem,
-    MemoryTabId,
+  MemoryPanelProps,
+  ShortTermViewProps,
+  SummaryViewProps,
+  FactsViewProps,
+  FactCardProps,
+  FactEditModalProps,
+  WatermarkIndicatorProps,
+  ShortTermMessageItem,
+  SummaryItem,
+  FactItem,
+  MemoryTabId,
 } from './types';
 
 export { CATEGORY_DISPLAY_MAP, CATEGORY_OPTIONS, MEMORY_TABS } from './types';

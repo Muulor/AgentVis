@@ -15,33 +15,36 @@ import styles from './SelectCheckbox.module.css';
 // ==================== 类型定义 ====================
 
 interface SelectCheckboxProps {
-    /** 是否选中 */
-    checked: boolean;
-    /** 切换回调 */
-    onChange: () => void;
+  /** 是否选中 */
+  checked: boolean;
+  /** 切换回调 */
+  onChange: () => void;
 }
 
 // ==================== 组件实现 ====================
 
 export const SelectCheckbox = memo(function SelectCheckbox({
-    checked,
-    onChange,
+  checked,
+  onChange,
 }: SelectCheckboxProps) {
-    const { t } = useI18n();
-    // 阻止事件冒泡，避免触发消息气泡的点击
-    const handleClick = useCallback((e: React.MouseEvent) => {
-        e.stopPropagation();
-        onChange();
-    }, [onChange]);
+  const { t } = useI18n();
+  // 阻止事件冒泡，避免触发消息气泡的点击
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onChange();
+    },
+    [onChange]
+  );
 
-    return (
-        <button
-            className={styles.checkbox}
-            onClick={handleClick}
-            aria-label={checked ? t('chat.unselectMessage') : t('chat.selectMessage')}
-            aria-pressed={checked}
-        >
-            <SelectionCheck checked={checked} shape="circle" />
-        </button>
-    );
+  return (
+    <button
+      className={styles.checkbox}
+      onClick={handleClick}
+      aria-label={checked ? t('chat.unselectMessage') : t('chat.selectMessage')}
+      aria-pressed={checked}
+    >
+      <SelectionCheck checked={checked} shape="circle" />
+    </button>
+  );
 });

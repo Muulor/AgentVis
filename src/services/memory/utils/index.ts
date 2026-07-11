@@ -3,11 +3,11 @@
  */
 
 export {
-    type ParseResult,
-    type ParseOptions,
-    extractJsonFromText,
-    sanitizeJson,
-    parseWithFallback,
-    tryParse,
-    parseOrDefault,
+  type ParseResult,
+  type ParseOptions,
+  extractJsonFromText,
+  sanitizeJson,
+  parseWithFallback,
+  tryParse,
+  parseOrDefault,
 } from './JsonParser';

@@ -14,97 +14,97 @@ import { extractFencedCodeBlocks, parseWidgetLanguage, resolveWidgetType } from 
 import styles from './StandaloneTreeReplyBar.module.css';
 
 interface StandaloneTreeReplyBarProps {
-    messageId: string;
-    contextId: string;
-    content: string;
+  messageId: string;
+  contextId: string;
+  content: string;
 }
 
 function makeLevelKey(baseKey: string, depth: number): string {
-    return `${baseKey}:L${depth}`;
+  return `${baseKey}:L${depth}`;
 }
 
 function makeDepthKey(baseKey: string): string {
-    return `${baseKey}:depth`;
+  return `${baseKey}:depth`;
 }
 
 function makeDoneKey(baseKey: string): string {
-    return `${baseKey}:done`;
+  return `${baseKey}:done`;
 }
 
 function extractTreeBaseKeys(content: string, contextId: string): string[] {
-    const baseKeys = new Set<string>();
+  const baseKeys = new Set<string>();
 
-    for (const block of extractFencedCodeBlocks(content)) {
-        if (!parseWidgetLanguage(block.language).isWidget) continue;
+  for (const block of extractFencedCodeBlocks(content)) {
+    if (!parseWidgetLanguage(block.language).isWidget) continue;
 
-        const parsed = parseWithFallback<Record<string, unknown>>(block.code, {
-            logPrefix: '[StandaloneTreeReplyBar]',
-        });
-        const data = parsed.data;
-        if (!parsed.success || !data) continue;
-        if (resolveWidgetType(block.language, data) !== 'tree') continue;
+    const parsed = parseWithFallback<Record<string, unknown>>(block.code, {
+      logPrefix: '[StandaloneTreeReplyBar]',
+    });
+    const data = parsed.data;
+    if (!parsed.success || !data) continue;
+    if (resolveWidgetType(block.language, data) !== 'tree') continue;
 
-        const title = typeof data.title === 'string' ? data.title : '';
-        baseKeys.add(`tree:${contextId}:${title}`);
-    }
+    const title = typeof data.title === 'string' ? data.title : '';
+    baseKeys.add(`tree:${contextId}:${title}`);
+  }
 
-    return Array.from(baseKeys);
+  return Array.from(baseKeys);
 }
 
 function clearTreeSelection(baseKey: string, clearSelectionOnly: (widgetKey: string) => void) {
-    clearSelectionOnly(baseKey);
-    for (let i = 0; i < 10; i++) {
-        clearSelectionOnly(makeLevelKey(baseKey, i));
-    }
-    clearSelectionOnly(makeDepthKey(baseKey));
-    clearSelectionOnly(makeDoneKey(baseKey));
+  clearSelectionOnly(baseKey);
+  for (let i = 0; i < 10; i++) {
+    clearSelectionOnly(makeLevelKey(baseKey, i));
+  }
+  clearSelectionOnly(makeDepthKey(baseKey));
+  clearSelectionOnly(makeDoneKey(baseKey));
 }
 
 export const StandaloneTreeReplyBar = memo(function StandaloneTreeReplyBar({
-    messageId,
-    contextId,
-    content,
+  messageId,
+  contextId,
+  content,
 }: StandaloneTreeReplyBarProps) {
-    const { t } = useI18n();
-    const clearSelectionOnly = useWidgetStore((s) => s.clearSelectionOnly);
-    const clearSelectionAndUndo = useWidgetStore((s) => s.clearSelectionAndUndo);
-    const treeBaseKeys = useMemo(() => extractTreeBaseKeys(content, contextId), [content, contextId]);
-    const hasCompletedTree = useWidgetStore((s) =>
-        treeBaseKeys.some((baseKey) => s.selections.get(makeDoneKey(baseKey)) === 1)
+  const { t } = useI18n();
+  const clearSelectionOnly = useWidgetStore((s) => s.clearSelectionOnly);
+  const clearSelectionAndUndo = useWidgetStore((s) => s.clearSelectionAndUndo);
+  const treeBaseKeys = useMemo(() => extractTreeBaseKeys(content, contextId), [content, contextId]);
+  const hasCompletedTree = useWidgetStore((s) =>
+    treeBaseKeys.some((baseKey) => s.selections.get(makeDoneKey(baseKey)) === 1)
+  );
+
+  const handleReselect = useCallback(() => {
+    const selections = useWidgetStore.getState().selections;
+    const completedBaseKeys = treeBaseKeys.filter(
+      (baseKey) => selections.get(makeDoneKey(baseKey)) === 1
     );
+    const targetBaseKey = completedBaseKeys[0];
+    if (!targetBaseKey) return;
 
-    const handleReselect = useCallback(() => {
-        const selections = useWidgetStore.getState().selections;
-        const completedBaseKeys = treeBaseKeys.filter((baseKey) =>
-            selections.get(makeDoneKey(baseKey)) === 1
-        );
-        const targetBaseKey = completedBaseKeys[0];
-        if (!targetBaseKey) return;
+    for (const baseKey of treeBaseKeys) {
+      clearTreeSelection(baseKey, clearSelectionOnly);
+    }
+    clearSelectionAndUndo(targetBaseKey, contextId, messageId);
+  }, [treeBaseKeys, clearSelectionOnly, clearSelectionAndUndo, contextId, messageId]);
 
-        for (const baseKey of treeBaseKeys) {
-            clearTreeSelection(baseKey, clearSelectionOnly);
-        }
-        clearSelectionAndUndo(targetBaseKey, contextId, messageId);
-    }, [treeBaseKeys, clearSelectionOnly, clearSelectionAndUndo, contextId, messageId]);
+  if (!hasCompletedTree) return null;
 
-    if (!hasCompletedTree) return null;
-
-    return (
-        <div className={styles.bar}>
-            <div className={styles.submittedRow}>
-                <span className={styles.submittedLabel}>
-                    <CheckCircle2 size={13} />
-                    {t('chat.processed')}
-                </span>
-                <button
-                    className={styles.reselectBtn}
-                    onClick={handleReselect}
-                    title={t('widgets.reselectTitle')}
-                >
-                    <RotateCcw size={13} />
-                    <span>{t('widgets.reselect')}</span>
-                </button>
-            </div>
-        </div>
-    );
+  return (
+    <div className={styles.bar}>
+      <div className={styles.submittedRow}>
+        <span className={styles.submittedLabel}>
+          <CheckCircle2 size={13} />
+          {t('chat.processed')}
+        </span>
+        <button
+          className={styles.reselectBtn}
+          onClick={handleReselect}
+          title={t('widgets.reselectTitle')}
+        >
+          <RotateCcw size={13} />
+          <span>{t('widgets.reselect')}</span>
+        </button>
+      </div>
+    </div>
+  );
 });

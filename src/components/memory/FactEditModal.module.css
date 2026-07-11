@@ -6,217 +6,221 @@
 
 /* 遮罩层 */
 .overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
 }
 
 /* 模态框 */
 .modal {
-    width: 480px;
-    max-width: 90vw;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    background-color: var(--color-bg-primary);
-    border-radius: var(--radius-surface);
-    box-shadow: var(--shadow-xl);
-    overflow: hidden;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
 }
 
 /* 头部 */
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--color-border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--color-border-primary);
 }
 
 .title {
-    margin: 0;
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
 
 .closeBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-button);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-button);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
 }
 
 .closeBtn:hover {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 /* 内容区 */
 .content {
-    flex: 1;
-    padding: 24px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* 表单组 */
 .formGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .label {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
 /* 下拉选择 */
 .select {
-    padding: 8px 12px;
-    font-size: 13px;
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-control);
-    cursor: pointer;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .select:hover {
-    border-color: var(--color-border-hover);
+  border-color: var(--color-border-hover);
 }
 
 .select:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 /* 类别预览 */
 .categoryPreview {
-    align-self: flex-start;
-    padding: 2px 8px;
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 /* 文本框 */
 .textarea {
-    padding: 10px 12px;
-    font-size: var(--font-size-base);
-    font-family: inherit;
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-control);
-    resize: vertical;
-    min-height: 80px;
-    transition: border-color 150ms ease, box-shadow 150ms ease;
+  padding: 10px 12px;
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-control);
+  resize: vertical;
+  min-height: 80px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .textarea:hover {
-    border-color: var(--color-border-hover);
+  border-color: var(--color-border-hover);
 }
 
 .textarea:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .textarea::placeholder {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 /* 来源信息 */
 .sourceInfo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    background-color: var(--color-bg-tertiary);
-    border-radius: var(--radius-control);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 /* 警告提示 */
 .warning {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background-color: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-surface);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-surface);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
 
 .warningIcon {
-    flex-shrink: 0;
+  flex-shrink: 0;
 }
 
 /* 底部按钮 */
 .footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 16px 24px;
-    border-top: 1px solid var(--color-border-primary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border-primary);
 }
 
 .cancelBtn,
 .saveBtn {
-    padding: 8px 16px;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    transition: all 150ms ease;
+  padding: 8px 16px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: all 150ms ease;
 }
 
 .cancelBtn {
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border-primary);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border-primary);
 }
 
 .cancelBtn:hover:not(:disabled) {
-    background-color: var(--color-bg-secondary);
-    border-color: var(--color-border-hover);
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-border-hover);
 }
 
 .saveBtn {
-    color: white;
-    background-color: var(--color-action-primary);
-    border: none;
+  color: white;
+  background-color: var(--color-action-primary);
+  border: none;
 }
 
 .saveBtn:hover:not(:disabled) {
-    background-color: var(--color-action-primary-hover);
+  background-color: var(--color-action-primary-hover);
 }
 
 .saveBtn:disabled,
 .cancelBtn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }

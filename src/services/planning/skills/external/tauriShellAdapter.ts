@@ -18,16 +18,16 @@ import type { ShellExecuteFn } from './ExternalExecutor';
 type ShellExecuteParams = Parameters<ShellExecuteFn>[0];
 
 export type ShellExecuteDefaults = Partial<
-    Pick<
-        ShellExecuteParams,
-        | 'sandboxLevel'
-        | 'sandboxNetwork'
-        | 'sandboxMode'
-        | 'processLifecycle'
-        | 'networkScope'
-        | 'subjectType'
-        | 'subjectId'
-    >
+  Pick<
+    ShellExecuteParams,
+    | 'sandboxLevel'
+    | 'sandboxNetwork'
+    | 'sandboxMode'
+    | 'processLifecycle'
+    | 'networkScope'
+    | 'subjectType'
+    | 'subjectId'
+  >
 >;
 
 /**
@@ -39,35 +39,32 @@ export type ShellExecuteDefaults = Partial<
  * @returns ShellExecuteFn 的 Tauri IPC 实现
  */
 export async function createTauriShellExecute(
-    defaults: ShellExecuteDefaults = {}
+  defaults: ShellExecuteDefaults = {}
 ): Promise<ShellExecuteFn> {
-    const { invoke } = await import('@tauri-apps/api/core');
+  const { invoke } = await import('@tauri-apps/api/core');
 
-    return async (params) => {
-        return invoke<Awaited<ReturnType<ShellExecuteFn>>>(
-            'shell_execute',
-            {
-                command: params.command,
-                workdir: params.workdir,
-                timeoutSecs: params.timeout,
-                background: params.background,
-                executionId: params.executionId,
-                env: params.env,
-                sandboxLevel: params.sandboxLevel ?? defaults.sandboxLevel,
-                sandboxNetwork: params.sandboxNetwork ?? defaults.sandboxNetwork,
-                sandboxMode: params.sandboxMode ?? defaults.sandboxMode,
-                processLifecycle: params.processLifecycle ?? defaults.processLifecycle,
-                networkScope: params.networkScope ?? defaults.networkScope,
-                subjectType: params.subjectType ?? defaults.subjectType,
-                subjectId: params.subjectId ?? defaults.subjectId,
-                networkDirectAllowances: params.networkDirectAllowances,
-                networkDirectTargets: params.networkDirectTargets,
-                networkUploadConfirmed: params.networkUploadConfirmed,
-                networkSensitiveEgressConfirmed: params.networkSensitiveEgressConfirmed,
-                networkRemoteDestructiveConfirmed: params.networkRemoteDestructiveConfirmed,
-                networkBrokerCredentials: params.networkBrokerCredentials,
-                appContainerFilesystemGrants: params.appContainerFilesystemGrants,
-            }
-        );
-    };
+  return async (params) => {
+    return invoke<Awaited<ReturnType<ShellExecuteFn>>>('shell_execute', {
+      command: params.command,
+      workdir: params.workdir,
+      timeoutSecs: params.timeout,
+      background: params.background,
+      executionId: params.executionId,
+      env: params.env,
+      sandboxLevel: params.sandboxLevel ?? defaults.sandboxLevel,
+      sandboxNetwork: params.sandboxNetwork ?? defaults.sandboxNetwork,
+      sandboxMode: params.sandboxMode ?? defaults.sandboxMode,
+      processLifecycle: params.processLifecycle ?? defaults.processLifecycle,
+      networkScope: params.networkScope ?? defaults.networkScope,
+      subjectType: params.subjectType ?? defaults.subjectType,
+      subjectId: params.subjectId ?? defaults.subjectId,
+      networkDirectAllowances: params.networkDirectAllowances,
+      networkDirectTargets: params.networkDirectTargets,
+      networkUploadConfirmed: params.networkUploadConfirmed,
+      networkSensitiveEgressConfirmed: params.networkSensitiveEgressConfirmed,
+      networkRemoteDestructiveConfirmed: params.networkRemoteDestructiveConfirmed,
+      networkBrokerCredentials: params.networkBrokerCredentials,
+      appContainerFilesystemGrants: params.appContainerFilesystemGrants,
+    });
+  };
 }

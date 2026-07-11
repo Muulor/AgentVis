@@ -13,73 +13,73 @@ import { ThinkingStream } from './ThinkingStream';
 import styles from './ReasoningTraceSection.module.css';
 
 export function ReasoningTraceSection({ contextId }: { contextId: string }) {
-    const { t } = useI18n();
-    const contextState = useFSMVisualizationStore((s) => s.contextStates[contextId]);
-    const traceContainerRef = useRef<HTMLDivElement>(null);
+  const { t } = useI18n();
+  const contextState = useFSMVisualizationStore((s) => s.contextStates[contextId]);
+  const traceContainerRef = useRef<HTMLDivElement>(null);
 
-    const reasoningTrace = contextState?.reasoningTrace;
-    const content = reasoningTrace?.content ?? '';
-    const isStreaming = reasoningTrace?.isStreaming ?? false;
-    const isCompleted = reasoningTrace?.isCompleted ?? false;
-    const hasContent = Boolean(content.trim());
-    const [isExpanded, setIsExpanded] = useState(isStreaming);
+  const reasoningTrace = contextState?.reasoningTrace;
+  const content = reasoningTrace?.content ?? '';
+  const isStreaming = reasoningTrace?.isStreaming ?? false;
+  const isCompleted = reasoningTrace?.isCompleted ?? false;
+  const hasContent = Boolean(content.trim());
+  const [isExpanded, setIsExpanded] = useState(isStreaming);
 
-    useEffect(() => {
-        if (!traceContainerRef.current) return;
-        traceContainerRef.current.scrollTop = traceContainerRef.current.scrollHeight;
-    }, [content]);
+  useEffect(() => {
+    if (!traceContainerRef.current) return;
+    traceContainerRef.current.scrollTop = traceContainerRef.current.scrollHeight;
+  }, [content]);
 
-    useEffect(() => {
-        if (isStreaming) {
-            setIsExpanded(true);
-        } else if (isCompleted) {
-            setIsExpanded(false);
-        }
-    }, [isCompleted, isStreaming]);
-
-    if (!hasContent && !isStreaming) {
-        return null;
+  useEffect(() => {
+    if (isStreaming) {
+      setIsExpanded(true);
+    } else if (isCompleted) {
+      setIsExpanded(false);
     }
+  }, [isCompleted, isStreaming]);
 
-    const title = isStreaming
-        ? t('chat.masterBrainReasoning')
-        : t('chat.masterBrainReasoningCollapsedTitle');
-    const toggleLabel = isExpanded
-        ? t('chat.masterBrainReasoningCollapse')
-        : t('chat.masterBrainReasoningExpand');
+  if (!hasContent && !isStreaming) {
+    return null;
+  }
 
-    return (
-        <section className={cx(styles.section, isStreaming && styles.streaming)}>
-            <button
-                type="button"
-                className={styles.header}
-                onClick={() => setIsExpanded(value => !value)}
-                aria-expanded={isExpanded}
-                aria-label={toggleLabel}
-            >
-                <span className={styles.title}>{title}</span>
-                <span className={styles.rule} />
-                <span className={styles.toggle}>
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </span>
-            </button>
+  const title = isStreaming
+    ? t('chat.masterBrainReasoning')
+    : t('chat.masterBrainReasoningCollapsedTitle');
+  const toggleLabel = isExpanded
+    ? t('chat.masterBrainReasoningCollapse')
+    : t('chat.masterBrainReasoningExpand');
 
-            <div
-                ref={traceContainerRef}
-                className={cx(styles.traceContainer, isExpanded ? styles.expanded : styles.collapsed)}
-                aria-hidden={!isExpanded}
-            >
-                {hasContent ? (
-                    <ThinkingStream
-                        content={content}
-                        isActive={isStreaming}
-                        showCursor={isStreaming}
-                        typeSpeed={24}
-                    />
-                ) : (
-                    <div className={styles.placeholder}>{t('chat.masterBrainReasoning')}</div>
-                )}
-            </div>
-        </section>
-    );
+  return (
+    <section className={cx(styles.section, isStreaming && styles.streaming)}>
+      <button
+        type="button"
+        className={styles.header}
+        onClick={() => setIsExpanded((value) => !value)}
+        aria-expanded={isExpanded}
+        aria-label={toggleLabel}
+      >
+        <span className={styles.title}>{title}</span>
+        <span className={styles.rule} />
+        <span className={styles.toggle}>
+          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+      </button>
+
+      <div
+        ref={traceContainerRef}
+        className={cx(styles.traceContainer, isExpanded ? styles.expanded : styles.collapsed)}
+        aria-hidden={!isExpanded}
+      >
+        {hasContent ? (
+          <ThinkingStream
+            content={content}
+            isActive={isStreaming}
+            showCursor={isStreaming}
+            typeSpeed={24}
+          />
+        ) : (
+          <div className={styles.placeholder}>{t('chat.masterBrainReasoning')}</div>
+        )}
+      </div>
+    </section>
+  );
 }

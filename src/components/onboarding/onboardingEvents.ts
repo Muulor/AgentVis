@@ -8,20 +8,19 @@ export const SETUP_STATUS_CHANGED_EVENT = 'agentvis:onboarding-status-changed';
 export type OnboardingSettingsTab = Extract<SettingsTab, 'apiKeys' | 'cloudService'>;
 
 export function openSettingsTab(tab: OnboardingSettingsTab): void {
-    window.dispatchEvent(new CustomEvent<{ tab: OnboardingSettingsTab }>(
-        OPEN_SETTINGS_EVENT,
-        { detail: { tab } }
-    ));
+  window.dispatchEvent(
+    new CustomEvent<{ tab: OnboardingSettingsTab }>(OPEN_SETTINGS_EVENT, { detail: { tab } })
+  );
 }
 
 export function openHubCreate(): void {
-    window.dispatchEvent(new Event(OPEN_HUB_CREATE_EVENT));
+  window.dispatchEvent(new Event(OPEN_HUB_CREATE_EVENT));
 }
 
 export function openAgentCreate(): void {
-    window.dispatchEvent(new Event(OPEN_AGENT_CREATE_EVENT));
+  window.dispatchEvent(new Event(OPEN_AGENT_CREATE_EVENT));
 }
 
 export function notifySetupStatusChanged(): void {
-    window.dispatchEvent(new Event(SETUP_STATUS_CHANGED_EVENT));
+  window.dispatchEvent(new Event(SETUP_STATUS_CHANGED_EVENT));
 }

@@ -3,4 +3,7 @@
  */
 
 export { SubAgentSpecBuilder, type ToolCallInfo } from './SubAgentSpecBuilder';
-export { MasterBrainInputBuilder, type MasterBrainInputBuilderDeps } from './MasterBrainInputBuilder';
+export {
+  MasterBrainInputBuilder,
+  type MasterBrainInputBuilderDeps,
+} from './MasterBrainInputBuilder';

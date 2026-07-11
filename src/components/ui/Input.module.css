@@ -1,62 +1,64 @@
 .wrapper {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    height: 36px;
-    padding: 0 var(--spacing-md);
-    background-color: var(--color-bg-primary);
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-control);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: 36px;
+  padding: 0 var(--spacing-md);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .wrapper:focus-within {
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .wrapper:hover:not(.disabled):not(:focus-within) {
-    border-color: var(--color-border-hover);
+  border-color: var(--color-border-hover);
 }
 
 /* 错误状态 */
 .error {
-    border-color: var(--color-status-error);
+  border-color: var(--color-status-error);
 }
 
 .error:focus-within {
-    border-color: var(--color-status-error);
-    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+  border-color: var(--color-status-error);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
 }
 
 /* 禁用状态 */
 .disabled {
-    background-color: var(--color-bg-secondary);
-    cursor: var(--cursor-disabled);
-    opacity: 0.6;
+  background-color: var(--color-bg-secondary);
+  cursor: var(--cursor-disabled);
+  opacity: 0.6;
 }
 
 /* 输入框 */
 .input {
-    flex: 1;
-    height: 100%;
-    font-size: var(--font-size-base);
-    color: var(--color-text-primary);
-    background: transparent;
+  flex: 1;
+  height: 100%;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: transparent;
 }
 
 .input::placeholder {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 .input:disabled {
-    cursor: var(--cursor-disabled);
+  cursor: var(--cursor-disabled);
 }
 
 /* 前缀后缀 */
 .prefix,
 .suffix {
-    display: flex;
-    align-items: center;
-    color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
 }

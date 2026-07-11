@@ -14,7 +14,7 @@ import type { FSMContext, FSMEvent, GuardFn } from '../types';
  * 检查当前决策是否存在
  */
 export const hasCurrentDecision: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.currentDecision !== undefined;
+  return ctx.currentDecision !== undefined;
 };
 
 /**
@@ -23,17 +23,13 @@ export const hasCurrentDecision: GuardFn<FSMEvent> = (ctx: FSMContext): boolean 
  * 有效类型：SPAWN_SUB_AGENT, REQUEST_MORE_INPUT, RESPOND_TO_USER
  */
 export const decisionTypeValid: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    if (!ctx.currentDecision) {
-        return false;
-    }
+  if (!ctx.currentDecision) {
+    return false;
+  }
 
-    const validTypes = [
-        'SPAWN_SUB_AGENT',
-        'REQUEST_MORE_INPUT',
-        'RESPOND_TO_USER',
-    ];
+  const validTypes = ['SPAWN_SUB_AGENT', 'REQUEST_MORE_INPUT', 'RESPOND_TO_USER'];
 
-    return validTypes.includes(ctx.currentDecision.decision);
+  return validTypes.includes(ctx.currentDecision.decision);
 };
 
 /**
@@ -42,32 +38,29 @@ export const decisionTypeValid: GuardFn<FSMEvent> = (ctx: FSMContext): boolean =
  * 需要在 FSM 定义中结合具体事件使用
  */
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
-export const hasValidPayload = <E extends FSMEvent>(
-    _ctx: FSMContext,
-    event: E
-): boolean => {
-    // 类型断言检查 payload 是否存在
-    const eventWithPayload = event as { payload?: unknown };
-    return 'payload' in eventWithPayload && eventWithPayload.payload !== undefined;
+export const hasValidPayload = <E extends FSMEvent>(_ctx: FSMContext, event: E): boolean => {
+  // 类型断言检查 payload 是否存在
+  const eventWithPayload = event as { payload?: unknown };
+  return 'payload' in eventWithPayload && eventWithPayload.payload !== undefined;
 };
 
 /**
  * 检查会话 ID 是否存在
  */
 export const hasSessionId: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.sessionId !== undefined && ctx.sessionId.length > 0;
+  return ctx.sessionId !== undefined && ctx.sessionId.length > 0;
 };
 
 /**
  * 检查活跃子 Agent 是否存在
  */
 export const hasActiveSubAgents: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.activeSubAgents.size > 0;
+  return ctx.activeSubAgents.size > 0;
 };
 
 /**
  * 检查活跃子 Agent 是否为空
  */
 export const noActiveSubAgents: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.activeSubAgents.size === 0;
+  return ctx.activeSubAgents.size === 0;
 };

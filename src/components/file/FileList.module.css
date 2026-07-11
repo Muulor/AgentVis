@@ -5,336 +5,336 @@
  */
 
 .fileList {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .fileListDragActive {
-    box-shadow: inset 0 0 0 1px var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 /* ==================== 导航栏（面包屑 + 按钮） ==================== */
 
 .header {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    padding: 6px var(--spacing-sm);
-    flex-shrink: 0;
-    min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 6px var(--spacing-sm);
+  flex-shrink: 0;
+  min-height: 32px;
 }
 
 /* 前进/后退按钮容器 */
 .navButtons {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .navBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-button);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-button);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .navBtn:hover:not(:disabled) {
-    background: var(--color-bg-hover);
-    color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .navBtn:disabled {
-    opacity: 0.3;
-    cursor: var(--cursor-disabled);
+  opacity: 0.3;
+  cursor: var(--cursor-disabled);
 }
 
 /* ==================== 面包屑 ==================== */
 
 .breadcrumb {
-    display: flex;
-    align-items: center;
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-    gap: 0;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 0;
 }
 
 .breadcrumb::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 
 .breadcrumbGroup {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .breadcrumbItem {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 2px 4px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s ease;
-    max-width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .breadcrumbItem:hover {
-    background: var(--color-bg-hover);
-    color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
 }
 
 .breadcrumbActive {
-    color: var(--color-text-primary);
-    font-weight: 500;
+  color: var(--color-text-primary);
+  font-weight: 500;
 }
 
 .breadcrumbSeparator {
-    color: var(--color-text-tertiary);
-    opacity: 0.5;
-    flex-shrink: 0;
-    margin: 0 1px;
+  color: var(--color-text-tertiary);
+  opacity: 0.5;
+  flex-shrink: 0;
+  margin: 0 1px;
 }
 
 /* ==================== 刷新按钮 ==================== */
 
 .refreshBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-button);
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-button);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .refreshBtn:hover {
-    background: var(--color-bg-hover);
-    color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
 }
 
 .refreshBtn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* 项目预览按钮（绿色 Play 图标） */
 .previewBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-button);
-    color: #a6e3a1;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-button);
+  color: #a6e3a1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .previewBtn:hover:not(:disabled) {
-    background: rgba(166, 227, 161, 0.15);
-    color: #a6e3a1;
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
 }
 
 .previewBtn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .spinning {
-    animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
+  from {
+    transform: rotate(0deg);
+  }
 
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ==================== 文件列表 ==================== */
 
 .list {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--spacing-xs) 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-xs) 0;
 }
 
 /* 空状态（内嵌在列表区域内的简洁版） */
 .emptyInline {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md);
-    color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  color: var(--color-text-tertiary);
 }
 
 /* 空状态（独立全屏版） */
 .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-lg);
-    text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  text-align: center;
 }
 
 .emptyIcon {
-    color: var(--color-text-tertiary);
-    opacity: 0.5;
+  color: var(--color-text-tertiary);
+  opacity: 0.5;
 }
 
 .emptyText {
-    font-size: 12px;
-    color: var(--color-text-tertiary);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
 }
 
 .emptyHint {
-    font-size: 12px;
-    color: var(--color-text-tertiary);
-    max-width: 200px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  max-width: 200px;
 }
 
 /* ==================== 加载状态 ==================== */
 
 .loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: var(--spacing-sm);
-    color: var(--color-text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-sm);
+  color: var(--color-text-tertiary);
 }
 
 .spinner {
-    animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 /* ==================== 错误状态 ==================== */
 
 .error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-lg);
-    text-align: center;
-    color: var(--color-error);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: var(--color-error);
 }
 
 .retryBtn {
-    padding: var(--spacing-xs) var(--spacing-md);
-    background: transparent;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-button);
-    color: var(--color-text-primary);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .retryBtn:hover {
-    background: var(--color-bg-hover);
-    border-color: var(--color-border-hover);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
 }
 
 /* ==================== 滚动条样式 ==================== */
 /* 始终可见的半透明滚动条，让用户明确知道内容可滚动 */
 
 .list::-webkit-scrollbar {
-    width: 6px;
+  width: 6px;
 }
 
 .list::-webkit-scrollbar-track {
-    background: rgba(128, 128, 128, 0.05);
+  background: rgba(128, 128, 128, 0.05);
 }
 
 .list::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.25);
-    border-radius: 3px;
+  background: rgba(128, 128, 128, 0.25);
+  border-radius: 3px;
 }
 
 .list::-webkit-scrollbar-thumb:hover {
-    background: rgba(128, 128, 128, 0.4);
+  background: rgba(128, 128, 128, 0.4);
 }
 
 /* ==================== 拖拽导入覆盖层 ==================== */
 
 .importOverlay {
-    position: absolute;
-    inset: var(--spacing-sm);
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: var(--spacing-md);
-    border: 1px dashed var(--color-primary);
-    border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-primary) 12%);
-    color: var(--color-text-primary);
-    text-align: center;
-    pointer-events: none;
-    box-shadow: var(--shadow-md);
+  position: absolute;
+  inset: var(--spacing-sm);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--spacing-md);
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--color-primary) 12%);
+  color: var(--color-text-primary);
+  text-align: center;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
 }
 
 .importOverlayIcon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
-    color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
 }
 
 .importOverlayTitle {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .importOverlayHint {
-    max-width: 220px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--color-text-secondary);
+  max-width: 220px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
 }

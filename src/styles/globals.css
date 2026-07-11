@@ -13,82 +13,82 @@
 *,
 *::before,
 *::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-    font-size: 16px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-    font-family: var(--font-family-sans);
-    font-size: var(--font-size-base);
-    line-height: var(--line-height-normal);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-primary);
-    overflow: hidden;
-    /* 禁止页面滚动，由内部组件控制滚动 */
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  overflow: hidden;
+  /* 禁止页面滚动，由内部组件控制滚动 */
 }
 
 /* 链接样式 */
 a {
-    color: var(--color-action-primary);
-    text-decoration: none;
+  color: var(--color-action-primary);
+  text-decoration: none;
 }
 
 a:hover {
-    color: var(--color-action-primary-hover);
+  color: var(--color-action-primary-hover);
 }
 
 /* 按钮基础 Reset */
 button {
-    font-family: inherit;
-    font-size: inherit;
-    background: none;
-    border: none;
-    outline: none;
-    cursor: pointer;
-    color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  color: inherit;
 }
 
 button:disabled {
-    cursor: var(--cursor-disabled);
-    opacity: 0.5;
+  cursor: var(--cursor-disabled);
+  opacity: 0.5;
 }
 
 /* 输入框基础 Reset */
 input,
 textarea,
 select {
-    font-family: inherit;
-    font-size: inherit;
-    color: inherit;
-    background: transparent;
-    border: none;
-    outline: none;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
 }
 
 input:disabled,
 textarea:disabled,
 select:disabled {
-    cursor: var(--cursor-disabled);
+  cursor: var(--cursor-disabled);
 }
 
 /* 列表 Reset */
 ul,
 ol {
-    list-style: none;
+  list-style: none;
 }
 
 /* 代码字体 */
 code,
 pre,
 kbd {
-    font-family: var(--font-family-mono);
+  font-family: var(--font-family-mono);
 }
 
 /* ============================================
@@ -96,21 +96,21 @@ kbd {
  * ============================================ */
 
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--color-border-default);
-    border-radius: var(--radius-full);
+  background: var(--color-border-default);
+  border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-border-hover);
+  background: var(--color-border-hover);
 }
 
 ::-webkit-scrollbar-button,
@@ -122,20 +122,20 @@ kbd {
 ::-webkit-scrollbar-button:vertical:end:increment,
 ::-webkit-scrollbar-button:horizontal:start:decrement,
 ::-webkit-scrollbar-button:horizontal:end:increment {
-    display: none;
-    width: 0;
-    height: 0;
-    min-width: 0;
-    min-height: 0;
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
-    background-image: none;
-    border: 0;
+  display: none;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  background-image: none;
+  border: 0;
 }
 
 ::-webkit-scrollbar-corner {
-    background: transparent;
+  background: transparent;
 }
 
 /* ============================================
@@ -143,8 +143,8 @@ kbd {
  * ============================================ */
 
 ::selection {
-    background-color: var(--color-action-primary);
-    color: white;
+  background-color: var(--color-action-primary);
+  color: white;
 }
 
 /* ============================================
@@ -152,11 +152,11 @@ kbd {
  * ============================================ */
 
 #root {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* ============================================
@@ -165,32 +165,32 @@ kbd {
 
 /* 文本截断 */
 .truncate {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 隐藏滚动条但保留滚动功能 */
 .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 
 /* Flex 工具类 */
 .flex-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .flex-between {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 /* ============================================
@@ -198,37 +198,37 @@ kbd {
  * ============================================ */
 
 @keyframes highlight-flash {
-    0% {
-        background-color: rgba(59, 130, 246, 0.3);
-    }
+  0% {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
 
-    50% {
-        background-color: rgba(59, 130, 246, 0.15);
-    }
+  50% {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
 
-    100% {
-        background-color: transparent;
-    }
+  100% {
+    background-color: transparent;
+  }
 }
 
 .highlight-flash {
-    animation: highlight-flash 2s ease-out;
+  animation: highlight-flash 2s ease-out;
 }
 
 select:not([multiple]) {
-    --select-chevron-size: 16px;
-    --select-chevron-right: 12px;
-    --select-chevron-padding: calc(var(--select-chevron-right) + var(--select-chevron-size) + 10px);
+  --select-chevron-size: 16px;
+  --select-chevron-right: 12px;
+  --select-chevron-padding: calc(var(--select-chevron-right) + var(--select-chevron-size) + 10px);
 
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    padding-right: var(--select-chevron-padding) !important;
-    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23a3a3a3'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E") !important;
-    background-position: right var(--select-chevron-right) center !important;
-    background-size: var(--select-chevron-size) var(--select-chevron-size) !important;
-    background-repeat: no-repeat !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  padding-right: var(--select-chevron-padding) !important;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23a3a3a3'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='m6%209%206%206%206-6'/%3E%3C/svg%3E") !important;
+  background-position: right var(--select-chevron-right) center !important;
+  background-size: var(--select-chevron-size) var(--select-chevron-size) !important;
+  background-repeat: no-repeat !important;
 }
 
 select:not([multiple])::-ms-expand {
-    display: none;
+  display: none;
 }

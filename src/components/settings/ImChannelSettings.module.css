@@ -6,9 +6,9 @@
  */
 
 .container {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -16,60 +16,62 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .serviceSection {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-    background: var(--color-bg-secondary);
-    border-radius: var(--radius-surface);
-    border: 1px solid var(--color-border-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-surface);
+  border: 1px solid var(--color-border-primary);
 }
 
 .serviceHeader {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .serviceName {
-    font-size: var(--font-size-base, 14px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
-    margin: 0;
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
 .serviceTitleRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .externalLinkButton {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    border-radius: var(--radius-button);
-    transition: color 0.15s, background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-button);
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 
 .externalLinkButton:hover {
-    color: var(--color-accent-primary);
-    background: rgba(59, 130, 246, 0.1);
+  color: var(--color-accent-primary);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .serviceDesc {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
-    margin: 0;
-    line-height: 1.5;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -77,43 +79,43 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .headerRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .tooltipButtonWrap {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .addBotButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border: 1px dashed var(--color-accent-primary, #3b82f6);
-    background: transparent;
-    color: var(--color-accent-primary, #3b82f6);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px dashed var(--color-accent-primary, #3b82f6);
+  background: transparent;
+  color: var(--color-accent-primary, #3b82f6);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .addBotButton:hover:not(:disabled) {
-    background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .addBotButton:disabled {
-    opacity: 0.4;
-    cursor: var(--cursor-disabled);
-    border-color: var(--color-text-tertiary);
-    color: var(--color-text-tertiary);
+  opacity: 0.4;
+  cursor: var(--cursor-disabled);
+  border-color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -121,19 +123,19 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .botList {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .emptyState {
-    text-align: center;
-    padding: 24px 16px;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm, 13px);
-    line-height: 1.6;
-    border: 1px dashed var(--color-border-primary);
-    border-radius: var(--radius-surface);
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm, 13px);
+  line-height: 1.6;
+  border: 1px dashed var(--color-border-primary);
+  border-radius: var(--radius-surface);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -141,169 +143,171 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .botCard {
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    overflow: hidden;
-    background: var(--color-bg-primary);
-    transition: border-color 0.15s;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  transition: border-color 0.15s;
 }
 
 .botCard.botCardConnected {
-    border-color: rgba(22, 163, 74, 0.4);
+  border-color: rgba(22, 163, 74, 0.4);
 }
 
 .botCardHeader {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
 }
 
 .botCardHeader:hover {
-    background: var(--color-bg-secondary);
+  background: var(--color-bg-secondary);
 }
 
 /* 展开/折叠指示箭头 */
 .expandIcon {
-    font-size: 10px;
-    color: var(--color-text-tertiary);
-    transition: transform 0.2s;
-    flex-shrink: 0;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
 }
 
 .expandIconOpen {
-    transform: rotate(90deg);
+  transform: rotate(90deg);
 }
 
 /* Bot 名称区块 */
 .botInfo {
-    flex: 1;
-    min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .botName {
-    font-size: var(--font-size-sm, 13px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .botMeta {
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-tertiary);
-    margin-top: 1px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-tertiary);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 连接状态徽章 */
 .statusBadge {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: var(--font-size-xs, 11px);
-    font-weight: var(--font-weight-medium, 500);
-    white-space: nowrap;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: var(--font-size-xs, 11px);
+  font-weight: var(--font-weight-medium, 500);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .statusBadge.online {
-    background: rgba(22, 163, 74, 0.12);
-    color: #16a34a;
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
 }
 
 .statusBadge.offline {
-    background: var(--color-bg-secondary);
-    color: var(--color-text-tertiary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .statusBadge.connecting {
-    background: rgba(234, 179, 8, 0.12);
-    color: #ca8a04;
+  background: rgba(234, 179, 8, 0.12);
+  color: #ca8a04;
 }
 
 .statusDot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 /* 头部右侧动作按钮组 */
 .botHeaderActions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .connectButton {
-    padding: 5px 10px;
-    border: none;
-    background: var(--color-action-primary, #2563eb);
-    color: #fff;
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 11px);
-    font-weight: var(--font-weight-medium, 500);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-    white-space: nowrap;
+  padding: 5px 10px;
+  border: none;
+  background: var(--color-action-primary, #2563eb);
+  color: #fff;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 11px);
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  white-space: nowrap;
 }
 
 .connectButton:hover:not(:disabled) {
-    background: #1d4ed8;
-    background: color-mix(in srgb, var(--color-action-primary, #2563eb) 84%, #000);
-    color: #fff;
+  background: #1d4ed8;
+  background: color-mix(in srgb, var(--color-action-primary, #2563eb) 84%, #000);
+  color: #fff;
 }
 
 .connectButton:disabled {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-secondary);
-    opacity: 1;
-    cursor: var(--cursor-disabled);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  opacity: 1;
+  cursor: var(--cursor-disabled);
 }
 
 .disconnectButton {
-    padding: 5px 10px;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs, 11px);
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .disconnectButton:hover {
-    border-color: #dc2626;
-    color: #dc2626;
+  border-color: #dc2626;
+  color: #dc2626;
 }
 
 .deleteBotButton {
-    padding: 5px 8px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs, 11px);
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .deleteBotButton:hover {
-    border-color: #dc2626;
-    color: #dc2626;
-    background: rgba(220, 38, 38, 0.06);
+  border-color: #dc2626;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -311,12 +315,12 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .botConfigPanel {
-    border-top: 1px solid var(--color-border-primary);
-    padding: 14px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border-primary);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--color-bg-secondary);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -324,111 +328,117 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .fieldGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .label {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
 }
 
 .inputRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    border-radius: var(--radius-control);
-    font-size: var(--font-size-sm, 13px);
-    transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-sm, 13px);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .input:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .input:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .select {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    border-radius: var(--radius-control);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-control);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .select:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .select:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .hint {
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-tertiary);
-    margin: 0;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-tertiary);
+  margin: 0;
 }
 
 /* 双列表单行（App ID 左，App Secret 右） */
 .twoColRow {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 /* 保存按钮行（位于配置面板底部） */
 .saveActions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
 }
 
 .saveButton {
-    padding: 6px 16px;
-    border: none;
-    background: var(--color-action-primary, #2563eb);
-    color: #fff;
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    font-weight: var(--font-weight-medium, 500);
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+  padding: 6px 16px;
+  border: none;
+  background: var(--color-action-primary, #2563eb);
+  color: #fff;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .saveButton:hover:not(:disabled) {
-    background: #1d4ed8;
-    background: color-mix(in srgb, var(--color-action-primary, #2563eb) 84%, #000);
-    color: #fff;
+  background: #1d4ed8;
+  background: color-mix(in srgb, var(--color-action-primary, #2563eb) 84%, #000);
+  color: #fff;
 }
 
 .saveButton:disabled {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-secondary);
-    opacity: 1;
-    cursor: var(--cursor-disabled);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  opacity: 1;
+  cursor: var(--cursor-disabled);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -436,62 +446,65 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .toggleRow {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .toggleLabel {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .toggleInput {
-    display: none;
+  display: none;
 }
 
 .toggleSwitch {
-    position: relative;
-    width: 32px;
-    height: 16px;
-    box-sizing: border-box;
-    background: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg-tertiary));
-    border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
-    border-radius: 8px;
-    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
-    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
-    flex-shrink: 0;
+  position: relative;
+  width: 32px;
+  height: 16px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg-tertiary));
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+  flex-shrink: 0;
 }
 
 .toggleSwitch::after {
-    content: '';
-    position: absolute;
-    top: 1px;
-    left: 1px;
-    width: 12px;
-    height: 12px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
-    transition: transform 0.2s;
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: transform 0.2s;
 }
 
-.toggleInput:checked+.toggleSwitch {
-    background: var(--color-accent-primary, #3b82f6);
-    border-color: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 68%, transparent);
-    box-shadow: 0 0 0 1px rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.18);
+.toggleInput:checked + .toggleSwitch {
+  background: var(--color-accent-primary, #3b82f6);
+  border-color: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 68%, transparent);
+  box-shadow: 0 0 0 1px rgba(var(--color-accent-primary-rgb, 59, 130, 246), 0.18);
 }
 
-.toggleInput:checked+.toggleSwitch::after {
-    transform: translateX(16px);
+.toggleInput:checked + .toggleSwitch::after {
+  transform: translateX(16px);
 }
 
 .toggleText {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-primary);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -499,11 +512,11 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .errorMessage {
-    font-size: var(--font-size-xs, 11px);
-    color: #dc2626;
-    padding: 6px 10px;
-    background: rgba(220, 38, 38, 0.08);
-    border-radius: var(--radius-sm, 4px);
+  font-size: var(--font-size-xs, 11px);
+  color: #dc2626;
+  padding: 6px 10px;
+  background: rgba(220, 38, 38, 0.08);
+  border-radius: var(--radius-sm, 4px);
 }
 
 /* ═══════════════════════════════════════════════════════════════ */
@@ -511,14 +524,14 @@
 /* ═══════════════════════════════════════════════════════════════ */
 
 .statsRow {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-tertiary);
 }
 
 .statsCount {
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-secondary);
 }

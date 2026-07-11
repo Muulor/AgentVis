@@ -17,7 +17,7 @@ import type { FSMContext, FSMEvent, GuardFn } from '../types';
  * @returns 预算 > 0 返回 true
  */
 export const loopBudgetRemaining: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.loopBudget > 0;
+  return ctx.loopBudget > 0;
 };
 
 /**
@@ -25,17 +25,15 @@ export const loopBudgetRemaining: GuardFn<FSMEvent> = (ctx: FSMContext): boolean
  *
  * 用于决定是否继续循环
  */
-export const loopBudgetRemainingAndProgress: GuardFn<FSMEvent> = (
-    ctx: FSMContext
-): boolean => {
-    return ctx.loopBudget > 0 && ctx.progress;
+export const loopBudgetRemainingAndProgress: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
+  return ctx.loopBudget > 0 && ctx.progress;
 };
 
 /**
  * 检查预算是否耗尽
  */
 export const budgetExhausted: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.loopBudget <= 0;
+  return ctx.loopBudget <= 0;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -53,11 +51,11 @@ const DEFAULT_RISK_THRESHOLD = 0.7;
  * @param threshold - 风险阈值，默认 0.7
  */
 export const riskExceeded = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    threshold: number = DEFAULT_RISK_THRESHOLD
+  ctx: FSMContext,
+  _event: FSMEvent,
+  threshold: number = DEFAULT_RISK_THRESHOLD
 ): boolean => {
-    return ctx.riskScore > threshold;
+  return ctx.riskScore > threshold;
 };
 
 /**
@@ -66,7 +64,7 @@ export const riskExceeded = (
  * @param threshold - 风险阈值
  */
 export const createRiskExceededGuard = (
-    threshold: number = DEFAULT_RISK_THRESHOLD
+  threshold: number = DEFAULT_RISK_THRESHOLD
 ): GuardFn<FSMEvent> => {
-    return (ctx: FSMContext) => ctx.riskScore > threshold;
+  return (ctx: FSMContext) => ctx.riskScore > threshold;
 };

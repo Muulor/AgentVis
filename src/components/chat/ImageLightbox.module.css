@@ -7,195 +7,197 @@
 /* ==================== 遮罩层 ==================== */
 
 .overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.9);
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.2s ease-out;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
+  from {
+    opacity: 0;
+  }
 
-    to {
-        opacity: 1;
-    }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ==================== 关闭按钮 ==================== */
 
 .closeButton {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 50%;
-    color: white;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-    z-index: 10;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  z-index: 10;
 }
 
 .closeButton:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 /* ==================== 工具栏 ==================== */
 
 .toolbar {
-    position: absolute;
-    bottom: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background-color: rgba(0, 0, 0, 0.6);
-    border-radius: 8px;
-    backdrop-filter: blur(8px);
-    z-index: 10;
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 10;
 }
 
 .toolButton {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    background-color: transparent;
-    border: none;
-    border-radius: var(--radius-button);
-    color: white;
-    cursor: pointer;
-    font-size: 13px;
-    transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-button);
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.15s ease;
 }
 
 .toolButton:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
 .toolButton:disabled {
-    opacity: 0.4;
-    cursor: var(--cursor-disabled);
+  opacity: 0.4;
+  cursor: var(--cursor-disabled);
 }
 
 .scaleLabel {
-    min-width: 48px;
-    text-align: center;
-    color: white;
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
+  min-width: 48px;
+  text-align: center;
+  color: white;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .divider {
-    width: 1px;
-    height: 20px;
-    background-color: rgba(255, 255, 255, 0.2);
-    margin: 0 4px;
+  width: 1px;
+  height: 20px;
+  background-color: rgba(255, 255, 255, 0.2);
+  margin: 0 4px;
 }
 
 /* ==================== 图片容器 ==================== */
 
 .imageContainer {
-    position: absolute;
-    top: 16px;
-    left: 40px;
-    right: 40px;
-    bottom: 110px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+  position: absolute;
+  top: 16px;
+  left: 40px;
+  right: 40px;
+  bottom: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .image {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    transition: transform 0.1s ease-out;
-    user-select: none;
-    -webkit-user-drag: none;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.1s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* ==================== 底部信息栏 ==================== */
 
 .footer {
-    position: absolute;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 8px 16px;
-    background-color: rgba(0, 0, 0, 0.6);
-    border-radius: 8px;
-    backdrop-filter: blur(8px);
-    z-index: 10;
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 10;
 }
 
 .fileName {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 13px;
-    max-width: 400px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .counter {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 13px;
-    margin-left: 12px;
-    font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  margin-left: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ==================== 导航按钮 ==================== */
 
 .navButton {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 56px;
-    height: 56px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 0, 0, 0.4);
-    border: none;
-    border-radius: 50%;
-    color: white;
-    cursor: pointer;
-    transition: background-color 0.15s ease, opacity 0.15s ease;
-    z-index: 10;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+  z-index: 10;
 }
 
 .navButton:hover:not(:disabled) {
-    background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
 .navButton:disabled {
-    opacity: 0.3;
-    cursor: var(--cursor-disabled);
+  opacity: 0.3;
+  cursor: var(--cursor-disabled);
 }
 
 .navPrev {
-    left: 24px;
+  left: 24px;
 }
 
 .navNext {
-    right: 24px;
+  right: 24px;
 }

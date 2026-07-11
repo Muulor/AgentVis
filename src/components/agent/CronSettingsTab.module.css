@@ -1,384 +1,392 @@
 /* CronSettingsTab 样式 */
 
 .container {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* 头部 */
 .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .label {
-    font-size: var(--font-size-sm, 12px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
-    display: block;
+  font-size: var(--font-size-sm, 12px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  display: block;
 }
 
 .hint {
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-tertiary);
-    margin-top: 4px;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
 }
 
 /* 新增按钮 */
 .addBtn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
-    border-radius: var(--radius-button);
-    border: 1px solid var(--color-action-primary);
-    background: transparent;
-    color: var(--color-action-primary);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-action-primary);
+  background: transparent;
+  color: var(--color-action-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .addBtn:hover {
-    background: color-mix(in srgb, var(--color-action-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--color-action-primary) 12%, transparent);
 }
 
 /* 表单区域 */
 .form {
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-surface);
-    padding: 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-surface);
+  padding: 16px;
 }
 
 .formTitle {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text-primary, #1A1A1A);
-    margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+  margin-bottom: 14px;
 }
 
 .formField {
-    margin-bottom: 12px;
+  margin-bottom: 12px;
 }
 
 .fieldLabel {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--color-text-secondary, #666666);
-    margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #666666);
+  margin-bottom: 6px;
 }
 
 .cronPreview {
-    font-size: 11px;
-    color: var(--color-action-primary);
-    background: color-mix(in srgb, var(--color-action-primary) 12%, transparent);
-    padding: 2px 8px;
-    border-radius: 4px;
+  font-size: 11px;
+  color: var(--color-action-primary);
+  background: color-mix(in srgb, var(--color-action-primary) 12%, transparent);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 /* 输入框 */
 .input {
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--color-border-default);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm, 12px);
-    outline: none;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 12px);
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-sizing: border-box;
 }
 
 .input:focus {
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 /* 下拉选择器 */
 .select {
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--color-border-default);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm, 12px);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 12px);
+  outline: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-sizing: border-box;
 }
 
 .select:focus {
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 /* 小尺寸下拉（内联使用） */
 .selectSmall {
-    --select-chevron-right: 10px;
-    --select-chevron-padding: 34px;
+  --select-chevron-right: 10px;
+  --select-chevron-padding: 34px;
 
-    padding: 6px 8px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--color-border-default);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm, 12px);
-    outline: none;
-    cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    min-width: 60px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 12px);
+  outline: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  min-width: 60px;
 }
 
 .selectSmall:focus {
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 /* 调度行（内联排列） */
 .scheduleRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .scheduleLabel {
-    font-size: var(--font-size-sm, 12px);
-    color: var(--color-text-secondary);
-    white-space: nowrap;
+  font-size: var(--font-size-sm, 12px);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .timeSeparator {
-    font-size: var(--font-size-sm, 12px);
-    font-weight: 600;
-    color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 12px);
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 /* Toggle Switch 开关样式 */
 .toggleLabel {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: auto;
-    cursor: pointer;
-    user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  cursor: pointer;
+  user-select: none;
 }
 
 .toggleSwitch {
-    position: relative;
-    width: 32px;
-    height: 18px;
-    border-radius: 9px;
-    background: var(--color-border-default);
-    transition: background 0.2s ease;
-    cursor: pointer;
-    flex-shrink: 0;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--color-border-default);
+  transition: background 0.2s ease;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .toggleOn {
-    background: var(--color-action-primary);
+  background: var(--color-action-primary);
 }
 
 .toggleThumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.2s ease;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
 }
 
 .toggleOn .toggleThumb {
-    transform: translateX(14px);
+  transform: translateX(14px);
 }
 
 .toggleText {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-    white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
 }
 
 /* 高级模式切换按钮 */
 .advancedToggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 8px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--color-action-primary);
-    font-size: 11px;
-    cursor: pointer;
-    transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-action-primary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.15s ease;
 }
 
 .advancedToggle:hover {
-    color: var(--color-action-primary-hover);
+  color: var(--color-action-primary-hover);
 }
 
 /* 文本域 */
 .textarea {
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--color-border-default);
-    background: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm, 12px);
-    outline: none;
-    height: 112px;
-    min-height: 112px;
-    max-height: 112px;
-    resize: none;
-    overflow-y: auto;
-    font-family: inherit;
-    line-height: 1.5;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 12px);
+  outline: none;
+  height: 112px;
+  min-height: 112px;
+  max-height: 112px;
+  resize: none;
+  overflow-y: auto;
+  font-family: inherit;
+  line-height: 1.5;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-sizing: border-box;
 }
 
 .textarea:focus {
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .fieldHint {
-    display: block;
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-tertiary);
-    margin-top: 4px;
+  display: block;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
 }
 
 /* 执行模式选择器 */
 .modeSelector {
-    display: flex;
-    gap: 0;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-control);
-    overflow: hidden;
-    width: fit-content;
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  width: fit-content;
 }
 
 .modeBtn {
-    padding: 6px 16px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm, 12px);
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 12px);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .modeBtn:not(:last-child) {
-    border-right: 1px solid var(--color-border-default);
+  border-right: 1px solid var(--color-border-default);
 }
 
 .modeActive {
-    background: var(--color-action-primary);
-    color: #fff;
+  background: var(--color-action-primary);
+  color: #fff;
 }
 
 /* 错误提示 */
 .formError {
-    font-size: 12px;
-    color: #ef4444;
-    margin-bottom: 12px;
-    padding: 6px 10px;
-    background: rgba(239, 68, 68, 0.08);
-    border-radius: var(--radius-control);
+  font-size: 12px;
+  color: #ef4444;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: var(--radius-control);
 }
 
 /* 表单操作按钮 */
 .formActions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .cancelFormBtn {
-    padding: 6px 14px;
-    border-radius: var(--radius-button);
-    border: 1px solid var(--color-border-default);
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm, 12px);
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: 6px 14px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border-default);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 12px);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .cancelFormBtn:hover {
-    background: var(--color-bg-tertiary);
+  background: var(--color-bg-tertiary);
 }
 
 .saveFormBtn {
-    padding: 6px 14px;
-    border-radius: var(--radius-button);
-    border: none;
-    background: var(--color-action-primary);
-    color: #fff;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: 6px 14px;
+  border-radius: var(--radius-button);
+  border: none;
+  background: var(--color-action-primary);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .saveFormBtn:hover {
-    background: var(--color-action-primary-hover);
+  background: var(--color-action-primary-hover);
 }
 
 .saveFormBtn:disabled,
 .cancelFormBtn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* 任务列表 */
 .jobList {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* 空状态 */
 .empty {
-    text-align: center;
-    padding: 32px 16px;
-    color: var(--color-text-secondary);
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--color-text-secondary);
 }
 
 .emptyIcon {
-    margin-bottom: 12px;
-    opacity: 0.4;
+  margin-bottom: 12px;
+  opacity: 0.4;
 }
 
 .empty p {
-    margin: 0;
-    font-size: 13px;
+  margin: 0;
+  font-size: 13px;
 }
 
 .emptyHint {
-    font-size: 12px !important;
-    color: var(--color-text-tertiary) !important;
-    margin-top: 6px !important;
+  font-size: 12px !important;
+  color: var(--color-text-tertiary) !important;
+  margin-top: 6px !important;
 }
 
 /* 加载状态 */
 .loading {
-    text-align: center;
-    padding: 24px;
-    color: var(--color-text-secondary);
-    font-size: 13px;
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
 }

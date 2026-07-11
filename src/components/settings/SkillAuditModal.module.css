@@ -1,472 +1,473 @@
 /* SkillAuditModal - security review modal */
 
 .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 1200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--spacing-xl);
-    background: rgba(0, 0, 0, 0.5);
-    animation: fadeIn var(--transition-normal) ease-out;
-    pointer-events: auto;
-    -webkit-app-region: no-drag;
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xl);
+  background: rgba(0, 0, 0, 0.5);
+  animation: fadeIn var(--transition-normal) ease-out;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
+  from {
+    opacity: 0;
+  }
 
-    to {
-        opacity: 1;
-    }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
-    display: flex;
-    width: min(680px, calc(100vw - 48px));
-    max-height: calc(100vh - 64px);
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-xl);
-    background: var(--color-bg-primary);
-    box-shadow: var(--shadow-xl);
-    color: var(--color-text-primary);
-    animation: slideUp var(--transition-slow) ease-out;
+  display: flex;
+  width: min(680px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-primary);
+  box-shadow: var(--shadow-xl);
+  color: var(--color-text-primary);
+  animation: slideUp var(--transition-slow) ease-out;
 }
 
 @keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(16px) scale(0.98);
-    }
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .header {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-xl);
-    border-bottom: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
 }
 
 .statusIcon {
-    display: flex;
-    width: 48px;
-    height: 48px;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-lg);
-    background: color-mix(in srgb, currentColor 14%, transparent);
+  display: flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
 .statusIcon.auditing {
-    color: var(--color-status-info);
-    animation: pulse 1.5s ease-in-out infinite;
+  color: var(--color-status-info);
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 .statusIcon.approved {
-    color: var(--color-status-success);
+  color: var(--color-status-success);
 }
 
 .statusIcon.rejected {
-    color: var(--color-status-error);
+  color: var(--color-status-error);
 }
 
 .statusIcon.manualReview,
 .statusIcon.error {
-    color: var(--color-status-warning);
+  color: var(--color-status-warning);
 }
 
 @keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
 
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.55;
-    }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .headerText {
-    flex: 1;
-    min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .title {
-    margin: 0 0 var(--spacing-xs);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
+  margin: 0 0 var(--spacing-xs);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
 }
 
 .subtitle {
-    margin: 0;
-    overflow: hidden;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .minimizeButton {
-    display: flex;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast);
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .minimizeButton:hover {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .progressBar {
-    height: 3px;
-    flex-shrink: 0;
-    overflow: hidden;
-    background: var(--color-bg-tertiary);
+  height: 3px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
 }
 
 .progressFill {
-    width: 40%;
-    height: 100%;
-    border-radius: var(--radius-full);
-    background: var(--color-action-primary);
-    animation: progressIndeterminate 1.5s ease-in-out infinite;
+  width: 40%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-action-primary);
+  animation: progressIndeterminate 1.5s ease-in-out infinite;
 }
 
 @keyframes progressIndeterminate {
-    0% {
-        transform: translateX(-100%);
-    }
+  0% {
+    transform: translateX(-100%);
+  }
 
-    100% {
-        transform: translateX(350%);
-    }
+  100% {
+    transform: translateX(350%);
+  }
 }
 
 .body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: var(--spacing-xl);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--spacing-xl);
 }
 
 .riskScoreBar {
-    display: grid;
-    grid-template-columns: max-content minmax(96px, 1fr) max-content;
-    align-items: center;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    background: var(--color-bg-secondary);
+  display: grid;
+  grid-template-columns: max-content minmax(96px, 1fr) max-content;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  background: var(--color-bg-secondary);
 }
 
 .riskLabel {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
 }
 
 .riskScoreTrack {
-    height: 6px;
-    overflow: hidden;
-    border-radius: var(--radius-full);
-    background: var(--color-bg-tertiary);
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
 }
 
 .riskScoreFill {
-    height: 100%;
-    border-radius: var(--radius-full);
-    transition: width 0.5s ease-out;
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.5s ease-out;
 }
 
 .riskScoreFill.low {
-    background: var(--color-status-success);
+  background: var(--color-status-success);
 }
 
 .riskScoreFill.medium {
-    background: var(--color-status-warning);
+  background: var(--color-status-warning);
 }
 
 .riskScoreFill.high,
 .riskScoreFill.critical {
-    background: var(--color-status-error);
+  background: var(--color-status-error);
 }
 
 .riskValue {
-    min-width: 44px;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    text-align: right;
+  min-width: 44px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
 }
 
 .summary {
-    margin: 0 0 var(--spacing-lg);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-relaxed);
+  margin: 0 0 var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
 }
 
 .capabilities {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
 
 .capabilityTag {
-    padding: 3px 8px;
-    border: 1px solid color-mix(in srgb, var(--color-action-primary) 34%, transparent);
-    border-radius: var(--radius-button);
-    background: color-mix(in srgb, var(--color-action-primary) 10%, transparent);
-    color: var(--color-action-primary);
-    font-size: var(--font-size-xs);
-    line-height: var(--line-height-tight);
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--color-action-primary) 34%, transparent);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, var(--color-action-primary) 10%, transparent);
+  color: var(--color-action-primary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
 }
 
 .findingsHeader {
-    margin-bottom: var(--spacing-sm);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
 }
 
 .findingsList {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
 
 .findingItem {
-    padding: var(--spacing-md);
-    border: 1px solid var(--color-border-primary);
-    border-left: 3px solid transparent;
-    border-radius: var(--radius-surface);
-    background: var(--color-bg-secondary);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border-primary);
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-surface);
+  background: var(--color-bg-secondary);
 }
 
 .findingItem.critical,
 .findingItem.high {
-    border-left-color: var(--color-status-error);
+  border-left-color: var(--color-status-error);
 }
 
 .findingItem.medium {
-    border-left-color: var(--color-status-warning);
+  border-left-color: var(--color-status-warning);
 }
 
 .findingItem.low {
-    border-left-color: var(--color-status-success);
+  border-left-color: var(--color-status-success);
 }
 
 .findingMeta {
-    display: flex;
-    min-width: 0;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 }
 
 .findingBadge {
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
-    text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  text-transform: uppercase;
 }
 
 .findingBadge.critical,
 .findingBadge.high {
-    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
-    color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
+  color: var(--color-status-error);
 }
 
 .findingBadge.medium {
-    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
-    color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
+  color: var(--color-status-warning);
 }
 
 .findingBadge.low {
-    background: color-mix(in srgb, var(--color-status-success) 14%, transparent);
-    color: var(--color-status-success);
+  background: color-mix(in srgb, var(--color-status-success) 14%, transparent);
+  color: var(--color-status-success);
 }
 
 .findingType {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .findingFile {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    color: var(--color-text-tertiary);
-    font-family: var(--font-family-mono);
-    font-size: var(--font-size-xs);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
 }
 
 .findingDesc {
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 .footer {
-    display: flex;
-    min-height: 64px;
-    flex-shrink: 0;
-    justify-content: flex-end;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-lg) var(--spacing-xl);
-    border-top: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
+  display: flex;
+  min-height: 64px;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-top: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
 }
 
 .btn {
-    min-height: 36px;
-    padding: 0 var(--spacing-lg);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    transition:
-        background-color var(--transition-fast),
-        border-color var(--transition-fast),
-        color var(--transition-fast),
-        transform var(--transition-fast);
+  min-height: 36px;
+  padding: 0 var(--spacing-lg);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .btn:hover:not(:disabled) {
-    border-color: var(--color-border-secondary);
-    background: var(--color-bg-tertiary);
+  border-color: var(--color-border-secondary);
+  background: var(--color-bg-tertiary);
 }
 
 .btn:active:not(:disabled) {
-    transform: scale(0.98);
+  transform: scale(0.98);
 }
 
 .btn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .btnPrimary {
-    border-color: var(--color-action-primary);
-    background: var(--color-action-primary);
-    color: white;
+  border-color: var(--color-action-primary);
+  background: var(--color-action-primary);
+  color: white;
 }
 
 .btnPrimary:hover:not(:disabled) {
-    border-color: var(--color-action-primary-hover);
-    background: var(--color-action-primary-hover);
+  border-color: var(--color-action-primary-hover);
+  background: var(--color-action-primary-hover);
 }
 
 .btnSecondary {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .btnDanger {
-    border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
-    background: transparent;
-    color: var(--color-status-error);
+  border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
+  background: transparent;
+  color: var(--color-status-error);
 }
 
 .btnDanger:hover:not(:disabled) {
-    border-color: var(--color-status-error);
-    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
+  border-color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 .btnWarning {
-    border-color: var(--color-status-warning);
-    background: var(--color-status-warning);
-    color: white;
+  border-color: var(--color-status-warning);
+  background: var(--color-status-warning);
+  color: white;
 }
 
 .btnWarning:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--color-status-warning) 88%, #000);
-    background: color-mix(in srgb, var(--color-status-warning) 88%, #000);
+  border-color: color-mix(in srgb, var(--color-status-warning) 88%, #000);
+  background: color-mix(in srgb, var(--color-status-warning) 88%, #000);
 }
 
 .btnSuccess {
-    border-color: var(--color-status-success);
-    background: var(--color-status-success);
-    color: white;
+  border-color: var(--color-status-success);
+  background: var(--color-status-success);
+  color: white;
 }
 
 .btnSuccess:hover:not(:disabled) {
-    border-color: color-mix(in srgb, var(--color-status-success) 88%, #000);
-    background: color-mix(in srgb, var(--color-status-success) 88%, #000);
+  border-color: color-mix(in srgb, var(--color-status-success) 88%, #000);
+  background: color-mix(in srgb, var(--color-status-success) 88%, #000);
 }
 
 @media (max-width: 560px) {
-    .overlay {
-        align-items: flex-start;
-        padding: var(--spacing-lg);
-    }
+  .overlay {
+    align-items: flex-start;
+    padding: var(--spacing-lg);
+  }
 
-    .modal {
-        width: 100%;
-        max-height: calc(100vh - 32px);
-    }
+  .modal {
+    width: 100%;
+    max-height: calc(100vh - 32px);
+  }
 
-    .header,
-    .body,
-    .footer {
-        padding-right: var(--spacing-lg);
-        padding-left: var(--spacing-lg);
-    }
+  .header,
+  .body,
+  .footer {
+    padding-right: var(--spacing-lg);
+    padding-left: var(--spacing-lg);
+  }
 
-    .riskScoreBar {
-        grid-template-columns: 1fr max-content;
-    }
+  .riskScoreBar {
+    grid-template-columns: 1fr max-content;
+  }
 
-    .riskScoreTrack {
-        grid-column: 1 / -1;
-        grid-row: 2;
-    }
+  .riskScoreTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 
-    .footer {
-        flex-direction: column-reverse;
-    }
+  .footer {
+    flex-direction: column-reverse;
+  }
 
-    .btn {
-        width: 100%;
-    }
+  .btn {
+    width: 100%;
+  }
 }

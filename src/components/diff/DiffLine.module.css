@@ -10,158 +10,157 @@
 /* ==================== 基础行样式 ==================== */
 
 .line {
-    display: flex;
-    min-height: 24px;
-    line-height: 24px;
-    font-family: var(--font-family-mono);
-    font-size: 13px;
-    transition: background-color 0.15s ease;
-    border-left: 3px solid transparent;
+  display: flex;
+  min-height: 24px;
+  line-height: 24px;
+  font-family: var(--font-family-mono);
+  font-size: 13px;
+  transition: background-color 0.15s ease;
+  border-left: 3px solid transparent;
 }
 
 /* ==================== 行号 ==================== */
 
 .lineNumber {
-    min-width: 28px;
-    padding: 0 4px;
-    text-align: right;
-    font-size: 11px;
-    color: var(--color-text-tertiary);
-    user-select: none;
-    border-right: 1px solid color-mix(in srgb, var(--color-border-default) 58%, transparent);
-    /* 使用半透明背景，在浅色模式下更和谐 */
-    background: color-mix(in srgb, var(--color-bg-secondary) 64%, transparent);
-    flex-shrink: 0;
+  min-width: 28px;
+  padding: 0 4px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  user-select: none;
+  border-right: 1px solid color-mix(in srgb, var(--color-border-default) 58%, transparent);
+  /* 使用半透明背景，在浅色模式下更和谐 */
+  background: color-mix(in srgb, var(--color-bg-secondary) 64%, transparent);
+  flex-shrink: 0;
 }
 
 /* ==================== 行前缀 ==================== */
 
 .linePrefix {
-    width: 24px;
-    text-align: center;
-    flex-shrink: 0;
-    user-select: none;
-    font-weight: 600;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
+  font-weight: 600;
 }
 
 /* ==================== 行内容 ==================== */
 
 .lineContent {
-    flex: 1;
-    padding: 0 8px;
-    white-space: pre-wrap;
-    word-break: break-all;
+  flex: 1;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* ==================== 新增行样式（柔和绿色） ==================== */
 
 .lineAdd {
-    background: rgba(46, 160, 67, 0.15);
-    border-left-color: #3fb950;
+  background: rgba(46, 160, 67, 0.15);
+  border-left-color: #3fb950;
 }
 
 .lineAdd .linePrefix {
-    color: #3fb950;
+  color: #3fb950;
 }
 
 .lineAdd .lineNumber {
-    background: rgba(46, 160, 67, 0.10);
-    color: #3fb950;
+  background: rgba(46, 160, 67, 0.1);
+  color: #3fb950;
 }
 
 /* 浅色模式 */
-:global([data-theme="light"]) .lineAdd {
-    background: rgba(46, 160, 67, 0.10);
-    border-left-color: #1a7f37;
+:global([data-theme='light']) .lineAdd {
+  background: rgba(46, 160, 67, 0.1);
+  border-left-color: #1a7f37;
 }
 
-:global([data-theme="light"]) .lineAdd .linePrefix {
-    color: #1a7f37;
+:global([data-theme='light']) .lineAdd .linePrefix {
+  color: #1a7f37;
 }
 
-:global([data-theme="light"]) .lineAdd .lineNumber {
-    background: rgba(46, 160, 67, 0.08);
-    color: #1a7f37;
+:global([data-theme='light']) .lineAdd .lineNumber {
+  background: rgba(46, 160, 67, 0.08);
+  color: #1a7f37;
 }
 
 /* ==================== 删除行样式（柔和红色） ==================== */
 
 .lineRemove {
-    background: rgba(248, 81, 73, 0.15);
-    border-left-color: #f85149;
+  background: rgba(248, 81, 73, 0.15);
+  border-left-color: #f85149;
 }
 
 .lineRemove .linePrefix {
-    color: #f85149;
+  color: #f85149;
 }
 
 .lineRemove .lineNumber {
-    background: rgba(248, 81, 73, 0.10);
-    color: #f85149;
+  background: rgba(248, 81, 73, 0.1);
+  color: #f85149;
 }
 
 /* 浅色模式 */
-:global([data-theme="light"]) .lineRemove {
-    background: rgba(248, 81, 73, 0.10);
-    border-left-color: #cf222e;
+:global([data-theme='light']) .lineRemove {
+  background: rgba(248, 81, 73, 0.1);
+  border-left-color: #cf222e;
 }
 
-:global([data-theme="light"]) .lineRemove .linePrefix {
-    color: #cf222e;
+:global([data-theme='light']) .lineRemove .linePrefix {
+  color: #cf222e;
 }
 
-:global([data-theme="light"]) .lineRemove .lineNumber {
-    background: rgba(248, 81, 73, 0.08);
-    color: #cf222e;
+:global([data-theme='light']) .lineRemove .lineNumber {
+  background: rgba(248, 81, 73, 0.08);
+  color: #cf222e;
 }
 
 /* ==================== 上下文行样式 ==================== */
 
 .lineContext {
-    background: transparent;
+  background: transparent;
 }
 
 .lineContext .linePrefix {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 /* 浅色模式下行号背景用更柔和的颜色 */
-:global([data-theme="light"]) .lineNumber {
-    background: rgba(245, 245, 245, 0.72);
-    border-right-color: rgba(110, 118, 129, 0.22);
-    color: #6e7681;
+:global([data-theme='light']) .lineNumber {
+  background: rgba(245, 245, 245, 0.72);
+  border-right-color: rgba(110, 118, 129, 0.22);
+  color: #6e7681;
 }
 
 /* ==================== 高亮状态（手动定位） ==================== */
 
 .highlighted {
-    background: rgba(59, 130, 246, 0.15) !important;
-    animation: pulse 0.8s ease-in-out infinite;
+  background: rgba(59, 130, 246, 0.15) !important;
+  animation: pulse 0.8s ease-in-out infinite;
 }
 
 @keyframes pulse {
+  0%,
+  100% {
+    background: rgba(59, 130, 246, 0.15);
+  }
 
-    0%,
-    100% {
-        background: rgba(59, 130, 246, 0.15);
-    }
-
-    50% {
-        background: rgba(59, 130, 246, 0.3);
-    }
+  50% {
+    background: rgba(59, 130, 246, 0.3);
+  }
 }
 
 /* ==================== 可点击状态 ==================== */
 
 .clickable {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .clickable:hover {
-    background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .clickable:focus {
-    outline: 2px solid var(--color-action-primary);
-    outline-offset: -2px;
+  outline: 2px solid var(--color-action-primary);
+  outline-offset: -2px;
 }

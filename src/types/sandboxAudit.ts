@@ -16,62 +16,54 @@ export type SandboxAuditProcessLifecycle = 'managed' | 'detachedLaunch' | 'backg
 export type SandboxAuditNetworkScope = 'inherit' | 'blocked' | 'lan' | 'internetAudit';
 
 export type SandboxAuditBackend =
-    | 'none'
-    | 'jobObject'
-    | 'restrictedToken'
-    | 'appContainer'
-    | 'mainProcess'
-    | 'broker'
-    | 'wfpEnhanced';
+  | 'none'
+  | 'jobObject'
+  | 'restrictedToken'
+  | 'appContainer'
+  | 'mainProcess'
+  | 'broker'
+  | 'wfpEnhanced';
 
 export type SandboxAuditDecision = 'allow' | 'audit' | 'block' | 'diagnostic';
 
-export type SandboxAuditGuardMode =
-    | 'auditOnly'
-    | 'wouldBlock'
-    | 'hardBlock'
-    | 'directAuditAllowed';
+export type SandboxAuditGuardMode = 'auditOnly' | 'wouldBlock' | 'hardBlock' | 'directAuditAllowed';
 
-export type SandboxAuditCleanupState =
-    | 'notApplicable'
-    | 'clean'
-    | 'residualDetected'
-    | 'failed';
+export type SandboxAuditCleanupState = 'notApplicable' | 'clean' | 'residualDetected' | 'failed';
 
 export interface SandboxAuditEvent {
-    schemaVersion: 1;
-    id: string;
-    timestamp: number;
-    timestampIso: string;
-    executionId: string | null;
-    source: SandboxAuditSource;
-    subjectType: 'command' | 'skill' | 'tool' | 'preview' | 'installer' | 'process' | 'wfpSession';
-    subjectId: string | null;
-    commandHash: string;
-    profile: 'standard' | 'externalSkill' | 'installer' | 'preview' | 'restricted';
-    sandboxMode: SandboxAuditMode;
-    processLifecycle: SandboxAuditProcessLifecycle;
-    networkPolicy: SandboxAuditNetworkPolicy;
-    networkScope: SandboxAuditNetworkScope;
-    backend: SandboxAuditBackend;
-    decision: SandboxAuditDecision;
-    reason: string;
-    matchedPattern: string | null;
-    riskClass?: string | null;
-    riskKind?: string | null;
-    credentialContext?: string | null;
-    workdir: string | null;
-    cleanup: SandboxAuditCleanupState | null;
-    targetHost?: string | null;
-    targetScheme?: string | null;
-    targetPort?: number | null;
-    networkProtocol?: string | null;
-    guardMode?: SandboxAuditGuardMode | null;
-    requestMethod?: string | null;
-    urlHash?: string | null;
-    statusCode?: number | null;
-    bytesIn?: number | null;
-    bytesOut?: number | null;
-    durationMs?: number | null;
-    blockedReason?: string | null;
+  schemaVersion: 1;
+  id: string;
+  timestamp: number;
+  timestampIso: string;
+  executionId: string | null;
+  source: SandboxAuditSource;
+  subjectType: 'command' | 'skill' | 'tool' | 'preview' | 'installer' | 'process' | 'wfpSession';
+  subjectId: string | null;
+  commandHash: string;
+  profile: 'standard' | 'externalSkill' | 'installer' | 'preview' | 'restricted';
+  sandboxMode: SandboxAuditMode;
+  processLifecycle: SandboxAuditProcessLifecycle;
+  networkPolicy: SandboxAuditNetworkPolicy;
+  networkScope: SandboxAuditNetworkScope;
+  backend: SandboxAuditBackend;
+  decision: SandboxAuditDecision;
+  reason: string;
+  matchedPattern: string | null;
+  riskClass?: string | null;
+  riskKind?: string | null;
+  credentialContext?: string | null;
+  workdir: string | null;
+  cleanup: SandboxAuditCleanupState | null;
+  targetHost?: string | null;
+  targetScheme?: string | null;
+  targetPort?: number | null;
+  networkProtocol?: string | null;
+  guardMode?: SandboxAuditGuardMode | null;
+  requestMethod?: string | null;
+  urlHash?: string | null;
+  statusCode?: number | null;
+  bytesIn?: number | null;
+  bytesOut?: number | null;
+  durationMs?: number | null;
+  blockedReason?: string | null;
 }

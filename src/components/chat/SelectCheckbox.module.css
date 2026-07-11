@@ -3,21 +3,21 @@
  */
 
 .checkbox {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-full);
-    background: transparent;
-    cursor: pointer;
-    transition: transform 150ms ease;
-    align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 150ms ease;
+  align-self: center;
 }
 
 .checkbox:hover {
-    transform: scale(1.04);
+  transform: scale(1.04);
 }

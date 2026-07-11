@@ -1,7 +1,7 @@
 import { buildCurrentTimePrompt } from '@services/utils/TimeUtils';
 import {
-    buildOutputLanguageContract,
-    resolveOutputLanguage,
+  buildOutputLanguageContract,
+  resolveOutputLanguage,
 } from '@services/language/OutputLanguagePolicy';
 import { getQuoteContextContent } from '@utils/quoteContent';
 
@@ -10,15 +10,16 @@ export const NO_CONVERSATION_HISTORY = '(No conversation history)';
 export type ChatContextBlockType = 'quotes' | 'rag' | 'attachment' | 'facts' | 'summaries';
 
 export function buildChatModeIdentityPrompt(agentName: string, latestUserRequest = ''): string {
-    const outputLanguageContract = buildOutputLanguageContract(
-        resolveOutputLanguage(latestUserRequest),
-        {
-            fields: ['user-visible prose', 'widget labels', 'chart labels', 'examples'],
-            additionalRule: 'When the user explicitly requests a translation or another output language, follow that target language even when quoted source text uses a different language.',
-        }
-    );
+  const outputLanguageContract = buildOutputLanguageContract(
+    resolveOutputLanguage(latestUserRequest),
+    {
+      fields: ['user-visible prose', 'widget labels', 'chart labels', 'examples'],
+      additionalRule:
+        'When the user explicitly requests a translation or another output language, follow that target language even when quoted source text uses a different language.',
+    }
+  );
 
-    return `## Identity Awareness
+  return `## Identity Awareness
 
 Your name is ${agentName}. You are an intelligent agent in AgentVis. Mention this identity only when the user asks.
 
@@ -254,25 +255,27 @@ ${buildCurrentTimePrompt()}
 `;
 }
 
-export function buildChatQuoteContext(quotes: Array<{ content: string; agentName?: string }>): string | undefined {
-    if (quotes.length === 0) return undefined;
+export function buildChatQuoteContext(
+  quotes: Array<{ content: string; agentName?: string }>
+): string | undefined {
+  if (quotes.length === 0) return undefined;
 
-    return quotes
-        .map(q => `> [Quoted from ${q.agentName ?? 'Hub'}]:\n> ${getQuoteContextContent(q)}`)
-        .join('\n\n');
+  return quotes
+    .map((q) => `> [Quoted from ${q.agentName ?? 'Hub'}]:\n> ${getQuoteContextContent(q)}`)
+    .join('\n\n');
 }
 
 export function getChatContextSectionTitle(type: ChatContextBlockType): string {
-    switch (type) {
-        case 'quotes':
-            return '## User-Quoted Content';
-        case 'rag':
-            return "## Knowledge Base Reference Content\nThe following content was retrieved from the knowledge base and is relevant to the user's question. Prioritize it when answering:";
-        case 'attachment':
-            return '## User-Uploaded Attachment Content';
-        case 'facts':
-            return '## Factual Background';
-        case 'summaries':
-            return '## Early Conversation Summary';
-    }
+  switch (type) {
+    case 'quotes':
+      return '## User-Quoted Content';
+    case 'rag':
+      return "## Knowledge Base Reference Content\nThe following content was retrieved from the knowledge base and is relevant to the user's question. Prioritize it when answering:";
+    case 'attachment':
+      return '## User-Uploaded Attachment Content';
+    case 'facts':
+      return '## Factual Background';
+    case 'summaries':
+      return '## Early Conversation Summary';
+  }
 }

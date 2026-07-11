@@ -17,36 +17,36 @@ import styles from './ThinkingChainDisplay.module.css';
 
 /** 旧版思维链数据类型（三个阶段的累积字符串） */
 export interface ThinkingChainData {
-    analyzing: string;
-    planning: string;
-    decided: string;
+  analyzing: string;
+  planning: string;
+  decided: string;
 }
 
 /** 新版持久化步骤（从 fsmVisualizationStore.ThinkingStep 序列化而来） */
 export interface PersistedThinkingStep {
-    stepNumber: number;
-    analyzing: string;
-    planning: string;
-    decided: string;
+  stepNumber: number;
+  analyzing: string;
+  planning: string;
+  decided: string;
 }
 
 interface ThinkingChainDisplayProps {
-    /** 旧版思维链数据 */
-    data: ThinkingChainData;
-    /** 新版步骤数组（优先使用，顺序可靠） */
-    steps?: PersistedThinkingStep[];
-    /** 是否默认展开 */
-    defaultExpanded?: boolean;
-    /** 是否展示自身标题栏；嵌入汇总行时会隐藏标题栏 */
-    showHeader?: boolean;
-    /** 额外样式类名 */
-    className?: string;
+  /** 旧版思维链数据 */
+  data: ThinkingChainData;
+  /** 新版步骤数组（优先使用，顺序可靠） */
+  steps?: PersistedThinkingStep[];
+  /** 是否默认展开 */
+  defaultExpanded?: boolean;
+  /** 是否展示自身标题栏；嵌入汇总行时会隐藏标题栏 */
+  showHeader?: boolean;
+  /** 额外样式类名 */
+  className?: string;
 }
 
 /** 单个步骤的合并内容 */
 interface StepContent {
-    stepNumber: number;
-    content: string;
+  stepNumber: number;
+  content: string;
 }
 
 /**
@@ -55,21 +55,21 @@ interface StepContent {
  * 每步直接合并其 analyzing → planning → decided，顺序天然正确
  */
 function buildStepsFromArray(steps: PersistedThinkingStep[]): StepContent[] {
-    return steps
-        .map((step) => {
-            const parts: string[] = [];
-            if (step.analyzing) parts.push(step.analyzing);
-            if (step.planning) parts.push(step.planning);
-            if (step.decided) parts.push(step.decided);
+  return steps
+    .map((step) => {
+      const parts: string[] = [];
+      if (step.analyzing) parts.push(step.analyzing);
+      if (step.planning) parts.push(step.planning);
+      if (step.decided) parts.push(step.decided);
 
-            if (parts.length === 0) return null;
+      if (parts.length === 0) return null;
 
-            return {
-                stepNumber: step.stepNumber,
-                content: parts.join('\n\n'),
-            };
-        })
-        .filter((s): s is StepContent => s !== null);
+      return {
+        stepNumber: step.stepNumber,
+        content: parts.join('\n\n'),
+      };
+    })
+    .filter((s): s is StepContent => s !== null);
 }
 
 /**
@@ -79,91 +79,90 @@ function buildStepsFromArray(steps: PersistedThinkingStep[]): StepContent[] {
  * 按 \n\n 分割会导致索引错位。新版 thinkingSteps 从根源上避免此问题。
  */
 function parseStepsFromLegacy(data: ThinkingChainData): StepContent[] {
-    const analyzingParts = data.analyzing ? data.analyzing.split('\n\n').filter(Boolean) : [];
-    const planningParts = data.planning ? data.planning.split('\n\n').filter(Boolean) : [];
-    const decidedParts = data.decided ? data.decided.split('\n\n').filter(Boolean) : [];
+  const analyzingParts = data.analyzing ? data.analyzing.split('\n\n').filter(Boolean) : [];
+  const planningParts = data.planning ? data.planning.split('\n\n').filter(Boolean) : [];
+  const decidedParts = data.decided ? data.decided.split('\n\n').filter(Boolean) : [];
 
-    const stepCount = Math.max(analyzingParts.length, planningParts.length, decidedParts.length);
-    if (stepCount === 0) return [];
+  const stepCount = Math.max(analyzingParts.length, planningParts.length, decidedParts.length);
+  if (stepCount === 0) return [];
 
-    const steps: StepContent[] = [];
-    for (let i = 0; i < stepCount; i++) {
-        const parts: string[] = [];
-        const analyzing = analyzingParts[i];
-        const planning = planningParts[i];
-        const decided = decidedParts[i];
-        if (analyzing) parts.push(analyzing);
-        if (planning) parts.push(planning);
-        if (decided) parts.push(decided);
+  const steps: StepContent[] = [];
+  for (let i = 0; i < stepCount; i++) {
+    const parts: string[] = [];
+    const analyzing = analyzingParts[i];
+    const planning = planningParts[i];
+    const decided = decidedParts[i];
+    if (analyzing) parts.push(analyzing);
+    if (planning) parts.push(planning);
+    if (decided) parts.push(decided);
 
-        if (parts.length > 0) {
-            steps.push({ stepNumber: i + 1, content: parts.join('\n\n') });
-        }
+    if (parts.length > 0) {
+      steps.push({ stepNumber: i + 1, content: parts.join('\n\n') });
     }
+  }
 
-    return steps;
+  return steps;
 }
 
 /**
  * 静态思维链显示组件
  */
 export function ThinkingChainDisplay({
-    data,
-    steps: persistedSteps,
-    defaultExpanded = false,
-    showHeader = true,
-    className,
+  data,
+  steps: persistedSteps,
+  defaultExpanded = false,
+  showHeader = true,
+  className,
 }: ThinkingChainDisplayProps) {
-    const { t } = useI18n();
-    const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const { t } = useI18n();
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
-    // 优先使用新版步骤数组，回退到旧版解析
-    const steps = useMemo(() => {
-        if (persistedSteps && persistedSteps.length > 0) {
-            return buildStepsFromArray(persistedSteps);
-        }
-        return parseStepsFromLegacy(data);
-    }, [data, persistedSteps]);
-
-    if (steps.length === 0) {
-        return null;
+  // 优先使用新版步骤数组，回退到旧版解析
+  const steps = useMemo(() => {
+    if (persistedSteps && persistedSteps.length > 0) {
+      return buildStepsFromArray(persistedSteps);
     }
+    return parseStepsFromLegacy(data);
+  }, [data, persistedSteps]);
 
-    const showContent = showHeader ? isExpanded : true;
-    const toggleLabel = isExpanded
-        ? t('chat.collapseProcessingDetails')
-        : t('chat.expandProcessingDetails');
+  if (steps.length === 0) {
+    return null;
+  }
 
-    return (
-        <div className={cx(styles.container, !showHeader && styles.embedded, className)}>
-            {/* 标题栏（可点击折叠） */}
-            {showHeader && (
-                <button
-                    className={styles.header}
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    type="button"
-                    aria-expanded={isExpanded}
-                    aria-label={toggleLabel}
-                >
-                    <span className={styles.headerTitle}>{t('chat.masterBrainThought')}</span>
-                    <span className={styles.headerRule} />
-                    <span className={styles.toggle}>
-                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </span>
-                </button>
-            )}
+  const showContent = showHeader ? isExpanded : true;
+  const toggleLabel = isExpanded
+    ? t('chat.collapseProcessingDetails')
+    : t('chat.expandProcessingDetails');
 
-            {/* 折叠内容 - 按步显示 */}
-            {showContent && (
-                <div className={styles.stepsContainer}>
-                    {steps.map((step) => (
-                        <div key={step.stepNumber} className={styles.stepItem}>
-                            <div className={styles.stepContent}>{step.content}</div>
-                        </div>
-                    ))}
-                </div>
-            )}
+  return (
+    <div className={cx(styles.container, !showHeader && styles.embedded, className)}>
+      {/* 标题栏（可点击折叠） */}
+      {showHeader && (
+        <button
+          className={styles.header}
+          onClick={() => setIsExpanded(!isExpanded)}
+          type="button"
+          aria-expanded={isExpanded}
+          aria-label={toggleLabel}
+        >
+          <span className={styles.headerTitle}>{t('chat.masterBrainThought')}</span>
+          <span className={styles.headerRule} />
+          <span className={styles.toggle}>
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        </button>
+      )}
+
+      {/* 折叠内容 - 按步显示 */}
+      {showContent && (
+        <div className={styles.stepsContainer}>
+          {steps.map((step) => (
+            <div key={step.stepNumber} className={styles.stepItem}>
+              <div className={styles.stepContent}>{step.content}</div>
+            </div>
+          ))}
         </div>
-    );
+      )}
+    </div>
+  );
 }
-

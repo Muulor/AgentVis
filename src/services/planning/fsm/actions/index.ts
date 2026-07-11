@@ -12,20 +12,16 @@ export * from './LogActions';
 import type { FSMEvent, ActionFn } from '../types';
 
 // Budget Actions
-import {
-    initLoopBudget,
-    decrementBudget,
-    resetRiskScore,
-} from './BudgetActions';
+import { initLoopBudget, decrementBudget, resetRiskScore } from './BudgetActions';
 
 // Progress Actions
 import {
-    recordProgress,
-    recordNoProgress,
-    resetProgress,
-    clearToolCallHistory,
-    incrementSubAgentCount,
-    resetSubAgentCount,
+  recordProgress,
+  recordNoProgress,
+  resetProgress,
+  clearToolCallHistory,
+  incrementSubAgentCount,
+  resetSubAgentCount,
 } from './ProgressActions';
 
 // Log Actions
@@ -42,23 +38,23 @@ import { clearDecisionLog, storeDecision, storeSession } from './LogActions';
  * 注意：只包含无参数的 Action
  */
 export const ACTION_REGISTRY: Record<string, ActionFn<FSMEvent>> = {
-    // Budget Actions
-    initLoopBudget: (ctx, event) => initLoopBudget(ctx, event),
-    decrementBudget,
-    resetRiskScore,
+  // Budget Actions
+  initLoopBudget: (ctx, event) => initLoopBudget(ctx, event),
+  decrementBudget,
+  resetRiskScore,
 
-    // Progress Actions
-    recordProgress,
-    recordNoProgress,
-    resetProgress,
-    clearToolCallHistory,
-    incrementSubAgentCount,
-    resetSubAgentCount,
+  // Progress Actions
+  recordProgress,
+  recordNoProgress,
+  resetProgress,
+  clearToolCallHistory,
+  incrementSubAgentCount,
+  resetSubAgentCount,
 
-    // Log Actions
-    clearDecisionLog,
-    storeDecision,
-    storeSession,
+  // Log Actions
+  clearDecisionLog,
+  storeDecision,
+  storeSession,
 };
 
 /**
@@ -68,12 +64,12 @@ export const ACTION_REGISTRY: Record<string, ActionFn<FSMEvent>> = {
  * @returns Action 函数，如果未找到返回 undefined
  */
 export const getAction = (name: string): ActionFn<FSMEvent> | undefined => {
-    return ACTION_REGISTRY[name];
+  return ACTION_REGISTRY[name];
 };
 
 /**
  * 检查 Action 是否注册
  */
 export const hasAction = (name: string): boolean => {
-    return name in ACTION_REGISTRY;
+  return name in ACTION_REGISTRY;
 };

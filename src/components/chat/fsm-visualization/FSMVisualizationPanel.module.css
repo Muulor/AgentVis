@@ -3,44 +3,43 @@
  */
 
 .container {
-    margin-bottom: var(--spacing-md);
-    width: 100%;
+  margin-bottom: var(--spacing-md);
+  width: 100%;
 }
 
 /* 思考中标签 */
 .thinkingBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    padding: 2px 8px;
-    background: rgba(37, 99, 235, 0.1);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    color: var(--color-action-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 2px 8px;
+  background: rgba(37, 99, 235, 0.1);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  color: var(--color-action-primary);
 }
 
 .thinkingDot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--color-action-primary);
-    animation: pulse 1.5s ease-in-out infinite;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-action-primary);
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
 
-    0%,
-    100% {
-        opacity: 0.4;
-    }
-
-    50% {
-        opacity: 1;
-    }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* 决策卡片容器 */
 .decisionWrapper {
-    margin-top: 6px;
+  margin-top: 6px;
 }

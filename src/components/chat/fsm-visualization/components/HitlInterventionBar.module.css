@@ -7,227 +7,234 @@
 
 /* 根容器 */
 .container {
-    --hitl-neutral-bg: rgba(0, 0, 0, 0.035);
-    --hitl-neutral-accent: var(--color-text-tertiary, #999999);
-    --hitl-neutral-title: var(--color-text-secondary, #666666);
-    --hitl-neutral-subtext: var(--color-text-tertiary, #999999);
-    --hitl-input-bg: rgba(255, 255, 255, 0.68);
-    --hitl-hover-bg: rgba(0, 0, 0, 0.04);
-    --hitl-resume-border: rgba(0, 0, 0, 0.2);
-    --hitl-resume-border-hover: rgba(0, 0, 0, 0.34);
+  --hitl-neutral-bg: rgba(0, 0, 0, 0.035);
+  --hitl-neutral-accent: var(--color-text-tertiary, #999999);
+  --hitl-neutral-title: var(--color-text-secondary, #666666);
+  --hitl-neutral-subtext: var(--color-text-tertiary, #999999);
+  --hitl-input-bg: rgba(255, 255, 255, 0.68);
+  --hitl-hover-bg: rgba(0, 0, 0, 0.04);
+  --hitl-resume-border: rgba(0, 0, 0, 0.2);
+  --hitl-resume-border-hover: rgba(0, 0, 0, 0.34);
 
-    margin-top: var(--spacing-xs, 4px);
-    border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
-    padding-top: var(--spacing-xs, 4px);
+  margin-top: var(--spacing-xs, 4px);
+  border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+  padding-top: var(--spacing-xs, 4px);
 }
 
 :global([data-theme='dark']) .container {
-    --hitl-neutral-bg: rgba(255, 255, 255, 0.035);
-    --hitl-input-bg: rgba(0, 0, 0, 0.22);
-    --hitl-hover-bg: rgba(255, 255, 255, 0.06);
-    --hitl-resume-border: rgba(255, 255, 255, 0.16);
-    --hitl-resume-border-hover: rgba(255, 255, 255, 0.3);
+  --hitl-neutral-bg: rgba(255, 255, 255, 0.035);
+  --hitl-input-bg: rgba(0, 0, 0, 0.22);
+  --hitl-hover-bg: rgba(255, 255, 255, 0.06);
+  --hitl-resume-border: rgba(255, 255, 255, 0.16);
+  --hitl-resume-border-hover: rgba(255, 255, 255, 0.3);
 }
 
 /* ─── 运行中：暂停按钮行 ─── */
 .runningBar {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .runningBarWithHint {
-    justify-content: space-between;
+  justify-content: space-between;
 }
 
 .timeoutHint {
-    display: inline-flex;
-    align-items: center;
-    flex: 1;
-    min-width: 0;
-    gap: 4px;
-    color: rgba(137, 137, 137, 0.82);
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  color: rgba(137, 137, 137, 0.82);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .timeoutIcon {
-    color: rgba(168, 168, 168, 0.82);
-    flex-shrink: 0;
+  color: rgba(168, 168, 168, 0.82);
+  flex-shrink: 0;
 }
 
 .timeoutText {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .pauseBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-tertiary, #6B7280);
-    font-size: 11px;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-tertiary, #6b7280);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .pauseBtn:hover {
-    color: var(--color-text-secondary, #9CA3AF);
-    border-color: var(--color-border-hover, rgba(255, 255, 255, 0.2));
-    background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary, #9ca3af);
+  border-color: var(--color-border-hover, rgba(255, 255, 255, 0.2));
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* ─── 暂停后：展开介入区 ─── */
 .pausedBar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs, 6px);
-    padding: 8px 8px 6px;
-    background: var(--hitl-neutral-bg);
-    border: none;
-    border-radius: var(--radius-surface);
-    animation: slideDown 0.15s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 6px);
+  padding: 8px 8px 6px;
+  background: var(--hitl-neutral-bg);
+  border: none;
+  border-radius: var(--radius-surface);
+  animation: slideDown 0.15s ease-out;
 }
 
 /* ─── 预解决等待：指令已发，等待工具完成 ─── */
 .pendingBar {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 10px;
-    background: var(--hitl-neutral-bg);
-    border: none;
-    border-radius: var(--radius-surface);
-    animation: slideDown 0.15s ease-out;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--hitl-neutral-bg);
+  border: none;
+  border-radius: var(--radius-surface);
+  animation: slideDown 0.15s ease-out;
 }
 
 .pendingIcon {
-    /* 让 lucide Clock 图标颜色融入蓝色调 */
-    color: var(--hitl-neutral-accent);
-    flex-shrink: 0;
-    margin-top: 2px;
-    /* 轻微旋转动画，暗示"等待中" */
-    animation: pendingPulse 2s ease-in-out infinite;
+  /* 让 lucide Clock 图标颜色融入蓝色调 */
+  color: var(--hitl-neutral-accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+  /* 轻微旋转动画，暗示"等待中" */
+  animation: pendingPulse 2s ease-in-out infinite;
 }
 
 @keyframes pendingPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.45; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .pendingText {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .pendingTitle {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--hitl-neutral-title);
-    line-height: 1.4;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--hitl-neutral-title);
+  line-height: 1.4;
 }
 
 .pendingSubtext {
-    font-size: 10px;
-    color: var(--hitl-neutral-subtext);
-    line-height: 1.4;
+  font-size: 10px;
+  color: var(--hitl-neutral-subtext);
+  line-height: 1.4;
 }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 暂停状态提示行 */
 .pauseHint {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--hitl-neutral-title);
-    font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--hitl-neutral-title);
+  font-weight: 500;
 }
 
 /* 闪烁状态指示器 */
 .pauseIndicator {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--hitl-neutral-accent);
-    flex-shrink: 0;
-    animation: pauseBlink 1.2s ease-in-out infinite;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hitl-neutral-accent);
+  flex-shrink: 0;
+  animation: pauseBlink 1.2s ease-in-out infinite;
 }
 
 @keyframes pauseBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
 
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.3;
-    }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* 介入指令输入框 */
 .interventionInput {
-    width: 100%;
-    resize: none;
-    padding: 6px 8px;
-    background: var(--hitl-input-bg);
-    border: none;
-    border-radius: var(--radius-control);
-    color: var(--color-text-primary, #E5E7EB);
-    font-size: 12px;
-    font-family: inherit;
-    line-height: 1.5;
-    outline: none;
-    transition: none;
-    box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  padding: 6px 8px;
+  background: var(--hitl-input-bg);
+  border: none;
+  border-radius: var(--radius-control);
+  color: var(--color-text-primary, #e5e7eb);
+  font-size: 12px;
+  font-family: inherit;
+  line-height: 1.5;
+  outline: none;
+  transition: none;
+  box-sizing: border-box;
 }
 
 .interventionInput:focus {
-    box-shadow: none;
+  box-shadow: none;
 }
 
 .interventionInput::placeholder {
-    color: var(--color-text-tertiary, #6B7280);
+  color: var(--color-text-tertiary, #6b7280);
 }
 
 /* 操作按钮行 */
 .actionRow {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 /* 右侧继续按钮组 */
 .resumeGroup {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* 通用小按钮基础样式 */
@@ -235,52 +242,55 @@
 .stopBtn,
 .resumeBtn,
 .sendResumeBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: var(--radius-button);
-    font-size: 11px;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-    white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-button);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  white-space: nowrap;
 }
 
 /* 终止按钮 */
 .stopBtn {
-    border: 1px solid rgba(248, 113, 113, 0.3);
-    background: transparent;
-    color: var(--color-error, #F87171);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: transparent;
+  color: var(--color-error, #f87171);
 }
 
 .stopBtn:hover {
-    background: rgba(248, 113, 113, 0.1);
-    border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.5);
 }
 
 /* 继续按钮（轮廓样式） */
 .resumeBtn {
-    border: 1px solid var(--hitl-resume-border);
-    background: transparent;
-    color: var(--color-text-secondary, #9CA3AF);
+  border: 1px solid var(--hitl-resume-border);
+  background: transparent;
+  color: var(--color-text-secondary, #9ca3af);
 }
 
 .resumeBtn:hover {
-    border-color: var(--hitl-resume-border-hover);
-    background: var(--hitl-hover-bg);
-    color: var(--color-text-primary, #E5E7EB);
+  border-color: var(--hitl-resume-border-hover);
+  background: var(--hitl-hover-bg);
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 /* 发送并继续按钮（强调样式） */
 .sendResumeBtn {
-    border: 1px solid color-mix(in srgb, var(--color-action-primary, #60A5FA) 68%, transparent);
-    background: transparent;
-    color: var(--color-action-primary, #60A5FA);
+  border: 1px solid color-mix(in srgb, var(--color-action-primary, #60a5fa) 68%, transparent);
+  background: transparent;
+  color: var(--color-action-primary, #60a5fa);
 }
 
 .sendResumeBtn:hover {
-    background: transparent;
-    border-color: var(--color-action-primary-hover, var(--color-action-primary, #60A5FA));
-    color: var(--color-action-primary-hover, var(--color-action-primary, #60A5FA));
+  background: transparent;
+  border-color: var(--color-action-primary-hover, var(--color-action-primary, #60a5fa));
+  color: var(--color-action-primary-hover, var(--color-action-primary, #60a5fa));
 }

@@ -2,7 +2,7 @@
  * Tools 模块入口
  *
  * 导出所有工具和注册表，并完成工具注册
- * 
+ *
  * 架构说明：
  * - 工具实现已迁移到 skills/ 目录
  * - 每个技能目录包含 SKILL.md（技能定义）和 tool.ts（工具实现）
@@ -11,15 +11,15 @@
 
 // ==================== 类型导出 ====================
 export type {
-    Tool,
-    ToolSchema,
-    ToolParameterSchema,
-    ToolPropertySchema,
-    ToolResult,
-    ToolExecutionContext,
-    ToolCall,
-    LLMResponseType,
-    IToolRegistry,
+  Tool,
+  ToolSchema,
+  ToolParameterSchema,
+  ToolPropertySchema,
+  ToolResult,
+  ToolExecutionContext,
+  ToolCall,
+  LLMResponseType,
+  IToolRegistry,
 } from './types';
 
 // ==================== 工具注册表 ====================
@@ -59,28 +59,28 @@ const logger = getLogger('index');
  * 初始化工具注册表
  *
  * 注册所有内置工具
- * 
+ *
  * 注意：file_write 是统一的文件工具，已替代 write + edit
  */
 export function initializeTools(): void {
-    // 避免重复注册
-    if (toolRegistry.size > 0) {
-        logger.trace('[Tools] 工具已注册，跳过初始化');
-        return;
-    }
+  // 避免重复注册
+  if (toolRegistry.size > 0) {
+    logger.trace('[Tools] 工具已注册，跳过初始化');
+    return;
+  }
 
-    toolRegistry.registerAll([
-        readTool,
-        fileWriteTool,  // 统一文件工具（替代 write + edit）
-        webSearchTool,
-        execTool,
-        generateImageTool,
-        cronTool,
-        localSearchTool,
-        conversationSearchTool,
-        imSendTool, // 统一 IM 原生发送工具（飞书/Slack）
-        externalSkillExecuteTool,
-    ]);
+  toolRegistry.registerAll([
+    readTool,
+    fileWriteTool, // 统一文件工具（替代 write + edit）
+    webSearchTool,
+    execTool,
+    generateImageTool,
+    cronTool,
+    localSearchTool,
+    conversationSearchTool,
+    imSendTool, // 统一 IM 原生发送工具（飞书/Slack）
+    externalSkillExecuteTool,
+  ]);
 
-    logger.trace(`[Tools] 初始化完成，共注册 ${toolRegistry.size} 个工具`);
+  logger.trace(`[Tools] 初始化完成，共注册 ${toolRegistry.size} 个工具`);
 }

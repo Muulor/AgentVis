@@ -5,37 +5,37 @@
  */
 
 .button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 28px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--radius-button);
-    background-color: transparent;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .button:hover:not(:disabled),
 .button:focus-visible:not(:disabled) {
-    border-color: var(--color-border-hover);
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    outline: none;
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  outline: none;
 }
 
 .button:active:not(:disabled) {
-    transform: scale(0.95);
+  transform: scale(0.95);
 }
 
 .button:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .button svg {
-    flex-shrink: 0;
+  flex-shrink: 0;
 }

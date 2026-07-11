@@ -1,160 +1,160 @@
 .navItem {
-    display: flex;
-    align-items: center;
-    box-sizing: border-box;
-    width: 100%;
-    min-width: 0;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: var(--radius-button);
-    cursor: grab;
-    transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-button);
+  cursor: grab;
+  transition: background-color 0.15s ease;
 }
 
 .navItem:hover {
-    background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg-secondary);
 }
 
 .navItem:active {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
-.navItem[data-active="true"] {
-    background-color: var(--color-bg-tertiary);
-    position: relative;
+.navItem[data-active='true'] {
+  background-color: var(--color-bg-tertiary);
+  position: relative;
 }
 
-.navItem[data-dragging="true"] {
-    opacity: 0.55;
+.navItem[data-dragging='true'] {
+  opacity: 0.55;
 }
 
-.navItem[data-drag-over="true"] {
-    background-color: var(--color-bg-secondary);
-    box-shadow: inset 2px 0 0 var(--color-action-primary);
+.navItem[data-drag-over='true'] {
+  background-color: var(--color-bg-secondary);
+  box-shadow: inset 2px 0 0 var(--color-action-primary);
 }
 
-.navItem[data-active="true"]::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    background-color: var(--color-action-primary);
-    border-radius: 1px;
+.navItem[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background-color: var(--color-action-primary);
+  border-radius: 1px;
 }
 
 /* 头像容器（相对定位，供角标定位） */
 .avatarWrapper {
-    position: relative;
-    flex-shrink: 0;
+  position: relative;
+  flex-shrink: 0;
 }
 
 /* 头像：放大至 42px（1.5 倍），有自定义图片时显示颜色边框 ring */
 .avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-    color: #ffffff;
-    text-transform: uppercase;
-    overflow: hidden;
-    /* 默认无边框（纯色字母头像） */
-    border: 2.5px solid transparent;
-    box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: #ffffff;
+  text-transform: uppercase;
+  overflow: hidden;
+  /* 默认无边框（纯色字母头像） */
+  border: 2.5px solid transparent;
+  box-sizing: border-box;
 }
 
 /* 有自定义头像图片时：边框显示颜色 ring，内部透明 */
-.avatar[data-has-image="true"] {
-    background: transparent;
-    /* borderColor 由 inline style 动态设置 */
+.avatar[data-has-image='true'] {
+  background: transparent;
+  /* borderColor 由 inline style 动态设置 */
 }
 
 /* 自定义头像图片 */
 .avatarImg {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* 未读消息蓝点（右上角） */
 .unreadDot {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background-color: var(--color-action-primary, #3F7BD9);
-    /* 深色边框避免与头像色混淆 */
-    border: 1.5px solid var(--color-bg-primary);
-    pointer-events: none;
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-action-primary, #3f7bd9);
+  /* 深色边框避免与头像色混淆 */
+  border: 1.5px solid var(--color-bg-primary);
+  pointer-events: none;
 }
 
 /* Cron 定时任务图标（右下角） */
 .cronBadge {
-    position: absolute;
-    bottom: -2px;
-    right: -3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 13px;
-    height: 13px;
-    border-radius: 50%;
-    background-color: var(--color-bg-tertiary, #374151);
-    border: 1.5px solid var(--color-bg-primary);
-    color: var(--color-text-secondary);
-    pointer-events: none;
+  position: absolute;
+  bottom: -2px;
+  right: -3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background-color: var(--color-bg-tertiary, #374151);
+  border: 1.5px solid var(--color-bg-primary);
+  color: var(--color-text-secondary);
+  pointer-events: none;
 }
 
 /* 名称 */
 .content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 3px;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
 }
 
 .name {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview {
-    font-size: var(--font-size-xs);
-    line-height: 1.35;
-    color: var(--color-text-tertiary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 模型标签 */
 .modelTag {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
-    background-color: var(--color-bg-secondary);
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-bg-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* 折叠状态 */
-.navItem[data-collapsed="true"] {
-    justify-content: center;
-    padding: 8px;
+.navItem[data-collapsed='true'] {
+  justify-content: center;
+  padding: 8px;
 }
 
-.navItem[data-collapsed="true"] .content {
-    display: none;
+.navItem[data-collapsed='true'] .content {
+  display: none;
 }

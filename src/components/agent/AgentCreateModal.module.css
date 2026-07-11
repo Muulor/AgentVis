@@ -1,217 +1,223 @@
 .overlay {
-    position: fixed;
-    inset: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.15s ease;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
+  from {
+    opacity: 0;
+  }
 
-    to {
-        opacity: 1;
-    }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
-    width: 480px;
-    background-color: var(--color-bg-primary);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xl);
-    animation: slideIn 0.2s ease;
+  width: 480px;
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  animation: slideIn 0.2s ease;
 }
 
 @keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95) translateY(-10px);
-    }
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
 
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--color-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--color-border-default);
 }
 
 .title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-primary);
-    margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
 .closeBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .closeBtn:hover {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .body {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .formGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .label {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
 .input {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-control);
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-base);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .input:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .input::placeholder {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 .select {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-control);
-    background-color: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-base);
-    cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .select:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .error {
-    font-size: var(--font-size-sm);
-    color: var(--color-status-error);
+  font-size: var(--font-size-sm);
+  color: var(--color-status-error);
 }
 
 .footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 16px 20px;
-    border-top: 1px solid var(--color-border-default);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border-default);
 }
 
 .cancelBtn {
-    padding: 8px 16px;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background-color 0.15s ease;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .cancelBtn:hover {
-    background-color: var(--color-bg-secondary);
+  background-color: var(--color-bg-secondary);
 }
 
 .submitBtn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: var(--radius-button);
-    background-color: var(--color-action-primary);
-    color: #ffffff;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: background-color 0.15s ease;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-button);
+  background-color: var(--color-action-primary);
+  color: #ffffff;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .submitBtn:hover:not(:disabled) {
-    background-color: var(--color-action-primary-hover);
+  background-color: var(--color-action-primary-hover);
 }
 
 .submitBtn:disabled {
-    opacity: 0.6;
-    cursor: var(--cursor-disabled);
+  opacity: 0.6;
+  cursor: var(--cursor-disabled);
 }
 
 /* Provider 选择器 */
 .providerSelector {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .providerOption {
-    padding: 8px 14px;
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-control);
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .providerOption:hover:not(:disabled) {
-    border-color: var(--color-action-primary);
-    color: var(--color-text-primary);
+  border-color: var(--color-action-primary);
+  color: var(--color-text-primary);
 }
 
 .providerOption:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .providerOptionActive {
-    border-color: var(--color-action-primary);
-    background-color: var(--color-action-primary);
-    color: #ffffff;
+  border-color: var(--color-action-primary);
+  background-color: var(--color-action-primary);
+  color: #ffffff;
 }

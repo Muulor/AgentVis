@@ -3,524 +3,526 @@
  */
 
 .container {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* 网页版本警告提示 */
 .webWarning {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 48px 24px;
-    gap: 16px;
-    min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 16px;
+  min-height: 300px;
 }
 
 .webWarning svg {
-    color: var(--color-text-tertiary);
-    opacity: 0.6;
+  color: var(--color-text-tertiary);
+  opacity: 0.6;
 }
 
 .webWarningTitle {
-    font-size: var(--font-size-lg, 16px);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-text-primary);
-    margin: 0;
+  font-size: var(--font-size-lg, 16px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
 .webWarningText {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
-    margin: 0;
-    line-height: 1.6;
-    max-width: 320px;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+  max-width: 320px;
 }
 
 .webWarningHint {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
-    margin: 0;
-    padding: 12px 16px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
 }
 
 .section {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .sectionTitle {
-    font-size: var(--font-size-base, 14px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
-    margin: 0;
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
 /* 数据统计网格 */
 .statsGrid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
 .statCard {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 16px 12px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    transition: border-color 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  transition: border-color 0.15s;
 }
 
 .statCard:hover {
-    border-color: var(--color-border-secondary);
+  border-color: var(--color-border-secondary);
 }
 
 .statValue {
-    font-size: var(--font-size-lg, 18px);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-text-primary);
-    font-family: var(--font-family-mono);
+  font-size: var(--font-size-lg, 18px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
 }
 
 .statLabel {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
-    margin-top: 4px;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
 }
 
 .statsLoading {
-    padding: 24px;
-    text-align: center;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm, 13px);
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm, 13px);
 }
 
 /* 路径显示 */
 .pathDisplay {
-    padding: 10px 12px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    overflow: hidden;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  overflow: hidden;
 }
 
 .pathText {
-    font-size: var(--font-size-sm, 13px);
-    font-family: var(--font-family-mono);
-    color: var(--color-text-primary);
-    word-break: break-all;
+  font-size: var(--font-size-sm, 13px);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-primary);
+  word-break: break-all;
 }
 
 /* 提示文字 */
 .hint {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
-    margin: 0;
-    line-height: 1.5;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* 按钮组 */
 .buttonGroup {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .actionButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .actionButton:hover:not(:disabled) {
-    border-color: var(--color-border-secondary);
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  border-color: var(--color-border-secondary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .actionButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .dangerButton {
-    border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
-    color: var(--color-status-error);
+  border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
+  color: var(--color-status-error);
 }
 
 .dangerButton:hover:not(:disabled) {
-    border-color: var(--color-status-error);
-    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
+  border-color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 /* 加载动画 */
 .spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 关于卡片 */
 .aboutCard {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 16px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
 }
 
 .aboutRow {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .aboutLabel {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
 }
 
 .aboutValue {
-    font-size: var(--font-size-sm, 13px);
-    font-family: var(--font-family-mono);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 13px);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-primary);
 }
 
 /* 弹窗样式 */
 .dialogOverlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
 .dialog {
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    padding: 24px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .dialogTitle {
-    font-size: var(--font-size-lg, 16px);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-text-primary);
-    margin: 0 0 16px 0;
+  font-size: var(--font-size-lg, 16px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  margin: 0 0 16px 0;
 }
 
 .dialogText {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
-    margin: 0 0 12px 0;
-    line-height: 1.5;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
 }
 
 .dialogHint {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
-    margin: 0 0 16px 0;
-    line-height: 1.5;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
 }
 
 .dialogList {
-    margin: 0 0 16px 0;
-    padding-left: 20px;
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
-    line-height: 1.8;
+  margin: 0 0 16px 0;
+  padding-left: 20px;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
+  line-height: 1.8;
 }
 
 .dialogWarning {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-status-error);
-    margin: 0 0 12px 0;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-status-error);
+  margin: 0 0 12px 0;
 }
 
 .dialogInput {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-control);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm, 13px);
-    margin-bottom: 16px;
-    box-sizing: border-box;
-    transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 13px);
+  margin-bottom: 16px;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .dialogInput:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .dialogActions {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 .dialogCancelButton {
-    padding: 8px 16px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: all 0.15s;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .dialogCancelButton:hover {
-    border-color: var(--color-border-secondary);
-    background: var(--color-bg-tertiary);
+  border-color: var(--color-border-secondary);
+  background: var(--color-bg-tertiary);
 }
 
 .dialogDangerButton {
-    padding: 8px 16px;
-    border: 1px solid var(--color-status-error);
-    background: var(--color-status-error);
-    color: white;
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: all 0.15s;
+  padding: 8px 16px;
+  border: 1px solid var(--color-status-error);
+  background: var(--color-status-error);
+  color: white;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .dialogDangerButton:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-status-error) 88%, #000);
-    border-color: color-mix(in srgb, var(--color-status-error) 88%, #000);
+  background: color-mix(in srgb, var(--color-status-error) 88%, #000);
+  border-color: color-mix(in srgb, var(--color-status-error) 88%, #000);
 }
 
 .dialogDangerButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* 导入模式选择 */
 .importModeOptions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .importModeButton {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 16px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    transition: all 0.15s;
-    text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
 }
 
 .importModeButton:hover {
-    border-color: var(--color-accent-primary, #3b82f6);
-    background: var(--color-bg-tertiary);
+  border-color: var(--color-accent-primary, #3b82f6);
+  background: var(--color-bg-tertiary);
 }
 
 .importModeButton svg {
-    color: var(--color-accent-primary, #3b82f6);
-    margin-bottom: 4px;
+  color: var(--color-accent-primary, #3b82f6);
+  margin-bottom: 4px;
 }
 
 .importModeReplace svg {
-    color: var(--color-status-error);
+  color: var(--color-status-error);
 }
 
 .importModeReplace:hover {
-    border-color: var(--color-status-error);
+  border-color: var(--color-status-error);
 }
 
 .importModeTitle {
-    font-size: var(--font-size-sm, 13px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
 }
 
 .importModeDesc {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
 }
 
 /* ==================== 备份管理区块 ==================== */
 
 /* 路径 + 打开按钮横排容器 */
 .pathRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
 }
 
 .pathRow .pathText {
-    /* pathText 继承全局定义，这里只补充 flex 属性 */
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  /* pathText 继承全局定义，这里只补充 flex 属性 */
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 打开文件夹按钮 */
 .openButton {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 5px 10px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 12px);
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 12px);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
 }
 
 .openButton:hover {
-    border-color: var(--color-border-secondary);
-    color: var(--color-text-primary);
-    background: var(--color-bg-hover, var(--color-bg-tertiary));
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover, var(--color-bg-tertiary));
 }
 
 /* 次要摘要文字（文件数 + 占用大小） */
 .backupSummaryText {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
-    margin: 0;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
+  margin: 0;
 }
 
 /* 下拉清理面板容器（relative 定位基准） */
 .cleanDropdownWrapper {
-    position: relative;
-    display: inline-block;
+  position: relative;
+  display: inline-block;
 }
 
 /* 下拉面板（absolute 定位，从按钮左下方展开） */
 .cleanDropdownPanel {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    z-index: 100;
-    min-width: 260px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    padding: 6px 0;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 100;
+  min-width: 260px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  padding: 6px 0;
 }
 
 /* 单条清理策略行 */
 .cleanOption {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 9px 14px;
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
-    cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
+  cursor: default;
 }
 
 .cleanOption:hover {
-    background: var(--color-bg-secondary);
+  background: var(--color-bg-secondary);
 }
 
 .cleanOptionLabel {
-    flex: 1;
+  flex: 1;
 }
 
 /* 策略执行按钮 */
 .cleanExecButton {
-    padding: 4px 10px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 12px);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 12px);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
 }
 
 .cleanExecButton:hover:not(:disabled) {
-    border-color: var(--color-border-secondary);
-    color: var(--color-text-primary);
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-primary);
 }
 
 .cleanExecButton:disabled {
-    opacity: 0.45;
-    cursor: var(--cursor-disabled);
+  opacity: 0.45;
+  cursor: var(--cursor-disabled);
 }
 
 /* 危险操作分隔线 */
 .cleanSeparator {
-    height: 1px;
-    background: var(--color-border-primary);
-    margin: 4px 0;
+  height: 1px;
+  background: var(--color-border-primary);
+  margin: 4px 0;
 }
 
 /* 危险操作行 */
 .cleanOptionDanger .cleanOptionLabel {
-    color: var(--color-status-error);
+  color: var(--color-status-error);
 }
 
 .cleanOptionDanger .cleanExecButton {
-    border-color: color-mix(in srgb, var(--color-status-error) 46%, transparent);
-    color: var(--color-status-error);
+  border-color: color-mix(in srgb, var(--color-status-error) 46%, transparent);
+  color: var(--color-status-error);
 }
 
 .cleanOptionDanger .cleanExecButton:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
-    border-color: var(--color-status-error);
-}
+  background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
+  border-color: var(--color-status-error);
+}

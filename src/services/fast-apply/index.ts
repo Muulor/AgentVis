@@ -6,31 +6,31 @@
 
 // 类型导出
 export type {
-    // 操作类型
-    OperationType,
-    // 修改协议
-    Modification,
-    ModificationBatch,
-    // 匹配相关
-    MatchLevel,
-    MatchResult,
-    MatchCandidate,
-    // 快照相关
-    DocumentSnapshot,
-    SnapshotResponse,
-    // Diff 相关
-    DiffLineType,
-    DiffLine,
-    DiffHunk,
-    DiffResult,
-    // 应用结果
-    ApplyStatus,
-    ModificationApplyResult,
-    BatchApplyResult,
-    // 配置
-    ContentMatcherConfig,
-    SnapshotManagerConfig,
-    FastApplyConfig,
+  // 操作类型
+  OperationType,
+  // 修改协议
+  Modification,
+  ModificationBatch,
+  // 匹配相关
+  MatchLevel,
+  MatchResult,
+  MatchCandidate,
+  // 快照相关
+  DocumentSnapshot,
+  SnapshotResponse,
+  // Diff 相关
+  DiffLineType,
+  DiffLine,
+  DiffHunk,
+  DiffResult,
+  // 应用结果
+  ApplyStatus,
+  ModificationApplyResult,
+  BatchApplyResult,
+  // 配置
+  ContentMatcherConfig,
+  SnapshotManagerConfig,
+  FastApplyConfig,
 } from './types';
 
 // 常量导出
@@ -41,15 +41,15 @@ export { ProtocolParser, ProtocolParseError, protocolParser } from './ProtocolPa
 export { ContentMatcher, calculateSimilarity, levenshteinDistance } from './ContentMatcher';
 export { DiffGenerator, diffGenerator } from './DiffGenerator';
 export { SnapshotManager, snapshotManager } from './SnapshotManager';
-export { ModificationExecutor, ModificationExecuteError, modificationExecutor } from './ModificationExecutor';
+export {
+  ModificationExecutor,
+  ModificationExecuteError,
+  modificationExecutor,
+} from './ModificationExecutor';
 export { FastApplyEngine, FastApplyError, fastApplyEngine } from './FastApplyEngine';
 export { diffToXml } from './DiffToXmlConverter';
 
 // 前端服务导出
-export {
-    FastApplyService,
-    fastApplyService,
-    createFastApplyService,
-} from './FastApplyService';
+export { FastApplyService, fastApplyService, createFastApplyService } from './FastApplyService';
 
 export type { SnapshotInfo } from './FastApplyService';

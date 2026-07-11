@@ -17,18 +17,18 @@ import type { FullFileDiffLine, ApplyStatus } from '../../services/fast-apply/ty
 // ==================== 类型定义 ====================
 
 export interface DiffBlockProps {
-    /** 修改 ID */
-    modificationId: string;
-    /** 属于此修改的所有行 */
-    lines: FullFileDiffLine[];
-    /** 当前状态 */
-    status: ApplyStatus;
-    /** 接受回调 */
-    onAccept: () => void;
-    /** 拒绝回调 */
-    onReject: () => void;
-    /** 是否正在处理 */
-    isProcessing?: boolean;
+  /** 修改 ID */
+  modificationId: string;
+  /** 属于此修改的所有行 */
+  lines: FullFileDiffLine[];
+  /** 当前状态 */
+  status: ApplyStatus;
+  /** 接受回调 */
+  onAccept: () => void;
+  /** 拒绝回调 */
+  onReject: () => void;
+  /** 是否正在处理 */
+  isProcessing?: boolean;
 }
 
 // ==================== 辅助函数 ====================
@@ -37,68 +37,61 @@ export interface DiffBlockProps {
  * 获取状态对应的样式类
  */
 function getStatusClass(status: ApplyStatus): string {
-    switch (status) {
-        case 'applied':
-            return styles.statusApplied ?? '';
-        case 'rejected':
-            return styles.statusRejected ?? '';
-        case 'failed':
-            return styles.statusFailed ?? '';
-        default:
-            return '';
-    }
+  switch (status) {
+    case 'applied':
+      return styles.statusApplied ?? '';
+    case 'rejected':
+      return styles.statusRejected ?? '';
+    case 'failed':
+      return styles.statusFailed ?? '';
+    default:
+      return '';
+  }
 }
 
 // ==================== 主组件 ====================
 
 export function DiffBlock({
-    modificationId,
-    lines,
-    status,
-    onAccept,
-    onReject,
-    isProcessing = false,
+  modificationId,
+  lines,
+  status,
+  onAccept,
+  onReject,
+  isProcessing = false,
 }: DiffBlockProps) {
-    const { t } = useI18n();
-    const statusClass = getStatusClass(status);
-    const isPending = status === 'pending';
+  const { t } = useI18n();
+  const statusClass = getStatusClass(status);
+  const isPending = status === 'pending';
 
-    return (
-        <div
-            className={cx(styles.container, statusClass)}
-            data-modification-id={modificationId}
-        >
-            {/* Diff 行内容 */}
-            <div className={styles.content}>
-                {lines.map((line, index) => (
-                    <DiffLine
-                        key={`${modificationId}-${index}`}
-                        line={line}
-                        showLineNumbers={true}
-                    />
-                ))}
-            </div>
+  return (
+    <div className={cx(styles.container, statusClass)} data-modification-id={modificationId}>
+      {/* Diff 行内容 */}
+      <div className={styles.content}>
+        {lines.map((line, index) => (
+          <DiffLine key={`${modificationId}-${index}`} line={line} showLineNumbers={true} />
+        ))}
+      </div>
 
-            {/* 底部操作按钮（仅 pending 状态显示） */}
-            {isPending && (
-                <div className={styles.actions}>
-                    <DiffActions
-                        status={status}
-                        onAccept={onAccept}
-                        onReject={onReject}
-                        isProcessing={isProcessing}
-                    />
-                </div>
-            )}
-
-            {/* 底部状态标签（非 pending 状态显示） */}
-            {!isPending && (
-                <div className={styles.statusLabel}>
-                    {status === 'applied' && t('diff.statusAccepted')}
-                    {status === 'rejected' && t('diff.statusRejected')}
-                    {status === 'failed' && t('diff.statusFailed')}
-                </div>
-            )}
+      {/* 底部操作按钮（仅 pending 状态显示） */}
+      {isPending && (
+        <div className={styles.actions}>
+          <DiffActions
+            status={status}
+            onAccept={onAccept}
+            onReject={onReject}
+            isProcessing={isProcessing}
+          />
         </div>
-    );
+      )}
+
+      {/* 底部状态标签（非 pending 状态显示） */}
+      {!isPending && (
+        <div className={styles.statusLabel}>
+          {status === 'applied' && t('diff.statusAccepted')}
+          {status === 'rejected' && t('diff.statusRejected')}
+          {status === 'failed' && t('diff.statusFailed')}
+        </div>
+      )}
+    </div>
+  );
 }

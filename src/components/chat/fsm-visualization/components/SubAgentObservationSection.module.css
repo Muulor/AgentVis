@@ -7,377 +7,384 @@
 
 /* 观测内容容器 */
 .observationList {
-    --observation-thinking-text: var(--color-subagent-observation-text, var(--color-text-secondary, #666666));
-    --observation-tool-label: var(--color-subagent-tool-label, var(--color-text-secondary, #666666));
-    --observation-tool-target: var(--color-subagent-tool-target, var(--color-text-primary, #1A1A1A));
-    --observation-pending-icon: var(--color-subagent-pending-icon, var(--color-text-tertiary, #999999));
-    --observation-wave-highlight: var(--color-subagent-wave-highlight, #20242B);
+  --observation-thinking-text: var(
+    --color-subagent-observation-text,
+    var(--color-text-secondary, #666666)
+  );
+  --observation-tool-label: var(--color-subagent-tool-label, var(--color-text-secondary, #666666));
+  --observation-tool-target: var(--color-subagent-tool-target, var(--color-text-primary, #1a1a1a));
+  --observation-pending-icon: var(
+    --color-subagent-pending-icon,
+    var(--color-text-tertiary, #999999)
+  );
+  --observation-wave-highlight: var(--color-subagent-wave-highlight, #20242b);
 
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs, 4px);
-    overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 4px);
+  overflow: visible;
 }
 
 .liveSection {
-    width: 100%;
-    min-width: 0;
-    margin-top: 2px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 2px;
 }
 
 .liveHeader {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    min-height: 30px;
-    padding: 0 0 6px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary, #9CA3AF);
-    cursor: pointer;
-    text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 0 6px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #9ca3af);
+  cursor: pointer;
+  text-align: left;
 }
 
 .liveHeader:hover {
-    color: var(--color-text-primary, #E5E7EB);
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .liveHeader:hover .liveRule {
-    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
+  background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
 }
 
 .liveHeaderLeft {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .liveHeaderIcon {
-    flex-shrink: 0;
-    color: var(--color-action-primary, #3F7BD9);
+  flex-shrink: 0;
+  color: var(--color-action-primary, #3f7bd9);
 }
 
 .liveTitle {
-    font-size: var(--font-size-base, 13px);
-    font-weight: 600;
+  font-size: var(--font-size-base, 13px);
+  font-weight: 600;
 }
 
 .liveRule {
-    flex: 1;
-    height: 1px;
-    min-width: 24px;
-    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
-    transition: background-color var(--transition-fast, 150ms ease);
+  flex: 1;
+  height: 1px;
+  min-width: 24px;
+  background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
+  transition: background-color var(--transition-fast, 150ms ease);
 }
 
 .liveToggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: var(--color-text-tertiary, #6B7280);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary, #6b7280);
 }
 
 /* LLM 思考文字 */
 .thinkingText {
-    color: var(--observation-thinking-text);
-    font-size: var(--font-size-sm, 12px);
-    line-height: 1.5;
-    padding: 2px 0;
-    word-break: break-word;
+  color: var(--observation-thinking-text);
+  font-size: var(--font-size-sm, 12px);
+  line-height: 1.5;
+  padding: 2px 0;
+  word-break: break-word;
 }
 
 /* Provider reasoning trace */
 .reasoningTrace {
-    align-self: flex-start;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    overflow: visible;
+  align-self: flex-start;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .reasoningTraceExpanded,
 .reasoningTraceStreaming {
-    align-self: stretch;
-    background: transparent;
+  align-self: stretch;
+  background: transparent;
 }
 
 .reasoningTraceStreaming {
-    border-color: transparent;
+  border-color: transparent;
 }
 
 .reasoningTraceHeader {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 6px;
-    width: auto;
-    min-height: 22px;
-    padding: 2px 0;
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary, #9CA3AF);
-    cursor: pointer;
-    font-size: 11px;
-    text-align: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: auto;
+  min-height: 22px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #9ca3af);
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
 }
 
 .reasoningTraceExpanded .reasoningTraceHeader,
 .reasoningTraceStreaming .reasoningTraceHeader {
-    width: auto;
-    max-width: 100%;
-    min-height: 28px;
-    padding: 2px 0 4px;
+  width: auto;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 2px 0 4px;
 }
 
 .reasoningTraceHeader:hover {
-    color: var(--color-text-primary, #E5E7EB);
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .reasoningTraceExpanded .reasoningTraceHeader:hover,
 .reasoningTraceStreaming .reasoningTraceHeader:hover {
-    background: transparent;
+  background: transparent;
 }
 
 .reasoningTraceTitle {
-    font-weight: 600;
-    color: var(--color-text-primary, #E5E7EB);
+  font-weight: 600;
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .reasoningTraceBody {
-    max-height: 220px;
-    overflow: auto;
-    padding: 4px 0 8px;
-    border-top: none;
-    color: var(--observation-thinking-text);
-    font-size: var(--font-size-sm, 12px);
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+  padding: 4px 0 8px;
+  border-top: none;
+  color: var(--observation-thinking-text);
+  font-size: var(--font-size-sm, 12px);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* 工具行为指示器 */
 .toolAction {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 3px 8px;
-    border-radius: var(--radius-lg);
-    background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
-    font-size: var(--font-size-sm, 12px);
-    color: var(--color-text-primary, #E5E7EB);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
+  font-size: var(--font-size-sm, 12px);
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .toolActionExpanded {
-    align-items: flex-start;
+  align-items: flex-start;
 }
 
 /* 工具图标 */
 .toolIcon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
-    line-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  line-height: 0;
 }
 
 .toolActionExpanded .toolIcon {
-    margin-top: 0;
+  margin-top: 0;
 }
 
 .toolIcon.success {
-    color: var(--color-success, #34D399);
+  color: var(--color-success, #34d399);
 }
 
 .toolIcon.failure {
-    color: var(--color-error, #F87171);
+  color: var(--color-error, #f87171);
 }
 
 .toolIcon.pending {
-    color: var(--observation-pending-icon);
+  color: var(--observation-pending-icon);
 }
 
 /* 工具操作文字 */
 .toolLabel {
-    font-family: var(--font-mono, 'JetBrains Mono', monospace);
-    font-size: 11px;
-    line-height: 1.4;
-    color: var(--observation-tool-label);
-    flex-shrink: 0;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--observation-tool-label);
+  flex-shrink: 0;
 }
 
 /* 工具目标（文件名/命令）— 允许换行显示完整内容 */
 .toolTarget {
-    display: -webkit-box;
-    flex: 1;
-    font-family: var(--font-mono, 'JetBrains Mono', monospace);
-    font-size: 11px;
-    line-height: 1.4;
-    color: var(--observation-tool-target);
-    min-width: 0;
-    overflow: hidden;
-    overflow-wrap: anywhere;
-    text-overflow: ellipsis;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    white-space: normal;
-    word-break: normal;
-    transition: color var(--transition-fast, 150ms ease);
+  display: -webkit-box;
+  flex: 1;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--observation-tool-target);
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  word-break: normal;
+  transition: color var(--transition-fast, 150ms ease);
 }
 
 .toolTargetExpanded {
-    display: block;
-    -webkit-box-orient: initial;
-    -webkit-line-clamp: unset;
-    line-clamp: unset;
-    max-height: 160px;
-    overflow: auto;
-    overflow-wrap: anywhere;
-    padding-right: 2px;
-    white-space: pre-wrap;
-    word-break: break-word;
+  display: block;
+  -webkit-box-orient: initial;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  max-height: 160px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding-right: 2px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .toolTargetToggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    margin-left: auto;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-tertiary, #6B7280);
-    cursor: pointer;
-    transition: background-color var(--transition-fast, 150ms ease), color var(--transition-fast, 150ms ease);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-tertiary, #6b7280);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast, 150ms ease),
+    color var(--transition-fast, 150ms ease);
 }
 
 .toolTargetToggle:hover {
-    background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
-    color: var(--color-text-primary, #E5E7EB);
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .toolTargetSuccess {
-    color: var(--observation-wave-highlight);
+  color: var(--observation-wave-highlight);
 }
 
 /* Pending 工具指令文字波浪渐变：只作用于指令/目标文本，不影响 icon 与工具名 */
 .pendingInstructionText {
-    color: var(--observation-tool-target);
+  color: var(--observation-tool-target);
 }
 
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
-    .pendingInstructionText {
-        background-image: linear-gradient(
-            90deg,
-            var(--observation-tool-target) 0%,
-            var(--observation-tool-target) 32%,
-            var(--observation-wave-highlight) 44%,
-            var(--observation-tool-target) 56%,
-            var(--observation-tool-target) 100%
-        );
-        background-size: 300% 100%;
-        background-position: 100% 0;
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-        animation: pendingInstructionWave 6s ease-in-out infinite;
-        will-change: background-position;
-    }
+  .pendingInstructionText {
+    background-image: linear-gradient(
+      90deg,
+      var(--observation-tool-target) 0%,
+      var(--observation-tool-target) 32%,
+      var(--observation-wave-highlight) 44%,
+      var(--observation-tool-target) 56%,
+      var(--observation-tool-target) 100%
+    );
+    background-size: 300% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: pendingInstructionWave 6s ease-in-out infinite;
+    will-change: background-position;
+  }
 }
 
 @keyframes pendingInstructionWave {
-    0% {
-        background-position: 100% 0;
-    }
+  0% {
+    background-position: 100% 0;
+  }
 
-    62.5%,
-    100% {
-        background-position: 0% 0;
-    }
+  62.5%,
+  100% {
+    background-position: 0% 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .pendingInstructionText {
-        animation: none;
-        background: none;
-        color: var(--observation-tool-target);
-        -webkit-text-fill-color: currentColor;
-    }
+  .pendingInstructionText {
+    animation: none;
+    background: none;
+    color: var(--observation-tool-target);
+    -webkit-text-fill-color: currentColor;
+  }
 }
 
 /* 运行指示器（标题栏状态标签） */
 .runningBadge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-xs, 4px);
-    padding: 1px 6px;
-    background: rgba(37, 99, 235, 0.1);
-    border-radius: var(--radius-full, 9999px);
-    font-size: 11px;
-    color: var(--color-action-primary, #3F7BD9);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  padding: 1px 6px;
+  background: rgba(37, 99, 235, 0.1);
+  border-radius: var(--radius-full, 9999px);
+  font-size: 11px;
+  color: var(--color-action-primary, #3f7bd9);
 }
 
 .runningDot {
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--color-action-primary, #3F7BD9);
-    animation: observationPulse 1.5s ease-in-out infinite;
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-action-primary, #3f7bd9);
+  animation: observationPulse 1.5s ease-in-out infinite;
 }
 
 @keyframes observationPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
 
-    0%,
-    100% {
-        opacity: 0.4;
-    }
-
-    50% {
-        opacity: 1;
-    }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* 步骤计数标签 */
 .stepCount {
-    font-size: 11px;
-    color: var(--color-text-tertiary, #6B7280);
+  font-size: 11px;
+  color: var(--color-text-tertiary, #6b7280);
 }
 
 /* 空状态 */
 .emptyState {
-    color: var(--color-text-tertiary, #6B7280);
-    font-size: var(--font-size-sm, 12px);
-    font-style: italic;
-    padding: var(--spacing-sm, 8px) 0;
+  color: var(--color-text-tertiary, #6b7280);
+  font-size: var(--font-size-sm, 12px);
+  font-style: italic;
+  padding: var(--spacing-sm, 8px) 0;
 }
 
 /* 最终结果卡片 */
 .resultCard {
-    margin-top: 4px;
-    padding: 6px 10px;
-    border-left: 2px solid var(--color-success, #34D399);
-    background: rgba(52, 211, 153, 0.06);
-    border-radius: 0 var(--radius-control) var(--radius-control) 0;
-    font-size: var(--font-size-sm, 12px);
-    color: var(--color-text-secondary, #9CA3AF);
-    word-break: break-word;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--color-success, #34d399);
+  background: rgba(52, 211, 153, 0.06);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  font-size: var(--font-size-sm, 12px);
+  color: var(--color-text-secondary, #9ca3af);
+  word-break: break-word;
 }
 
 /* 覆盖 MarkdownRenderer 的默认间距，适配紧凑卡片场景 */
 .resultCard p {
-    margin: 0.2em 0;
-    line-height: 1.5;
+  margin: 0.2em 0;
+  line-height: 1.5;
 }
 
 .resultCard h1,
@@ -386,69 +393,69 @@
 .resultCard h4,
 .resultCard h5,
 .resultCard h6 {
-    margin-top: 0.5em;
-    margin-bottom: 0.2em;
-    font-size: 1em;
-    border-bottom: none;
-    padding-bottom: 0;
+  margin-top: 0.5em;
+  margin-bottom: 0.2em;
+  font-size: 1em;
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .resultCard ul,
 .resultCard ol {
-    margin: 0.2em 0;
-    padding-left: 1.2em;
+  margin: 0.2em 0;
+  padding-left: 1.2em;
 }
 
 .resultCard li {
-    margin: 0.1em 0;
-    line-height: 1.4;
+  margin: 0.1em 0;
+  line-height: 1.4;
 }
 
 /* 列表项内段落不占额外空间 */
-.resultCard li>p {
-    margin: 0;
+.resultCard li > p {
+  margin: 0;
 }
 
 /* ─── 用户 HITL 介入消息指示器 ─── */
 /* 与暂停条（HitlInterventionBar）色调一致：amber / warning */
 .interventionAction {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 8px;
-    border-radius: var(--radius-lg);
-    background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
-    border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
-    font-size: var(--font-size-sm, 12px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-bg-tertiary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
+  font-size: var(--font-size-sm, 12px);
 }
 
 /* 介入图标（amber 主题色） */
 .interventionIcon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
-    line-height: 0;
-    color: var(--color-warning, #C98D2E);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  line-height: 0;
+  color: var(--color-warning, #c98d2e);
 }
 
 /* "User" 标签（等宽字体，与工具名对齐） */
 .interventionLabel {
-    font-family: var(--font-mono, 'JetBrains Mono', monospace);
-    font-size: 11px;
-    line-height: 1.4;
-    color: var(--color-warning, #C98D2E);
-    flex-shrink: 0;
-    font-weight: 500;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-warning, #c98d2e);
+  flex-shrink: 0;
+  font-weight: 500;
 }
 
 /* 介入消息正文（允许换行） */
 .interventionMessage {
-    font-size: 11px;
-    line-height: 1.4;
-    color: var(--color-text-secondary, #9CA3AF);
-    word-break: break-word;
-    min-width: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-secondary, #9ca3af);
+  word-break: break-word;
+  min-width: 0;
 }

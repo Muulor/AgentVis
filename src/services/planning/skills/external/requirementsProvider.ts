@@ -40,17 +40,17 @@ const RUNTIME_RELATIVE_PATH = 'runtime/python-v1';
  * 直接用 `error instanceof Error` 会丢失原始错误信息。
  */
 function extractErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-    if (typeof error === 'string') {
-        return error;
-    }
-    // Tauri 某些错误是带 message 属性的对象
-    if (error !== null && typeof error === 'object' && 'message' in error) {
-        return String((error as { message: unknown }).message);
-    }
-    return String(error);
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  // Tauri 某些错误是带 message 属性的对象
+  if (error !== null && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return String(error);
 }
 
 /**
@@ -60,10 +60,10 @@ function extractErrorMessage(error: unknown): string {
  * 直接走 fs.remove 可避免污染 Agent Trash Bin 的用户语义。
  */
 async function removeInternalDirectory(path: string): Promise<void> {
-    const { exists, remove } = await import('@tauri-apps/plugin-fs');
-    if (await exists(path)) {
-        await remove(path, { recursive: true });
-    }
+  const { exists, remove } = await import('@tauri-apps/plugin-fs');
+  if (await exists(path)) {
+    await remove(path, { recursive: true });
+  }
 }
 
 // ==================== Requirements 解析 ====================
@@ -77,10 +77,10 @@ async function removeInternalDirectory(path: string): Promise<void> {
  * @returns 包声明数组，如 ['requests==2.34.2', 'pdfminer.six>=20231228']
  */
 function parseBasePackages(): string[] {
-    return (requirementsContent)
-        .split('\n')
-        .map((line: string) => line.trim())
-        .filter((line: string) => line.length > 0 && !line.startsWith('#'));
+  return requirementsContent
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter((line: string) => line.length > 0 && !line.startsWith('#'));
 }
 
 // ==================== Requirements 文件管理 ====================
@@ -98,37 +98,40 @@ function parseBasePackages(): string[] {
  * @returns requirements 文件的绝对路径
  */
 export async function ensureRequirementsFile(): Promise<string> {
-    const { appDataDir, join } = await import('@tauri-apps/api/path');
-    const { writeTextFile, mkdir } = await import('@tauri-apps/plugin-fs');
+  const { appDataDir, join } = await import('@tauri-apps/api/path');
+  const { writeTextFile, mkdir } = await import('@tauri-apps/plugin-fs');
 
-    const appData = await appDataDir();
-    if (!appData) {
-        throw new Error('AppDataDir is unavailable');
-    }
+  const appData = await appDataDir();
+  if (!appData) {
+    throw new Error('AppDataDir is unavailable');
+  }
 
-    // 确保目录存在
-    await mkdir(appData, { recursive: true });
+  // 确保目录存在
+  await mkdir(appData, { recursive: true });
 
-    const reqPath = await join(appData, REQUIREMENTS_FILENAME);
+  const reqPath = await join(appData, REQUIREMENTS_FILENAME);
 
-    // 过滤掉注释行（# 开头）和空行，只保留包声明行
-    // 避免 UTF-8 注释在 cp1252 默认编码的 Python 环境下引发 UnicodeDecodeError
-    const packageLines = (requirementsContent)
-        .split('\n')
-        .map((line: string) => line.trim())
-        .filter((line: string) => line.length > 0 && !line.startsWith('#'));
+  // 过滤掉注释行（# 开头）和空行，只保留包声明行
+  // 避免 UTF-8 注释在 cp1252 默认编码的 Python 环境下引发 UnicodeDecodeError
+  const packageLines = requirementsContent
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter((line: string) => line.length > 0 && !line.startsWith('#'));
 
-    const cleanContent = packageLines.join('\n') + '\n';
+  const cleanContent = packageLines.join('\n') + '\n';
 
-    logger.trace('[requirementsProvider] 正在写入 requirements 文件:', reqPath,
-        `(${packageLines.length} 个包声明)`);
+  logger.trace(
+    '[requirementsProvider] 正在写入 requirements 文件:',
+    reqPath,
+    `(${packageLines.length} 个包声明)`
+  );
 
-    // 覆盖写入，确保内容与构建版本一致
-    // 需要 Tauri capability: fs:allow-write-text-file
-    await writeTextFile(reqPath, cleanContent);
+  // 覆盖写入，确保内容与构建版本一致
+  // 需要 Tauri capability: fs:allow-write-text-file
+  await writeTextFile(reqPath, cleanContent);
 
-    logger.trace('[requirementsProvider] requirements 文件写入成功:', reqPath);
-    return reqPath;
+  logger.trace('[requirementsProvider] requirements 文件写入成功:', reqPath);
+  return reqPath;
 }
 
 // ==================== 共享安装流程 ====================
@@ -145,147 +148,143 @@ export async function ensureRequirementsFile(): Promise<string> {
  * 供 RuntimeOnboardingBanner 和 SkillSettings 复用。
  */
 export async function performEnvironmentSetup(): Promise<void> {
-    const {
-        setEnvStatus,
-        setInstallProgress,
-        setPythonInfo,
-        setVenvPath,
-        setError,
-        clearError,
-        setActiveInstall,
-    } = useRuntimeStore.getState();
-    const previousRuntimeState = useRuntimeStore.getState();
-    const shouldCleanupPreviousVenv =
-        previousRuntimeState.errorMessage !== null ||
-        previousRuntimeState.envStatus === 'error';
+  const {
+    setEnvStatus,
+    setInstallProgress,
+    setPythonInfo,
+    setVenvPath,
+    setError,
+    clearError,
+    setActiveInstall,
+  } = useRuntimeStore.getState();
+  const previousRuntimeState = useRuntimeStore.getState();
+  const shouldCleanupPreviousVenv =
+    previousRuntimeState.errorMessage !== null || previousRuntimeState.envStatus === 'error';
 
-    try {
-        // 标记当前会话有活跃安装，防止 reconcileWithPhysical 误重置状态
-        setActiveInstall(true);
-        setEnvStatus('creating');
-        setInstallProgress({ phase: translate('runtime.progress.prepareInstall'), percent: 2 });
+  try {
+    // 标记当前会话有活跃安装，防止 reconcileWithPhysical 误重置状态
+    setActiveInstall(true);
+    setEnvStatus('creating');
+    setInstallProgress({ phase: translate('runtime.progress.prepareInstall'), percent: 2 });
 
-        // 提前导入公共依赖，供后续各步骤使用
-        const { appDataDir, join } = await import('@tauri-apps/api/path');
-        const { mkdir } = await import('@tauri-apps/plugin-fs');
-        const appData = await appDataDir();
+    // 提前导入公共依赖，供后续各步骤使用
+    const { appDataDir, join } = await import('@tauri-apps/api/path');
+    const { mkdir } = await import('@tauri-apps/plugin-fs');
+    const appData = await appDataDir();
 
-        // Step 0: 如果从失败状态重试，先删除残留的不完整 runtime。
-        // not_created 只表示 Store 认为需要初始化，可能仍有可复用的预置 runtime；
-        // 交由 RuntimeManager 的签名/健康检查决定是否需要重新解压，避免技能包变动后误删整套环境。
-        if (shouldCleanupPreviousVenv) {
-            logger.trace('[requirementsProvider] 检测到残留错误状态，清理旧 runtime');
-            try {
-                const runtimePath = await join(appData, RUNTIME_RELATIVE_PATH);
-                await removeInternalDirectory(runtimePath);
-                logger.trace('[requirementsProvider] 残留 runtime 已清理');
-            } catch (cleanupErr) {
-                // 清理失败不阻断流程，ensureReady 可能仍然能正常工作
-                logger.warn('[requirementsProvider] 清理残留 runtime 失败:', extractErrorMessage(cleanupErr));
-            }
-        }
-
-        // Step 1: 解析基础包列表
-        logger.trace('[requirementsProvider] Step 1: 解析 requirements 内容');
-        const basePackages = parseBasePackages();
-        logger.trace(`[requirementsProvider] 解析到 ${basePackages.length} 个基础包`);
-
-        // Step 2: 确保 runtime 目录存在
-        logger.trace('[requirementsProvider] Step 2: 创建 runtime 目录');
-        const runtimeDir = await join(appData, RUNTIME_RELATIVE_PATH);
-        await mkdir(runtimeDir, { recursive: true });
-
-        // Step 3: 初始化 shell 和 manager
-        logger.trace('[requirementsProvider] Step 3: 初始化 RuntimeManager');
-        setInstallProgress({ phase: translate('runtime.progress.checkPython'), percent: 5 });
-        const { createTauriShellExecute } = await import('./tauriShellAdapter');
-        const shellExecute = await createTauriShellExecute({
-            sandboxLevel: 'installer',
-            subjectType: 'installer',
-            subjectId: 'python-runtime-setup',
-        });
-
-        const { RuntimeManager } = await import('./RuntimeManager');
-        const manager = new RuntimeManager(runtimeDir, shellExecute);
-
-        // Step 4: 执行完整的 ensureReady（解压/校验预置基础 runtime + 增量安装额外依赖）
-        logger.trace('[requirementsProvider] Step 4: 执行 ensureReady');
-
-        // 从 store 读取待安装的额外依赖（由静态分析或 frontmatter 声明注入）
-        const { pendingDependencies, clearPendingDependencies } = useRuntimeStore.getState();
-        const extraDeps = pendingDependencies.map((dep) => ({
-            packages: dep.packages,
-        }));
-        if (extraDeps.length > 0) {
-            logger.trace(
-                `[requirementsProvider] 将安装 ${extraDeps.length} 个技能的额外依赖`
-            );
-        }
-
-        const result = await manager.ensureReady(
-            basePackages,
-            extraDeps,
-            (progress) => {
-                setInstallProgress(progress);
-                // 同步环境状态到 Store
-                const phaseLower = progress.phase.toLowerCase();
-                if (progress.phase.includes('额外依赖') || phaseLower.includes('extra dependencies')) {
-                    setEnvStatus('installing_extra');
-                } else if (
-                    progress.phase.includes('预置 Python 环境') ||
-                    phaseLower.includes('packaged python environment') ||
-                    progress.phase.includes('虚拟环境') ||
-                    phaseLower.includes('virtual environment')
-                ) {
-                    setEnvStatus('creating');
-                } else if (
-                    progress.phase.includes('预置基础依赖') ||
-                    phaseLower.includes('packaged base dependencies') ||
-                    progress.phase.includes('安装') ||
-                    phaseLower.includes('installing')
-                ) {
-                    // 匹配逐包安装进度（如"安装 requests (1/15)"）和"安装基础依赖"
-                    setEnvStatus('installing_base');
-                }
-            }
+    // Step 0: 如果从失败状态重试，先删除残留的不完整 runtime。
+    // not_created 只表示 Store 认为需要初始化，可能仍有可复用的预置 runtime；
+    // 交由 RuntimeManager 的签名/健康检查决定是否需要重新解压，避免技能包变动后误删整套环境。
+    if (shouldCleanupPreviousVenv) {
+      logger.trace('[requirementsProvider] 检测到残留错误状态，清理旧 runtime');
+      try {
+        const runtimePath = await join(appData, RUNTIME_RELATIVE_PATH);
+        await removeInternalDirectory(runtimePath);
+        logger.trace('[requirementsProvider] 残留 runtime 已清理');
+      } catch (cleanupErr) {
+        // 清理失败不阻断流程，ensureReady 可能仍然能正常工作
+        logger.warn(
+          '[requirementsProvider] 清理残留 runtime 失败:',
+          extractErrorMessage(cleanupErr)
         );
-
-        // Step 5: 同步结果
-        if (result.status === 'ready') {
-            logger.trace('[requirementsProvider] 环境安装成功');
-            try {
-                await writeRuntimeReadyMarker(result.venvPath, {
-                    pythonVersion: result.pythonVersion,
-                    source: 'fresh-install',
-                });
-            } catch (markerError) {
-                logger.warn(
-                    '[requirementsProvider] 写入 runtime 就绪标记失败:',
-                    extractErrorMessage(markerError)
-                );
-            }
-            clearError();
-            clearPendingDependencies();
-            setEnvStatus('ready');
-            setInstallProgress(null);
-            if (result.pythonVersion) {
-                setPythonInfo(result.pythonVersion, '');
-            }
-            setVenvPath(result.venvPath);
-            setActiveInstall(false);
-        } else {
-            const errorMsg = result.error ?? 'Environment installation failed';
-            logger.error('[requirementsProvider] 环境安装失败:', errorMsg);
-            setError(errorMsg);
-            setActiveInstall(false);
-        }
-    } catch (error) {
-        // 提取 Tauri 插件/invoke 的真实错误信息（可能是字符串而非 Error 实例）
-        const errorMsg = extractErrorMessage(error);
-        logger.error('[requirementsProvider] 安装过程异常:', errorMsg);
-        setError(errorMsg);
-        setActiveInstall(false);
+      }
     }
+
+    // Step 1: 解析基础包列表
+    logger.trace('[requirementsProvider] Step 1: 解析 requirements 内容');
+    const basePackages = parseBasePackages();
+    logger.trace(`[requirementsProvider] 解析到 ${basePackages.length} 个基础包`);
+
+    // Step 2: 确保 runtime 目录存在
+    logger.trace('[requirementsProvider] Step 2: 创建 runtime 目录');
+    const runtimeDir = await join(appData, RUNTIME_RELATIVE_PATH);
+    await mkdir(runtimeDir, { recursive: true });
+
+    // Step 3: 初始化 shell 和 manager
+    logger.trace('[requirementsProvider] Step 3: 初始化 RuntimeManager');
+    setInstallProgress({ phase: translate('runtime.progress.checkPython'), percent: 5 });
+    const { createTauriShellExecute } = await import('./tauriShellAdapter');
+    const shellExecute = await createTauriShellExecute({
+      sandboxLevel: 'installer',
+      subjectType: 'installer',
+      subjectId: 'python-runtime-setup',
+    });
+
+    const { RuntimeManager } = await import('./RuntimeManager');
+    const manager = new RuntimeManager(runtimeDir, shellExecute);
+
+    // Step 4: 执行完整的 ensureReady（解压/校验预置基础 runtime + 增量安装额外依赖）
+    logger.trace('[requirementsProvider] Step 4: 执行 ensureReady');
+
+    // 从 store 读取待安装的额外依赖（由静态分析或 frontmatter 声明注入）
+    const { pendingDependencies, clearPendingDependencies } = useRuntimeStore.getState();
+    const extraDeps = pendingDependencies.map((dep) => ({
+      packages: dep.packages,
+    }));
+    if (extraDeps.length > 0) {
+      logger.trace(`[requirementsProvider] 将安装 ${extraDeps.length} 个技能的额外依赖`);
+    }
+
+    const result = await manager.ensureReady(basePackages, extraDeps, (progress) => {
+      setInstallProgress(progress);
+      // 同步环境状态到 Store
+      const phaseLower = progress.phase.toLowerCase();
+      if (progress.phase.includes('额外依赖') || phaseLower.includes('extra dependencies')) {
+        setEnvStatus('installing_extra');
+      } else if (
+        progress.phase.includes('预置 Python 环境') ||
+        phaseLower.includes('packaged python environment') ||
+        progress.phase.includes('虚拟环境') ||
+        phaseLower.includes('virtual environment')
+      ) {
+        setEnvStatus('creating');
+      } else if (
+        progress.phase.includes('预置基础依赖') ||
+        phaseLower.includes('packaged base dependencies') ||
+        progress.phase.includes('安装') ||
+        phaseLower.includes('installing')
+      ) {
+        // 匹配逐包安装进度（如"安装 requests (1/15)"）和"安装基础依赖"
+        setEnvStatus('installing_base');
+      }
+    });
+
+    // Step 5: 同步结果
+    if (result.status === 'ready') {
+      logger.trace('[requirementsProvider] 环境安装成功');
+      try {
+        await writeRuntimeReadyMarker(result.venvPath, {
+          pythonVersion: result.pythonVersion,
+          source: 'fresh-install',
+        });
+      } catch (markerError) {
+        logger.warn(
+          '[requirementsProvider] 写入 runtime 就绪标记失败:',
+          extractErrorMessage(markerError)
+        );
+      }
+      clearError();
+      clearPendingDependencies();
+      setEnvStatus('ready');
+      setInstallProgress(null);
+      if (result.pythonVersion) {
+        setPythonInfo(result.pythonVersion, '');
+      }
+      setVenvPath(result.venvPath);
+      setActiveInstall(false);
+    } else {
+      const errorMsg = result.error ?? 'Environment installation failed';
+      logger.error('[requirementsProvider] 环境安装失败:', errorMsg);
+      setError(errorMsg);
+      setActiveInstall(false);
+    }
+  } catch (error) {
+    // 提取 Tauri 插件/invoke 的真实错误信息（可能是字符串而非 Error 实例）
+    const errorMsg = extractErrorMessage(error);
+    logger.error('[requirementsProvider] 安装过程异常:', errorMsg);
+    setError(errorMsg);
+    setActiveInstall(false);
+  }
 }
 
 /**
@@ -298,27 +297,27 @@ export async function performEnvironmentSetup(): Promise<void> {
  * @throws 删除失败时不中断，继续尝试重新创建
  */
 export async function performEnvironmentRebuild(): Promise<void> {
-    const { setEnvStatus, setInstallProgress } = useRuntimeStore.getState();
+  const { setEnvStatus, setInstallProgress } = useRuntimeStore.getState();
 
-    setEnvStatus('creating');
-    setInstallProgress({ phase: translate('runtime.progress.removeOldEnvironment'), percent: 1 });
+  setEnvStatus('creating');
+  setInstallProgress({ phase: translate('runtime.progress.removeOldEnvironment'), percent: 1 });
 
-    try {
-        // 删除现有 runtime
-        const { appDataDir, join } = await import('@tauri-apps/api/path');
-        const appData = await appDataDir();
-        const runtimePath = await join(appData, RUNTIME_RELATIVE_PATH);
+  try {
+    // 删除现有 runtime
+    const { appDataDir, join } = await import('@tauri-apps/api/path');
+    const appData = await appDataDir();
+    const runtimePath = await join(appData, RUNTIME_RELATIVE_PATH);
 
-        await removeInternalDirectory(runtimePath);
-        logger.trace('[requirementsProvider] 旧 runtime 已删除');
-    } catch (deleteError) {
-        // 删除失败不中断流程，ensureReady 会检测 runtime 是否存在并决定是否重建
-        logger.warn(
-            '[requirementsProvider] 删除旧 runtime 失败（将尝试覆盖创建）:',
-            extractErrorMessage(deleteError)
-        );
-    }
+    await removeInternalDirectory(runtimePath);
+    logger.trace('[requirementsProvider] 旧 runtime 已删除');
+  } catch (deleteError) {
+    // 删除失败不中断流程，ensureReady 会检测 runtime 是否存在并决定是否重建
+    logger.warn(
+      '[requirementsProvider] 删除旧 runtime 失败（将尝试覆盖创建）:',
+      extractErrorMessage(deleteError)
+    );
+  }
 
-    // 触发完整的安装流程
-    await performEnvironmentSetup();
+  // 触发完整的安装流程
+  await performEnvironmentSetup();
 }

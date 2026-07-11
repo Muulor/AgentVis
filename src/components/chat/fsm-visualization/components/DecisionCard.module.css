@@ -5,132 +5,132 @@
  */
 
 .container {
-    padding: 4px 0 8px;
-    border: none;
-    border-radius: 0;
-    background: transparent;
+  padding: 4px 0 8px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 /* 颜色变体 */
 .success {
-    border-left: none;
+  border-left: none;
 }
 
 .error {
-    border-left: none;
+  border-left: none;
 }
 
 .primary {
-    border-left: none;
+  border-left: none;
 }
 
 .warning {
-    border-left: none;
+  border-left: none;
 }
 
 .neutral {
-    border-left: none;
+  border-left: none;
 }
 
 /* 头部 */
 .header {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .icon {
-    flex-shrink: 0;
+  flex-shrink: 0;
 }
 
 .success .icon {
-    color: var(--color-status-success);
+  color: var(--color-status-success);
 }
 
 .error .icon {
-    color: var(--color-status-error);
+  color: var(--color-status-error);
 }
 
 .primary .icon {
-    color: var(--color-action-primary);
+  color: var(--color-action-primary);
 }
 
 .warning .icon {
-    color: var(--color-status-warning);
+  color: var(--color-status-warning);
 }
 
 .neutral .icon {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 .label {
-    font-weight: var(--font-weight-semibold);
-    font-size: var(--font-size-base);
-    color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
 }
 
 /* 风险标签 */
 .riskBadge {
-    margin-left: auto;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
 }
 
 .riskLow {
-    background: rgba(22, 163, 74, 0.1);
-    color: var(--color-status-success);
+  background: rgba(22, 163, 74, 0.1);
+  color: var(--color-status-success);
 }
 
 .riskMedium {
-    background: rgba(202, 138, 4, 0.1);
-    color: var(--color-status-warning);
+  background: rgba(202, 138, 4, 0.1);
+  color: var(--color-status-warning);
 }
 
 .riskHigh {
-    background: rgba(220, 38, 38, 0.1);
-    color: var(--color-status-error);
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-status-error);
 }
 
 /* 理由 */
 .rationale {
-    margin-top: var(--spacing-sm);
-    padding: 0;
-    background: transparent;
-    border-radius: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-    line-height: var(--line-height-relaxed);
+  margin-top: var(--spacing-sm);
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-relaxed);
 }
 
 /* 详情 */
 .details {
-    margin-top: var(--spacing-sm);
-    font-size: var(--font-size-sm);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
 }
 
 .detailLabel {
-    color: var(--color-text-tertiary);
-    margin-right: var(--spacing-xs);
+  color: var(--color-text-tertiary);
+  margin-right: var(--spacing-xs);
 }
 
 .detailValue {
-    color: var(--color-text-primary);
+  color: var(--color-text-primary);
 }
 
 /* 问题列表 */
 .questions {
-    margin-top: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
 }
 
 .questionList {
-    margin: var(--spacing-xs) 0 0;
-    padding-left: var(--spacing-lg);
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+  margin: var(--spacing-xs) 0 0;
+  padding-left: var(--spacing-lg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .questionList li {
-    margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
 }

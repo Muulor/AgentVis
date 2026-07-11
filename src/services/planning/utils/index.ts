@@ -8,9 +8,9 @@ export type { SaveOptions, SaveResult } from './FileWriter';
 
 export { ChunkProcessor, chunkProcessor } from './ChunkProcessor';
 export type {
-    FileCategory,
-    ChunkConfig,
-    FileChunk,
-    ProcessOptions,
-    ProcessResult,
+  FileCategory,
+  ChunkConfig,
+  FileChunk,
+  ProcessOptions,
+  ProcessResult,
 } from './ChunkProcessor';

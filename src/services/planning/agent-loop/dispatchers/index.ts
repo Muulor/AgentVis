@@ -3,7 +3,7 @@
  */
 
 export {
-    SubAgentDispatcher,
-    type SubAgentDispatcherConfig,
-    type DispatchResult,
+  SubAgentDispatcher,
+  type SubAgentDispatcherConfig,
+  type DispatchResult,
 } from './SubAgentDispatcher';

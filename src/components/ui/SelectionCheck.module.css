@@ -1,55 +1,55 @@
 .indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    border: 1.5px solid color-mix(in srgb, var(--color-text-tertiary) 58%, transparent);
-    background: transparent;
-    color: #ffffff;
-    transition:
-        background-color var(--transition-fast),
-        border-color var(--transition-fast),
-        transform var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1.5px solid color-mix(in srgb, var(--color-text-tertiary) 58%, transparent);
+  background: transparent;
+  color: #ffffff;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .indicator[data-checked='true'] {
-    border-color: var(--color-action-primary);
-    background: var(--color-action-primary);
+  border-color: var(--color-action-primary);
+  background: var(--color-action-primary);
 }
 
 .indicator[data-disabled='true'] {
-    opacity: 0.48;
+  opacity: 0.48;
 }
 
 .rounded {
-    border-radius: 5px;
+  border-radius: 5px;
 }
 
 .circle {
-    border-radius: var(--radius-full);
+  border-radius: var(--radius-full);
 }
 
 .sm {
-    width: 14px;
-    height: 14px;
+  width: 14px;
+  height: 14px;
 }
 
 .md {
-    width: 18px;
-    height: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 .icon {
-    width: 58%;
-    height: 58%;
-    opacity: 0;
-    transform: scale(0.55);
-    transition:
-        opacity var(--transition-fast),
-        transform var(--transition-fast);
+  width: 58%;
+  height: 58%;
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .indicator[data-checked='true'] .icon {
-    opacity: 1;
-    transform: scale(1);
+  opacity: 1;
+  transform: scale(1);
 }

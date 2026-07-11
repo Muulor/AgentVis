@@ -6,43 +6,43 @@
  */
 
 export type MbDecisionRetryReason =
-    | 'empty_content'
-    | 'anomalous_content'
-    | 'reasoning_repetition'
-    | 'tool_call_envelope'
-    | 'truncated_output'
-    | 'reasoning_transport_truncated'
-    | 'aggressive_repair'
-    | 'malformed_json'
-    | 'schema_invalid'
-    | 'meta_output'
-    | 'plain_text';
+  | 'empty_content'
+  | 'anomalous_content'
+  | 'reasoning_repetition'
+  | 'tool_call_envelope'
+  | 'truncated_output'
+  | 'reasoning_transport_truncated'
+  | 'aggressive_repair'
+  | 'malformed_json'
+  | 'schema_invalid'
+  | 'meta_output'
+  | 'plain_text';
 
 export interface MbDecisionRetryCorrection {
-    reason: MbDecisionRetryReason;
-    detail?: string;
+  reason: MbDecisionRetryReason;
+  detail?: string;
 }
 
 export interface MbDecisionRetryState {
-    attemptsUsed: number;
-    lastReason?: MbDecisionRetryReason;
+  attemptsUsed: number;
+  lastReason?: MbDecisionRetryReason;
 }
 
 export const MB_DECISION_SEMANTIC_RETRY_LIMIT = 1;
 
 export function createMbDecisionRetryState(): MbDecisionRetryState {
-    return { attemptsUsed: 0 };
+  return { attemptsUsed: 0 };
 }
 
 export function tryConsumeMbDecisionRetry(
-    state: MbDecisionRetryState,
-    reason: MbDecisionRetryReason,
+  state: MbDecisionRetryState,
+  reason: MbDecisionRetryReason
 ): boolean {
-    if (state.attemptsUsed >= MB_DECISION_SEMANTIC_RETRY_LIMIT) {
-        return false;
-    }
+  if (state.attemptsUsed >= MB_DECISION_SEMANTIC_RETRY_LIMIT) {
+    return false;
+  }
 
-    state.attemptsUsed += 1;
-    state.lastReason = reason;
-    return true;
+  state.attemptsUsed += 1;
+  state.lastReason = reason;
+  return true;
 }

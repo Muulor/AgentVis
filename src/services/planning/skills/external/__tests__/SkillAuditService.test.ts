@@ -1,165 +1,170 @@
 import { describe, expect, it } from 'vitest';
 import {
-    buildAuditOutputLanguageInstruction,
-    buildAuditSystemPrompt,
-    buildAuditTaskDescription,
-    parseAuditResultFromOutput,
+  buildAuditOutputLanguageInstruction,
+  buildAuditSystemPrompt,
+  buildAuditTaskDescription,
+  parseAuditResultFromOutput,
 } from '../SkillAuditService';
 
 const HAN_CHARACTER_PATTERN = /[\u3400-\u9FFF]/;
 
 describe('SkillAuditService prompt invariants', () => {
-    const packagePath = 'C:/AgentVis/skills/external/packages/sample-skill';
-    const fileList = [
-        'SKILL.md',
-        'scripts/run.py',
-        'package.json',
-        'README.md',
-        'assets/icon.svg',
+  const packagePath = 'C:/AgentVis/skills/external/packages/sample-skill';
+  const fileList = ['SKILL.md', 'scripts/run.py', 'package.json', 'README.md', 'assets/icon.svg'];
+
+  it('keeps system-owned audit prompt text in English', () => {
+    const prompt = buildAuditSystemPrompt(packagePath, fileList, 'en-US');
+
+    expect(prompt).not.toMatch(HAN_CHARACTER_PATTERN);
+  });
+
+  it('preserves schema fields, verdict enums, and termination signal', () => {
+    const prompt = buildAuditSystemPrompt(packagePath, fileList, 'en-US');
+    const requiredTokens = [
+      'audit_result',
+      'risk_score',
+      'confidence',
+      'summary',
+      'intent_mismatch',
+      'detected_capabilities',
+      'findings',
+      'line_or_location',
+      'risk_level',
+      'risk_type',
+      'attack_scenario',
+      'recommendation',
+      'APPROVED',
+      'REJECTED',
+      'MANUAL_REVIEW_REQUIRED',
+      'LOW',
+      'MEDIUM',
+      'HIGH',
+      'CRITICAL',
+      'TASK_COMPLETE',
     ];
 
-    it('keeps system-owned audit prompt text in English', () => {
-        const prompt = buildAuditSystemPrompt(packagePath, fileList, 'en-US');
+    for (const token of requiredTokens) {
+      expect(prompt).toContain(token);
+    }
+  });
 
-        expect(prompt).not.toMatch(HAN_CHARACTER_PATTERN);
-    });
+  it('keeps the audit runner constrained to the read tool', () => {
+    const prompt = buildAuditSystemPrompt(packagePath, fileList, 'en-US');
 
-    it('preserves schema fields, verdict enums, and termination signal', () => {
-        const prompt = buildAuditSystemPrompt(packagePath, fileList, 'en-US');
-        const requiredTokens = [
-            'audit_result',
-            'risk_score',
-            'confidence',
-            'summary',
-            'intent_mismatch',
-            'detected_capabilities',
-            'findings',
-            'line_or_location',
-            'risk_level',
-            'risk_type',
-            'attack_scenario',
-            'recommendation',
-            'APPROVED',
-            'REJECTED',
-            'MANUAL_REVIEW_REQUIRED',
-            'LOW',
-            'MEDIUM',
-            'HIGH',
-            'CRITICAL',
-            'TASK_COMPLETE',
-        ];
+    expect(prompt).toContain('## Available Tools');
+    expect(prompt).toContain('### read');
+    expect(prompt).toContain('Read file contents. Parameters: `path`');
+  });
 
-        for (const token of requiredTokens) {
-            expect(prompt).toContain(token);
-        }
-    });
+  it('instructs human-readable result fields to follow the Chinese UI language', () => {
+    const prompt = buildAuditSystemPrompt(packagePath, fileList, 'zh-CN');
 
-    it('keeps the audit runner constrained to the read tool', () => {
-        const prompt = buildAuditSystemPrompt(packagePath, fileList, 'en-US');
+    expect(prompt).toContain('Current UI language: Simplified Chinese (zh-CN)');
+    expect(prompt).toContain(
+      'Write these human-readable natural-language fields in Simplified Chinese'
+    );
+    expect(prompt).toContain('`summary`');
+    expect(prompt).toContain('`findings[].description`');
+    expect(prompt).toContain('`findings[].attack_scenario`');
+    expect(prompt).toContain('`findings[].recommendation`');
+    expect(prompt).toContain('Keep JSON keys, enum values, risk levels, file paths');
+    expect(prompt).toContain('Keep `detected_capabilities` and `findings[].risk_type`');
+  });
 
-        expect(prompt).toContain('## Available Tools');
-        expect(prompt).toContain('### read');
-        expect(prompt).toContain('Read file contents. Parameters: `path`');
-    });
+  it('can request English human-readable fields for English UI', () => {
+    const instruction = buildAuditOutputLanguageInstruction('en-US');
 
-    it('instructs human-readable result fields to follow the Chinese UI language', () => {
-        const prompt = buildAuditSystemPrompt(packagePath, fileList, 'zh-CN');
+    expect(instruction).toContain('Current UI language: English (en-US)');
+    expect(instruction).toContain('Write these human-readable natural-language fields in English');
+    expect(instruction).toContain('Keep JSON keys, enum values');
+  });
 
-        expect(prompt).toContain('Current UI language: Simplified Chinese (zh-CN)');
-        expect(prompt).toContain('Write these human-readable natural-language fields in Simplified Chinese');
-        expect(prompt).toContain('`summary`');
-        expect(prompt).toContain('`findings[].description`');
-        expect(prompt).toContain('`findings[].attack_scenario`');
-        expect(prompt).toContain('`findings[].recommendation`');
-        expect(prompt).toContain('Keep JSON keys, enum values, risk levels, file paths');
-        expect(prompt).toContain('Keep `detected_capabilities` and `findings[].risk_type`');
-    });
+  it('prioritizes high-risk files before config, docs, and other files', () => {
+    const taskDescription = buildAuditTaskDescription(packagePath, fileList);
 
-    it('can request English human-readable fields for English UI', () => {
-        const instruction = buildAuditOutputLanguageInstruction('en-US');
-
-        expect(instruction).toContain('Current UI language: English (en-US)');
-        expect(instruction).toContain('Write these human-readable natural-language fields in English');
-        expect(instruction).toContain('Keep JSON keys, enum values');
-    });
-
-    it('prioritizes high-risk files before config, docs, and other files', () => {
-        const taskDescription = buildAuditTaskDescription(packagePath, fileList);
-
-        expect(taskDescription).toContain('root skill definition: SKILL.md');
-        expect(taskDescription).toContain('script/code files (high priority): scripts/run.py');
-        expect(taskDescription).toContain('all configuration files: package.json');
-        expect(taskDescription).toContain('documentation files: README.md');
-        expect(taskDescription).toContain('assets by path/name');
-        expect(taskDescription).toContain('assets/icon.svg');
-        expect(taskDescription.indexOf('root skill definition')).toBeLessThan(
-            taskDescription.indexOf('script/code files')
-        );
-        expect(taskDescription.indexOf('script/code files')).toBeLessThan(
-            taskDescription.indexOf('configuration files')
-        );
-        expect(taskDescription.indexOf('configuration files')).toBeLessThan(
-            taskDescription.indexOf('documentation files')
-        );
-    });
+    expect(taskDescription).toContain('root skill definition: SKILL.md');
+    expect(taskDescription).toContain('script/code files (high priority): scripts/run.py');
+    expect(taskDescription).toContain('all configuration files: package.json');
+    expect(taskDescription).toContain('documentation files: README.md');
+    expect(taskDescription).toContain('assets by path/name');
+    expect(taskDescription).toContain('assets/icon.svg');
+    expect(taskDescription.indexOf('root skill definition')).toBeLessThan(
+      taskDescription.indexOf('script/code files')
+    );
+    expect(taskDescription.indexOf('script/code files')).toBeLessThan(
+      taskDescription.indexOf('configuration files')
+    );
+    expect(taskDescription.indexOf('configuration files')).toBeLessThan(
+      taskDescription.indexOf('documentation files')
+    );
+  });
 });
 
 describe('SkillAuditService result parsing', () => {
-    it('normalizes snake_case audit JSON into the service result shape', () => {
-        const result = parseAuditResultFromOutput(JSON.stringify({
-            audit_result: 'REJECTED',
-            risk_score: 9,
-            confidence: 'HIGH',
-            summary: 'External command execution accepts untrusted input.',
-            intent_mismatch: true,
-            detected_capabilities: ['shell execution', 'network access'],
-            findings: [{
-                file: 'scripts/run.py',
-                line_or_location: 'line 12',
-                risk_level: 'CRITICAL',
-                risk_type: 'RCE',
-                description: 'Runs shell commands from user-controlled arguments.',
-                attack_scenario: 'A crafted argument can execute arbitrary commands.',
-                recommendation: 'Remove shell execution or use a strict allowlist.',
-            }],
-        }));
-
-        expect(result.auditResult).toBe('REJECTED');
-        expect(result.riskScore).toBe(9);
-        expect(result.confidence).toBe('HIGH');
-        expect(result.intentMismatch).toBe(true);
-        expect(result.detectedCapabilities).toEqual(['shell execution', 'network access']);
-        expect(result.findings).toEqual([{
+  it('normalizes snake_case audit JSON into the service result shape', () => {
+    const result = parseAuditResultFromOutput(
+      JSON.stringify({
+        audit_result: 'REJECTED',
+        risk_score: 9,
+        confidence: 'HIGH',
+        summary: 'External command execution accepts untrusted input.',
+        intent_mismatch: true,
+        detected_capabilities: ['shell execution', 'network access'],
+        findings: [
+          {
             file: 'scripts/run.py',
-            lineOrLocation: 'line 12',
-            riskLevel: 'CRITICAL',
-            riskType: 'RCE',
+            line_or_location: 'line 12',
+            risk_level: 'CRITICAL',
+            risk_type: 'RCE',
             description: 'Runs shell commands from user-controlled arguments.',
-            attackScenario: 'A crafted argument can execute arbitrary commands.',
+            attack_scenario: 'A crafted argument can execute arbitrary commands.',
             recommendation: 'Remove shell execution or use a strict allowlist.',
-        }]);
-    });
+          },
+        ],
+      })
+    );
 
-    it('localizes parse-failure fallbacks using the requested UI language', () => {
-        const zhResult = parseAuditResultFromOutput('not-json', 'zh-CN');
-        const enResult = parseAuditResultFromOutput('not-json', 'en-US');
+    expect(result.auditResult).toBe('REJECTED');
+    expect(result.riskScore).toBe(9);
+    expect(result.confidence).toBe('HIGH');
+    expect(result.intentMismatch).toBe(true);
+    expect(result.detectedCapabilities).toEqual(['shell execution', 'network access']);
+    expect(result.findings).toEqual([
+      {
+        file: 'scripts/run.py',
+        lineOrLocation: 'line 12',
+        riskLevel: 'CRITICAL',
+        riskType: 'RCE',
+        description: 'Runs shell commands from user-controlled arguments.',
+        attackScenario: 'A crafted argument can execute arbitrary commands.',
+        recommendation: 'Remove shell execution or use a strict allowlist.',
+      },
+    ]);
+  });
 
-        expect(zhResult.summary).toBe('无法解析审查结果，建议人工复核。');
-        expect(zhResult.findings[0]?.description).toContain('输出无法解析为 JSON');
-        expect(zhResult.findings[0]?.recommendation).toBe('请人工检查技能包内容。');
-        expect(enResult.summary).toBe(
-            'The review result could not be parsed. Manual review is recommended.'
-        );
-    });
+  it('localizes parse-failure fallbacks using the requested UI language', () => {
+    const zhResult = parseAuditResultFromOutput('not-json', 'zh-CN');
+    const enResult = parseAuditResultFromOutput('not-json', 'en-US');
 
-    it('localizes the missing-summary fallback without changing schema enums', () => {
-        const result = parseAuditResultFromOutput(JSON.stringify({
-            audit_result: 'APPROVED',
-            risk_score: 1,
-            confidence: 'HIGH',
-        }), 'zh-CN');
+    expect(zhResult.summary).toBe('无法解析审查结果，建议人工复核。');
+    expect(zhResult.findings[0]?.description).toContain('输出无法解析为 JSON');
+    expect(zhResult.findings[0]?.recommendation).toBe('请人工检查技能包内容。');
+    expect(enResult.summary).toBe(
+      'The review result could not be parsed. Manual review is recommended.'
+    );
+  });
 
-        expect(result.auditResult).toBe('APPROVED');
-        expect(result.summary).toBe('安全审查已完成。');
-    });
+  it('localizes the missing-summary fallback without changing schema enums', () => {
+    const result = parseAuditResultFromOutput(
+      JSON.stringify({
+        audit_result: 'APPROVED',
+        risk_score: 1,
+        confidence: 'HIGH',
+      }),
+      'zh-CN'
+    );
+
+    expect(result.auditResult).toBe('APPROVED');
+    expect(result.summary).toBe('安全审查已完成。');
+  });
 });

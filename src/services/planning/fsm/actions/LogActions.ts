@@ -5,11 +5,11 @@
  */
 
 import type {
-    FSMContext,
-    FSMEvent,
-    ActionFn,
-    DecisionLogEntry,
-    MasterBrainDecisionType,
+  FSMContext,
+  FSMEvent,
+  ActionFn,
+  DecisionLogEntry,
+  MasterBrainDecisionType,
 } from '../types';
 
 // ═══════════════════════════════════════════════════════════════
@@ -20,10 +20,10 @@ import type {
  * 决策日志输入
  */
 export interface DecisionLogInput {
-    /** 决策类型 */
-    decisionType: MasterBrainDecisionType;
-    /** 输入摘要 */
-    inputSummary: string;
+  /** 决策类型 */
+  decisionType: MasterBrainDecisionType;
+  /** 输入摘要 */
+  inputSummary: string;
 }
 
 /**
@@ -34,33 +34,33 @@ export interface DecisionLogInput {
  * @param input - 日志输入
  */
 export const persistDecisionLog = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    input: DecisionLogInput
+  ctx: FSMContext,
+  _event: FSMEvent,
+  input: DecisionLogInput
 ): void => {
-    const entry: DecisionLogEntry = {
-        timestamp: new Date(),
-        decisionType: input.decisionType,
-        inputSummary: input.inputSummary,
-    };
+  const entry: DecisionLogEntry = {
+    timestamp: new Date(),
+    decisionType: input.decisionType,
+    inputSummary: input.inputSummary,
+  };
 
-    ctx.decisionLog.push(entry);
+  ctx.decisionLog.push(entry);
 };
 
 /**
  * 创建决策日志 Action
  */
 export const createPersistDecisionLogAction = (
-    decisionType: MasterBrainDecisionType,
-    inputSummary: string
+  decisionType: MasterBrainDecisionType,
+  inputSummary: string
 ): ActionFn<FSMEvent> => {
-    return (ctx: FSMContext) => {
-        ctx.decisionLog.push({
-            timestamp: new Date(),
-            decisionType,
-            inputSummary,
-        });
-    };
+  return (ctx: FSMContext) => {
+    ctx.decisionLog.push({
+      timestamp: new Date(),
+      decisionType,
+      inputSummary,
+    });
+  };
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -76,22 +76,18 @@ export const createPersistDecisionLogAction = (
  * @param _event - 事件（未使用）
  * @param error - 错误信息
  */
-export const recordFailure = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    error: string
-): void => {
-    if (ctx.decisionLog.length === 0) {
-        return;
-    }
+export const recordFailure = (ctx: FSMContext, _event: FSMEvent, error: string): void => {
+  if (ctx.decisionLog.length === 0) {
+    return;
+  }
 
-    const lastEntry = ctx.decisionLog[ctx.decisionLog.length - 1];
-    if (lastEntry) {
-        lastEntry.executionResult = {
-            success: false,
-            error,
-        };
-    }
+  const lastEntry = ctx.decisionLog[ctx.decisionLog.length - 1];
+  if (lastEntry) {
+    lastEntry.executionResult = {
+      success: false,
+      error,
+    };
+  }
 };
 
 /**
@@ -101,22 +97,18 @@ export const recordFailure = (
  * @param _event - 事件（未使用）
  * @param output - 输出内容
  */
-export const recordSuccess = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    output?: unknown
-): void => {
-    if (ctx.decisionLog.length === 0) {
-        return;
-    }
+export const recordSuccess = (ctx: FSMContext, _event: FSMEvent, output?: unknown): void => {
+  if (ctx.decisionLog.length === 0) {
+    return;
+  }
 
-    const lastEntry = ctx.decisionLog[ctx.decisionLog.length - 1];
-    if (lastEntry) {
-        lastEntry.executionResult = {
-            success: true,
-            output,
-        };
-    }
+  const lastEntry = ctx.decisionLog[ctx.decisionLog.length - 1];
+  if (lastEntry) {
+    lastEntry.executionResult = {
+      success: true,
+      output,
+    };
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -127,7 +119,7 @@ export const recordSuccess = (
  * 清空决策日志
  */
 export const clearDecisionLog: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
-    ctx.decisionLog = [];
+  ctx.decisionLog = [];
 };
 
 /**
@@ -136,26 +128,26 @@ export const clearDecisionLog: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
  * 用于 DECISION_RECEIVED 转移
  */
 export const storeDecision: ActionFn<FSMEvent> = (ctx: FSMContext, event: FSMEvent): void => {
-    if (event.type === 'DECISION_RECEIVED' && 'payload' in event) {
-        ctx.currentDecision = event.payload;
-    }
+  if (event.type === 'DECISION_RECEIVED' && 'payload' in event) {
+    ctx.currentDecision = event.payload;
+  }
 };
 
 /**
  * 从 USER_REQUEST 事件提取 sessionId 存储到 context
  */
 export const storeSession: ActionFn<FSMEvent> = (ctx: FSMContext, event: FSMEvent): void => {
-    if (event.type === 'USER_REQUEST' && 'payload' in event) {
-        ctx.sessionId = event.payload.sessionId;
-    }
+  if (event.type === 'USER_REQUEST' && 'payload' in event) {
+    ctx.sessionId = event.payload.sessionId;
+  }
 };
 
 /**
  * 获取最后一条决策日志
  */
 export const getLastDecision = (ctx: FSMContext): DecisionLogEntry | undefined => {
-    if (ctx.decisionLog.length === 0) {
-        return undefined;
-    }
-    return ctx.decisionLog[ctx.decisionLog.length - 1];
+  if (ctx.decisionLog.length === 0) {
+    return undefined;
+  }
+  return ctx.decisionLog[ctx.decisionLog.length - 1];
 };

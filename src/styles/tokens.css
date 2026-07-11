@@ -20,7 +20,7 @@
   --color-surface-secondary: var(--color-bg-secondary);
 
   /* 文本色 */
-  --color-text-primary: #1A1A1A;
+  --color-text-primary: #1a1a1a;
   --color-text-secondary: #595959;
   --color-text-tertiary: #888888;
   --color-text-quaternary: #afafaf;
@@ -37,20 +37,32 @@
   --color-border: var(--color-border-default);
   --color-border-primary: var(--color-border-default);
   --color-border-secondary: var(--color-border-hover);
-  --color-border-subtle: #E8E3DA;
+  --color-border-subtle: #e8e3da;
   --color-border-active: var(--color-action-primary);
 
   /* 主操作色 */
-  --color-action-primary: #3F7BD9;
-  --color-action-primary-hover: #336DC8;
+  --color-action-primary: #3f7bd9;
+  --color-action-primary-hover: #336dc8;
   --color-primary: var(--color-action-primary);
   --color-primary-hover: var(--color-action-primary-hover);
   --state-hover-border-mix: 75%;
   --state-selected-bg-mix: 5%;
   --state-selected-hover-bg-mix: 10%;
-  --color-state-hover-border: color-mix(in srgb, var(--color-action-primary) var(--state-hover-border-mix), var(--color-border-hover));
-  --color-state-selected-bg: color-mix(in srgb, var(--color-action-primary) var(--state-selected-bg-mix), var(--color-bg-secondary));
-  --color-state-selected-hover-bg: color-mix(in srgb, var(--color-action-primary) var(--state-selected-hover-bg-mix), var(--color-bg-tertiary));
+  --color-state-hover-border: color-mix(
+    in srgb,
+    var(--color-action-primary) var(--state-hover-border-mix),
+    var(--color-border-hover)
+  );
+  --color-state-selected-bg: color-mix(
+    in srgb,
+    var(--color-action-primary) var(--state-selected-bg-mix),
+    var(--color-bg-secondary)
+  );
+  --color-state-selected-hover-bg: color-mix(
+    in srgb,
+    var(--color-action-primary) var(--state-selected-hover-bg-mix),
+    var(--color-bg-tertiary)
+  );
   --color-primary-bg: var(--color-state-selected-bg);
   --color-primary-bg-hover: var(--color-state-selected-hover-bg);
   --color-primary-alpha: color-mix(in srgb, var(--color-action-primary) 28%, transparent);
@@ -58,23 +70,27 @@
   --color-accent-primary-hover: var(--color-action-primary-hover);
   --color-accent-primary-rgb: 63, 123, 217;
   --color-inline-token: #778089;
-  --color-inline-token-hover: color-mix(in srgb, var(--color-inline-token) 74%, var(--color-text-primary));
+  --color-inline-token-hover: color-mix(
+    in srgb,
+    var(--color-inline-token) 74%,
+    var(--color-text-primary)
+  );
   --color-inline-token-on-action: #0e5cbc;
 
   /* 状态色 */
-  --color-status-success: #21804E;
-  --color-status-warning: #E0A238;
-  --color-status-error: #E34F53;
-  --color-status-info: #3F7BD9;
+  --color-status-success: #21804e;
+  --color-status-warning: #e0a238;
+  --color-status-error: #e34f53;
+  --color-status-info: #3f7bd9;
   --color-success: var(--color-status-success);
   --color-warning: var(--color-status-warning);
   --color-error: var(--color-status-error);
   --color-info: var(--color-status-info);
 
   /* Diff 相关颜色 */
-  --color-diff-add-bg: #E6FFEC;
-  --color-diff-remove-bg: #FFEBE9;
-  --color-diff-modify-bg: #FFF8E1;
+  --color-diff-add-bg: #e6ffec;
+  --color-diff-remove-bg: #ffebe9;
+  --color-diff-modify-bg: #fff8e1;
 
   /* ============================================
    * 字体系统
@@ -137,14 +153,19 @@
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
-  --focus-control-border: color-mix(in srgb, var(--color-action-primary) 34%, var(--color-border-hover));
+  --focus-control-border: color-mix(
+    in srgb,
+    var(--color-action-primary) 34%,
+    var(--color-border-hover)
+  );
   --focus-control-ring: 0 0 0 1px color-mix(in srgb, var(--color-action-primary) 16%, transparent);
   --focus-control-elevation: 0 5px 10px rgba(0, 0, 0, 0.08);
-  --focus-control-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.64), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
-  --focus-control-shadow: var(--focus-control-highlight), var(--focus-control-ring), var(--focus-control-elevation);
+  --focus-control-highlight:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+  --focus-control-shadow:
+    var(--focus-control-highlight), var(--focus-control-ring), var(--focus-control-elevation);
   --focus-composer-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 0 rgba(0, 0, 0, 0.04),
     0 0 0 1px color-mix(in srgb, var(--color-action-primary) 10%, transparent),
     0 8px 20px rgba(0, 0, 0, 0.1);
 
@@ -170,7 +191,10 @@
   --transition-slow: 300ms ease;
 
   /* Cursor */
-  --cursor-disabled: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E") 8 8, not-allowed;
+  --cursor-disabled:
+    url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='16'%20height='16'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff6363'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Ccircle%20cx='12'%20cy='12'%20r='10'/%3E%3Cpath%20d='m9%2015%206-6'/%3E%3C/svg%3E")
+      8 8,
+    not-allowed;
   --blocked-cursor: var(--cursor-disabled);
 }
 
@@ -201,13 +225,13 @@
 
   /* 边框色 */
   --color-border-default: #333337;
-  --color-border-hover: #4A4A51;
-  --color-border-subtle: #28282B;
+  --color-border-hover: #4a4a51;
+  --color-border-subtle: #28282b;
   --color-border-active: var(--color-action-primary);
 
   /* 主操作色 */
   --color-action-primary: #5a8ffa;
-  --color-action-primary-hover: #82A6F6;
+  --color-action-primary-hover: #82a6f6;
   --state-hover-border-mix: 75%;
   --state-selected-bg-mix: 4%;
   --state-selected-hover-bg-mix: 5%;
@@ -216,26 +240,31 @@
   --color-inline-token-on-action: #5191ff;
 
   /* 状态色 */
-  --color-status-success: #21804E;
-  --color-status-warning: #E0A238;
-  --color-status-error: #E34F53;
-  --color-status-info: #82A6F6;
+  --color-status-success: #21804e;
+  --color-status-warning: #e0a238;
+  --color-status-error: #e34f53;
+  --color-status-info: #82a6f6;
 
   /* Diff 相关颜色 */
-  --color-diff-add-bg: #1A3D1A;
-  --color-diff-remove-bg: #3D1A1A;
-  --color-diff-modify-bg: #3D3A1A;
+  --color-diff-add-bg: #1a3d1a;
+  --color-diff-remove-bg: #3d1a1a;
+  --color-diff-modify-bg: #3d3a1a;
 
-  --focus-control-border: color-mix(in srgb, var(--color-action-primary) 30%, var(--color-border-hover));
+  --focus-control-border: color-mix(
+    in srgb,
+    var(--color-action-primary) 30%,
+    var(--color-border-hover)
+  );
   --focus-control-ring:
     0 0 0 1px rgba(255, 255, 255, 0.045),
     0 0 0 1px color-mix(in srgb, var(--color-action-primary) 0%, transparent);
   --focus-control-elevation: 0 5px 10px rgba(0, 0, 0, 0.05);
-  --focus-control-highlight: inset 0 -0.5px 0 rgba(255, 255, 255, 0.20), inset 0 1px 0 rgba(0, 0, 0, 0.25);
-  --focus-control-shadow: var(--focus-control-highlight), var(--focus-control-ring), var(--focus-control-elevation);
+  --focus-control-highlight:
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(0, 0, 0, 0.25);
+  --focus-control-shadow:
+    var(--focus-control-highlight), var(--focus-control-ring), var(--focus-control-elevation);
   --focus-composer-shadow:
-    inset 0 -0.5px 0 rgba(255, 255, 255, 0.20),
-    inset 0 1px 0 rgba(0, 0, 0, 0.25),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(0, 0, 0, 0.25),
     0 0 0 1px rgba(255, 255, 255, 0.055),
     0 0 0 2px color-mix(in srgb, var(--color-action-primary) 5%, transparent),
     0 12px 30px rgba(0, 0, 0, 0.34);

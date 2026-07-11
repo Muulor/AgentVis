@@ -10,23 +10,21 @@
 import { stripVisualCodeBlocks } from '@services/planning/visual-enhancer/stripVisualCodeBlocks';
 
 interface MessageLike {
-    role?: string;
-    content: string;
-    metadata?: string | Record<string, unknown> | null;
+  role?: string;
+  content: string;
+  metadata?: string | Record<string, unknown> | null;
 }
 
 function parseMetadata(metadata: MessageLike['metadata']): Record<string, unknown> | undefined {
-    if (!metadata) return undefined;
-    if (typeof metadata === 'object') return metadata;
+  if (!metadata) return undefined;
+  if (typeof metadata === 'object') return metadata;
 
-    try {
-        const parsed = JSON.parse(metadata) as unknown;
-        return parsed && typeof parsed === 'object'
-            ? parsed as Record<string, unknown>
-            : undefined;
-    } catch {
-        return undefined;
-    }
+  try {
+    const parsed = JSON.parse(metadata) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -34,20 +32,18 @@ function parseMetadata(metadata: MessageLike['metadata']): Record<string, unknow
  * memory recall prompts.
  */
 export function getMemorySafeMessageContent(message: MessageLike): string {
-    if (message.role !== 'assistant') {
-        return message.content;
-    }
+  if (message.role !== 'assistant') {
+    return message.content;
+  }
 
-    const metadata = parseMetadata(message.metadata);
-    const persistContent = metadata?.persistContent;
-    const preferredContent = typeof persistContent === 'string'
-        ? persistContent
-        : message.content;
+  const metadata = parseMetadata(message.metadata);
+  const persistContent = metadata?.persistContent;
+  const preferredContent = typeof persistContent === 'string' ? persistContent : message.content;
 
-    return stripVisualCodeBlocks(preferredContent);
+  return stripVisualCodeBlocks(preferredContent);
 }
 
 /** Strips visual-only code blocks from arbitrary memory text before prompt injection. */
 export function stripMemoryVisualCodeBlocks(content: string): string {
-    return stripVisualCodeBlocks(content);
+  return stripVisualCodeBlocks(content);
 }

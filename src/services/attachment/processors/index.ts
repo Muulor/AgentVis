@@ -1,6 +1,6 @@
 ﻿/**
  * 文档处理器注册表
- * 
+ *
  * 管理所有格式处理器，提供统一的获取接口
  */
 
@@ -24,34 +24,34 @@ const processorRegistry: Map<DocumentExtension, IDocumentProcessor> = new Map();
  * 注册处理器
  */
 function registerProcessor(processor: IDocumentProcessor): void {
-    for (const ext of processor.supportedExtensions) {
-        processorRegistry.set(ext, processor);
-        logger.trace(`[ProcessorRegistry] 已注册处理器: ${ext}`);
-    }
+  for (const ext of processor.supportedExtensions) {
+    processorRegistry.set(ext, processor);
+    logger.trace(`[ProcessorRegistry] 已注册处理器: ${ext}`);
+  }
 }
 
 /**
  * 获取指定扩展名的处理器
- * 
+ *
  * @param extension - 文件扩展名
  * @returns 对应的处理器，不存在则返回 undefined
  */
 export function getProcessor(extension: string): IDocumentProcessor | undefined {
-    return processorRegistry.get(extension.toLowerCase() as DocumentExtension);
+  return processorRegistry.get(extension.toLowerCase() as DocumentExtension);
 }
 
 /**
  * 检查是否有可用的处理器
  */
 export function hasProcessor(extension: string): boolean {
-    return processorRegistry.has(extension.toLowerCase() as DocumentExtension);
+  return processorRegistry.has(extension.toLowerCase() as DocumentExtension);
 }
 
 /**
  * 获取所有已注册的扩展名
  */
 export function getRegisteredExtensions(): DocumentExtension[] {
-    return Array.from(processorRegistry.keys());
+  return Array.from(processorRegistry.keys());
 }
 
 // ==================== 初始化注册 ====================

@@ -13,16 +13,14 @@
 import type { TemplateId } from './types';
 
 /** 可项目预览的文件扩展名集合 */
-export const PREVIEWABLE_EXTENSIONS = new Set([
-    'jsx', 'tsx', 'js', 'ts', 'css', 'vue', 'html',
-]);
+export const PREVIEWABLE_EXTENSIONS = new Set(['jsx', 'tsx', 'js', 'ts', 'css', 'vue', 'html']);
 
 /**
  * 判断文件名是否为可项目预览的类型
  */
 export function isPreviewableFile(fileName: string): boolean {
-    const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
-    return PREVIEWABLE_EXTENSIONS.has(ext);
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return PREVIEWABLE_EXTENSIONS.has(ext);
 }
 
 /**
@@ -31,10 +29,10 @@ export function isPreviewableFile(fileName: string): boolean {
  * 用于文件预览（FilePreview）和代码块预览（CodeHighlight）场景。
  */
 export function inferTemplateFromFileName(fileName: string): TemplateId {
-    const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
-    if (ext === 'jsx' || ext === 'tsx') return 'react-tailwind';
-    if (ext === 'vue') return 'vue-tailwind';
-    return 'vanilla';
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'jsx' || ext === 'tsx') return 'react-tailwind';
+  if (ext === 'vue') return 'vue-tailwind';
+  return 'vanilla';
 }
 
 /**
@@ -43,19 +41,19 @@ export function inferTemplateFromFileName(fileName: string): TemplateId {
  * 用于交付物文件夹（FileList）和多文件代码块（MessageBubble）场景。
  */
 export function inferTemplateFromFileNames(fileNames: string[]): TemplateId {
-    const hasReact = fileNames.some(name => {
-        const ext = name.split('.').pop()?.toLowerCase() ?? '';
-        return ext === 'jsx' || ext === 'tsx';
-    });
-    if (hasReact) return 'react-tailwind';
+  const hasReact = fileNames.some((name) => {
+    const ext = name.split('.').pop()?.toLowerCase() ?? '';
+    return ext === 'jsx' || ext === 'tsx';
+  });
+  if (hasReact) return 'react-tailwind';
 
-    const hasVue = fileNames.some(name => {
-        const ext = name.split('.').pop()?.toLowerCase() ?? '';
-        return ext === 'vue';
-    });
-    if (hasVue) return 'vue-tailwind';
+  const hasVue = fileNames.some((name) => {
+    const ext = name.split('.').pop()?.toLowerCase() ?? '';
+    return ext === 'vue';
+  });
+  if (hasVue) return 'vue-tailwind';
 
-    return 'vanilla';
+  return 'vanilla';
 }
 
 /**
@@ -64,9 +62,9 @@ export function inferTemplateFromFileNames(fileNames: string[]): TemplateId {
  * 用于单个代码块预览（MessageBubble handleProjectPreview）场景。
  */
 export function inferTemplateFromLanguage(language: string): TemplateId {
-    if (language === 'jsx' || language === 'tsx') return 'react-tailwind';
-    if (language === 'vue') return 'vue-tailwind';
-    return 'vanilla';
+  if (language === 'jsx' || language === 'tsx') return 'react-tailwind';
+  if (language === 'vue') return 'vue-tailwind';
+  return 'vanilla';
 }
 
 /**
@@ -75,9 +73,9 @@ export function inferTemplateFromLanguage(language: string): TemplateId {
  * 用于多文件预览（MessageBubble handleMultiFilePreview）场景。
  */
 export function inferTemplateFromLanguages(languages: string[]): TemplateId {
-    if (languages.some(l => l === 'jsx' || l === 'tsx')) return 'react-tailwind';
-    if (languages.some(l => l === 'vue')) return 'vue-tailwind';
-    return 'vanilla';
+  if (languages.some((l) => l === 'jsx' || l === 'tsx')) return 'react-tailwind';
+  if (languages.some((l) => l === 'vue')) return 'vue-tailwind';
+  return 'vanilla';
 }
 
 /**
@@ -87,7 +85,7 @@ export function inferTemplateFromLanguages(languages: string[]): TemplateId {
  * 深色背景 + 居中显示 + SVG 自适应宽度，匹配应用整体风格。
  */
 export function wrapSvgInHtml(svgCode: string): string {
-    return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">

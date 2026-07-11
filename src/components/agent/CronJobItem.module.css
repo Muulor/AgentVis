@@ -1,184 +1,183 @@
 /* CronJobItem 样式 */
 
 .card {
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-default);
-    border-radius: var(--radius-surface);
-    padding: 14px 16px;
-    transition: all 0.2s ease;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-surface);
+  padding: 14px 16px;
+  transition: all 0.2s ease;
 }
 
 .card:hover {
-    border-color: var(--color-border-hover);
-    background: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-tertiary);
 }
 
 .card.disabled {
-    opacity: 0.55;
+  opacity: 0.55;
 }
 
 /* 头部：名称 + 执行状态 + 时间描述 */
 .header {
-    margin-bottom: 8px;
+  margin-bottom: 8px;
 }
 
 .nameRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .name {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .schedule {
-    font-size: 12px;
-    color: var(--color-action-primary);
-    font-weight: 500;
+  font-size: 12px;
+  color: var(--color-action-primary);
+  font-weight: 500;
 }
 
 /* 状态指示点 */
 .statusDot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 .statusSuccess {
-    background: #22c55e;
+  background: #22c55e;
 }
 
 .statusFailed {
-    background: #ef4444;
+  background: #ef4444;
 }
 
 .statusRunning {
-    background: #f59e0b;
-    animation: pulse 1.5s infinite;
+  background: #f59e0b;
+  animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
 
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.4;
-    }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* 提示词预览 */
 .prompt {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    line-height: 1.4;
-    margin-bottom: 10px;
-    overflow: hidden;
-    max-height: 2.8em;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-bottom: 10px;
+  overflow: hidden;
+  max-height: 2.8em;
 }
 
 /* 元信息 + 操作栏（同一行） */
 .meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .metaInfo {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .metaItem {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
 }
 
 /* 操作栏 */
 .actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 开关按钮 */
 .toggleBtn {
-    background: none;
-    border: none;
-    padding: 2px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
 }
 
 .toggleTrack {
-    width: 32px;
-    height: 18px;
-    border-radius: 9px;
-    background: var(--color-bg-tertiary, #333333);
-    position: relative;
-    transition: background 0.2s ease;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--color-bg-tertiary, #333333);
+  position: relative;
+  transition: background 0.2s ease;
 }
 
 .toggleOn .toggleTrack {
-    background: var(--color-action-primary);
+  background: var(--color-action-primary);
 }
 
 .toggleThumb {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #fff;
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    transition: transform 0.2s ease;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s ease;
 }
 
 .toggleOn .toggleThumb {
-    transform: translateX(14px);
+  transform: translateX(14px);
 }
 
 /* 操作按钮 */
 .actionBtn {
-    background: none;
-    border: 1px solid transparent;
-    padding: 4px;
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    color: var(--color-text-secondary);
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  padding: 4px;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .actionBtn:hover {
-    color: var(--color-text-primary);
-    background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
 }
 
 .deleteBtn:hover {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .actionBtn:disabled {
-    opacity: 0.4;
-    cursor: var(--cursor-disabled);
+  opacity: 0.4;
+  cursor: var(--cursor-disabled);
 }

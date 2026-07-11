@@ -17,20 +17,20 @@ import type { AgentLoopCallbacks } from '@/services/planning/agent-loop';
  * FSM 可视化相关的回调接口
  */
 export interface FSMVisualizationCallbacks {
-    /** 思维阶段事件 */
-    onThinkingPhase: (event: ThinkingPhaseEvent) => void;
-    /** Master Brain provider reasoning_content 流事件 */
-    onReasoningTrace: (event: ReasoningTraceEvent) => void;
-    /** FSM 状态变更 */
-    onFSMStateChange: (from: AgentServiceState, to: AgentServiceState) => void;
-    /** 治理器指标更新 */
-    onMetricsUpdate: (snapshot: GovernorSnapshot) => void;
-    /** Sub-Agent 创建 */
-    onSubAgentSpawn: (spec: SubAgentSpec) => void;
-    /** Sub-Agent 完成 */
-    onSubAgentComplete: (id: string, output: SubAgentOutput) => void;
-    /** Sub-Agent 失败 */
-    onSubAgentFail: (id: string, error: string) => void;
+  /** 思维阶段事件 */
+  onThinkingPhase: (event: ThinkingPhaseEvent) => void;
+  /** Master Brain provider reasoning_content 流事件 */
+  onReasoningTrace: (event: ReasoningTraceEvent) => void;
+  /** FSM 状态变更 */
+  onFSMStateChange: (from: AgentServiceState, to: AgentServiceState) => void;
+  /** 治理器指标更新 */
+  onMetricsUpdate: (snapshot: GovernorSnapshot) => void;
+  /** Sub-Agent 创建 */
+  onSubAgentSpawn: (spec: SubAgentSpec) => void;
+  /** Sub-Agent 完成 */
+  onSubAgentComplete: (id: string, output: SubAgentOutput) => void;
+  /** Sub-Agent 失败 */
+  onSubAgentFail: (id: string, error: string) => void;
 }
 
 /**
@@ -39,118 +39,121 @@ export interface FSMVisualizationCallbacks {
  * @returns 回调函数，可直接传递给 AgentLoop
  */
 export function useFSMVisualization(contextId: string) {
-    const {
-        handleThinkingPhaseEvent,
-        handleReasoningTraceEvent,
-        handleFSMStateChange,
-        updateMetrics,
-        recordSubAgentSpawn,
-        recordSubAgentComplete,
-        recordSubAgentFail,
-        setCurrentDecision,
-        reset,
-    } = useFSMVisualizationStore();
+  const {
+    handleThinkingPhaseEvent,
+    handleReasoningTraceEvent,
+    handleFSMStateChange,
+    updateMetrics,
+    recordSubAgentSpawn,
+    recordSubAgentComplete,
+    recordSubAgentFail,
+    setCurrentDecision,
+    reset,
+  } = useFSMVisualizationStore();
 
-    // 创建稳定的回调函数
-    const onThinkingPhase = useCallback(
-        (event: ThinkingPhaseEvent) => {
-            handleThinkingPhaseEvent(event, contextId);
-        },
-        [contextId, handleThinkingPhaseEvent]
-    );
+  // 创建稳定的回调函数
+  const onThinkingPhase = useCallback(
+    (event: ThinkingPhaseEvent) => {
+      handleThinkingPhaseEvent(event, contextId);
+    },
+    [contextId, handleThinkingPhaseEvent]
+  );
 
-    const onReasoningTrace = useCallback(
-        (event: ReasoningTraceEvent) => {
-            handleReasoningTraceEvent(event, contextId);
-        },
-        [contextId, handleReasoningTraceEvent]
-    );
+  const onReasoningTrace = useCallback(
+    (event: ReasoningTraceEvent) => {
+      handleReasoningTraceEvent(event, contextId);
+    },
+    [contextId, handleReasoningTraceEvent]
+  );
 
-    const onFSMStateChange = useCallback(
-        (from: AgentServiceState, to: AgentServiceState) => {
-            handleFSMStateChange(from, to, contextId);
-        },
-        [contextId, handleFSMStateChange]
-    );
+  const onFSMStateChange = useCallback(
+    (from: AgentServiceState, to: AgentServiceState) => {
+      handleFSMStateChange(from, to, contextId);
+    },
+    [contextId, handleFSMStateChange]
+  );
 
-    const onMetricsUpdate = useCallback(
-        (snapshot: GovernorSnapshot) => {
-            updateMetrics(snapshot, contextId);
-        },
-        [contextId, updateMetrics]
-    );
+  const onMetricsUpdate = useCallback(
+    (snapshot: GovernorSnapshot) => {
+      updateMetrics(snapshot, contextId);
+    },
+    [contextId, updateMetrics]
+  );
 
-    const onSubAgentSpawn = useCallback(
-        (spec: SubAgentSpec) => {
-            const id = crypto.randomUUID();
-            recordSubAgentSpawn(id, spec, contextId);
-        },
-        [contextId, recordSubAgentSpawn]
-    );
+  const onSubAgentSpawn = useCallback(
+    (spec: SubAgentSpec) => {
+      const id = crypto.randomUUID();
+      recordSubAgentSpawn(id, spec, contextId);
+    },
+    [contextId, recordSubAgentSpawn]
+  );
 
-    const onSubAgentComplete = useCallback(
-        (id: string, output: SubAgentOutput) => {
-            recordSubAgentComplete(id, output, contextId);
-        },
-        [contextId, recordSubAgentComplete]
-    );
+  const onSubAgentComplete = useCallback(
+    (id: string, output: SubAgentOutput) => {
+      recordSubAgentComplete(id, output, contextId);
+    },
+    [contextId, recordSubAgentComplete]
+  );
 
-    const onSubAgentFail = useCallback(
-        (id: string, error: string) => {
-            recordSubAgentFail(id, error, contextId);
-        },
-        [contextId, recordSubAgentFail]
-    );
+  const onSubAgentFail = useCallback(
+    (id: string, error: string) => {
+      recordSubAgentFail(id, error, contextId);
+    },
+    [contextId, recordSubAgentFail]
+  );
+
+  // 设置决策
+  const setDecision = useCallback(
+    (decision: MasterBrainDecision | null) => {
+      setCurrentDecision(decision, contextId);
+    },
+    [contextId, setCurrentDecision]
+  );
+
+  // 重置可视化状态
+  const resetVisualization = useCallback(() => {
+    reset(contextId);
+  }, [contextId, reset]);
+
+  // 获取可传递给 AgentLoop 的完整回调对象
+  const getCallbacks = useCallback(
+    (): Partial<AgentLoopCallbacks> => ({
+      onThinkingPhase,
+      onReasoningTrace,
+      onFSMStateChange,
+      onMetricsUpdate,
+      onSubAgentSpawn,
+      onSubAgentComplete,
+      onSubAgentFail,
+    }),
+    [
+      onThinkingPhase,
+      onReasoningTrace,
+      onFSMStateChange,
+      onMetricsUpdate,
+      onSubAgentSpawn,
+      onSubAgentComplete,
+      onSubAgentFail,
+    ]
+  );
+
+  return {
+    // 单独的回调函数
+    onThinkingPhase,
+    onReasoningTrace,
+    onFSMStateChange,
+    onMetricsUpdate,
+    onSubAgentSpawn,
+    onSubAgentComplete,
+    onSubAgentFail,
 
     // 设置决策
-    const setDecision = useCallback(
-        (decision: MasterBrainDecision | null) => {
-            setCurrentDecision(decision, contextId);
-        },
-        [contextId, setCurrentDecision]
-    );
+    setDecision,
 
-    // 重置可视化状态
-    const resetVisualization = useCallback(() => {
-        reset(contextId);
-    }, [contextId, reset]);
+    // 重置
+    resetVisualization,
 
-    // 获取可传递给 AgentLoop 的完整回调对象
-    const getCallbacks = useCallback((): Partial<AgentLoopCallbacks> => ({
-        onThinkingPhase,
-        onReasoningTrace,
-        onFSMStateChange,
-        onMetricsUpdate,
-        onSubAgentSpawn,
-        onSubAgentComplete,
-        onSubAgentFail,
-    }), [
-        onThinkingPhase,
-        onReasoningTrace,
-        onFSMStateChange,
-        onMetricsUpdate,
-        onSubAgentSpawn,
-        onSubAgentComplete,
-        onSubAgentFail,
-    ]);
-
-    return {
-        // 单独的回调函数
-        onThinkingPhase,
-        onReasoningTrace,
-        onFSMStateChange,
-        onMetricsUpdate,
-        onSubAgentSpawn,
-        onSubAgentComplete,
-        onSubAgentFail,
-
-        // 设置决策
-        setDecision,
-
-        // 重置
-        resetVisualization,
-
-        // 获取完整回调对象（用于传递给 AgentLoop）
-        getCallbacks,
-    };
+    // 获取完整回调对象（用于传递给 AgentLoop）
+    getCallbacks,
+  };
 }

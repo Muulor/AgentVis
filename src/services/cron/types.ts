@@ -8,44 +8,44 @@ import type { ChatMode } from '@/types/chatMode';
 
 /** CronJob 实体（与 Rust 端 CronJobItem 对应） */
 export interface CronJob {
-    id: string;
-    agentId: string;
-    name: string;
-    cronExpression: string;
-    prompt: string;
-    mode: ChatMode;
-    enabled: boolean;
-    lastRunAt: number | null;
-    nextRunAt: number | null;
-    lastRunStatus: 'success' | 'failed' | 'running' | null;
-    createdAt: number;
-    updatedAt: number;
+  id: string;
+  agentId: string;
+  name: string;
+  cronExpression: string;
+  prompt: string;
+  mode: ChatMode;
+  enabled: boolean;
+  lastRunAt: number | null;
+  nextRunAt: number | null;
+  lastRunStatus: 'success' | 'failed' | 'running' | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 /** 创建定时任务请求（与 Rust 端 CreateCronJobRequest 对应） */
 export interface CronJobCreateParams {
-    agentId: string;
-    name: string;
-    cronExpression: string;
-    prompt: string;
-    enabled?: boolean;
-    nextRunAt?: number;
+  agentId: string;
+  name: string;
+  cronExpression: string;
+  prompt: string;
+  enabled?: boolean;
+  nextRunAt?: number;
 }
 
 /** 更新定时任务请求（与 Rust 端 UpdateCronJobRequest 对应） */
 export interface CronJobUpdateParams {
-    name?: string;
-    cronExpression?: string;
-    prompt?: string;
-    enabled?: boolean;
-    nextRunAt?: number;
-    lastRunAt?: number;
-    lastRunStatus?: 'success' | 'failed' | 'running' | null;
+  name?: string;
+  cronExpression?: string;
+  prompt?: string;
+  enabled?: boolean;
+  nextRunAt?: number;
+  lastRunAt?: number;
+  lastRunStatus?: 'success' | 'failed' | 'running' | null;
 }
 
 /** Cron 调度器状态 */
 export interface CronSchedulerStatus {
-    isRunning: boolean;
-    /** 当前跟踪的任务数量 */
-    trackedJobCount: number;
+  isRunning: boolean;
+  /** 当前跟踪的任务数量 */
+  trackedJobCount: number;
 }

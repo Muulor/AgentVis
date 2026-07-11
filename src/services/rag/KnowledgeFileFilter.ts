@@ -8,17 +8,17 @@
 export type { KnowledgeDocumentType } from '@services/file-types';
 
 export {
-    CODE_FILE_EXTENSIONS,
-    KNOWLEDGE_OFFICE_FILE_EXTENSIONS,
-    KNOWLEDGE_TEXT_FILE_EXTENSIONS,
-    getKnowledgeDocumentType,
-    isKnowledgeOfficeFile,
-    isKnowledgeTextFile,
-    shouldAutoIndexKnowledgeFile,
+  CODE_FILE_EXTENSIONS,
+  KNOWLEDGE_OFFICE_FILE_EXTENSIONS,
+  KNOWLEDGE_TEXT_FILE_EXTENSIONS,
+  getKnowledgeDocumentType,
+  isKnowledgeOfficeFile,
+  isKnowledgeTextFile,
+  shouldAutoIndexKnowledgeFile,
 } from '@services/file-types';
 
 export {
-    getFileExtension as getFileExtensionForKnowledge,
-    isAgentLogFile as isAgentLogFileForKnowledge,
-    isCodeFile as isCodeFileForKnowledge,
+  getFileExtension as getFileExtensionForKnowledge,
+  isAgentLogFile as isAgentLogFileForKnowledge,
+  isCodeFile as isCodeFileForKnowledge,
 } from '@services/file-types';

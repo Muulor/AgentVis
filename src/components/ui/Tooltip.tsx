@@ -12,67 +12,65 @@ import type { ReactElement, ReactNode } from 'react';
 import styles from './Tooltip.module.css';
 
 interface TooltipProviderProps {
-    children: ReactNode;
+  children: ReactNode;
 }
 
 interface TooltipProps {
-    /** 触发提示的单个元素 */
-    children: ReactElement;
-    /** 提示内容 */
-    content?: ReactNode;
-    /** 快捷键文本 */
-    shortcut?: string;
-    /** 显示方位 */
-    side?: TooltipPrimitive.TooltipContentProps['side'];
-    /** 对齐方式 */
-    align?: TooltipPrimitive.TooltipContentProps['align'];
-    /** 与触发元素的间距 */
-    sideOffset?: number;
-    /** 禁用提示 */
-    disabled?: boolean;
-    /** 长文本提示允许换行显示完整内容 */
-    multiline?: boolean;
+  /** 触发提示的单个元素 */
+  children: ReactElement;
+  /** 提示内容 */
+  content?: ReactNode;
+  /** 快捷键文本 */
+  shortcut?: string;
+  /** 显示方位 */
+  side?: TooltipPrimitive.TooltipContentProps['side'];
+  /** 对齐方式 */
+  align?: TooltipPrimitive.TooltipContentProps['align'];
+  /** 与触发元素的间距 */
+  sideOffset?: number;
+  /** 禁用提示 */
+  disabled?: boolean;
+  /** 长文本提示允许换行显示完整内容 */
+  multiline?: boolean;
 }
 
 export function TooltipProvider({ children }: TooltipProviderProps) {
-    return (
-        <TooltipPrimitive.Provider delayDuration={120} skipDelayDuration={80}>
-            {children}
-        </TooltipPrimitive.Provider>
-    );
+  return (
+    <TooltipPrimitive.Provider delayDuration={120} skipDelayDuration={80}>
+      {children}
+    </TooltipPrimitive.Provider>
+  );
 }
 
 export function Tooltip({
-    children,
-    content,
-    shortcut,
-    side = 'top',
-    align = 'center',
-    sideOffset = 8,
-    disabled = false,
-    multiline = false,
+  children,
+  content,
+  shortcut,
+  side = 'top',
+  align = 'center',
+  sideOffset = 8,
+  disabled = false,
+  multiline = false,
 }: TooltipProps) {
-    if (disabled || !content) {
-        return children;
-    }
+  if (disabled || !content) {
+    return children;
+  }
 
-    return (
-        <TooltipPrimitive.Root>
-            <TooltipPrimitive.Trigger asChild>
-                {children}
-            </TooltipPrimitive.Trigger>
-            <TooltipPrimitive.Portal>
-                <TooltipPrimitive.Content
-                    className={[styles.content, multiline && styles.multiline].filter(Boolean).join(' ')}
-                    side={side}
-                    align={align}
-                    sideOffset={sideOffset}
-                    collisionPadding={10}
-                >
-                    <span className={styles.label}>{content}</span>
-                    {shortcut && <kbd className={styles.shortcut}>{shortcut}</kbd>}
-                </TooltipPrimitive.Content>
-            </TooltipPrimitive.Portal>
-        </TooltipPrimitive.Root>
-    );
+  return (
+    <TooltipPrimitive.Root>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content
+          className={[styles.content, multiline && styles.multiline].filter(Boolean).join(' ')}
+          side={side}
+          align={align}
+          sideOffset={sideOffset}
+          collisionPadding={10}
+        >
+          <span className={styles.label}>{content}</span>
+          {shortcut && <kbd className={styles.shortcut}>{shortcut}</kbd>}
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
+  );
 }

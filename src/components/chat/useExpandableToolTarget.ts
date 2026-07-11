@@ -7,55 +7,53 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function useExpandableToolTarget(target: string, fullTarget?: string) {
-    const targetRef = useRef<HTMLSpanElement>(null);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [isOverflowing, setIsOverflowing] = useState(false);
+  const targetRef = useRef<HTMLSpanElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
 
-    const resolvedFullTarget = fullTarget ?? target;
-    const hasFullTarget = Boolean(fullTarget && fullTarget !== target);
+  const resolvedFullTarget = fullTarget ?? target;
+  const hasFullTarget = Boolean(fullTarget && fullTarget !== target);
 
-    const measureOverflow = useCallback(() => {
-        const node = targetRef.current;
-        if (!node || isExpanded) return;
+  const measureOverflow = useCallback(() => {
+    const node = targetRef.current;
+    if (!node || isExpanded) return;
 
-        const nextIsOverflowing = node.scrollWidth > node.clientWidth
-            || node.scrollHeight > node.clientHeight;
-        setIsOverflowing(prev => (
-            prev === nextIsOverflowing ? prev : nextIsOverflowing
-        ));
-    }, [isExpanded]);
+    const nextIsOverflowing =
+      node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight;
+    setIsOverflowing((prev) => (prev === nextIsOverflowing ? prev : nextIsOverflowing));
+  }, [isExpanded]);
 
-    useEffect(() => {
-        setIsExpanded(false);
-        setIsOverflowing(false);
-    }, [target, fullTarget]);
+  useEffect(() => {
+    setIsExpanded(false);
+    setIsOverflowing(false);
+  }, [target, fullTarget]);
 
-    useEffect(() => {
-        if (isExpanded || !target) return undefined;
+  useEffect(() => {
+    if (isExpanded || !target) return undefined;
 
-        const frameId = window.requestAnimationFrame(measureOverflow);
-        const node = targetRef.current;
-        let observer: ResizeObserver | undefined;
+    const frameId = window.requestAnimationFrame(measureOverflow);
+    const node = targetRef.current;
+    let observer: ResizeObserver | undefined;
 
-        if (node && typeof ResizeObserver !== 'undefined') {
-            observer = new ResizeObserver(measureOverflow);
-            observer.observe(node);
-        }
+    if (node && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(measureOverflow);
+      observer.observe(node);
+    }
 
-        window.addEventListener('resize', measureOverflow);
+    window.addEventListener('resize', measureOverflow);
 
-        return () => {
-            window.cancelAnimationFrame(frameId);
-            observer?.disconnect();
-            window.removeEventListener('resize', measureOverflow);
-        };
-    }, [isExpanded, measureOverflow, target, fullTarget]);
-
-    return {
-        targetRef,
-        isExpanded,
-        canExpand: hasFullTarget || isOverflowing,
-        displayedTarget: isExpanded ? resolvedFullTarget : target,
-        toggleExpanded: () => setIsExpanded(prev => !prev),
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      observer?.disconnect();
+      window.removeEventListener('resize', measureOverflow);
     };
+  }, [isExpanded, measureOverflow, target, fullTarget]);
+
+  return {
+    targetRef,
+    isExpanded,
+    canExpand: hasFullTarget || isOverflowing,
+    displayedTarget: isExpanded ? resolvedFullTarget : target,
+    toggleExpanded: () => setIsExpanded((prev) => !prev),
+  };
 }

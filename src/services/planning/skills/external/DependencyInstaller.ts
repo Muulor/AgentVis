@@ -23,11 +23,11 @@ const logger = getLogger('DependencyInstaller');
 
 /** Shell 命令执行函数签名（与 ExternalExecutor 保持一致） */
 export type ShellExecutor = (params: {
-    command: string;
-    workdir: string;
-    timeout: number;
-    background: boolean;
-    env?: Record<string, string>;
+  command: string;
+  workdir: string;
+  timeout: number;
+  background: boolean;
+  env?: Record<string, string>;
 }) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
 
 /** 单个依赖的安装状态 */
@@ -35,20 +35,20 @@ export type DepInstallStatus = 'idle' | 'checking' | 'installing' | 'installed' 
 
 /** 安装结果 */
 export interface InstallResult {
-    /** 是否安装成功 */
-    success: boolean;
-    /** 结果消息（成功描述或错误信息） */
-    message: string;
-    /** 是否为网络相关错误（可重试） */
-    isNetworkError: boolean;
+  /** 是否安装成功 */
+  success: boolean;
+  /** 结果消息（成功描述或错误信息） */
+  message: string;
+  /** 是否为网络相关错误（可重试） */
+  isNetworkError: boolean;
 }
 
 /** 包管理器检测结果 */
 interface PackageManagerInfo {
-    /** 可用的包管理器名称 */
-    name: string;
-    /** 包管理器的安装命令前缀 */
-    installPrefix: string;
+  /** 可用的包管理器名称 */
+  name: string;
+  /** 包管理器的安装命令前缀 */
+  installPrefix: string;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -62,36 +62,36 @@ interface PackageManagerInfo {
  * 帮助用户区分「需要检查网络」和「命令/权限错误」。
  */
 const NETWORK_ERROR_PATTERNS: readonly string[] = [
-    // 通用
-    'network',
-    'timeout',
-    'timed out',
-    'connection refused',
-    'connection reset',
-    'connection timed out',
-    'failed to fetch',
-    'error sending request',
-    'could not connect',
-    'dns lookup',
-    'ETIMEDOUT',
-    'ECONNREFUSED',
-    'ECONNRESET',
-    'ENOTFOUND',
-    'EHOSTUNREACH',
-    'EAI_AGAIN',
-    // npm 特有
-    'npm ERR! network',
-    'npm ERR! code ENOTFOUND',
-    'npm ERR! fetch failed',
-    'npm ERR! request to',
-    // scoop 特有
-    'Could not resolve host',
-    'SSL connection',
-    // 代理相关
-    'proxy',
-    'certificate',
-    'CERT_',
-    'SSL',
+  // 通用
+  'network',
+  'timeout',
+  'timed out',
+  'connection refused',
+  'connection reset',
+  'connection timed out',
+  'failed to fetch',
+  'error sending request',
+  'could not connect',
+  'dns lookup',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'EHOSTUNREACH',
+  'EAI_AGAIN',
+  // npm 特有
+  'npm ERR! network',
+  'npm ERR! code ENOTFOUND',
+  'npm ERR! fetch failed',
+  'npm ERR! request to',
+  // scoop 特有
+  'Could not resolve host',
+  'SSL connection',
+  // 代理相关
+  'proxy',
+  'certificate',
+  'CERT_',
+  'SSL',
 ];
 
 /**
@@ -101,23 +101,23 @@ const NETWORK_ERROR_PATTERNS: readonly string[] = [
  * 并返回非零 exit code，需要特殊处理为安装成功。
  */
 const ALREADY_INSTALLED_PATTERNS: readonly string[] = [
-    // winget
-    'already installed',
-    'no available upgrade',
-    'no newer package versions',
-    'installed already',
-    'already exists',
-    'no update available',
-    'latest version is already installed',
-    'nothing to upgrade',
-    // scoop
-    'is already installed',
-    // choco
-    'already installed',
-    // brew
-    'already installed',
-    // 中文系统 winget 可能输出中文
-    '\u5df2\u5b89\u88c5',
+  // winget
+  'already installed',
+  'no available upgrade',
+  'no newer package versions',
+  'installed already',
+  'already exists',
+  'no update available',
+  'latest version is already installed',
+  'nothing to upgrade',
+  // scoop
+  'is already installed',
+  // choco
+  'already installed',
+  // brew
+  'already installed',
+  // 中文系统 winget 可能输出中文
+  '\u5df2\u5b89\u88c5',
 ];
 
 /**
@@ -127,10 +127,8 @@ const ALREADY_INSTALLED_PATTERNS: readonly string[] = [
  * @returns 是否为网络错误（可通过重试或检查网络解决）
  */
 export function isNetworkRelatedError(output: string): boolean {
-    const lowerOutput = output.toLowerCase();
-    return NETWORK_ERROR_PATTERNS.some(
-        pattern => lowerOutput.includes(pattern.toLowerCase())
-    );
+  const lowerOutput = output.toLowerCase();
+  return NETWORK_ERROR_PATTERNS.some((pattern) => lowerOutput.includes(pattern.toLowerCase()));
 }
 
 /**
@@ -141,23 +139,23 @@ export function isNetworkRelatedError(output: string): boolean {
  * 需要给用户更具体的恢复路径，而不是只显示泛化的网络错误。
  */
 export function isChromeForTestingInstallFailure(command: string, output: string): boolean {
-    const normalizedCommand = command.trim().toLowerCase();
-    const isAgentBrowserInstall = /^(?:npx\s+)?agent-browser(?:\.cmd|\.exe)?\s+install\b/.test(
-        normalizedCommand
-    );
-    if (!isAgentBrowserInstall) return false;
+  const normalizedCommand = command.trim().toLowerCase();
+  const isAgentBrowserInstall = /^(?:npx\s+)?agent-browser(?:\.cmd|\.exe)?\s+install\b/.test(
+    normalizedCommand
+  );
+  if (!isAgentBrowserInstall) return false;
 
-    const lowerOutput = output.toLowerCase();
-    const hasChromeForTestingSignal = [
-        'chrome for testing',
-        'chrome-for-testing',
-        'googlechromelabs.github.io/chrome-for-testing',
-        'last-known-good-versions-with-downloads',
-        'storage.googleapis.com/chrome-for-testing-public',
-        'failed to fetch version info',
-    ].some(pattern => lowerOutput.includes(pattern));
+  const lowerOutput = output.toLowerCase();
+  const hasChromeForTestingSignal = [
+    'chrome for testing',
+    'chrome-for-testing',
+    'googlechromelabs.github.io/chrome-for-testing',
+    'last-known-good-versions-with-downloads',
+    'storage.googleapis.com/chrome-for-testing-public',
+    'failed to fetch version info',
+  ].some((pattern) => lowerOutput.includes(pattern));
 
-    return hasChromeForTestingSignal || isNetworkRelatedError(output);
+  return hasChromeForTestingSignal || isNetworkRelatedError(output);
 }
 
 /**
@@ -170,10 +168,8 @@ export function isChromeForTestingInstallFailure(command: string, output: string
  * @returns 是否为「已安装」场景
  */
 function isAlreadyInstalledOutput(output: string): boolean {
-    const lowerOutput = output.toLowerCase();
-    return ALREADY_INSTALLED_PATTERNS.some(
-        pattern => lowerOutput.includes(pattern.toLowerCase())
-    );
+  const lowerOutput = output.toLowerCase();
+  return ALREADY_INSTALLED_PATTERNS.some((pattern) => lowerOutput.includes(pattern.toLowerCase()));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -190,35 +186,39 @@ function isAlreadyInstalledOutput(output: string): boolean {
  * @returns 检测到的包管理器信息，无可用时返回 null
  */
 export async function detectWindowsPackageManager(
-    shellExec: ShellExecutor
+  shellExec: ShellExecutor
 ): Promise<PackageManagerInfo | null> {
-    // 按优先级依次检测
-    const candidates: Array<{ name: string; testCmd: string; installPrefix: string }> = [
-        { name: 'scoop', testCmd: 'scoop --version', installPrefix: 'scoop install' },
-        { name: 'winget', testCmd: 'winget --version', installPrefix: 'winget install --accept-package-agreements --accept-source-agreements' },
-        { name: 'choco', testCmd: 'choco --version', installPrefix: 'choco install -y' },
-    ];
+  // 按优先级依次检测
+  const candidates: Array<{ name: string; testCmd: string; installPrefix: string }> = [
+    { name: 'scoop', testCmd: 'scoop --version', installPrefix: 'scoop install' },
+    {
+      name: 'winget',
+      testCmd: 'winget --version',
+      installPrefix: 'winget install --accept-package-agreements --accept-source-agreements',
+    },
+    { name: 'choco', testCmd: 'choco --version', installPrefix: 'choco install -y' },
+  ];
 
-    for (const candidate of candidates) {
-        try {
-            const result = await shellExec({
-                command: candidate.testCmd,
-                workdir: '.',
-                timeout: 10,
-                background: false,
-            });
-            if (result.exitCode === 0) {
-                logger.debug(
-                    `[DependencyInstaller] 检测到包管理器: ${candidate.name} (${result.stdout.trim()})`
-                );
-                return { name: candidate.name, installPrefix: candidate.installPrefix };
-            }
-        } catch {
-            // 命令不存在 → 跳过
-        }
+  for (const candidate of candidates) {
+    try {
+      const result = await shellExec({
+        command: candidate.testCmd,
+        workdir: '.',
+        timeout: 10,
+        background: false,
+      });
+      if (result.exitCode === 0) {
+        logger.debug(
+          `[DependencyInstaller] 检测到包管理器: ${candidate.name} (${result.stdout.trim()})`
+        );
+        return { name: candidate.name, installPrefix: candidate.installPrefix };
+      }
+    } catch {
+      // 命令不存在 → 跳过
     }
+  }
 
-    return null;
+  return null;
 }
 
 /**
@@ -228,15 +228,15 @@ export async function detectWindowsPackageManager(
  * 回退到 process.platform（Node.js 测试环境）。
  */
 function isWindowsPlatform(): boolean {
-    if (typeof navigator !== 'undefined' && navigator.userAgent) {
-        return navigator.userAgent.toLowerCase().includes('win');
-    }
-    // Node.js 测试环境回退
-    const nodeProcess = (globalThis as { process?: { platform?: string } }).process;
-    if (nodeProcess?.platform) {
-        return nodeProcess.platform === 'win32';
-    }
-    return true; // 安全默认值：假定 Windows
+  if (typeof navigator !== 'undefined' && navigator.userAgent) {
+    return navigator.userAgent.toLowerCase().includes('win');
+  }
+  // Node.js 测试环境回退
+  const nodeProcess = (globalThis as { process?: { platform?: string } }).process;
+  if (nodeProcess?.platform) {
+    return nodeProcess.platform === 'win32';
+  }
+  return true; // 安全默认值：假定 Windows
 }
 
 /**
@@ -247,24 +247,22 @@ function isWindowsPlatform(): boolean {
  * @returns 是否已安装
  */
 export async function isCommandAvailable(
-    command: string,
-    shellExec: ShellExecutor
+  command: string,
+  shellExec: ShellExecutor
 ): Promise<boolean> {
-    try {
-        const checkCmd = isWindowsPlatform()
-            ? `where ${command}`
-            : `which ${command}`;
+  try {
+    const checkCmd = isWindowsPlatform() ? `where ${command}` : `which ${command}`;
 
-        const result = await shellExec({
-            command: checkCmd,
-            workdir: '.',
-            timeout: 10,
-            background: false,
-        });
-        return result.exitCode === 0;
-    } catch {
-        return false;
-    }
+    const result = await shellExec({
+      command: checkCmd,
+      workdir: '.',
+      timeout: 10,
+      background: false,
+    });
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -282,29 +280,29 @@ export async function isCommandAvailable(
  * @returns 是否已安装
  */
 export async function isCommandAvailableWithFreshPath(
-    command: string,
-    shellExec: ShellExecutor,
-    windowsExePaths?: string[]
+  command: string,
+  shellExec: ShellExecutor,
+  windowsExePaths?: string[]
 ): Promise<boolean> {
-    try {
-        if (isWindowsPlatform()) {
-            // 策略 1：从注册表获取最新 PATH + where.exe
-            const whereResult = await findCommandViaFreshPath(command, shellExec);
-            if (whereResult) return true;
+  try {
+    if (isWindowsPlatform()) {
+      // 策略 1：从注册表获取最新 PATH + where.exe
+      const whereResult = await findCommandViaFreshPath(command, shellExec);
+      if (whereResult) return true;
 
-            // 策略 2：检查已知安装路径（仅当提供了 windowsExePaths 时）
-            if (windowsExePaths && windowsExePaths.length > 0) {
-                return await checkWindowsKnownPaths(windowsExePaths, shellExec);
-            }
+      // 策略 2：检查已知安装路径（仅当提供了 windowsExePaths 时）
+      if (windowsExePaths && windowsExePaths.length > 0) {
+        return await checkWindowsKnownPaths(windowsExePaths, shellExec);
+      }
 
-            return false;
-        }
-
-        // 非 Windows: 标准 which
-        return await isCommandAvailable(command, shellExec);
-    } catch {
-        return false;
+      return false;
     }
+
+    // 非 Windows: 标准 which
+    return await isCommandAvailable(command, shellExec);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -318,24 +316,24 @@ export async function isCommandAvailableWithFreshPath(
  * @returns 是否已安装
  */
 export async function isNpmPackageInstalled(
-    packageName: string,
-    shellExec: ShellExecutor
+  packageName: string,
+  shellExec: ShellExecutor
 ): Promise<boolean> {
-    try {
-        // 先确认 npm 可用
-        const npmAvailable = await isCommandAvailable('npm', shellExec);
-        if (!npmAvailable) return false;
+  try {
+    // 先确认 npm 可用
+    const npmAvailable = await isCommandAvailable('npm', shellExec);
+    if (!npmAvailable) return false;
 
-        const result = await shellExec({
-            command: `npm list -g ${packageName} --depth=0`,
-            workdir: '.',
-            timeout: 15,
-            background: false,
-        });
-        return result.exitCode === 0 && result.stdout.includes(packageName);
-    } catch {
-        return false;
-    }
+    const result = await shellExec({
+      command: `npm list -g ${packageName} --depth=0`,
+      workdir: '.',
+      timeout: 15,
+      background: false,
+    });
+    return result.exitCode === 0 && result.stdout.includes(packageName);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -345,28 +343,28 @@ export async function isNpmPackageInstalled(
  * 改为检查 stdout 内容——where.exe 成功时输出完整路径。
  */
 async function findCommandViaFreshPath(
-    command: string,
-    shellExec: ShellExecutor
+  command: string,
+  shellExec: ShellExecutor
 ): Promise<boolean> {
-    try {
-        const psScript = [
-            `$m = [Environment]::GetEnvironmentVariable('Path','Machine')`,
-            `$u = [Environment]::GetEnvironmentVariable('Path','User')`,
-            `$env:Path = $m + ';' + $u`,
-            `where.exe ${command}`,
-        ].join('; ');
+  try {
+    const psScript = [
+      `$m = [Environment]::GetEnvironmentVariable('Path','Machine')`,
+      `$u = [Environment]::GetEnvironmentVariable('Path','User')`,
+      `$env:Path = $m + ';' + $u`,
+      `where.exe ${command}`,
+    ].join('; ');
 
-        const result = await shellExec({
-            command: `powershell -NoProfile -Command "& {${psScript}}"`,
-            workdir: '.',
-            timeout: 15,
-            background: false,
-        });
-        const output = result.stdout.trim();
-        return output.length > 0 && (output.includes('\\') || output.includes('.exe'));
-    } catch {
-        return false;
-    }
+    const result = await shellExec({
+      command: `powershell -NoProfile -Command "& {${psScript}}"`,
+      workdir: '.',
+      timeout: 15,
+      background: false,
+    });
+    const output = result.stdout.trim();
+    return output.length > 0 && (output.includes('\\') || output.includes('.exe'));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -379,29 +377,29 @@ async function findCommandViaFreshPath(
  * 不使用 cmd.exe if exist：Tauri 的 shell 层会吃掉嵌套引号导致 stdout 为空。
  */
 async function checkWindowsKnownPaths(
-    exePaths: string[],
-    shellExec: ShellExecutor
+  exePaths: string[],
+  shellExec: ShellExecutor
 ): Promise<boolean> {
-    for (const exePath of exePaths) {
-        try {
-            // PowerShell Test-Path 原生支持通配符和含空格路径
-            // 单引号包裹避免变量展开和特殊字符问题
-            const result = await shellExec({
-                command: `powershell -NoProfile -Command "Test-Path '${exePath}'"`,
-                workdir: '.',
-                timeout: 5,
-                background: false,
-            });
-            const output = result.stdout.trim().toLowerCase();
-            if (output === 'true') {
-                return true;
-            }
-        } catch {
-            // 单条路径检测失败不影响后续
-            continue;
-        }
+  for (const exePath of exePaths) {
+    try {
+      // PowerShell Test-Path 原生支持通配符和含空格路径
+      // 单引号包裹避免变量展开和特殊字符问题
+      const result = await shellExec({
+        command: `powershell -NoProfile -Command "Test-Path '${exePath}'"`,
+        workdir: '.',
+        timeout: 5,
+        background: false,
+      });
+      const output = result.stdout.trim().toLowerCase();
+      if (output === 'true') {
+        return true;
+      }
+    } catch {
+      // 单条路径检测失败不影响后续
+      continue;
     }
-    return false;
+  }
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -419,74 +417,74 @@ async function checkWindowsKnownPaths(
  * @returns 安装结果
  */
 export async function installNpmPackage(
-    packageName: string,
-    shellExec: ShellExecutor
+  packageName: string,
+  shellExec: ShellExecutor
 ): Promise<InstallResult> {
-    // 1. 检测 npm 是否可用
-    const npmAvailable = await isCommandAvailable('npm', shellExec);
-    if (!npmAvailable) {
-        return {
-            success: false,
-            message: 'npm was not detected. Install Node.js first (https://nodejs.org/).',
-            isNetworkError: false,
-        };
+  // 1. 检测 npm 是否可用
+  const npmAvailable = await isCommandAvailable('npm', shellExec);
+  if (!npmAvailable) {
+    return {
+      success: false,
+      message: 'npm was not detected. Install Node.js first (https://nodejs.org/).',
+      isNetworkError: false,
+    };
+  }
+
+  // 2. 检测是否已安装
+  try {
+    const listResult = await shellExec({
+      command: `npm list -g ${packageName} --depth=0`,
+      workdir: '.',
+      timeout: 15,
+      background: false,
+    });
+    if (listResult.exitCode === 0 && listResult.stdout.includes(packageName)) {
+      return {
+        success: true,
+        message: `${packageName} is already installed`,
+        isNetworkError: false,
+      };
+    }
+  } catch {
+    // 未安装，继续安装流程
+  }
+
+  // 3. 执行安装
+  try {
+    const result = await shellExec({
+      command: `npm install -g ${packageName}`,
+      workdir: '.',
+      timeout: 120,
+      background: false,
+    });
+
+    if (result.exitCode === 0) {
+      return {
+        success: true,
+        message: `${packageName} installed successfully`,
+        isNetworkError: false,
+      };
     }
 
-    // 2. 检测是否已安装
-    try {
-        const listResult = await shellExec({
-            command: `npm list -g ${packageName} --depth=0`,
-            workdir: '.',
-            timeout: 15,
-            background: false,
-        });
-        if (listResult.exitCode === 0 && listResult.stdout.includes(packageName)) {
-            return {
-                success: true,
-                message: `${packageName} is already installed`,
-                isNetworkError: false,
-            };
-        }
-    } catch {
-        // 未安装，继续安装流程
-    }
+    // 安装失败 → 分析错误类型
+    const combinedOutput = `${result.stdout}\n${result.stderr}`;
+    const networkError = isNetworkRelatedError(combinedOutput);
 
-    // 3. 执行安装
-    try {
-        const result = await shellExec({
-            command: `npm install -g ${packageName}`,
-            workdir: '.',
-            timeout: 120,
-            background: false,
-        });
-
-        if (result.exitCode === 0) {
-            return {
-                success: true,
-                message: `${packageName} installed successfully`,
-                isNetworkError: false,
-            };
-        }
-
-        // 安装失败 → 分析错误类型
-        const combinedOutput = `${result.stdout}\n${result.stderr}`;
-        const networkError = isNetworkRelatedError(combinedOutput);
-
-        return {
-            success: false,
-            message: networkError
-                ? `${packageName} installation failed due to a network error. Check the connection and try again.`
-                : `${packageName} installation failed: ${result.stderr.slice(0, 200)}`,
-            isNetworkError: networkError,
-        };
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return {
-            success: false,
-            message: `${packageName} installation error: ${errorMsg}`,
-            isNetworkError: isNetworkRelatedError(errorMsg),
-        };
-    }
+    return {
+      success: false,
+      message: networkError
+        ? `${packageName} installation failed due to a network error. Check the connection and try again.`
+        : `${packageName} installation failed: ${result.stderr.slice(0, 200)}`,
+      isNetworkError: networkError,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      message: `${packageName} installation error: ${errorMsg}`,
+      isNetworkError: isNetworkRelatedError(errorMsg),
+    };
+  }
 }
 
 /**
@@ -501,122 +499,123 @@ export async function installNpmPackage(
  * @returns 安装结果
  */
 export async function installSystemTool(
-    toolInfo: SystemToolInfo,
-    platform: 'windows' | 'mac' | 'linux',
-    shellExec: ShellExecutor
+  toolInfo: SystemToolInfo,
+  platform: 'windows' | 'mac' | 'linux',
+  shellExec: ShellExecutor
 ): Promise<InstallResult> {
-    // 使用 detectCommand（如果存在）替代 command 进行检测
-    // 解决如 convert（Windows 内置磁盘工具）与 ImageMagick 的命名冲突
-    const checkCommand = toolInfo.detectCommand ?? toolInfo.command;
+  // 使用 detectCommand（如果存在）替代 command 进行检测
+  // 解决如 convert（Windows 内置磁盘工具）与 ImageMagick 的命名冲突
+  const checkCommand = toolInfo.detectCommand ?? toolInfo.command;
 
-    // 1. 检测工具是否已安装
-    const alreadyInstalled = await isCommandAvailable(checkCommand, shellExec);
-    if (alreadyInstalled) {
-        return {
-            success: true,
-            message: `${toolInfo.packageName} is already installed`,
-            isNetworkError: false,
-        };
+  // 1. 检测工具是否已安装
+  const alreadyInstalled = await isCommandAvailable(checkCommand, shellExec);
+  if (alreadyInstalled) {
+    return {
+      success: true,
+      message: `${toolInfo.packageName} is already installed`,
+      isNetworkError: false,
+    };
+  }
+
+  // 2. 确定安装命令
+  let installCmd: string;
+
+  if (platform === 'windows') {
+    // Windows: 自动检测可用的包管理器
+    const pkgMgr = await detectWindowsPackageManager(shellExec);
+    if (!pkgMgr) {
+      return {
+        success: false,
+        message: `No package manager detected (scoop/winget/choco). Install scoop first: https://scoop.sh/`,
+        isNetworkError: false,
+      };
     }
 
-    // 2. 确定安装命令
-    let installCmd: string;
+    // 从预设命令中提取包名，用检测到的包管理器替换
+    installCmd = await buildWindowsInstallCommand(toolInfo, pkgMgr, shellExec);
+  } else if (platform === 'mac') {
+    // macOS: 使用 brew
+    const brewAvailable = await isCommandAvailable('brew', shellExec);
+    if (!brewAvailable) {
+      return {
+        success: false,
+        message: 'Homebrew was not detected. Install it first: https://brew.sh/',
+        isNetworkError: false,
+      };
+    }
+    installCmd = toolInfo.macInstall;
+  } else {
+    // Linux: 使用 apt（需要 sudo）
+    installCmd = toolInfo.linuxInstall;
+  }
 
-    if (platform === 'windows') {
-        // Windows: 自动检测可用的包管理器
-        const pkgMgr = await detectWindowsPackageManager(shellExec);
-        if (!pkgMgr) {
-            return {
-                success: false,
-                message: `No package manager detected (scoop/winget/choco). Install scoop first: https://scoop.sh/`,
-                isNetworkError: false,
-            };
-        }
+  // 3. 执行安装
+  try {
+    logger.debug(`[DependencyInstaller] 安装 ${toolInfo.packageName}: ${installCmd}`);
 
-        // 从预设命令中提取包名，用检测到的包管理器替换
-        installCmd = await buildWindowsInstallCommand(toolInfo, pkgMgr, shellExec);
-    } else if (platform === 'mac') {
-        // macOS: 使用 brew
-        const brewAvailable = await isCommandAvailable('brew', shellExec);
-        if (!brewAvailable) {
-            return {
-                success: false,
-                message: 'Homebrew was not detected. Install it first: https://brew.sh/',
-                isNetworkError: false,
-            };
-        }
-        installCmd = toolInfo.macInstall;
-    } else {
-        // Linux: 使用 apt（需要 sudo）
-        installCmd = toolInfo.linuxInstall;
+    const result = await shellExec({
+      command: installCmd,
+      workdir: '.',
+      timeout: 300, // 系统工具安装可能较慢
+      background: false,
+    });
+
+    const combinedOutput = `${result.stdout}\n${result.stderr}`;
+
+    if (result.exitCode === 0) {
+      // 安装命令执行成功 →
+      // 尝试用刷新 PATH 的方式验证命令是否可用
+      const verified = await isCommandAvailableWithFreshPath(
+        checkCommand,
+        shellExec,
+        toolInfo.windowsExePaths
+      );
+      return {
+        // 安装命令成功即视为成功（PATH 刷新后可能需要重启应用才生效）
+        success: true,
+        message: verified
+          ? `${toolInfo.packageName} installed successfully`
+          : `${toolInfo.packageName} installed successfully; restart the app for it to take effect`,
+        isNetworkError: false,
+      };
     }
 
-    // 3. 执行安装
-    try {
-        logger.debug(
-            `[DependencyInstaller] 安装 ${toolInfo.packageName}: ${installCmd}`
-        );
-
-        const result = await shellExec({
-            command: installCmd,
-            workdir: '.',
-            timeout: 300, // 系统工具安装可能较慢
-            background: false,
-        });
-
-        const combinedOutput = `${result.stdout}\n${result.stderr}`;
-
-        if (result.exitCode === 0) {
-            // 安装命令执行成功 →
-            // 尝试用刷新 PATH 的方式验证命令是否可用
-            const verified = await isCommandAvailableWithFreshPath(
-                checkCommand, shellExec, toolInfo.windowsExePaths
-            );
-            return {
-                // 安装命令成功即视为成功（PATH 刷新后可能需要重启应用才生效）
-                success: true,
-                message: verified
-                    ? `${toolInfo.packageName} installed successfully`
-                    : `${toolInfo.packageName} installed successfully; restart the app for it to take effect`,
-                isNetworkError: false,
-            };
-        }
-
-        // exit code 非零 → 检测是否为「已安装」场景
-        if (isAlreadyInstalledOutput(combinedOutput)) {
-            return {
-                success: true,
-                message: `${toolInfo.packageName} is already installed`,
-                isNetworkError: false,
-            };
-        }
-
-        // 真正的安装失败 → 分析错误类型
-        const networkError = isNetworkRelatedError(combinedOutput);
-
-        // 优先取 stderr，为空时取 stdout 的头 200 字符作为错误描述
-        const errorDetail = (result.stderr.trim() || result.stdout.trim()).slice(0, 200);
-
-        // 非网络错误 + 有 fallbackUrl → 附带手动下载链接引导用户
-        const fallbackHint = !networkError && toolInfo.fallbackUrl
-            ? `\nDownload and install it manually from the official website: ${toolInfo.fallbackUrl}`
-            : '';
-
-        return {
-            success: false,
-            message: networkError
-                ? `${toolInfo.packageName} installation failed due to a network error. Check the connection and try again.`
-                : `${toolInfo.packageName} installation failed: ${errorDetail || 'Unknown error'}${fallbackHint}`,
-            isNetworkError: networkError,
-        };
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return {
-            success: false,
-            message: `${toolInfo.packageName} installation error: ${errorMsg}`,
-            isNetworkError: isNetworkRelatedError(errorMsg),
-        };
+    // exit code 非零 → 检测是否为「已安装」场景
+    if (isAlreadyInstalledOutput(combinedOutput)) {
+      return {
+        success: true,
+        message: `${toolInfo.packageName} is already installed`,
+        isNetworkError: false,
+      };
     }
+
+    // 真正的安装失败 → 分析错误类型
+    const networkError = isNetworkRelatedError(combinedOutput);
+
+    // 优先取 stderr，为空时取 stdout 的头 200 字符作为错误描述
+    const errorDetail = (result.stderr.trim() || result.stdout.trim()).slice(0, 200);
+
+    // 非网络错误 + 有 fallbackUrl → 附带手动下载链接引导用户
+    const fallbackHint =
+      !networkError && toolInfo.fallbackUrl
+        ? `\nDownload and install it manually from the official website: ${toolInfo.fallbackUrl}`
+        : '';
+
+    return {
+      success: false,
+      message: networkError
+        ? `${toolInfo.packageName} installation failed due to a network error. Check the connection and try again.`
+        : `${toolInfo.packageName} installation failed: ${errorDetail || 'Unknown error'}${fallbackHint}`,
+      isNetworkError: networkError,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      message: `${toolInfo.packageName} installation error: ${errorMsg}`,
+      isNetworkError: isNetworkRelatedError(errorMsg),
+    };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -633,26 +632,28 @@ export async function installSystemTool(
  * @returns 是否已安装
  */
 export async function isCargoPackageInstalled(
-    packageName: string,
-    shellExec: ShellExecutor
+  packageName: string,
+  shellExec: ShellExecutor
 ): Promise<boolean> {
-    try {
-        const cargoAvailable = await isCommandAvailable('cargo', shellExec);
-        if (!cargoAvailable) return false;
+  try {
+    const cargoAvailable = await isCommandAvailable('cargo', shellExec);
+    if (!cargoAvailable) return false;
 
-        const result = await shellExec({
-            command: 'cargo install --list',
-            workdir: '.',
-            timeout: 15,
-            background: false,
-        });
-        // cargo install --list 输出格式：包名在行首，后续子条目缩进
-        // 如 "bat v0.24.0:\n    bat" → 检查行首是否以包名开头
-        return result.exitCode === 0 &&
-            result.stdout.split('\n').some(line => line.startsWith(`${packageName} `));
-    } catch {
-        return false;
-    }
+    const result = await shellExec({
+      command: 'cargo install --list',
+      workdir: '.',
+      timeout: 15,
+      background: false,
+    });
+    // cargo install --list 输出格式：包名在行首，后续子条目缩进
+    // 如 "bat v0.24.0:\n    bat" → 检查行首是否以包名开头
+    return (
+      result.exitCode === 0 &&
+      result.stdout.split('\n').some((line) => line.startsWith(`${packageName} `))
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -666,64 +667,64 @@ export async function isCargoPackageInstalled(
  * @returns 安装结果
  */
 export async function installCargoPackage(
-    packageName: string,
-    shellExec: ShellExecutor
+  packageName: string,
+  shellExec: ShellExecutor
 ): Promise<InstallResult> {
-    // 1. 检测 cargo 是否可用
-    const cargoAvailable = await isCommandAvailable('cargo', shellExec);
-    if (!cargoAvailable) {
-        return {
-            success: false,
-            message: 'Cargo was not detected. Install the Rust toolchain first (https://rustup.rs/).',
-            isNetworkError: false,
-        };
+  // 1. 检测 cargo 是否可用
+  const cargoAvailable = await isCommandAvailable('cargo', shellExec);
+  if (!cargoAvailable) {
+    return {
+      success: false,
+      message: 'Cargo was not detected. Install the Rust toolchain first (https://rustup.rs/).',
+      isNetworkError: false,
+    };
+  }
+
+  // 2. 检测是否已安装
+  const alreadyInstalled = await isCargoPackageInstalled(packageName, shellExec);
+  if (alreadyInstalled) {
+    return {
+      success: true,
+      message: `${packageName} is already installed`,
+      isNetworkError: false,
+    };
+  }
+
+  // 3. 执行安装（cargo install 从源码编译，超时设大一些）
+  try {
+    const result = await shellExec({
+      command: `cargo install ${packageName}`,
+      workdir: '.',
+      timeout: 600, // cargo 编译可能较慢
+      background: false,
+    });
+
+    if (result.exitCode === 0) {
+      return {
+        success: true,
+        message: `${packageName} installed successfully`,
+        isNetworkError: false,
+      };
     }
 
-    // 2. 检测是否已安装
-    const alreadyInstalled = await isCargoPackageInstalled(packageName, shellExec);
-    if (alreadyInstalled) {
-        return {
-            success: true,
-            message: `${packageName} is already installed`,
-            isNetworkError: false,
-        };
-    }
+    const combinedOutput = `${result.stdout}\n${result.stderr}`;
+    const networkError = isNetworkRelatedError(combinedOutput);
 
-    // 3. 执行安装（cargo install 从源码编译，超时设大一些）
-    try {
-        const result = await shellExec({
-            command: `cargo install ${packageName}`,
-            workdir: '.',
-            timeout: 600, // cargo 编译可能较慢
-            background: false,
-        });
-
-        if (result.exitCode === 0) {
-            return {
-                success: true,
-                message: `${packageName} installed successfully`,
-                isNetworkError: false,
-            };
-        }
-
-        const combinedOutput = `${result.stdout}\n${result.stderr}`;
-        const networkError = isNetworkRelatedError(combinedOutput);
-
-        return {
-            success: false,
-            message: networkError
-                ? `${packageName} installation failed due to a network error. Check the connection and try again.`
-                : `${packageName} installation failed: ${result.stderr.slice(0, 200)}`,
-            isNetworkError: networkError,
-        };
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return {
-            success: false,
-            message: `${packageName} installation error: ${errorMsg}`,
-            isNetworkError: isNetworkRelatedError(errorMsg),
-        };
-    }
+    return {
+      success: false,
+      message: networkError
+        ? `${packageName} installation failed due to a network error. Check the connection and try again.`
+        : `${packageName} installation failed: ${result.stderr.slice(0, 200)}`,
+      isNetworkError: networkError,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      message: `${packageName} installation error: ${errorMsg}`,
+      isNetworkError: isNetworkRelatedError(errorMsg),
+    };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -741,20 +742,20 @@ export async function installCargoPackage(
  * @returns 是否已安装
  */
 export async function isGoPackageInstalled(
-    modulePath: string,
-    shellExec: ShellExecutor
+  modulePath: string,
+  shellExec: ShellExecutor
 ): Promise<boolean> {
-    try {
-        const goAvailable = await isCommandAvailable('go', shellExec);
-        if (!goAvailable) return false;
+  try {
+    const goAvailable = await isCommandAvailable('go', shellExec);
+    if (!goAvailable) return false;
 
-        // 从模块路径提取二进制名（路径最后一段）
-        // 如 github.com/golangci/golangci-lint/cmd/golangci-lint → golangci-lint
-        const binaryName = modulePath.split('/').pop() ?? modulePath;
-        return await isCommandAvailable(binaryName, shellExec);
-    } catch {
-        return false;
-    }
+    // 从模块路径提取二进制名（路径最后一段）
+    // 如 github.com/golangci/golangci-lint/cmd/golangci-lint → golangci-lint
+    const binaryName = modulePath.split('/').pop() ?? modulePath;
+    return await isCommandAvailable(binaryName, shellExec);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -768,64 +769,64 @@ export async function isGoPackageInstalled(
  * @returns 安装结果
  */
 export async function installGoPackage(
-    modulePath: string,
-    shellExec: ShellExecutor
+  modulePath: string,
+  shellExec: ShellExecutor
 ): Promise<InstallResult> {
-    // 1. 检测 go 是否可用
-    const goAvailable = await isCommandAvailable('go', shellExec);
-    if (!goAvailable) {
-        return {
-            success: false,
-            message: 'Go was not detected. Install the Go SDK first (https://go.dev/dl/).',
-            isNetworkError: false,
-        };
+  // 1. 检测 go 是否可用
+  const goAvailable = await isCommandAvailable('go', shellExec);
+  if (!goAvailable) {
+    return {
+      success: false,
+      message: 'Go was not detected. Install the Go SDK first (https://go.dev/dl/).',
+      isNetworkError: false,
+    };
+  }
+
+  // 2. 检测是否已安装
+  const alreadyInstalled = await isGoPackageInstalled(modulePath, shellExec);
+  if (alreadyInstalled) {
+    return {
+      success: true,
+      message: `${modulePath} is already installed`,
+      isNetworkError: false,
+    };
+  }
+
+  // 3. 执行安装（默认使用 @latest 版本）
+  try {
+    const result = await shellExec({
+      command: `go install ${modulePath}@latest`,
+      workdir: '.',
+      timeout: 300,
+      background: false,
+    });
+
+    if (result.exitCode === 0) {
+      return {
+        success: true,
+        message: `${modulePath} installed successfully`,
+        isNetworkError: false,
+      };
     }
 
-    // 2. 检测是否已安装
-    const alreadyInstalled = await isGoPackageInstalled(modulePath, shellExec);
-    if (alreadyInstalled) {
-        return {
-            success: true,
-            message: `${modulePath} is already installed`,
-            isNetworkError: false,
-        };
-    }
+    const combinedOutput = `${result.stdout}\n${result.stderr}`;
+    const networkError = isNetworkRelatedError(combinedOutput);
 
-    // 3. 执行安装（默认使用 @latest 版本）
-    try {
-        const result = await shellExec({
-            command: `go install ${modulePath}@latest`,
-            workdir: '.',
-            timeout: 300,
-            background: false,
-        });
-
-        if (result.exitCode === 0) {
-            return {
-                success: true,
-                message: `${modulePath} installed successfully`,
-                isNetworkError: false,
-            };
-        }
-
-        const combinedOutput = `${result.stdout}\n${result.stderr}`;
-        const networkError = isNetworkRelatedError(combinedOutput);
-
-        return {
-            success: false,
-            message: networkError
-                ? `${modulePath} installation failed due to a network error. Check the connection and try again.`
-                : `${modulePath} installation failed: ${result.stderr.slice(0, 200)}`,
-            isNetworkError: networkError,
-        };
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        return {
-            success: false,
-            message: `${modulePath} installation error: ${errorMsg}`,
-            isNetworkError: isNetworkRelatedError(errorMsg),
-        };
-    }
+    return {
+      success: false,
+      message: networkError
+        ? `${modulePath} installation failed due to a network error. Check the connection and try again.`
+        : `${modulePath} installation failed: ${result.stderr.slice(0, 200)}`,
+      isNetworkError: networkError,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    return {
+      success: false,
+      message: `${modulePath} installation error: ${errorMsg}`,
+      isNetworkError: isNetworkRelatedError(errorMsg),
+    };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -854,53 +855,51 @@ export async function installGoPackage(
  * 仅在预设包管理器不可用时才回退到检测到的备选包管理器。
  */
 async function buildWindowsInstallCommand(
-    toolInfo: SystemToolInfo,
-    detectedPkgMgr: PackageManagerInfo,
-    shellExec: ShellExecutor
+  toolInfo: SystemToolInfo,
+  detectedPkgMgr: PackageManagerInfo,
+  shellExec: ShellExecutor
 ): Promise<string> {
-    const presetCmd = toolInfo.windowsInstall;
+  const presetCmd = toolInfo.windowsInstall;
 
-    // 提取预设命令使用的包管理器名称
-    const presetMatch = presetCmd.match(/^(scoop|choco|winget)\s+install/i);
-    if (!presetMatch) {
-        // 无法解析格式，直接使用预设命令
-        return presetCmd;
-    }
-
-    const presetMgr = (presetMatch[1] ?? '').toLowerCase();
-
-    // 如果预设包管理器与检测到的一致 → 使用预设命令
-    if (presetMgr === detectedPkgMgr.name) {
-        // winget 需追加 --accept 参数
-        if (presetMgr === 'winget' && !presetCmd.includes('--accept')) {
-            return presetCmd.replace(
-                'winget install',
-                'winget install --accept-package-agreements --accept-source-agreements'
-            );
-        }
-        return presetCmd;
-    }
-
-    // 预设包管理器与检测到的不同 → 检查预设包管理器是否可用
-    const presetAvailable = await isCommandAvailable(presetMgr, shellExec);
-    if (presetAvailable) {
-        // 预设包管理器可用 → 使用预设命令（包名匹配更准确）
-        return presetCmd;
-    }
-
-    // 预设包管理器不可用 → 回退到检测到的包管理器
-    // 此时只能做最佳努力替换包名（可能不兼容）
-    const packageNameMatch = presetCmd.match(
-        /(?:scoop|choco|winget)\s+install\s+(?:-\S+\s+)*(.+)/i
-    );
-    if (packageNameMatch?.[1]) {
-        const pkgName = packageNameMatch[1].trim();
-        logger.warn(
-            `[DependencyInstaller] 预设包管理器 ${presetMgr} 不可用，` +
-            `回退到 ${detectedPkgMgr.name}（包名 ${pkgName} 可能不兼容）`
-        );
-        return `${detectedPkgMgr.installPrefix} ${pkgName}`;
-    }
-
+  // 提取预设命令使用的包管理器名称
+  const presetMatch = presetCmd.match(/^(scoop|choco|winget)\s+install/i);
+  if (!presetMatch) {
+    // 无法解析格式，直接使用预设命令
     return presetCmd;
+  }
+
+  const presetMgr = (presetMatch[1] ?? '').toLowerCase();
+
+  // 如果预设包管理器与检测到的一致 → 使用预设命令
+  if (presetMgr === detectedPkgMgr.name) {
+    // winget 需追加 --accept 参数
+    if (presetMgr === 'winget' && !presetCmd.includes('--accept')) {
+      return presetCmd.replace(
+        'winget install',
+        'winget install --accept-package-agreements --accept-source-agreements'
+      );
+    }
+    return presetCmd;
+  }
+
+  // 预设包管理器与检测到的不同 → 检查预设包管理器是否可用
+  const presetAvailable = await isCommandAvailable(presetMgr, shellExec);
+  if (presetAvailable) {
+    // 预设包管理器可用 → 使用预设命令（包名匹配更准确）
+    return presetCmd;
+  }
+
+  // 预设包管理器不可用 → 回退到检测到的包管理器
+  // 此时只能做最佳努力替换包名（可能不兼容）
+  const packageNameMatch = presetCmd.match(/(?:scoop|choco|winget)\s+install\s+(?:-\S+\s+)*(.+)/i);
+  if (packageNameMatch?.[1]) {
+    const pkgName = packageNameMatch[1].trim();
+    logger.warn(
+      `[DependencyInstaller] 预设包管理器 ${presetMgr} 不可用，` +
+        `回退到 ${detectedPkgMgr.name}（包名 ${pkgName} 可能不兼容）`
+    );
+    return `${detectedPkgMgr.installPrefix} ${pkgName}`;
+  }
+
+  return presetCmd;
 }

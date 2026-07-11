@@ -28,54 +28,54 @@ const logger = getLogger('tool');
 
 /** grep 匹配条目 */
 interface GrepMatch {
-    file: string;
-    line: number;
-    content: string;
+  file: string;
+  line: number;
+  content: string;
 }
 
 /** grep 诊断信息 */
 interface GrepDiagnostics {
-    scannedFiles: number;
-    matchedFiles: number;
-    skippedDirs: string[];
-    skippedBinaryFiles: number;
-    skippedLargeFiles: number;
-    skippedMinifiedFiles: number;
-    skippedGlobFiles: number;
-    unreadableFiles: number;
-    parseFailedFiles: number;
-    probableBinaryFiles: number;
-    resultLimitReached: boolean;
-    outputLimitReached: boolean;
-    perFileLimitReached: boolean;
-    maxResults: number;
-    maxMatchesPerFile: number;
-    contextChars: number;
-    maxOutputTokens: number;
-    caseInsensitive: boolean;
+  scannedFiles: number;
+  matchedFiles: number;
+  skippedDirs: string[];
+  skippedBinaryFiles: number;
+  skippedLargeFiles: number;
+  skippedMinifiedFiles: number;
+  skippedGlobFiles: number;
+  unreadableFiles: number;
+  parseFailedFiles: number;
+  probableBinaryFiles: number;
+  resultLimitReached: boolean;
+  outputLimitReached: boolean;
+  perFileLimitReached: boolean;
+  maxResults: number;
+  maxMatchesPerFile: number;
+  contextChars: number;
+  maxOutputTokens: number;
+  caseInsensitive: boolean;
 }
 
 /** grep 返回体 */
 interface GrepSearchResult {
-    matches: GrepMatch[];
-    diagnostics: GrepDiagnostics;
+  matches: GrepMatch[];
+  diagnostics: GrepDiagnostics;
 }
 
 /** find 结果条目 */
 interface FindResult {
-    path: string;
-    fileType: string;
-    size: number;
+  path: string;
+  fileType: string;
+  size: number;
 }
 
 /** outline 符号条目 */
 interface OutlineItem {
-    name: string;
-    kind: string;
-    signature: string;
-    startLine: number;
-    endLine: number;
-    children: OutlineItem[];
+  name: string;
+  kind: string;
+  signature: string;
+  startLine: number;
+  endLine: number;
+  children: OutlineItem[];
 }
 
 // ==================== 命令规范化层 ====================
@@ -85,15 +85,25 @@ interface OutlineItem {
  * 与 search.rs 中 parse_outline 的 match 分支保持同步
  */
 const TREE_SITTER_SUPPORTED_EXTENSIONS: ReadonlySet<string> = new Set([
-    'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'rs', 'css', 'scss', 'json',
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'mjs',
+  'cjs',
+  'py',
+  'rs',
+  'css',
+  'scss',
+  'json',
 ]);
 
 /**
  * grep 查询正则元字符自动检测结果
  */
 interface NormalizedGrepQuery {
-    normalizedQuery: string;
-    normalizedIsRegex: boolean;
+  normalizedQuery: string;
+  normalizedIsRegex: boolean;
 }
 
 /**
@@ -113,22 +123,19 @@ interface NormalizedGrepQuery {
  * - 否则将 { 转义为 \{ （Rust regex 中 } 单独出现是安全的，但对称处理更稳健）
  */
 export function sanitizeRegexBraces(regex: string): string {
-    if (!regex) return regex;
+  if (!regex) return regex;
 
-    // 单遍扫描策略：逐个匹配未转义的 {，判断其后是否为合法量词格式
-    // 合法量词：{n}, {n,}, {n,m}（n/m 为非负整数）
-    // 如果不是量词 → 转义为 \{
-    return regex.replace(
-        /(?<!\\)\{(\d+(,\d*)?\})?/g,
-        (match) => {
-            // 如果匹配到完整的量词格式（如 {3}, {2,}, {1,5}），保留原样
-            if (/^\{\d+(,\d*)?\}$/.test(match)) {
-                return match;
-            }
-            // 孤立 { 或后面不是合法量词 → 转义
-            return '\\{';
-        }
-    );
+  // 单遍扫描策略：逐个匹配未转义的 {，判断其后是否为合法量词格式
+  // 合法量词：{n}, {n,}, {n,m}（n/m 为非负整数）
+  // 如果不是量词 → 转义为 \{
+  return regex.replace(/(?<!\\)\{(\d+(,\d*)?\})?/g, (match) => {
+    // 如果匹配到完整的量词格式（如 {3}, {2,}, {1,5}），保留原样
+    if (/^\{\d+(,\d*)?\}$/.test(match)) {
+      return match;
+    }
+    // 孤立 { 或后面不是合法量词 → 转义
+    return '\\{';
+  });
 }
 
 /**
@@ -152,33 +159,33 @@ export function sanitizeRegexBraces(regex: string): string {
  * - 正则模式的 query 会自动调用 sanitizeRegexBraces 转义非量词花括号
  */
 export function normalizeGrepQuery(
-    query: string,
-    isRegex: boolean | undefined
+  query: string,
+  isRegex: boolean | undefined
 ): NormalizedGrepQuery {
-    // 如果已经显式指定为正则模式，修正花括号后返回
-    if (isRegex === true) {
-        return { normalizedQuery: sanitizeRegexBraces(query), normalizedIsRegex: true };
-    }
+  // 如果已经显式指定为正则模式，修正花括号后返回
+  if (isRegex === true) {
+    return { normalizedQuery: sanitizeRegexBraces(query), normalizedIsRegex: true };
+  }
 
-    if (!query) {
-        return { normalizedQuery: query, normalizedIsRegex: isRegex ?? false };
-    }
-
-    // 检测高置信度的正则元字符模式
-    const regexIndicators: RegExp[] = [
-        /\|/,              // OR 语义管道符："foo|bar"
-        /\([^)]+\)/,       // 捕获组："(foo|bar)"
-        /\\[dwsbDWSB]/,   // 正则转义序列："\d+", "\w+", "\s", "\b"
-    ];
-
-    const hasRegexPattern = regexIndicators.some(pattern => pattern.test(query));
-
-    if (hasRegexPattern) {
-        // 自动提升为正则模式，并修正花括号
-        return { normalizedQuery: sanitizeRegexBraces(query), normalizedIsRegex: true };
-    }
-
+  if (!query) {
     return { normalizedQuery: query, normalizedIsRegex: isRegex ?? false };
+  }
+
+  // 检测高置信度的正则元字符模式
+  const regexIndicators: RegExp[] = [
+    /\|/, // OR 语义管道符："foo|bar"
+    /\([^)]+\)/, // 捕获组："(foo|bar)"
+    /\\[dwsbDWSB]/, // 正则转义序列："\d+", "\w+", "\s", "\b"
+  ];
+
+  const hasRegexPattern = regexIndicators.some((pattern) => pattern.test(query));
+
+  if (hasRegexPattern) {
+    // 自动提升为正则模式，并修正花括号
+    return { normalizedQuery: sanitizeRegexBraces(query), normalizedIsRegex: true };
+  }
+
+  return { normalizedQuery: query, normalizedIsRegex: isRegex ?? false };
 }
 
 /**
@@ -196,16 +203,16 @@ export function normalizeGrepQuery(
  * - Linux 风格绝对路径但非盘符（/usr/local/...，盘符只有单字母）
  */
 export function normalizeFilePath(inputPath: string): string {
-    if (!inputPath) return inputPath;
+  if (!inputPath) return inputPath;
 
-    // 匹配 /X/... 格式（X 为单个字母，后跟 /）
-    // 例: /f/AgentVis/src → f:/AgentVis/src
-    const gitBashMatch = inputPath.match(/^\/([a-zA-Z])\/(.*)$/);
-    if (gitBashMatch) {
-        return `${gitBashMatch[1] ?? ''}:/${gitBashMatch[2] ?? ''}`;
-    }
+  // 匹配 /X/... 格式（X 为单个字母，后跟 /）
+  // 例: /f/AgentVis/src → f:/AgentVis/src
+  const gitBashMatch = inputPath.match(/^\/([a-zA-Z])\/(.*)$/);
+  if (gitBashMatch) {
+    return `${gitBashMatch[1] ?? ''}:/${gitBashMatch[2] ?? ''}`;
+  }
 
-    return inputPath;
+  return inputPath;
 }
 
 /**
@@ -217,536 +224,560 @@ export function normalizeFilePath(inputPath: string): string {
  * @returns 提示文本（不支持时），或 null（扩展名在支持列表中，文件可能为空）
  */
 export function getUnsupportedLanguageHint(filePath: string): string | null {
-    // 提取文件扩展名
-    const lastDot = filePath.lastIndexOf('.');
-    if (lastDot === -1) {
-        return translate('tools.localSearch.noExtension');
-    }
+  // 提取文件扩展名
+  const lastDot = filePath.lastIndexOf('.');
+  if (lastDot === -1) {
+    return translate('tools.localSearch.noExtension');
+  }
 
-    const ext = filePath.substring(lastDot + 1).toLowerCase();
+  const ext = filePath.substring(lastDot + 1).toLowerCase();
 
-    if (TREE_SITTER_SUPPORTED_EXTENSIONS.has(ext)) {
-        // 在支持列表中但返回空 — 说明文件可能为空，不是语言问题
-        return null;
-    }
+  if (TREE_SITTER_SUPPORTED_EXTENSIONS.has(ext)) {
+    // 在支持列表中但返回空 — 说明文件可能为空，不是语言问题
+    return null;
+  }
 
-    return translate('tools.localSearch.unsupportedExtension', { ext });
+  return translate('tools.localSearch.unsupportedExtension', { ext });
 }
 
 // ==================== 工具 Schema ====================
 
 const SCHEMA: ToolSchema = {
-    name: 'local_search',
-    description: 'Search local files. Supports four modes: grep (text search), find (file lookup), outline (AST outline), and symbol (symbol lookup).',
-    parameters: {
-        type: 'object',
-        properties: {
-            mode: {
-                type: 'string',
-                description: 'Search mode: grep / find / outline / symbol.',
-                enum: ['grep', 'find', 'outline', 'symbol'],
-            },
-            query: {
-                type: 'string',
-                description: '[grep] Text or regular expression to search for.',
-            },
-            searchPath: {
-                type: 'string',
-                description: '[grep/find] Directory to search. Defaults to the workspace directory.',
-            },
-            isRegex: {
-                type: 'boolean',
-                description: '[grep] Whether to treat query as a regular expression. Defaults to false.',
-            },
-            caseInsensitive: {
-                type: 'boolean',
-                description: '[grep] Force case-insensitive matching. If omitted, smart-case is used.',
-            },
-            maxResults: {
-                type: 'number',
-                description: '[grep] Maximum number of matches to return. Defaults to 60; hard-capped by the backend.',
-            },
-            contextChars: {
-                type: 'number',
-                description: '[grep] Approximate characters per match snippet, centered on the match. Defaults to 220.',
-            },
-            maxMatchesPerFile: {
-                type: 'number',
-                description: '[grep] Maximum matches per file. Defaults to 20.',
-            },
-            maxOutputTokens: {
-                type: 'number',
-                description: '[grep] Approximate output token budget. Defaults to 6000; hard-capped by the backend.',
-            },
-            includes: {
-                type: 'array',
-                items: { type: 'string', description: 'Glob pattern.' },
-                description: '[grep/find] File filter globs, for example ["*.ts", "*.tsx"].',
-            },
-            pattern: {
-                type: 'string',
-                description: '[find] File name glob pattern, for example "*.module.css".',
-            },
-            maxDepth: {
-                type: 'number',
-                description: '[find] Maximum search depth.',
-            },
-            fileType: {
-                type: 'string',
-                description: '[find] Type filter: file / directory / any.',
-                enum: ['file', 'directory', 'any'],
-            },
-            path: {
-                type: 'string',
-                description: '[outline/symbol] Target file path.',
-            },
-            symbolName: {
-                type: 'string',
-                description: '[symbol] Fully qualified symbol name, for example "ClassName.methodName".',
-            },
-        },
-        required: ['mode'],
+  name: 'local_search',
+  description:
+    'Search local files. Supports four modes: grep (text search), find (file lookup), outline (AST outline), and symbol (symbol lookup).',
+  parameters: {
+    type: 'object',
+    properties: {
+      mode: {
+        type: 'string',
+        description: 'Search mode: grep / find / outline / symbol.',
+        enum: ['grep', 'find', 'outline', 'symbol'],
+      },
+      query: {
+        type: 'string',
+        description: '[grep] Text or regular expression to search for.',
+      },
+      searchPath: {
+        type: 'string',
+        description: '[grep/find] Directory to search. Defaults to the workspace directory.',
+      },
+      isRegex: {
+        type: 'boolean',
+        description: '[grep] Whether to treat query as a regular expression. Defaults to false.',
+      },
+      caseInsensitive: {
+        type: 'boolean',
+        description: '[grep] Force case-insensitive matching. If omitted, smart-case is used.',
+      },
+      maxResults: {
+        type: 'number',
+        description:
+          '[grep] Maximum number of matches to return. Defaults to 60; hard-capped by the backend.',
+      },
+      contextChars: {
+        type: 'number',
+        description:
+          '[grep] Approximate characters per match snippet, centered on the match. Defaults to 220.',
+      },
+      maxMatchesPerFile: {
+        type: 'number',
+        description: '[grep] Maximum matches per file. Defaults to 20.',
+      },
+      maxOutputTokens: {
+        type: 'number',
+        description:
+          '[grep] Approximate output token budget. Defaults to 6000; hard-capped by the backend.',
+      },
+      includes: {
+        type: 'array',
+        items: { type: 'string', description: 'Glob pattern.' },
+        description: '[grep/find] File filter globs, for example ["*.ts", "*.tsx"].',
+      },
+      pattern: {
+        type: 'string',
+        description: '[find] File name glob pattern, for example "*.module.css".',
+      },
+      maxDepth: {
+        type: 'number',
+        description: '[find] Maximum search depth.',
+      },
+      fileType: {
+        type: 'string',
+        description: '[find] Type filter: file / directory / any.',
+        enum: ['file', 'directory', 'any'],
+      },
+      path: {
+        type: 'string',
+        description: '[outline/symbol] Target file path.',
+      },
+      symbolName: {
+        type: 'string',
+        description: '[symbol] Fully qualified symbol name, for example "ClassName.methodName".',
+      },
     },
+    required: ['mode'],
+  },
 };
 
 // ==================== 工具实现 ====================
 
 class LocalSearchToolImpl implements Tool {
-    readonly schema = SCHEMA;
+  readonly schema = SCHEMA;
 
-    async execute(
-        params: Record<string, unknown>,
-        context: ToolExecutionContext
-    ): Promise<ToolResult> {
-        const mode = (params.mode ?? params.search_mode) as string;
+  async execute(
+    params: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    const mode = (params.mode ?? params.search_mode) as string;
 
-        if (!mode) {
-            return {
-                success: false,
-                content: translate('tools.localSearch.missingMode'),
-            };
-        }
-
-        try {
-            switch (mode) {
-                case 'grep':
-                    return await this.executeGrep(params, context);
-                case 'find':
-                    return await this.executeFind(params, context);
-                case 'outline':
-                    return await this.executeOutline(params, context);
-                case 'symbol':
-                    return await this.executeSymbol(params, context);
-                default:
-                    return {
-                        success: false,
-                        content: translate('tools.localSearch.unknownMode', { mode }),
-                    };
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            logger.error(`[LocalSearchTool] ${mode} 执行失败:`, errorMessage);
-            return {
-                success: false,
-                content: translate('tools.localSearch.failed', { mode, error: errorMessage }),
-            };
-        }
+    if (!mode) {
+      return {
+        success: false,
+        content: translate('tools.localSearch.missingMode'),
+      };
     }
 
-    // ==================== grep 模式 ====================
+    try {
+      switch (mode) {
+        case 'grep':
+          return await this.executeGrep(params, context);
+        case 'find':
+          return await this.executeFind(params, context);
+        case 'outline':
+          return await this.executeOutline(params, context);
+        case 'symbol':
+          return await this.executeSymbol(params, context);
+        default:
+          return {
+            success: false,
+            content: translate('tools.localSearch.unknownMode', { mode }),
+          };
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`[LocalSearchTool] ${mode} 执行失败:`, errorMessage);
+      return {
+        success: false,
+        content: translate('tools.localSearch.failed', { mode, error: errorMessage }),
+      };
+    }
+  }
 
-    private async executeGrep(
-        params: Record<string, unknown>,
-        context: ToolExecutionContext
-    ): Promise<ToolResult> {
-        const query = (params.query ?? params.search_query) as string;
-        if (!query) {
-            return { success: false, content: translate('tools.localSearch.missingGrepQuery') };
-        }
+  // ==================== grep 模式 ====================
 
-        // 搜索路径：优先使用参数指定的，否则使用 workdir
-        const searchPath = this.resolveSearchPath(
-            params.searchPath as string | undefined,
-            context.workdir
-        );
-        const sandboxViolation = getSandboxPathViolation(searchPath, context);
-        if (sandboxViolation) {
-            return {
-                success: false,
-                content: sandboxViolation.reason === 'missingWorkdir'
-                    ? translate('tools.common.sandboxMissingWorkdir', { path: searchPath })
-                    : translate('tools.common.sandboxPathDenied', {
-                        path: searchPath,
-                        root: sandboxViolation.root,
-                        mode: sandboxViolation.mode,
-                    }),
-            };
-        }
-
-        // 规范化 grep 查询：检测正则元字符，自动提升 isRegex
-        const { normalizedQuery, normalizedIsRegex } = normalizeGrepQuery(
-            query,
-            params.isRegex as boolean | undefined
-        );
-
-        const result = await invoke<GrepSearchResult>('code_grep', {
-            query: normalizedQuery,
-            searchPath,
-            isRegex: normalizedIsRegex,
-            includes: params.includes as string[] | undefined,
-            caseInsensitive: (params.caseInsensitive ?? params.case_insensitive) as boolean | undefined,
-            maxResults: (params.maxResults ?? params.max_results) as number | undefined,
-            contextChars: (params.contextChars ?? params.context_chars) as number | undefined,
-            maxMatchesPerFile: (params.maxMatchesPerFile ?? params.max_matches_per_file) as number | undefined,
-            maxOutputTokens: (params.maxOutputTokens ?? params.max_output_tokens) as number | undefined,
-        });
-        const { matches, diagnostics } = result;
-
-        context.onProgress?.(translate('tools.localSearch.grepProgress', { count: matches.length }));
-
-        if (matches.length === 0) {
-            return {
-                success: true,
-                content: translate('tools.localSearch.grepNoResults', { query }) +
-                    `\n${this.formatGrepDiagnostics(diagnostics)}`,
-                data: { mode: 'grep', matchCount: 0, diagnostics },
-            };
-        }
-
-        // 按文件分组格式化输出
-        const formatted = this.formatGrepResults(matches, query, diagnostics);
-        return {
-            success: true,
-            content: formatted,
-            data: { mode: 'grep', matchCount: matches.length, diagnostics },
-        };
+  private async executeGrep(
+    params: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    const query = (params.query ?? params.search_query) as string;
+    if (!query) {
+      return { success: false, content: translate('tools.localSearch.missingGrepQuery') };
     }
 
-    // ==================== find 模式 ====================
-
-    private async executeFind(
-        params: Record<string, unknown>,
-        context: ToolExecutionContext
-    ): Promise<ToolResult> {
-        const pattern = (params.pattern ?? params.file_pattern) as string;
-        if (!pattern) {
-            return { success: false, content: translate('tools.localSearch.missingFindPattern') };
-        }
-
-        const searchPath = this.resolveSearchPath(
-            params.searchPath as string | undefined,
-            context.workdir
-        );
-        const sandboxViolation = getSandboxPathViolation(searchPath, context);
-        if (sandboxViolation) {
-            return {
-                success: false,
-                content: sandboxViolation.reason === 'missingWorkdir'
-                    ? translate('tools.common.sandboxMissingWorkdir', { path: searchPath })
-                    : translate('tools.common.sandboxPathDenied', {
-                        path: searchPath,
-                        root: sandboxViolation.root,
-                        mode: sandboxViolation.mode,
-                    }),
-            };
-        }
-
-        const results = await invoke<FindResult[]>('code_find', {
-            pattern,
-            searchPath,
-            maxDepth: params.maxDepth as number | undefined,
-            fileType: params.fileType as string | undefined,
-            includes: params.includes as string[] | undefined,
-        });
-
-        context.onProgress?.(translate('tools.localSearch.findProgress', { count: results.length }));
-
-        if (results.length === 0) {
-            return { success: true, content: translate('tools.localSearch.findNoResults', { pattern }) };
-        }
-
-        const formatted = this.formatFindResults(results, pattern);
-        return {
-            success: true,
-            content: formatted,
-            data: { mode: 'find', resultCount: results.length },
-        };
+    // 搜索路径：优先使用参数指定的，否则使用 workdir
+    const searchPath = this.resolveSearchPath(
+      params.searchPath as string | undefined,
+      context.workdir
+    );
+    const sandboxViolation = getSandboxPathViolation(searchPath, context);
+    if (sandboxViolation) {
+      return {
+        success: false,
+        content:
+          sandboxViolation.reason === 'missingWorkdir'
+            ? translate('tools.common.sandboxMissingWorkdir', { path: searchPath })
+            : translate('tools.common.sandboxPathDenied', {
+                path: searchPath,
+                root: sandboxViolation.root,
+                mode: sandboxViolation.mode,
+              }),
+      };
     }
 
-    // ==================== outline 模式 ====================
+    // 规范化 grep 查询：检测正则元字符，自动提升 isRegex
+    const { normalizedQuery, normalizedIsRegex } = normalizeGrepQuery(
+      query,
+      params.isRegex as boolean | undefined
+    );
 
-    private async executeOutline(
-        params: Record<string, unknown>,
-        context: ToolExecutionContext
-    ): Promise<ToolResult> {
-        const path = this.resolvePath(
-            (params.path ?? params.file_path ?? params.filePath) as string,
-            context.workdir
-        );
-        if (!path) {
-            return { success: false, content: translate('tools.localSearch.missingOutlinePath') };
-        }
-        const sandboxViolation = getSandboxPathViolation(path, context);
-        if (sandboxViolation) {
-            return {
-                success: false,
-                content: sandboxViolation.reason === 'missingWorkdir'
-                    ? translate('tools.common.sandboxMissingWorkdir', { path })
-                    : translate('tools.common.sandboxPathDenied', {
-                        path,
-                        root: sandboxViolation.root,
-                        mode: sandboxViolation.mode,
-                    }),
-            };
-        }
+    const result = await invoke<GrepSearchResult>('code_grep', {
+      query: normalizedQuery,
+      searchPath,
+      isRegex: normalizedIsRegex,
+      includes: params.includes as string[] | undefined,
+      caseInsensitive: (params.caseInsensitive ?? params.case_insensitive) as boolean | undefined,
+      maxResults: (params.maxResults ?? params.max_results) as number | undefined,
+      contextChars: (params.contextChars ?? params.context_chars) as number | undefined,
+      maxMatchesPerFile: (params.maxMatchesPerFile ?? params.max_matches_per_file) as
+        | number
+        | undefined,
+      maxOutputTokens: (params.maxOutputTokens ?? params.max_output_tokens) as number | undefined,
+    });
+    const { matches, diagnostics } = result;
 
-        const items = await invoke<OutlineItem[]>('code_outline', { path });
+    context.onProgress?.(translate('tools.localSearch.grepProgress', { count: matches.length }));
 
-        context.onProgress?.(translate('tools.localSearch.outlineProgress', { count: items.length }));
-
-        if (items.length === 0) {
-            // 根据扩展名精准判断：是不支持的语言，还是文件本身为空
-            const unsupportedHint = getUnsupportedLanguageHint(path);
-            const message = unsupportedHint
-                ? translate('tools.localSearch.outlineUnsupported', { path, hint: unsupportedHint })
-                : translate('tools.localSearch.outlineEmpty', { path });
-            return {
-                success: true,
-                content: message,
-            };
-        }
-
-        const formatted = this.formatOutlineResults(items, path);
-        return {
-            success: true,
-            content: formatted,
-            data: { mode: 'outline', symbolCount: items.length },
-        };
+    if (matches.length === 0) {
+      return {
+        success: true,
+        content:
+          translate('tools.localSearch.grepNoResults', { query }) +
+          `\n${this.formatGrepDiagnostics(diagnostics)}`,
+        data: { mode: 'grep', matchCount: 0, diagnostics },
+      };
     }
 
-    // ==================== symbol 模式 ====================
+    // 按文件分组格式化输出
+    const formatted = this.formatGrepResults(matches, query, diagnostics);
+    return {
+      success: true,
+      content: formatted,
+      data: { mode: 'grep', matchCount: matches.length, diagnostics },
+    };
+  }
 
-    private async executeSymbol(
-        params: Record<string, unknown>,
-        context: ToolExecutionContext
-    ): Promise<ToolResult> {
-        const path = this.resolvePath(
-            (params.path ?? params.file_path ?? params.filePath) as string,
-            context.workdir
-        );
-        const symbolName = (params.symbolName ?? params.symbol_name) as string;
+  // ==================== find 模式 ====================
 
-        if (!path) {
-            return { success: false, content: translate('tools.localSearch.missingSymbolPath') };
-        }
-        const sandboxViolation = getSandboxPathViolation(path, context);
-        if (sandboxViolation) {
-            return {
-                success: false,
-                content: sandboxViolation.reason === 'missingWorkdir'
-                    ? translate('tools.common.sandboxMissingWorkdir', { path })
-                    : translate('tools.common.sandboxPathDenied', {
-                        path,
-                        root: sandboxViolation.root,
-                        mode: sandboxViolation.mode,
-                    }),
-            };
-        }
-        if (!symbolName) {
-            return { success: false, content: translate('tools.localSearch.missingSymbolName') };
-        }
-
-        const result = await invoke<string>('code_symbol', {
-            path,
-            symbolName,
-        });
-
-        context.onProgress?.(translate('tools.localSearch.symbolProgress', { symbolName }));
-
-        return {
-            success: true,
-            content: result,
-            data: { mode: 'symbol', symbolName },
-        };
+  private async executeFind(
+    params: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    const pattern = (params.pattern ?? params.file_pattern) as string;
+    if (!pattern) {
+      return { success: false, content: translate('tools.localSearch.missingFindPattern') };
     }
 
-    // ==================== 格式化方法 ====================
-
-    /** 格式化 grep 结果：按文件分组，显示行号和内容 */
-    private formatGrepResults(results: GrepMatch[], query: string, diagnostics: GrepDiagnostics): string {
-        const grouped = new Map<string, GrepMatch[]>();
-        for (const match of results) {
-            const existing = grouped.get(match.file);
-            if (existing) {
-                existing.push(match);
-            } else {
-                grouped.set(match.file, [match]);
-            }
-        }
-
-        const lines: string[] = [translate('tools.localSearch.grepHeader', { query, count: results.length })];
-
-        for (const [file, matches] of grouped) {
-            lines.push(`📄 ${file}`);
-            for (const m of matches) {
-                lines.push(`  L${m.line}: ${m.content}`);
-            }
-            lines.push('');
-        }
-
-        lines.push(this.formatGrepDiagnostics(diagnostics));
-
-        return lines.join('\n');
+    const searchPath = this.resolveSearchPath(
+      params.searchPath as string | undefined,
+      context.workdir
+    );
+    const sandboxViolation = getSandboxPathViolation(searchPath, context);
+    if (sandboxViolation) {
+      return {
+        success: false,
+        content:
+          sandboxViolation.reason === 'missingWorkdir'
+            ? translate('tools.common.sandboxMissingWorkdir', { path: searchPath })
+            : translate('tools.common.sandboxPathDenied', {
+                path: searchPath,
+                root: sandboxViolation.root,
+                mode: sandboxViolation.mode,
+              }),
+      };
     }
 
-    /** 格式化 grep 诊断信息 */
-    private formatGrepDiagnostics(diagnostics: GrepDiagnostics): string {
-        const limitReached = diagnostics.resultLimitReached ||
-            diagnostics.outputLimitReached ||
-            diagnostics.perFileLimitReached;
-        const lines = [
-            translate('tools.localSearch.grepDiagnosticsHeader'),
-            translate('tools.localSearch.grepDiagnosticsSummary', {
-                scannedFiles: diagnostics.scannedFiles,
-                matchedFiles: diagnostics.matchedFiles,
-                skippedLarge: diagnostics.skippedLargeFiles,
-                skippedBinary: diagnostics.skippedBinaryFiles + diagnostics.probableBinaryFiles,
-                skippedGlob: diagnostics.skippedGlobFiles,
-                skippedMinified: diagnostics.skippedMinifiedFiles,
-                parseFailed: diagnostics.parseFailedFiles,
-                unreadable: diagnostics.unreadableFiles,
-                caseInsensitive: diagnostics.caseInsensitive,
-                limitReached,
-            }),
-            translate('tools.localSearch.grepDiagnosticsLimits', {
-                maxResults: diagnostics.maxResults,
-                maxMatchesPerFile: diagnostics.maxMatchesPerFile,
-                contextChars: diagnostics.contextChars,
-                maxOutputTokens: diagnostics.maxOutputTokens,
-            }),
-        ];
+    const results = await invoke<FindResult[]>('code_find', {
+      pattern,
+      searchPath,
+      maxDepth: params.maxDepth as number | undefined,
+      fileType: params.fileType as string | undefined,
+      includes: params.includes as string[] | undefined,
+    });
 
-        if (diagnostics.skippedDirs.length > 0) {
-            lines.push(translate('tools.localSearch.grepDiagnosticsSkippedDirs', {
-                dirs: diagnostics.skippedDirs.join(', '),
-            }));
-        }
+    context.onProgress?.(translate('tools.localSearch.findProgress', { count: results.length }));
 
-        if (limitReached) {
-            lines.push(translate('tools.localSearch.grepDiagnosticsLimitHint'));
-        }
-
-        return lines.join('\n');
+    if (results.length === 0) {
+      return { success: true, content: translate('tools.localSearch.findNoResults', { pattern }) };
     }
 
-    /** 格式化 find 结果 */
-    private formatFindResults(results: FindResult[], pattern: string): string {
-        const lines: string[] = [translate('tools.localSearch.findHeader', { pattern, count: results.length })];
+    const formatted = this.formatFindResults(results, pattern);
+    return {
+      success: true,
+      content: formatted,
+      data: { mode: 'find', resultCount: results.length },
+    };
+  }
 
-        for (const r of results) {
-            if (r.fileType === 'directory') {
-                lines.push(`📁 ${r.path}`);
-            } else {
-                const sizeStr = this.formatFileSize(r.size);
-                lines.push(`📄 ${r.path} (${sizeStr})`);
-            }
-        }
+  // ==================== outline 模式 ====================
 
-        return lines.join('\n');
+  private async executeOutline(
+    params: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    const path = this.resolvePath(
+      (params.path ?? params.file_path ?? params.filePath) as string,
+      context.workdir
+    );
+    if (!path) {
+      return { success: false, content: translate('tools.localSearch.missingOutlinePath') };
+    }
+    const sandboxViolation = getSandboxPathViolation(path, context);
+    if (sandboxViolation) {
+      return {
+        success: false,
+        content:
+          sandboxViolation.reason === 'missingWorkdir'
+            ? translate('tools.common.sandboxMissingWorkdir', { path })
+            : translate('tools.common.sandboxPathDenied', {
+                path,
+                root: sandboxViolation.root,
+                mode: sandboxViolation.mode,
+              }),
+      };
     }
 
-    /** 格式化 outline 结果：递归树状结构 */
-    private formatOutlineResults(items: OutlineItem[], path: string): string {
-        // 提取文件名
-        const fileName = path.split(/[\\/]/).pop() ?? path;
-        const lines: string[] = [`📋 ${fileName}\n`];
+    const items = await invoke<OutlineItem[]>('code_outline', { path });
 
-        // 递归渲染符号树，支持任意深度嵌套（如 Python 内部类/函数套函数）
-        this.renderOutlineTree(items, lines, 1);
+    context.onProgress?.(translate('tools.localSearch.outlineProgress', { count: items.length }));
 
-        return lines.join('\n');
+    if (items.length === 0) {
+      // 根据扩展名精准判断：是不支持的语言，还是文件本身为空
+      const unsupportedHint = getUnsupportedLanguageHint(path);
+      const message = unsupportedHint
+        ? translate('tools.localSearch.outlineUnsupported', { path, hint: unsupportedHint })
+        : translate('tools.localSearch.outlineEmpty', { path });
+      return {
+        success: true,
+        content: message,
+      };
     }
 
-    /** 递归渲染 outline 符号树 */
-    private renderOutlineTree(items: OutlineItem[], lines: string[], depth: number): void {
-        const indent = '  '.repeat(depth);
-        const connector = depth > 1 ? '├─ ' : '';
+    const formatted = this.formatOutlineResults(items, path);
+    return {
+      success: true,
+      content: formatted,
+      data: { mode: 'outline', symbolCount: items.length },
+    };
+  }
 
-        for (const item of items) {
-            const kindIcon = this.getKindIcon(item.kind);
-            lines.push(`${indent}${connector}${kindIcon} ${item.name}  L${item.startLine}-L${item.endLine}`);
+  // ==================== symbol 模式 ====================
 
-            if (item.children.length > 0) {
-                this.renderOutlineTree(item.children, lines, depth + 1);
-            }
-        }
+  private async executeSymbol(
+    params: Record<string, unknown>,
+    context: ToolExecutionContext
+  ): Promise<ToolResult> {
+    const path = this.resolvePath(
+      (params.path ?? params.file_path ?? params.filePath) as string,
+      context.workdir
+    );
+    const symbolName = (params.symbolName ?? params.symbol_name) as string;
+
+    if (!path) {
+      return { success: false, content: translate('tools.localSearch.missingSymbolPath') };
+    }
+    const sandboxViolation = getSandboxPathViolation(path, context);
+    if (sandboxViolation) {
+      return {
+        success: false,
+        content:
+          sandboxViolation.reason === 'missingWorkdir'
+            ? translate('tools.common.sandboxMissingWorkdir', { path })
+            : translate('tools.common.sandboxPathDenied', {
+                path,
+                root: sandboxViolation.root,
+                mode: sandboxViolation.mode,
+              }),
+      };
+    }
+    if (!symbolName) {
+      return { success: false, content: translate('tools.localSearch.missingSymbolName') };
     }
 
-    // ==================== 辅助方法 ====================
+    const result = await invoke<string>('code_symbol', {
+      path,
+      symbolName,
+    });
 
-    /** 路径解析（与 read 工具保持一致） */
-    private resolvePath(inputPath: string | undefined, workdir?: string): string | null {
-        if (!inputPath) return null;
+    context.onProgress?.(translate('tools.localSearch.symbolProgress', { symbolName }));
 
-        // 规范化 Git Bash 风格路径：/f/... → f:/...
-        inputPath = normalizeFilePath(inputPath);
+    return {
+      success: true,
+      content: result,
+      data: { mode: 'symbol', symbolName },
+    };
+  }
 
-        // Windows 绝对路径
-        if (/^[a-zA-Z]:[/\\]/.test(inputPath)) {
-            return inputPath;
-        }
+  // ==================== 格式化方法 ====================
 
-        if (!workdir) return inputPath;
-
-        // 相对路径拼接
-        let relativePath = inputPath;
-        if (relativePath.startsWith('./')) {
-            relativePath = relativePath.slice(2);
-        }
-        if (relativePath.startsWith('/')) {
-            const parts = relativePath.split('/').filter(p => p.length > 0);
-            relativePath = parts[parts.length - 1] ?? relativePath;
-        }
-
-        const separator = workdir.includes('\\') ? '\\' : '/';
-        const normalizedWorkdir = workdir.endsWith(separator) ? workdir.slice(0, -1) : workdir;
-        return `${normalizedWorkdir}${separator}${relativePath}`;
+  /** 格式化 grep 结果：按文件分组，显示行号和内容 */
+  private formatGrepResults(
+    results: GrepMatch[],
+    query: string,
+    diagnostics: GrepDiagnostics
+  ): string {
+    const grouped = new Map<string, GrepMatch[]>();
+    for (const match of results) {
+      const existing = grouped.get(match.file);
+      if (existing) {
+        existing.push(match);
+      } else {
+        grouped.set(match.file, [match]);
+      }
     }
 
-    /** 搜索路径解析（默认 workdir） */
-    private resolveSearchPath(inputPath: string | undefined, workdir?: string): string {
-        if (inputPath) {
-            // 尝试解析为绝对路径
-            const resolved = this.resolvePath(inputPath, workdir);
-            if (resolved) return resolved;
-        }
-        // 默认使用 workdir
-        return workdir ?? '.';
+    const lines: string[] = [
+      translate('tools.localSearch.grepHeader', { query, count: results.length }),
+    ];
+
+    for (const [file, matches] of grouped) {
+      lines.push(`📄 ${file}`);
+      for (const m of matches) {
+        lines.push(`  L${m.line}: ${m.content}`);
+      }
+      lines.push('');
     }
 
-    /** 获取符号类型对应的图标 */
-    private getKindIcon(kind: string): string {
-        const icons: Record<string, string> = {
-            class: '🏛️',
-            interface: '📐',
-            function: 'ƒ',
-            method: '⚡',
-            type: '📝',
-            enum: '🔢',
-            struct: '🧱',
-            trait: '🔗',
-            impl: '⚙️',
-            rule: '🎨',
-        };
-        return icons[kind] ?? '•';
+    lines.push(this.formatGrepDiagnostics(diagnostics));
+
+    return lines.join('\n');
+  }
+
+  /** 格式化 grep 诊断信息 */
+  private formatGrepDiagnostics(diagnostics: GrepDiagnostics): string {
+    const limitReached =
+      diagnostics.resultLimitReached ||
+      diagnostics.outputLimitReached ||
+      diagnostics.perFileLimitReached;
+    const lines = [
+      translate('tools.localSearch.grepDiagnosticsHeader'),
+      translate('tools.localSearch.grepDiagnosticsSummary', {
+        scannedFiles: diagnostics.scannedFiles,
+        matchedFiles: diagnostics.matchedFiles,
+        skippedLarge: diagnostics.skippedLargeFiles,
+        skippedBinary: diagnostics.skippedBinaryFiles + diagnostics.probableBinaryFiles,
+        skippedGlob: diagnostics.skippedGlobFiles,
+        skippedMinified: diagnostics.skippedMinifiedFiles,
+        parseFailed: diagnostics.parseFailedFiles,
+        unreadable: diagnostics.unreadableFiles,
+        caseInsensitive: diagnostics.caseInsensitive,
+        limitReached,
+      }),
+      translate('tools.localSearch.grepDiagnosticsLimits', {
+        maxResults: diagnostics.maxResults,
+        maxMatchesPerFile: diagnostics.maxMatchesPerFile,
+        contextChars: diagnostics.contextChars,
+        maxOutputTokens: diagnostics.maxOutputTokens,
+      }),
+    ];
+
+    if (diagnostics.skippedDirs.length > 0) {
+      lines.push(
+        translate('tools.localSearch.grepDiagnosticsSkippedDirs', {
+          dirs: diagnostics.skippedDirs.join(', '),
+        })
+      );
     }
 
-    /** 格式化文件大小 */
-    private formatFileSize(bytes: number): string {
-        if (bytes < 1024) return `${bytes}B`;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-        return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+    if (limitReached) {
+      lines.push(translate('tools.localSearch.grepDiagnosticsLimitHint'));
     }
+
+    return lines.join('\n');
+  }
+
+  /** 格式化 find 结果 */
+  private formatFindResults(results: FindResult[], pattern: string): string {
+    const lines: string[] = [
+      translate('tools.localSearch.findHeader', { pattern, count: results.length }),
+    ];
+
+    for (const r of results) {
+      if (r.fileType === 'directory') {
+        lines.push(`📁 ${r.path}`);
+      } else {
+        const sizeStr = this.formatFileSize(r.size);
+        lines.push(`📄 ${r.path} (${sizeStr})`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /** 格式化 outline 结果：递归树状结构 */
+  private formatOutlineResults(items: OutlineItem[], path: string): string {
+    // 提取文件名
+    const fileName = path.split(/[\\/]/).pop() ?? path;
+    const lines: string[] = [`📋 ${fileName}\n`];
+
+    // 递归渲染符号树，支持任意深度嵌套（如 Python 内部类/函数套函数）
+    this.renderOutlineTree(items, lines, 1);
+
+    return lines.join('\n');
+  }
+
+  /** 递归渲染 outline 符号树 */
+  private renderOutlineTree(items: OutlineItem[], lines: string[], depth: number): void {
+    const indent = '  '.repeat(depth);
+    const connector = depth > 1 ? '├─ ' : '';
+
+    for (const item of items) {
+      const kindIcon = this.getKindIcon(item.kind);
+      lines.push(
+        `${indent}${connector}${kindIcon} ${item.name}  L${item.startLine}-L${item.endLine}`
+      );
+
+      if (item.children.length > 0) {
+        this.renderOutlineTree(item.children, lines, depth + 1);
+      }
+    }
+  }
+
+  // ==================== 辅助方法 ====================
+
+  /** 路径解析（与 read 工具保持一致） */
+  private resolvePath(inputPath: string | undefined, workdir?: string): string | null {
+    if (!inputPath) return null;
+
+    // 规范化 Git Bash 风格路径：/f/... → f:/...
+    inputPath = normalizeFilePath(inputPath);
+
+    // Windows 绝对路径
+    if (/^[a-zA-Z]:[/\\]/.test(inputPath)) {
+      return inputPath;
+    }
+
+    if (!workdir) return inputPath;
+
+    // 相对路径拼接
+    let relativePath = inputPath;
+    if (relativePath.startsWith('./')) {
+      relativePath = relativePath.slice(2);
+    }
+    if (relativePath.startsWith('/')) {
+      const parts = relativePath.split('/').filter((p) => p.length > 0);
+      relativePath = parts[parts.length - 1] ?? relativePath;
+    }
+
+    const separator = workdir.includes('\\') ? '\\' : '/';
+    const normalizedWorkdir = workdir.endsWith(separator) ? workdir.slice(0, -1) : workdir;
+    return `${normalizedWorkdir}${separator}${relativePath}`;
+  }
+
+  /** 搜索路径解析（默认 workdir） */
+  private resolveSearchPath(inputPath: string | undefined, workdir?: string): string {
+    if (inputPath) {
+      // 尝试解析为绝对路径
+      const resolved = this.resolvePath(inputPath, workdir);
+      if (resolved) return resolved;
+    }
+    // 默认使用 workdir
+    return workdir ?? '.';
+  }
+
+  /** 获取符号类型对应的图标 */
+  private getKindIcon(kind: string): string {
+    const icons: Record<string, string> = {
+      class: '🏛️',
+      interface: '📐',
+      function: 'ƒ',
+      method: '⚡',
+      type: '📝',
+      enum: '🔢',
+      struct: '🧱',
+      trait: '🔗',
+      impl: '⚙️',
+      rule: '🎨',
+    };
+    return icons[kind] ?? '•';
+  }
+
+  /** 格式化文件大小 */
+  private formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
 }
 
 /**

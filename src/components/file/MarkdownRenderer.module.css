@@ -3,9 +3,9 @@
  */
 
 .markdown {
-    color: var(--color-text-primary);
-    line-height: 1.6;
-    font-size: 14px;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  font-size: 14px;
 }
 
 /* 标题 */
@@ -15,315 +15,315 @@
 .markdown h4,
 .markdown h5,
 .markdown h6 {
-    color: var(--color-text-primary);
-    font-weight: 600;
-    margin-top: 0.8em;
-    margin-bottom: 0.3em;
-    line-height: 1.3;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+  line-height: 1.3;
 }
 
 .markdown h1 {
-    font-size: 1.75em;
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: 0.3em;
+  font-size: 1.75em;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.3em;
 }
 
 .markdown h2 {
-    font-size: 1.5em;
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: 0.3em;
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.3em;
 }
 
 .markdown h3 {
-    font-size: 1.25em;
+  font-size: 1.25em;
 }
 
 .markdown h4 {
-    font-size: 1.1em;
+  font-size: 1.1em;
 }
 
 .markdown h5,
 .markdown h6 {
-    font-size: 1em;
+  font-size: 1em;
 }
 
 /* 段落 */
 .markdown p {
-    margin: 0.35em 0;
+  margin: 0.35em 0;
 }
 
 /* 空段落不占用空间（处理模型输出的连续空行） */
 .markdown p:empty {
-    display: none;
+  display: none;
 }
 
 /* 列表 - 恢复列表样式符号（因为全局 Reset 移除了 list-style） */
 .markdown ul,
 .markdown ol {
-    margin: 0.4em 0;
-    padding-left: 1.5em;
+  margin: 0.4em 0;
+  padding-left: 1.5em;
 }
 
 /* 无序列表恢复圆点 */
 .markdown ul {
-    list-style-type: disc;
+  list-style-type: disc;
 }
 
 /* 有序列表恢复数字 */
 .markdown ol {
-    list-style-type: decimal;
+  list-style-type: decimal;
 }
 
 .markdown li {
-    margin: 0.15em 0;
+  margin: 0.15em 0;
 }
 
 /* 列表项内的段落不需要额外边距 */
-.markdown li>p {
-    margin: 0;
+.markdown li > p {
+  margin: 0;
 }
 
 /* 列表项内第一个段落后面的段落只需要很小边距 */
-.markdown li>p+p {
-    margin-top: 0.3em;
+.markdown li > p + p {
+  margin-top: 0.3em;
 }
 
 /* 嵌套列表紧凑 - 减少嵌套列表与父元素的间距 */
-.markdown li>ul,
-.markdown li>ol {
-    margin: 0.15em 0;
+.markdown li > ul,
+.markdown li > ol {
+  margin: 0.15em 0;
 }
 
 /* 任务列表 */
 .taskListItem {
-    list-style: none;
-    margin-left: -1.5em;
-    display: flex;
-    align-items: flex-start;
-    gap: var(--spacing-xs);
+  list-style: none;
+  margin-left: -1.5em;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
 }
 
 .checkbox {
-    margin-top: 0.3em;
-    accent-color: var(--color-primary);
+  margin-top: 0.3em;
+  accent-color: var(--color-primary);
 }
 
 /* 行内代码 */
 .inlineCode {
-    color: var(--color-primary);
-    background: transparent;
-    padding: 0;
-    border-radius: 0;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 0.9em;
+  color: var(--color-primary);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
 }
 
 /* 引用块 */
 .blockquote {
-    margin: 0.5em 0;
-    padding: 0.4em 0.8em;
-    border-left: 3px solid var(--color-primary);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-secondary);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin: 0.5em 0;
+  padding: 0.4em 0.8em;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .blockquote p {
-    margin: 0.3em 0;
+  margin: 0.3em 0;
 }
 
 /* 引用块内列表更紧凑 */
 .blockquote ul,
 .blockquote ol {
-    margin: 0.3em 0;
-    padding-left: 1.2em;
+  margin: 0.3em 0;
+  padding-left: 1.2em;
 }
 
 .blockquote li {
-    margin: 0.1em 0;
+  margin: 0.1em 0;
 }
 
 /* 表格 */
 .tableWrapper {
-    overflow-x: auto;
-    margin: 1em 0;
+  overflow-x: auto;
+  margin: 1em 0;
 }
 
 .table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9em;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
 }
 
 .table th,
 .table td {
-    padding: 0.5em 1em;
-    border: 1px solid var(--color-border);
-    text-align: left;
+  padding: 0.5em 1em;
+  border: 1px solid var(--color-border);
+  text-align: left;
 }
 
 .table th {
-    background: var(--color-bg-secondary);
-    font-weight: 600;
+  background: var(--color-bg-secondary);
+  font-weight: 600;
 }
 
 .table tr:hover {
-    background: var(--color-bg-hover);
+  background: var(--color-bg-hover);
 }
 
 /* 链接 */
 .link {
-    color: var(--color-primary);
-    text-decoration: none;
+  color: var(--color-primary);
+  text-decoration: none;
 }
 
 .link:hover {
-    text-decoration: underline;
+  text-decoration: underline;
 }
 
 .diagramBlockFallback {
-    min-height: 180px;
-    margin: 0.75em 0;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background:
-        linear-gradient(90deg, transparent, var(--color-bg-hover), transparent),
-        var(--color-bg-secondary);
-    background-size: 220% 100%;
-    animation: diagramBlockLoading 1.2s ease-in-out infinite;
+  min-height: 180px;
+  margin: 0.75em 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(90deg, transparent, var(--color-bg-hover), transparent),
+    var(--color-bg-secondary);
+  background-size: 220% 100%;
+  animation: diagramBlockLoading 1.2s ease-in-out infinite;
 }
 
 @keyframes diagramBlockLoading {
-    from {
-        background-position: 120% 0;
-    }
+  from {
+    background-position: 120% 0;
+  }
 
-    to {
-        background-position: -120% 0;
-    }
+  to {
+    background-position: -120% 0;
+  }
 }
 
 /* 图片（普通 URL 图片） */
 .image {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--radius-md);
-    margin: 0.75em 0;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin: 0.75em 0;
 }
 
 .imageStatus {
-    display: inline-flex;
-    align-items: center;
-    min-height: 32px;
-    margin: 0.75em 0;
-    padding: 6px 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    color: var(--color-text-secondary);
-    background: var(--color-bg-secondary);
-    font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 0.75em 0;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  font-size: 12px;
 }
 
 /* ==================== 图像生成模型输出的 base64 图片 ==================== */
 
 /* 生成图片容器 */
 .generatedImageWrapper {
-    position: relative;
-    display: inline-block;
-    margin: 0.75em 0;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-tertiary);
-    max-width: 360px;
-    /* 淡入动画（仅首次出现时播放） */
-    animation: imageAppear 0.4s ease-out forwards;
+  position: relative;
+  display: inline-block;
+  margin: 0.75em 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  max-width: 360px;
+  /* 淡入动画（仅首次出现时播放） */
+  animation: imageAppear 0.4s ease-out forwards;
 }
 
 @keyframes imageAppear {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
 
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* 生成图片缩略图 */
 .generatedImage {
-    display: block;
-    max-width: 360px;
-    max-height: 280px;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    cursor: pointer;
-    transition: filter 0.2s ease;
+  display: block;
+  max-width: 360px;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  cursor: pointer;
+  transition: filter 0.2s ease;
 }
 
 .generatedImageWrapper:hover .generatedImage {
-    filter: brightness(0.85);
+  filter: brightness(0.85);
 }
 
 /* 悬浮操作层 */
 .imageOverlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    gap: 6px;
-    padding: 8px;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
-    opacity: 0;
-    transition: opacity 0.2s ease;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
 .generatedImageWrapper:hover .imageOverlay {
-    opacity: 1;
+  opacity: 1;
 }
 
 /* 操作按钮 */
 .imageActionBtn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    font-size: 12px;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    backdrop-filter: blur(4px);
-    transition: background 0.15s ease;
-    white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s ease;
+  white-space: nowrap;
 }
 
 .imageActionBtn:hover {
-    background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* 水平线 - 减少边距 */
 .markdown hr {
-    border: none;
-    border-top: 1px solid var(--color-border);
-    margin: 0.8em 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 0.8em 0;
 }
 
 /* 删除线 */
 .markdown del {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 /* 粗体和斜体 */
 .markdown strong {
-    font-weight: 600;
+  font-weight: 600;
 }
 
 .markdown em {
-    font-style: italic;
+  font-style: italic;
 }

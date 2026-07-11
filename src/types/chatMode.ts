@@ -8,6 +8,6 @@ export type ChatMode = 'chat' | 'planning';
 export type LegacyChatMode = ChatMode | 'fast';
 
 export function normalizeChatMode(mode: LegacyChatMode | null | undefined): ChatMode {
-    if (mode === 'fast') return 'chat';
-    return mode ?? 'planning';
+  if (mode === 'fast') return 'chat';
+  return mode ?? 'planning';
 }

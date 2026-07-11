@@ -6,118 +6,120 @@
  */
 
 .container {
-    --inline-image-placeholder-bg: var(--color-bg-secondary);
-    --inline-image-placeholder-border: var(--color-border-primary);
-    --inline-image-placeholder-text: var(--color-text-tertiary);
-    --inline-image-thumbnail-bg: var(--color-bg-tertiary);
-    --inline-image-thumbnail-border: var(--color-border-primary);
+  --inline-image-placeholder-bg: var(--color-bg-secondary);
+  --inline-image-placeholder-border: var(--color-border-primary);
+  --inline-image-placeholder-text: var(--color-text-tertiary);
+  --inline-image-thumbnail-bg: var(--color-bg-tertiary);
+  --inline-image-thumbnail-border: var(--color-border-primary);
 
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--color-border-subtle);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 :global([data-theme='dark']) .container {
-    --inline-image-placeholder-bg: rgba(255, 255, 255, 0.03);
-    --inline-image-placeholder-border: rgba(255, 255, 255, 0.12);
-    --inline-image-placeholder-text: rgba(255, 255, 255, 0.3);
-    --inline-image-thumbnail-bg: rgba(255, 255, 255, 0.03);
-    --inline-image-thumbnail-border: rgba(255, 255, 255, 0.08);
+  --inline-image-placeholder-bg: rgba(255, 255, 255, 0.03);
+  --inline-image-placeholder-border: rgba(255, 255, 255, 0.12);
+  --inline-image-placeholder-text: rgba(255, 255, 255, 0.3);
+  --inline-image-thumbnail-bg: rgba(255, 255, 255, 0.03);
+  --inline-image-thumbnail-border: rgba(255, 255, 255, 0.08);
 }
 
 /* 缩略图网格布局：固定尺寸，不随窗口拉伸 */
 .grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* 单张缩略图卡片：尺寸由 JS 根据图片宽高比动态设置 */
 .thumbnailCard {
-    position: relative;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    /* 实际尺寸由 inline style 动态控制（最短边 250px） */
-    flex-shrink: 0;
-    background: var(--inline-image-thumbnail-bg);
-    border: 1px solid var(--inline-image-thumbnail-border);
-    transition: border-color 0.2s ease, transform 0.15s ease;
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  /* 实际尺寸由 inline style 动态控制（最短边 250px） */
+  flex-shrink: 0;
+  background: var(--inline-image-thumbnail-bg);
+  border: 1px solid var(--inline-image-thumbnail-border);
+  transition:
+    border-color 0.2s ease,
+    transform 0.15s ease;
 }
 
 .thumbnailCard:hover {
-    border-color: rgba(99, 102, 241, 0.4);
-    transform: translateY(-1px);
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
 }
 
 /* 缩略图图片 */
 .thumbnailImage {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* 悬停遮罩层 */
 .thumbnailOverlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.45);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-    color: white;
-    pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  color: white;
+  pointer-events: none;
 }
 
 .thumbnailCard:hover .thumbnailOverlay {
-    opacity: 1;
+  opacity: 1;
 }
 
 /* 加载失败占位符 */
 .thumbnailError {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    width: 250px;
-    height: 250px;
-    border-radius: 8px;
-    background: var(--inline-image-placeholder-bg);
-    border: 1px dashed var(--inline-image-placeholder-border);
-    color: var(--inline-image-placeholder-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 250px;
+  height: 250px;
+  border-radius: 8px;
+  background: var(--inline-image-placeholder-bg);
+  border: 1px dashed var(--inline-image-placeholder-border);
+  color: var(--inline-image-placeholder-text);
 }
 
 .errorText {
-    font-size: 11px;
+  font-size: 11px;
 }
 
 /* 加载中占位符 */
 .thumbnailLoading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 250px;
-    height: 250px;
-    border-radius: 8px;
-    background: var(--inline-image-placeholder-bg);
-    border: 1px solid var(--inline-image-placeholder-border);
-    color: var(--inline-image-placeholder-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 250px;
+  height: 250px;
+  border-radius: 8px;
+  background: var(--inline-image-placeholder-bg);
+  border: 1px solid var(--inline-image-placeholder-border);
+  color: var(--inline-image-placeholder-text);
 }
 
 .spinner {
-    animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
+  from {
+    transform: rotate(0deg);
+  }
 
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }

@@ -2,11 +2,11 @@ export type NetworkUploadSubjectType = 'command' | 'skill' | 'preview' | 'instal
 export type NetworkRiskAuthorizationKind = 'fileUpload' | 'sensitiveEgress' | 'remoteDestructive';
 
 export interface NetworkUploadAuthorizationRequest {
-    command: string;
-    workdir?: string;
-    subjectType: NetworkUploadSubjectType;
-    subjectId?: string;
-    reasonCode: string;
-    reason: string;
-    riskKind?: NetworkRiskAuthorizationKind;
+  command: string;
+  workdir?: string;
+  subjectType: NetworkUploadSubjectType;
+  subjectId?: string;
+  reasonCode: string;
+  reason: string;
+  riskKind?: NetworkRiskAuthorizationKind;
 }

@@ -10,18 +10,18 @@ import { useI18n } from '@/i18n';
 import styles from './AgentNavItem.module.css';
 
 interface AgentNavItemProps {
-    /** Agent ID */
-    agentId: string;
-    /** Agent 名称 */
-    name: string;
-    draggable?: boolean;
-    isDragging?: boolean;
-    isDragOver?: boolean;
-    onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void;
-    onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
-    onDragLeave?: () => void;
-    onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
-    onDragEnd?: () => void;
+  /** Agent ID */
+  agentId: string;
+  /** Agent 名称 */
+  name: string;
+  draggable?: boolean;
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: () => void;
+  onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: () => void;
 }
 
 /**
@@ -29,41 +29,41 @@ interface AgentNavItemProps {
  * 使用简单哈希算法生成一致的颜色
  */
 const AVATAR_COLORS = [
-    '#3F7BD9',
-    '#7CB342',
-    '#E0A238',
-    '#4ba1c9',
-    '#E34F53',
-    '#7E57C2',
-    '#E27A3A',
-    '#21804E',
-    '#ff9090',
-    '#6da7e1',
-    '#4a8131',
-    '#7D8BF4',
+  '#3F7BD9',
+  '#7CB342',
+  '#E0A238',
+  '#4ba1c9',
+  '#E34F53',
+  '#7E57C2',
+  '#E27A3A',
+  '#21804E',
+  '#ff9090',
+  '#6da7e1',
+  '#4a8131',
+  '#7D8BF4',
 ];
 
 function getAvatarColor(name: string): string {
-    const colors = AVATAR_COLORS;
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % colors.length;
-    return colors[index] ?? '#666';
+  const colors = AVATAR_COLORS;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % colors.length;
+  return colors[index] ?? '#666';
 }
 
 /**
  * 获取Agent头像字母
  */
 function getAvatarLetter(name: string): string {
-    const trimmed = name.trim();
-    if (!trimmed) return '?';
-    return trimmed.charAt(0).toUpperCase();
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  return trimmed.charAt(0).toUpperCase();
 }
 
 function getMessagePreview(content: string): string {
-    return content.replace(/\s+/g, ' ').trim();
+  return content.replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -79,156 +79,157 @@ function getMessagePreview(content: string): string {
  * - 支持折叠状态
  */
 export function AgentNavItem({
-    agentId,
-    name,
-    draggable,
-    isDragging = false,
-    isDragOver = false,
-    onDragStart,
-    onDragOver,
-    onDragLeave,
-    onDrop,
-    onDragEnd,
+  agentId,
+  name,
+  draggable,
+  isDragging = false,
+  isDragOver = false,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
 }: AgentNavItemProps) {
-    const { t } = useI18n();
-    const currentAgentId = useAgentStore((state) => state.currentAgentId);
-    const setCurrentAgentId = useAgentStore((state) => state.setCurrentAgentId);
-    const isCollapsed = useUIStore((state) => state.isLeftPanelCollapsed);
+  const { t } = useI18n();
+  const currentAgentId = useAgentStore((state) => state.currentAgentId);
+  const setCurrentAgentId = useAgentStore((state) => state.setCurrentAgentId);
+  const isCollapsed = useUIStore((state) => state.isLeftPanelCollapsed);
 
-    // 获取自定义头像
-    const agent = useAgentStore((state) => state.agents.find(a => a.id === agentId));
-    const avatar = agent?.avatar;
-    const persistedMessagePreview = agent?.latestMessagePreview ?? '';
+  // 获取自定义头像
+  const agent = useAgentStore((state) => state.agents.find((a) => a.id === agentId));
+  const avatar = agent?.avatar;
+  const persistedMessagePreview = agent?.latestMessagePreview ?? '';
 
-    // 未读消息判断：比较最新消息时间和最后查看时间
-    const agentMessages = useChatStore((state) => state.messagesByAgent.get(agentId));
-    const lastReadAt = useChatStore((state) => state.lastReadByAgent.get(agentId) ?? 0);
-    const streamingState = useChatStore((state) => state.streamingByContext.get(agentId));
-    const hasUnread = useMemo(() => {
-        // 当前选中的 Agent 不显示未读（正在查看）
-        if (currentAgentId === agentId) return false;
-        const latestMsg = agentMessages?.[agentMessages.length - 1];
-        if (!latestMsg) return false;
-        return latestMsg.createdAt > lastReadAt;
-    }, [agentId, currentAgentId, agentMessages, lastReadAt]);
+  // 未读消息判断：比较最新消息时间和最后查看时间
+  const agentMessages = useChatStore((state) => state.messagesByAgent.get(agentId));
+  const lastReadAt = useChatStore((state) => state.lastReadByAgent.get(agentId) ?? 0);
+  const streamingState = useChatStore((state) => state.streamingByContext.get(agentId));
+  const hasUnread = useMemo(() => {
+    // 当前选中的 Agent 不显示未读（正在查看）
+    if (currentAgentId === agentId) return false;
+    const latestMsg = agentMessages?.[agentMessages.length - 1];
+    if (!latestMsg) return false;
+    return latestMsg.createdAt > lastReadAt;
+  }, [agentId, currentAgentId, agentMessages, lastReadAt]);
 
-    const latestMessagePreview = useMemo(() => {
-        if (streamingState?.isStreaming && streamingState.content.trim()) {
-            return getMessagePreview(streamingState.content);
-        }
+  const latestMessagePreview = useMemo(() => {
+    if (streamingState?.isStreaming && streamingState.content.trim()) {
+      return getMessagePreview(streamingState.content);
+    }
 
-        if (agentMessages) {
-            const latestMsg = agentMessages[agentMessages.length - 1];
-            return latestMsg ? getMessagePreview(latestMsg.content) : '';
-        }
+    if (agentMessages) {
+      const latestMsg = agentMessages[agentMessages.length - 1];
+      return latestMsg ? getMessagePreview(latestMsg.content) : '';
+    }
 
-        return getMessagePreview(persistedMessagePreview);
-    }, [agentMessages, persistedMessagePreview, streamingState]);
+    return getMessagePreview(persistedMessagePreview);
+  }, [agentMessages, persistedMessagePreview, streamingState]);
 
-    // Cron 定时任务指示器：检查该 Agent 是否有启用的定时任务
-    const hasCronJobs = useCronStore((state) => state.enabledAgentIds.has(agentId));
+  // Cron 定时任务指示器：检查该 Agent 是否有启用的定时任务
+  const hasCronJobs = useCronStore((state) => state.enabledAgentIds.has(agentId));
 
-    // 右键菜单状态
-    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  // 右键菜单状态
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-    // 是否选中
-    const isActive = currentAgentId === agentId;
+  // 是否选中
+  const isActive = currentAgentId === agentId;
 
-    // 头像颜色
-    const avatarColor = useMemo(() => getAvatarColor(name), [name]);
+  // 头像颜色
+  const avatarColor = useMemo(() => getAvatarColor(name), [name]);
 
-    // 头像字母
-    const avatarLetter = useMemo(() => getAvatarLetter(name), [name]);
+  // 头像字母
+  const avatarLetter = useMemo(() => getAvatarLetter(name), [name]);
 
-    // 点击切换Agent
-    const handleClick = useCallback(() => {
-        setCurrentAgentId(agentId);
-    }, [agentId, setCurrentAgentId]);
+  // 点击切换Agent
+  const handleClick = useCallback(() => {
+    setCurrentAgentId(agentId);
+  }, [agentId, setCurrentAgentId]);
 
-    // 右键打开菜单
-    const handleContextMenu = useCallback((event: React.MouseEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-        setContextMenu({ x: event.clientX, y: event.clientY });
-    }, []);
+  // 右键打开菜单
+  const handleContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ x: event.clientX, y: event.clientY });
+  }, []);
 
-    // 关闭菜单
-    const handleCloseContextMenu = useCallback(() => {
-        setContextMenu(null);
-    }, []);
+  // 关闭菜单
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
 
-    return (
-        <>
-            <Tooltip content={name}>
-                <div
-                    className={styles.navItem}
-                    data-active={isActive}
-                    data-collapsed={isCollapsed}
-                    data-dragging={isDragging}
-                    data-drag-over={isDragOver}
-                    draggable={draggable}
-                    onClick={handleClick}
-                    onContextMenu={handleContextMenu}
-                    onDragStart={onDragStart}
-                    onDragOver={onDragOver}
-                    onDragLeave={onDragLeave}
-                    onDrop={onDrop}
-                    onDragEnd={onDragEnd}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && handleClick()}
-                >
-                    {/* 头像容器（相对定位，供角标绝对定位） */}
-                    <div className={styles.avatarWrapper}>
-                        <div
-                            className={styles.avatar}
-                            style={avatar
-                                ? { borderColor: avatarColor }  /* 有头像时用颜色作为边框 */
-                                : { backgroundColor: avatarColor }  /* 无头像时用颜色作为背景 */
-                            }
-                            data-has-image={!!avatar}
-                        >
-                            {avatar ? (
-                                <img
-                                    src={`data:image/webp;base64,${avatar}`}
-                                    alt={name}
-                                    className={styles.avatarImg}
-                                />
-                            ) : (
-                                avatarLetter
-                            )}
-                        </div>
-                        {/* 未读消息蓝点（右上角） */}
-                        {hasUnread && <span className={styles.unreadDot} />}
-                        {/* Cron 定时任务图标（右下角） */}
-                        {hasCronJobs && (
-                            <span className={styles.cronBadge} aria-label={t('agent.hasEnabledCron')}>
-                                <Timer size={8} />
-                            </span>
-                        )}
-                    </div>
-                    {!isCollapsed && (
-                        <div className={styles.content}>
-                            <span className={styles.name}>{name}</span>
-                            {latestMessagePreview && (
-                                <span className={styles.preview} title={latestMessagePreview}>
-                                    {latestMessagePreview}
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </Tooltip>
-
-            {/* 右键菜单 */}
-            {contextMenu && (
-                <AgentContextMenu
-                    agentId={agentId}
-                    agentName={name}
-                    position={contextMenu}
-                    onClose={handleCloseContextMenu}
+  return (
+    <>
+      <Tooltip content={name}>
+        <div
+          className={styles.navItem}
+          data-active={isActive}
+          data-collapsed={isCollapsed}
+          data-dragging={isDragging}
+          data-drag-over={isDragOver}
+          draggable={draggable}
+          onClick={handleClick}
+          onContextMenu={handleContextMenu}
+          onDragStart={onDragStart}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onDragEnd={onDragEnd}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+        >
+          {/* 头像容器（相对定位，供角标绝对定位） */}
+          <div className={styles.avatarWrapper}>
+            <div
+              className={styles.avatar}
+              style={
+                avatar
+                  ? { borderColor: avatarColor } /* 有头像时用颜色作为边框 */
+                  : { backgroundColor: avatarColor } /* 无头像时用颜色作为背景 */
+              }
+              data-has-image={!!avatar}
+            >
+              {avatar ? (
+                <img
+                  src={`data:image/webp;base64,${avatar}`}
+                  alt={name}
+                  className={styles.avatarImg}
                 />
+              ) : (
+                avatarLetter
+              )}
+            </div>
+            {/* 未读消息蓝点（右上角） */}
+            {hasUnread && <span className={styles.unreadDot} />}
+            {/* Cron 定时任务图标（右下角） */}
+            {hasCronJobs && (
+              <span className={styles.cronBadge} aria-label={t('agent.hasEnabledCron')}>
+                <Timer size={8} />
+              </span>
             )}
-        </>
-    );
+          </div>
+          {!isCollapsed && (
+            <div className={styles.content}>
+              <span className={styles.name}>{name}</span>
+              {latestMessagePreview && (
+                <span className={styles.preview} title={latestMessagePreview}>
+                  {latestMessagePreview}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </Tooltip>
+
+      {/* 右键菜单 */}
+      {contextMenu && (
+        <AgentContextMenu
+          agentId={agentId}
+          agentName={name}
+          position={contextMenu}
+          onClose={handleCloseContextMenu}
+        />
+      )}
+    </>
+  );
 }

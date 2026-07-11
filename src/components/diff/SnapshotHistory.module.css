@@ -7,344 +7,344 @@
 /* ==================== 容器 ==================== */
 
 .container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
 }
 
 /* ==================== 头部 ==================== */
 
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px;
-    border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .title {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .closeBtn {
-    background: none;
-    border: none;
-    padding: 4px 8px;
-    font-size: 20px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    border-radius: var(--radius-button);
-    line-height: 1;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-button);
+  line-height: 1;
 }
 
 .closeBtn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 /* ==================== 列表 ==================== */
 
 .list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 .divider {
-    height: 1px;
-    background: var(--border-color);
-    margin: 16px 0;
+  height: 1px;
+  background: var(--border-color);
+  margin: 16px 0;
 }
 
 .empty {
-    padding: 48px 24px;
-    text-align: center;
-    color: var(--text-tertiary);
-    font-size: 14px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
 }
 
 /* ==================== 快照项 ==================== */
 
 .item {
-    padding: 12px 16px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    margin-bottom: 12px;
-    background: var(--bg-secondary);
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: var(--bg-secondary);
 }
 
 .item:last-child {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 
 .currentItem {
-    border-color: var(--color-primary);
-    background: rgba(59, 130, 246, 0.05);
+  border-color: var(--color-primary);
+  background: rgba(59, 130, 246, 0.05);
 }
 
 .itemHeader {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .itemIndicator {
-    font-size: 12px;
+  font-size: 12px;
 }
 
 .currentItem .itemIndicator {
-    color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .itemTitle {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--text-primary);
-    flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
 }
 
 .itemTime {
-    font-size: 12px;
-    color: var(--text-tertiary);
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .itemDescription {
-    margin-top: 8px;
-    font-size: 13px;
-    color: var(--text-secondary);
-    padding-left: 20px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-left: 20px;
 }
 
 .itemActions {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-    padding-left: 20px;
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-left: 20px;
 }
 
 .previewBtn,
 .rollbackBtn {
-    padding: 6px 12px;
-    border-radius: var(--radius-button);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .previewBtn {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .previewBtn:hover {
-    background: var(--bg-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .rollbackBtn {
-    background: transparent;
-    border: 1px solid var(--color-warning, #E0A238);
-    color: var(--color-warning, #E0A238);
+  background: transparent;
+  border: 1px solid var(--color-warning, #e0a238);
+  color: var(--color-warning, #e0a238);
 }
 
 .rollbackBtn:hover {
-    background: color-mix(in srgb, var(--color-warning, #E0A238) 14%, transparent);
+  background: color-mix(in srgb, var(--color-warning, #e0a238) 14%, transparent);
 }
 
 .deleteBtn {
-    padding: 6px 12px;
-    border-radius: var(--radius-button);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    background: transparent;
-    border: 1px solid var(--color-error, #E34F53);
-    color: var(--color-error, #E34F53);
+  padding: 6px 12px;
+  border-radius: var(--radius-button);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+  border: 1px solid var(--color-error, #e34f53);
+  color: var(--color-error, #e34f53);
 }
 
 .deleteBtn:hover {
-    background: color-mix(in srgb, var(--color-error, #E34F53) 14%, transparent);
+  background: color-mix(in srgb, var(--color-error, #e34f53) 14%, transparent);
 }
 
 /* ==================== 弹窗通用 ==================== */
 
 .dialogOverlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    animation: fadeIn 0.15s ease;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
+  from {
+    opacity: 0;
+  }
 
-    to {
-        opacity: 1;
-    }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ==================== 回滚确认弹窗 ==================== */
 
 .dialog {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 420px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-    animation: slideUp 0.2s ease;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.2s ease;
 }
 
 @keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dialogTitle {
-    margin: 0 0 16px;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .dialogContent {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .dialogContent p {
-    margin: 0 0 12px;
-    font-size: 14px;
-    color: var(--text-secondary);
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .dialogWarning {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    background: rgba(234, 179, 8, 0.1);
-    border: 1px solid rgba(234, 179, 8, 0.3);
-    border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 8px;
 }
 
 .warningIcon {
-    font-size: 20px;
-    flex-shrink: 0;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 
 .dialogWarning p {
-    margin: 0;
-    font-size: 13px;
-    color: var(--color-warning, #E0A238);
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-warning, #e0a238);
 }
 
 .warningTip {
-    margin-top: 4px !important;
-    opacity: 0.8;
+  margin-top: 4px !important;
+  opacity: 0.8;
 }
 
 .dialogActions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .cancelBtn,
 .confirmRollbackBtn {
-    padding: 8px 16px;
-    border-radius: var(--radius-button);
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
+  padding: 8px 16px;
+  border-radius: var(--radius-button);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .cancelBtn {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .cancelBtn:hover:not(:disabled) {
-    background: var(--bg-tertiary);
+  background: var(--bg-tertiary);
 }
 
 .confirmRollbackBtn {
-    background: var(--color-warning, #E0A238);
-    border: none;
-    color: white;
+  background: var(--color-warning, #e0a238);
+  border: none;
+  color: white;
 }
 
 .confirmRollbackBtn:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-warning, #E0A238) 88%, #000);
+  background: color-mix(in srgb, var(--color-warning, #e0a238) 88%, #000);
 }
 
 .cancelBtn:disabled,
 .confirmRollbackBtn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* ==================== 预览弹窗 ==================== */
 
 .previewDialog {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    max-width: 800px;
-    width: 90%;
-    max-height: 80vh;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-    animation: slideUp 0.2s ease;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  max-width: 800px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.2s ease;
 }
 
 .previewHeader {
-    display: flex;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border-color);
-    gap: 12px;
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  gap: 12px;
 }
 
 .previewHeader h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .previewSubtitle {
-    font-size: 13px;
-    color: var(--text-secondary);
-    flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
 }
 
 .previewContent {
-    flex: 1;
-    padding: 16px;
-    overflow-y: auto;
-    min-height: 0;
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* ==================== Diff 摘要徽章 ==================== */
@@ -354,25 +354,25 @@
  * 让用户扫一眼就能判断每个版本的变动规模，无需点击预览
  */
 .diffSummary {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    font-family: monospace;
-    line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: monospace;
+  line-height: 1;
 }
 
 .diffAdded {
-    color: #3d9256;
-    /* green-500 */
-    padding: 1px 5px;
-    border-radius: 3px;
+  color: #3d9256;
+  /* green-500 */
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .diffRemoved {
-    color: #b7312a;
-    /* red-500 */
-    padding: 1px 5px;
-    border-radius: 3px;
+  color: #b7312a;
+  /* red-500 */
+  padding: 1px 5px;
+  border-radius: 3px;
 }

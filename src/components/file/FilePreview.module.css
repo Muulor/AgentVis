@@ -5,309 +5,309 @@
  */
 
 .preview {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .header {
-    flex-shrink: 0;
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-secondary);
+  flex-shrink: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
 .fileName {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 .content {
-    flex: 1;
-    overflow: auto;
-    padding: var(--spacing-md);
-    word-wrap: break-word;
-    word-break: break-word;
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing-md);
+  word-wrap: break-word;
+  word-break: break-word;
 }
 
 /* 纯文本 */
 .plainText {
-    margin: 0;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--color-text-primary);
-    white-space: pre-wrap;
-    word-wrap: break-word;
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 /* ==================== 图片预览 ==================== */
 
 .imageContainer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 200px;
-    padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 8px;
 }
 
 .imagePreview {
-    max-width: 100%;
-    max-height: 70vh;
-    object-fit: contain;
-    border-radius: var(--radius-md, 6px);
-    background: var(--color-bg-tertiary);
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: var(--radius-md, 6px);
+  background: var(--color-bg-tertiary);
 }
 
 .imageError {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 32px;
-    color: var(--color-text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--color-text-tertiary);
 }
 
 .imageErrorHint {
-    margin: 0;
-    font-size: 11px;
-    opacity: 0.6;
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 /* ==================== 视频预览 ==================== */
 
 .videoContainer {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 200px;
-    padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 8px;
 }
 
 .videoPlayer {
-    max-width: 100%;
-    max-height: 70vh;
-    border-radius: var(--radius-md, 6px);
-    background: #000;
-    outline: none;
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: var(--radius-md, 6px);
+  background: #000;
+  outline: none;
 }
 
 /* ==================== 音频预览 ==================== */
 
 .audioContainer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 16px;
 }
 
 .audioIcon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    background: rgba(137, 180, 250, 0.1);
-    color: #89b4fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(137, 180, 250, 0.1);
+  color: #89b4fa;
 }
 
 .audioFileName {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    text-align: center;
-    word-break: break-word;
-    max-width: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  text-align: center;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .audioPlayer {
-    width: 100%;
-    max-width: 400px;
-    outline: none;
+  width: 100%;
+  max-width: 400px;
+  outline: none;
 }
 
 .binaryDocWrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* 文件信息卡片 */
 .binaryDocCard {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md, 6px);
 }
 
 .binaryDocIcon {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    border-radius: 10px;
-    background: rgba(137, 180, 250, 0.1);
-    color: #89b4fa;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: rgba(137, 180, 250, 0.1);
+  color: #89b4fa;
 }
 
 .binaryDocMeta {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .binaryDocName {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .binaryDocInfo {
-    font-size: 11px;
-    color: var(--color-text-tertiary);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
 }
 
 /* 系统打开按钮 */
 .openSystemBtn {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: 1px solid rgba(137, 180, 250, 0.3);
-    background: rgba(137, 180, 250, 0.08);
-    color: #89b4fa;
-    border-radius: var(--radius-button);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid rgba(137, 180, 250, 0.3);
+  background: rgba(137, 180, 250, 0.08);
+  color: #89b4fa;
+  border-radius: var(--radius-button);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .openSystemBtn:hover:not(:disabled) {
-    background: rgba(137, 180, 250, 0.18);
-    border-color: rgba(137, 180, 250, 0.5);
+  background: rgba(137, 180, 250, 0.18);
+  border-color: rgba(137, 180, 250, 0.5);
 }
 
 .openSystemBtn:disabled {
-    opacity: 0.6;
-    cursor: default;
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* 提取内容预览区域 */
 .extractedContent {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-md, 6px);
-    overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-md, 6px);
+  overflow: hidden;
 }
 
 .extractedHeader {
-    padding: 8px 14px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--color-text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: var(--color-bg-tertiary);
-    border-bottom: 1px solid var(--color-border-primary);
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border-primary);
 }
 
-.extractedContent> :last-child {
-    padding: 12px 14px;
+.extractedContent > :last-child {
+  padding: 12px 14px;
 }
 
 /* ==================== 空状态 ==================== */
 
 .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: var(--spacing-sm);
-    color: var(--color-text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-sm);
+  color: var(--color-text-tertiary);
 }
 
 .emptyIcon {
-    opacity: 0.5;
+  opacity: 0.5;
 }
 
 .emptyText {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 500;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .emptyHint {
-    margin: 0;
-    font-size: 12px;
-    opacity: 0.7;
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.7;
 }
 
 /* ==================== 加载状态 ==================== */
 
 .loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: var(--spacing-sm);
-    color: var(--color-text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-sm);
+  color: var(--color-text-tertiary);
 }
 
 .spinner {
-    animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
+  from {
+    transform: rotate(0deg);
+  }
 
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ==================== 滚动条 ==================== */
 
 .content::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+  width: 10px;
+  height: 10px;
 }
 
 .content::-webkit-scrollbar-track {
-    background: var(--color-bg-tertiary);
-    border-radius: 5px;
+  background: var(--color-bg-tertiary);
+  border-radius: 5px;
 }
 
 .content::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.5);
-    border-radius: 5px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
+  background: rgba(128, 128, 128, 0.5);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .content::-webkit-scrollbar-thumb:hover {
-    background: rgba(128, 128, 128, 0.7);
-    background-clip: padding-box;
+  background: rgba(128, 128, 128, 0.7);
+  background-clip: padding-box;
 }

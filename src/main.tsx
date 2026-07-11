@@ -15,13 +15,13 @@ registerRendererHealthMonitor();
 // 确保 root 元素存在
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-    throw new Error('Failed to find root element');
+  throw new Error('Failed to find root element');
 }
 
 ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-        <I18nProvider>
-            <App />
-        </I18nProvider>
-    </React.StrictMode>
+  <React.StrictMode>
+    <I18nProvider>
+      <App />
+    </I18nProvider>
+  </React.StrictMode>
 );

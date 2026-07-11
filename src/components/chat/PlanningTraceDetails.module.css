@@ -5,128 +5,128 @@
  */
 
 .container {
-    width: 100%;
-    margin: 2px 0 var(--spacing-xs);
+  width: 100%;
+  margin: 2px 0 var(--spacing-xs);
 }
 
 .summaryButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    min-height: 28px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--color-text-tertiary);
-    font-size: 12px;
-    line-height: 1.4;
-    text-align: left;
-    cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
 }
 
 .summaryButton:hover {
-    color: var(--color-text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .summaryText {
-    flex-shrink: 0;
-    font-weight: 500;
+  flex-shrink: 0;
+  font-weight: 500;
 }
 
 .chevron {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
 }
 
 .details {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 8px 0 12px;
-    border-bottom: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.12));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.12));
 }
 
 .detailSection {
-    min-width: 0;
+  min-width: 0;
 }
 
 .detailHeader {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-    color: var(--color-text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .detailHeader svg {
-    flex-shrink: 0;
-    color: var(--color-action-primary, #339CFF);
+  flex-shrink: 0;
+  color: var(--color-action-primary, #339cff);
 }
 
 .reasoningTrace {
-    width: 100%;
-    min-width: 0;
+  width: 100%;
+  min-width: 0;
 }
 
 .reasoningTraceHeader {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    min-height: 28px;
-    padding: 0 0 4px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary, #9CA3AF);
-    cursor: pointer;
-    font-size: 13px;
-    text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 0 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #9ca3af);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
 }
 
 .reasoningTraceHeader:hover {
-    color: var(--color-text-primary, #E5E7EB);
+  color: var(--color-text-primary, #e5e7eb);
 }
 
 .reasoningTraceHeader:hover .reasoningTraceRule {
-    background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
+  background-color: var(--color-border-hover, rgba(255, 255, 255, 0.18));
 }
 
 .reasoningTraceTitle {
-    flex-shrink: 0;
-    color: var(--color-text-primary, #E5E7EB);
-    font-weight: 600;
+  flex-shrink: 0;
+  color: var(--color-text-primary, #e5e7eb);
+  font-weight: 600;
 }
 
 .reasoningTraceRule {
-    flex: 1;
-    height: 1px;
-    min-width: 24px;
-    background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
-    transition: background-color var(--transition-fast, 150ms ease);
+  flex: 1;
+  height: 1px;
+  min-width: 24px;
+  background-color: var(--color-border-default, rgba(255, 255, 255, 0.12));
+  transition: background-color var(--transition-fast, 150ms ease);
 }
 
 .reasoningTraceToggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: var(--color-text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
 }
 
 .reasoningTraceBody {
-    max-height: 260px;
-    overflow-y: auto;
-    padding: 4px 0 8px;
-    color: var(--color-masterbrain-thought-text, var(--color-text-secondary));
-    font-size: 13px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+  color: var(--color-masterbrain-thought-text, var(--color-text-secondary));
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

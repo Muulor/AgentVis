@@ -1,234 +1,246 @@
 .tabs {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: var(--spacing-md);
-    flex: 1;
-    height: 100%;
-    min-width: 0;
-    overflow: visible;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--spacing-md);
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  overflow: visible;
 }
 
 .hubActions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    min-width: 0;
-    -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  -webkit-app-region: no-drag;
 }
 
 .hubActionButton {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: 1px solid transparent;
-    border-radius: var(--radius-button);
-    background: transparent;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition:
-        background-color 0.15s ease,
-        border-color 0.15s ease,
-        color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .hubActionButton:hover:not(:disabled),
 .hubActionButton:focus-visible:not(:disabled) {
-    border-color: color-mix(in srgb, var(--color-border-hover) 70%, transparent);
-    background-color: color-mix(in srgb, var(--color-bg-tertiary) 82%, transparent);
-    color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-border-hover) 70%, transparent);
+  background-color: color-mix(in srgb, var(--color-bg-tertiary) 82%, transparent);
+  color: var(--color-text-primary);
 }
 
 .hubActionButton:disabled {
-    cursor: default;
-    color: var(--color-text-tertiary);
-    opacity: 0.35;
+  cursor: default;
+  color: var(--color-text-tertiary);
+  opacity: 0.35;
 }
 
 .switcher {
-    --hub-switcher-collapsed-width: clamp(150px, 18vw, 230px);
-    --hub-switcher-expanded-width: min(100%, 920px);
+  --hub-switcher-collapsed-width: clamp(150px, 18vw, 230px);
+  --hub-switcher-expanded-width: min(100%, 920px);
 
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    justify-self: center;
-    width: var(--hub-switcher-collapsed-width);
-    max-width: 100%;
-    height: 38px;
-    transition: width 0.22s ease;
-    -webkit-app-region: no-drag;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: var(--hub-switcher-collapsed-width);
+  max-width: 100%;
+  height: 38px;
+  transition: width 0.22s ease;
+  -webkit-app-region: no-drag;
 }
 
-.switcher[data-expanded="true"] {
-    width: var(--hub-switcher-expanded-width);
+.switcher[data-expanded='true'] {
+  width: var(--hub-switcher-expanded-width);
 }
 
 .currentHub {
-    position: absolute;
-    inset: 3px 0;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-width: 0;
-    padding: 0 14px;
-    border: 1px solid color-mix(in srgb, var(--color-border-default) 76%, transparent);
-    border-radius: var(--radius-lg);
-    background: color-mix(in srgb, var(--color-bg-tertiary) 78%, transparent);
-    color: var(--color-text-primary);
-    cursor: pointer;
-    backdrop-filter: blur(14px) saturate(128%);
-    -webkit-backdrop-filter: blur(14px) saturate(128%);
-    transition:
-        opacity 0.18s ease,
-        transform 0.18s ease,
-        background-color 0.15s ease,
-        border-color 0.15s ease;
+  position: absolute;
+  inset: 3px 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--color-border-default) 76%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-bg-tertiary) 78%, transparent);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  backdrop-filter: blur(14px) saturate(128%);
+  -webkit-backdrop-filter: blur(14px) saturate(128%);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .currentHub:hover {
-    border-color: var(--color-border-hover);
-    background: color-mix(in srgb, var(--color-bg-tertiary) 92%, transparent);
+  border-color: var(--color-border-hover);
+  background: color-mix(in srgb, var(--color-bg-tertiary) 92%, transparent);
 }
 
-.switcher[data-expanded="true"] .currentHub {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.96);
+.switcher[data-expanded='true'] .currentHub {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.96);
 }
 
 .currentHubLabel {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
 }
 
 .currentHubChevron {
-    flex-shrink: 0;
-    color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
 }
 
 .rail {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: safe center;
-    gap: 4px;
-    min-width: 0;
-    padding: 3px 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border: 1px solid color-mix(in srgb, var(--color-border-default) 72%, transparent);
-    border-radius: var(--radius-xl);
-    background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
-    color: var(--color-text-secondary);
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.96);
-    scrollbar-width: none;
-    touch-action: pan-x;
-    backdrop-filter: blur(16px) saturate(132%);
-    -webkit-backdrop-filter: blur(16px) saturate(132%);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-    mask-image: linear-gradient(to right, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
-    transition:
-        opacity 0.18s ease,
-        transform 0.18s ease,
-        border-color 0.15s ease;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: safe center;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-border-default) 72%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
+  color: var(--color-text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.96);
+  scrollbar-width: none;
+  touch-action: pan-x;
+  backdrop-filter: blur(16px) saturate(132%);
+  -webkit-backdrop-filter: blur(16px) saturate(132%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 18px,
+    black calc(100% - 18px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 18px,
+    black calc(100% - 18px),
+    transparent 100%
+  );
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.15s ease;
 }
 
 .rail::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
 
-.switcher[data-expanded="true"] .rail {
-    z-index: 3;
-    opacity: 1;
-    pointer-events: auto;
-    transform: scale(1);
+.switcher[data-expanded='true'] .rail {
+  z-index: 3;
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
 }
 
 .tab {
-    position: relative;
-    display: flex;
-    align-items: center;
-    flex: 0 0 auto;
-    gap: 8px;
-    height: 30px;
-    min-width: 88px;
-    max-width: 156px;
-    padding: 0 12px;
-    border: none;
-    border-radius: var(--radius-lg);
-    outline: none;
-    background: transparent;
-    color: var(--color-text-secondary);
-    cursor: grab;
-    font-size: var(--font-size-base);
-    transition:
-        background-color 0.15s ease,
-        color 0.15s ease,
-        box-shadow 0.15s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  height: 30px;
+  min-width: 88px;
+  max-width: 156px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-lg);
+  outline: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: grab;
+  font-size: var(--font-size-base);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .tab:active {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 .tab:hover {
-    background-color: color-mix(in srgb, var(--color-bg-tertiary) 86%, transparent);
-    color: var(--color-text-primary);
+  background-color: color-mix(in srgb, var(--color-bg-tertiary) 86%, transparent);
+  color: var(--color-text-primary);
 }
 
-.tab[data-active="true"] {
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border-hover) 72%, transparent);
+.tab[data-active='true'] {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border-hover) 72%, transparent);
 }
 
-.tab[data-dragging="true"] {
-    opacity: 0.55;
+.tab[data-dragging='true'] {
+  opacity: 0.55;
 }
 
-.tab[data-drag-over="true"] {
-    background-color: var(--color-bg-tertiary);
-    box-shadow: inset 0 -2px 0 var(--color-action-primary);
-    color: var(--color-text-primary);
+.tab[data-drag-over='true'] {
+  background-color: var(--color-bg-tertiary);
+  box-shadow: inset 0 -2px 0 var(--color-action-primary);
+  color: var(--color-text-primary);
 }
 
 .tabLabel {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: var(--font-weight-semibold);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Hub Tab 未读消息小圆点：行内显示在 hub 名称后方 */
 .unreadDot {
-    display: inline-block;
-    flex-shrink: 0;
-    width: 7px;
-    height: 7px;
-    margin-left: -4px;
-    margin-right: 4px;
-    border-radius: 50%;
-    background-color: var(--color-action-primary, #3F7BD9);
-    box-shadow: 0 0 0 1.5px var(--color-bg-primary);
-    pointer-events: none;
-    align-self: center;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-left: -4px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background-color: var(--color-action-primary, #3f7bd9);
+  box-shadow: 0 0 0 1.5px var(--color-bg-primary);
+  pointer-events: none;
+  align-self: center;
 }

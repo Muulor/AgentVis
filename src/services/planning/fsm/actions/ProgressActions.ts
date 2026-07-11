@@ -16,8 +16,8 @@ import type { FSMContext, FSMEvent, ActionFn } from '../types';
  * 同时重置连续无进展计数
  */
 export const recordProgress: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
-    ctx.progress = true;
-    ctx.consecutiveNoProgress = 0;
+  ctx.progress = true;
+  ctx.consecutiveNoProgress = 0;
 };
 
 /**
@@ -26,17 +26,17 @@ export const recordProgress: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
  * 增加连续无进展计数
  */
 export const recordNoProgress: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
-    ctx.progress = false;
-    ctx.consecutiveNoProgress++;
+  ctx.progress = false;
+  ctx.consecutiveNoProgress++;
 };
 
 /**
  * 重置所有进度相关状态
  */
 export const resetProgress: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
-    ctx.progress = false;
-    ctx.consecutiveNoProgress = 0;
-    ctx.toolCallHistory = [];
+  ctx.progress = false;
+  ctx.consecutiveNoProgress = 0;
+  ctx.toolCallHistory = [];
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -50,32 +50,24 @@ export const resetProgress: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
  * @param _event - 事件（未使用）
  * @param toolName - 工具名称
  */
-export const recordToolCall = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    toolName: string
-): void => {
-    ctx.toolCallHistory.push(toolName);
+export const recordToolCall = (ctx: FSMContext, _event: FSMEvent, toolName: string): void => {
+  ctx.toolCallHistory.push(toolName);
 };
 
 /**
  * 创建记录工具调用 Action
  */
-export const createRecordToolCallAction = (
-    toolName: string
-): ActionFn<FSMEvent> => {
-    return (ctx: FSMContext) => {
-        ctx.toolCallHistory.push(toolName);
-    };
+export const createRecordToolCallAction = (toolName: string): ActionFn<FSMEvent> => {
+  return (ctx: FSMContext) => {
+    ctx.toolCallHistory.push(toolName);
+  };
 };
 
 /**
  * 清空工具调用历史
  */
-export const clearToolCallHistory: ActionFn<FSMEvent> = (
-    ctx: FSMContext
-): void => {
-    ctx.toolCallHistory = [];
+export const clearToolCallHistory: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
+  ctx.toolCallHistory = [];
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -85,17 +77,13 @@ export const clearToolCallHistory: ActionFn<FSMEvent> = (
 /**
  * 增加子 Agent 创建计数
  */
-export const incrementSubAgentCount: ActionFn<FSMEvent> = (
-    ctx: FSMContext
-): void => {
-    ctx.subAgentSpawnCount++;
+export const incrementSubAgentCount: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
+  ctx.subAgentSpawnCount++;
 };
 
 /**
  * 重置子 Agent 计数
  */
-export const resetSubAgentCount: ActionFn<FSMEvent> = (
-    ctx: FSMContext
-): void => {
-    ctx.subAgentSpawnCount = 0;
+export const resetSubAgentCount: ActionFn<FSMEvent> = (ctx: FSMContext): void => {
+  ctx.subAgentSpawnCount = 0;
 };

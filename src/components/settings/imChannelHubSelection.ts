@@ -6,11 +6,11 @@
  */
 
 interface HubOption {
-    id: string;
+  id: string;
 }
 
 interface AgentOption {
-    id: string;
+  id: string;
 }
 
 export type MissingAgentAction = 'none' | 'reload' | 'clear';
@@ -23,18 +23,18 @@ export type MissingAgentAction = 'none' | 'reload' | 'clear';
  * - 没有 Hub 或多个 Hub 且配置为空/失效：返回 null，等待用户显式选择
  */
 export function resolveImBotHubId(
-    configuredHubId: string | null,
-    hubs: readonly HubOption[],
+  configuredHubId: string | null,
+  hubs: readonly HubOption[]
 ): string | null {
-    if (configuredHubId && hubs.some((hub) => hub.id === configuredHubId)) {
-        return configuredHubId;
-    }
+  if (configuredHubId && hubs.some((hub) => hub.id === configuredHubId)) {
+    return configuredHubId;
+  }
 
-    if (hubs.length === 1) {
-        return hubs[0]?.id ?? null;
-    }
+  if (hubs.length === 1) {
+    return hubs[0]?.id ?? null;
+  }
 
-    return null;
+  return null;
 }
 
 /**
@@ -44,14 +44,14 @@ export function resolveImBotHubId(
  * 在单 Hub 场景保留原绑定。
  */
 export function shouldClearAgentAfterHubResolve(
-    configuredHubId: string | null,
-    resolvedHubId: string | null,
+  configuredHubId: string | null,
+  resolvedHubId: string | null
 ): boolean {
-    return configuredHubId !== null && configuredHubId !== resolvedHubId;
+  return configuredHubId !== null && configuredHubId !== resolvedHubId;
 }
 
 export function getMissingAgentReloadKey(hubId: string, agentId: string): string {
-    return `${hubId}:${agentId}`;
+  return `${hubId}:${agentId}`;
 }
 
 /**
@@ -61,29 +61,23 @@ export function getMissingAgentReloadKey(hubId: string, agentId: string): string
  * 若 Agent 仍缺失，则先重载一次列表，第二次仍缺失才清空 agentId。
  */
 export function resolveMissingAgentAction(params: {
-    agentId: string | null;
-    currentHubId: string | null;
-    lastLoadedHubId: string | null;
-    agents: readonly AgentOption[];
-    lastMissingAgentReloadKey: string | null;
+  agentId: string | null;
+  currentHubId: string | null;
+  lastLoadedHubId: string | null;
+  agents: readonly AgentOption[];
+  lastMissingAgentReloadKey: string | null;
 }): MissingAgentAction {
-    const {
-        agentId,
-        currentHubId,
-        lastLoadedHubId,
-        agents,
-        lastMissingAgentReloadKey,
-    } = params;
+  const { agentId, currentHubId, lastLoadedHubId, agents, lastMissingAgentReloadKey } = params;
 
-    if (!agentId || !currentHubId || lastLoadedHubId !== currentHubId) {
-        return 'none';
-    }
+  if (!agentId || !currentHubId || lastLoadedHubId !== currentHubId) {
+    return 'none';
+  }
 
-    if (agents.some((agent) => agent.id === agentId)) {
-        return 'none';
-    }
+  if (agents.some((agent) => agent.id === agentId)) {
+    return 'none';
+  }
 
-    return lastMissingAgentReloadKey === getMissingAgentReloadKey(currentHubId, agentId)
-        ? 'clear'
-        : 'reload';
+  return lastMissingAgentReloadKey === getMissingAgentReloadKey(currentHubId, agentId)
+    ? 'clear'
+    : 'reload';
 }

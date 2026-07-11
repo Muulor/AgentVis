@@ -10,50 +10,50 @@ import type { LongTermFactCategory } from '@services/memory/types';
 const MANUAL_FACT_SOURCE = 'manual';
 
 export interface ManualFactCreateParams {
-    agentId: string;
-    content: string;
-    category: LongTermFactCategory;
+  agentId: string;
+  content: string;
+  category: LongTermFactCategory;
 }
 
 export interface ManualFactCreateRequest {
-    agentId: string;
-    layer: 'fact';
-    content: string;
-    category: LongTermFactCategory;
-    importance: number;
-    sourceMessageIds: null;
-    metadataJson: string;
+  agentId: string;
+  layer: 'fact';
+  content: string;
+  category: LongTermFactCategory;
+  importance: number;
+  sourceMessageIds: null;
+  metadataJson: string;
 }
 
 interface FactMetadata {
-    source?: string;
+  source?: string;
 }
 
 export function buildManualFactCreateRequest({
+  agentId,
+  content,
+  category,
+}: ManualFactCreateParams): ManualFactCreateRequest {
+  return {
     agentId,
+    layer: 'fact',
     content,
     category,
-}: ManualFactCreateParams): ManualFactCreateRequest {
-    return {
-        agentId,
-        layer: 'fact',
-        content,
-        category,
-        importance: 5,
-        sourceMessageIds: null,
-        metadataJson: JSON.stringify({ source: MANUAL_FACT_SOURCE }),
-    };
+    importance: 5,
+    sourceMessageIds: null,
+    metadataJson: JSON.stringify({ source: MANUAL_FACT_SOURCE }),
+  };
 }
 
 export function isManualFactMetadata(metadataJson: string | null | undefined): boolean {
-    if (!metadataJson) {
-        return false;
-    }
+  if (!metadataJson) {
+    return false;
+  }
 
-    try {
-        const metadata = JSON.parse(metadataJson) as FactMetadata;
-        return metadata.source === MANUAL_FACT_SOURCE;
-    } catch {
-        return false;
-    }
+  try {
+    const metadata = JSON.parse(metadataJson) as FactMetadata;
+    return metadata.source === MANUAL_FACT_SOURCE;
+  } catch {
+    return false;
+  }
 }

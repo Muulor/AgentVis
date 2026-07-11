@@ -2,185 +2,203 @@
 
 /* 容器：与气泡内容区边缘对齐 */
 .bar {
-    margin-top: 12px;
-    border-top: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
-    padding-top: 10px;
+  margin-top: 12px;
+  border-top: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.08));
+  padding-top: 10px;
 }
 
 /* ── 已选摘要 ── */
 .summary {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-bottom: 8px;
-    padding: 8px 10px;
-    border-radius: var(--radius-control);
-    background: rgba(37, 99, 235, 0.07);
-    border: 1px solid rgba(37, 99, 235, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: rgba(37, 99, 235, 0.07);
+  border: 1px solid rgba(37, 99, 235, 0.18);
 }
 
 .summaryRow {
-    display: flex;
-    align-items: baseline;
-    gap: 4px;
-    font-size: var(--font-size-xs, 11px);
-    line-height: 1.5;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--font-size-xs, 11px);
+  line-height: 1.5;
 }
 
 .summaryTitle {
-    flex-shrink: 0;
-    color: var(--color-text-tertiary, #888);
-    font-weight: var(--font-weight-medium, 500);
+  flex-shrink: 0;
+  color: var(--color-text-tertiary, #888);
+  font-weight: var(--font-weight-medium, 500);
 }
 
 .summaryLabels {
-    color: var(--color-text-primary, #E8E8E8);
-    font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary, #e8e8e8);
+  font-weight: var(--font-weight-medium, 500);
 }
 
 /* ── 输入行 ── */
 .inputRow {
-    display: flex;
-    align-items: flex-end;
-    gap: 6px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .textarea {
-    flex: 1;
-    min-height: 32px;
-    max-height: 120px;
-    padding: 6px 10px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
-    background: var(--color-bg-input, rgba(255, 255, 255, 0.05));
-    color: var(--color-text-primary, #E8E8E8);
-    font-family: inherit;
-    font-size: var(--font-size-sm, 13px);
-    line-height: 1.5;
-    resize: none;
-    overflow: hidden;
-    transition: border-color var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease);
+  flex: 1;
+  min-height: 32px;
+  max-height: 120px;
+  padding: 6px 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
+  background: var(--color-bg-input, rgba(255, 255, 255, 0.05));
+  color: var(--color-text-primary, #e8e8e8);
+  font-family: inherit;
+  font-size: var(--font-size-sm, 13px);
+  line-height: 1.5;
+  resize: none;
+  overflow: hidden;
+  transition:
+    border-color var(--transition-fast, 150ms ease),
+    box-shadow var(--transition-fast, 150ms ease);
 }
 
 .textarea::placeholder {
-    color: var(--color-text-quaternary, #555);
+  color: var(--color-text-quaternary, #555);
 }
 
 .textarea:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 /* 确认发送按钮 */
 .confirmBtn {
-    --widget-action-bg: color-mix(in srgb, var(--color-text-primary) 38%, var(--color-bg-tertiary));
-    --widget-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 46%, var(--color-bg-tertiary));
-    --widget-action-bg-disabled: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
-    --widget-action-border: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
-    --widget-action-border-hover: color-mix(in srgb, var(--color-text-primary) 26%, transparent);
-    --widget-action-icon: #fff;
-    --widget-action-icon-disabled: color-mix(in srgb, #fff 100%, var(--color-text-quaternary));
+  --widget-action-bg: color-mix(in srgb, var(--color-text-primary) 38%, var(--color-bg-tertiary));
+  --widget-action-bg-hover: color-mix(
+    in srgb,
+    var(--color-text-primary) 46%,
+    var(--color-bg-tertiary)
+  );
+  --widget-action-bg-disabled: color-mix(
+    in srgb,
+    var(--color-text-primary) 18%,
+    var(--color-bg-tertiary)
+  );
+  --widget-action-border: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  --widget-action-border-hover: color-mix(in srgb, var(--color-text-primary) 26%, transparent);
+  --widget-action-icon: #fff;
+  --widget-action-icon-disabled: color-mix(in srgb, #fff 100%, var(--color-text-quaternary));
 
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--radius-full);
-    border: 1px solid var(--widget-action-border);
-    background: var(--widget-action-bg);
-    color: var(--widget-action-icon);
-    cursor: pointer;
-    transition:
-        background-color var(--transition-fast, 150ms ease),
-        border-color var(--transition-fast, 150ms ease),
-        color var(--transition-fast, 150ms ease),
-        opacity var(--transition-fast, 150ms ease),
-        transform var(--transition-fast, 150ms ease);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--widget-action-border);
+  background: var(--widget-action-bg);
+  color: var(--widget-action-icon);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast, 150ms ease),
+    border-color var(--transition-fast, 150ms ease),
+    color var(--transition-fast, 150ms ease),
+    opacity var(--transition-fast, 150ms ease),
+    transform var(--transition-fast, 150ms ease);
 }
 
 .confirmBtn:hover:not(:disabled) {
-    border-color: var(--widget-action-border-hover);
-    background: var(--widget-action-bg-hover);
-    transform: translateY(-1px);
+  border-color: var(--widget-action-border-hover);
+  background: var(--widget-action-bg-hover);
+  transform: translateY(-1px);
 }
 
 .confirmBtn:active:not(:disabled) {
-    transform: translateY(0);
+  transform: translateY(0);
 }
 
 .confirmBtnDisabled {
-    background: var(--widget-action-bg-disabled);
-    border-color: transparent;
-    color: var(--widget-action-icon-disabled);
-    opacity: 1;
-    cursor: var(--cursor-disabled);
+  background: var(--widget-action-bg-disabled);
+  border-color: transparent;
+  color: var(--widget-action-icon-disabled);
+  opacity: 1;
+  cursor: var(--cursor-disabled);
 }
 
 :global([data-theme='dark']) .confirmBtn {
-    --widget-action-bg: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
-    --widget-action-bg-hover: color-mix(in srgb, var(--color-text-primary) 26%, var(--color-bg-tertiary));
-    --widget-action-bg-disabled: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg-tertiary));
-    --widget-action-border: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
-    --widget-action-border-hover: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  --widget-action-bg: color-mix(in srgb, var(--color-text-primary) 18%, var(--color-bg-tertiary));
+  --widget-action-bg-hover: color-mix(
+    in srgb,
+    var(--color-text-primary) 26%,
+    var(--color-bg-tertiary)
+  );
+  --widget-action-bg-disabled: color-mix(
+    in srgb,
+    var(--color-text-primary) 8%,
+    var(--color-bg-tertiary)
+  );
+  --widget-action-border: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  --widget-action-border-hover: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
 }
 
 /* 提示文字 */
 .hint {
-    margin: 6px 0 0;
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-quaternary, #555);
-    text-align: center;
+  margin: 6px 0 0;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-quaternary, #555);
+  text-align: center;
 }
 
 /* ── 已提交状态 ── */
 .submittedRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .submittedLabel {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-tertiary, #888);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-tertiary, #888);
 }
 
 /* 重新选择按钮 */
 .reselectBtn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: var(--radius-button);
-    border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
-    background: transparent;
-    color: var(--color-text-secondary, #AAAAAA);
-    font-family: inherit;
-    font-size: var(--font-size-xs, 11px);
-    cursor: pointer;
-    transition:
-        border-color var(--transition-fast, 150ms ease),
-        color var(--transition-fast, 150ms ease);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--color-border-default, rgba(255, 255, 255, 0.1));
+  background: transparent;
+  color: var(--color-text-secondary, #aaaaaa);
+  font-family: inherit;
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast, 150ms ease),
+    color var(--transition-fast, 150ms ease);
 }
 
 .reselectBtn:hover {
-    border-color: var(--color-text-secondary, #888);
-    color: var(--color-text-primary, #E8E8E8);
+  border-color: var(--color-text-secondary, #888);
+  color: var(--color-text-primary, #e8e8e8);
 }
 
 /* 已提交态的补充文字 */
 .submittedExtra {
-    margin: 4px 0 6px;
-    padding: 4px 10px;
-    font-size: var(--font-size-xs, 11px);
-    font-style: italic;
-    color: var(--color-text-secondary, #AAAAAA);
-    border-left: 2px solid rgba(37, 99, 235, 0.35);
-    line-height: 1.5;
+  margin: 4px 0 6px;
+  padding: 4px 10px;
+  font-size: var(--font-size-xs, 11px);
+  font-style: italic;
+  color: var(--color-text-secondary, #aaaaaa);
+  border-left: 2px solid rgba(37, 99, 235, 0.35);
+  line-height: 1.5;
 }

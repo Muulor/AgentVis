@@ -6,884 +6,892 @@
  */
 
 .container {
-    --skill-success-color: #42b353;
+  --skill-success-color: #42b353;
 
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 /* ==================== 审查状态条 ==================== */
 
 .auditBanner {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 52px;
-    padding: 10px 12px;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    background: var(--color-bg-secondary);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  background: var(--color-bg-secondary);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
 }
 
 .auditBannerActive {
-    color: var(--color-accent-primary, #3b82f6);
-    border-color: rgba(59, 130, 246, 0.35);
-    background: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 10%, var(--color-bg-secondary));
+  color: var(--color-accent-primary, #3b82f6);
+  border-color: rgba(59, 130, 246, 0.35);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-primary, #3b82f6) 10%,
+    var(--color-bg-secondary)
+  );
 }
 
 .auditBannerSuccess {
-    color: var(--skill-success-color);
-    border-color: color-mix(in srgb, var(--skill-success-color) 36%, transparent);
-    background: color-mix(in srgb, var(--skill-success-color) 10%, var(--color-bg-secondary));
+  color: var(--skill-success-color);
+  border-color: color-mix(in srgb, var(--skill-success-color) 36%, transparent);
+  background: color-mix(in srgb, var(--skill-success-color) 10%, var(--color-bg-secondary));
 }
 
 .auditBannerWarning {
-    color: var(--color-status-warning);
-    border-color: color-mix(in srgb, var(--color-status-warning) 38%, transparent);
-    background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-bg-secondary));
+  color: var(--color-status-warning);
+  border-color: color-mix(in srgb, var(--color-status-warning) 38%, transparent);
+  background: color-mix(in srgb, var(--color-status-warning) 10%, var(--color-bg-secondary));
 }
 
 .auditBannerDanger {
-    color: var(--color-status-error);
-    border-color: color-mix(in srgb, var(--color-status-error) 38%, transparent);
-    background: color-mix(in srgb, var(--color-status-error) 10%, var(--color-bg-secondary));
+  color: var(--color-status-error);
+  border-color: color-mix(in srgb, var(--color-status-error) 38%, transparent);
+  background: color-mix(in srgb, var(--color-status-error) 10%, var(--color-bg-secondary));
 }
 
 .auditBannerIcon {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: var(--radius-sm, 4px);
-    background: color-mix(in srgb, currentColor 14%, transparent);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
 .auditBannerText {
-    flex: 1;
-    min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .auditBannerTitleRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .auditBannerTitle {
-    font-size: var(--font-size-sm, 13px);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-text-primary);
-    white-space: nowrap;
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  white-space: nowrap;
 }
 
 .auditBannerSkill {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs, 12px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs, 12px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .auditBannerDetail {
-    margin-top: 2px;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-xs, 12px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  margin-top: 2px;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs, 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .auditBannerButton {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    height: 30px;
-    padding: 0 10px;
-    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-    border-radius: var(--radius-button);
-    background: color-mix(in srgb, currentColor 8%, transparent);
-    color: currentColor;
-    cursor: pointer;
-    font-size: var(--font-size-xs, 12px);
-    font-weight: var(--font-weight-medium, 500);
-    white-space: nowrap;
-    transition: background-color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: var(--radius-button);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: currentColor;
+  cursor: pointer;
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-medium, 500);
+  white-space: nowrap;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 .auditBannerButton:hover {
-    border-color: currentColor;
-    background: color-mix(in srgb, currentColor 14%, transparent);
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
 /* ==================== Section 通用 ==================== */
 
 .section {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .sectionTitle {
-    font-size: var(--font-size-base, 14px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
-    margin: 0;
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
 .hint {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-tertiary);
-    margin: 0;
-    line-height: 1.5;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ==================== 技能列表 ==================== */
 
 .skillList {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    /* 限制高度，技能多时可滚动，避免撑高整个设置窗口 */
-    max-height: 420px;
-    overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 限制高度，技能多时可滚动，避免撑高整个设置窗口 */
+  max-height: 420px;
+  overflow-y: auto;
 }
 
 .skillCard {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
-    transition: border-color 0.15s;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+  transition: border-color 0.15s;
 }
 
 .skillCard:hover {
-    border-color: var(--color-border-secondary);
+  border-color: var(--color-border-secondary);
 }
 
 /* 禁用的技能卡片：降低透明度 + 边框变灰 */
 .skillCardDisabled {
-    opacity: 0.55;
+  opacity: 0.55;
 }
 
 .skillCardDisabled:hover {
-    border-color: var(--color-border-primary);
+  border-color: var(--color-border-primary);
 }
 
 /* 技能启用/禁用开关按钮 */
 .skillToggle {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    background: transparent;
-    border-radius: var(--radius-sm, 4px);
-    cursor: pointer;
-    transition: all 0.15s;
-    color: var(--skill-success-color);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--skill-success-color);
 }
 
 .skillToggle:hover {
-    background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
+  background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
 }
 
 /* 禁用状态的开关 */
 .skillToggleOff {
-    color: var(--color-text-tertiary);
-    opacity: 1;
+  color: var(--color-text-tertiary);
+  opacity: 1;
 }
 
 .skillToggleOff:hover {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
 
 /* 可点击的头部区域 */
 .skillCardHeader {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 14px;
-    cursor: pointer;
-    user-select: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
 }
 
 /* 折叠/展开切换图标 */
 .collapseToggle {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    color: var(--color-text-tertiary);
-    margin-top: 2px;
-    transition: color 0.15s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+  transition: color 0.15s;
 }
 
 .skillCardHeader:hover .collapseToggle {
-    color: var(--color-text-secondary);
+  color: var(--color-text-secondary);
 }
 
 /* 展开后的内容区域 */
 .skillExpandedContent {
-    padding: 0 14px 12px 54px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  padding: 0 14px 12px 54px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .skillStatusIcon {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-sm, 4px);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm, 4px);
 }
 
 .statusReady {
-    color: var(--skill-success-color);
-    background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
+  color: var(--skill-success-color);
+  background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
 }
 
 .statusPending {
-    color: var(--color-status-warning);
-    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
+  color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
 }
 
 .statusError {
-    color: var(--color-status-error);
-    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
+  color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 .skillInfo {
-    flex: 1;
-    min-width: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .skillNameRow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .skillName {
-    font-size: var(--font-size-sm, 13px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-primary);
-    margin: 0;
+  font-size: var(--font-size-sm, 13px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  margin: 0;
 }
 
 .skillModeBadge {
-    font-size: var(--font-size-xs, 11px);
-    padding: 1px 6px;
-    border-radius: var(--radius-sm, 4px);
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-tertiary);
-    text-transform: capitalize;
+  font-size: var(--font-size-xs, 11px);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  text-transform: capitalize;
 }
 
 .skillDescription {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-secondary);
-    margin: 2px 0 0 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-secondary);
+  margin: 2px 0 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skillMissing {
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-status-warning);
-    margin: 2px 0 0 0;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-status-warning);
+  margin: 2px 0 0 0;
 }
 
 .installDepsButton {
-    flex-shrink: 0;
-    padding: 4px 10px;
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    background: transparent;
-    color: var(--color-accent-primary, #3b82f6);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 11px);
-    cursor: pointer;
-    transition: all 0.15s;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: transparent;
+  color: var(--color-accent-primary, #3b82f6);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .installDepsButton:hover {
-    background: rgba(59, 130, 246, 0.1);
-    border-color: var(--color-accent-primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--color-accent-primary, #3b82f6);
 }
 
 /* ==================== 手动依赖引导 ==================== */
 
 .manualDepSection {
-    margin-top: 6px;
-    padding: 6px 8px;
-    background: color-mix(in srgb, var(--color-status-warning) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-status-warning) 18%, transparent);
-    border-radius: var(--radius-surface);
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--color-status-warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-status-warning) 18%, transparent);
+  border-radius: var(--radius-surface);
 }
 
 .manualDepHeader {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-status-warning);
-    font-weight: var(--font-weight-medium, 500);
-    margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-status-warning);
+  font-weight: var(--font-weight-medium, 500);
+  margin-bottom: 4px;
 }
 
 .manualDepItem {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 4px 6px;
-    padding: 3px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding: 3px 0;
 }
 
-.manualDepItem+.manualDepItem {
-    border-top: 1px solid color-mix(in srgb, var(--color-status-warning) 14%, transparent);
+.manualDepItem + .manualDepItem {
+  border-top: 1px solid color-mix(in srgb, var(--color-status-warning) 14%, transparent);
 }
 
 .depToolInfo {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-    flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
 }
 
 .depToolName {
-    font-size: var(--font-size-xs, 11px);
-    color: var(--color-text-secondary);
-    font-weight: var(--font-weight-medium, 500);
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium, 500);
 }
 
 .depCommand {
-    font-size: var(--font-size-xs, 11px);
-    font-family: var(--font-family-mono);
-    color: var(--color-text-primary);
-    background: var(--color-bg-tertiary);
-    padding: 2px 6px;
-    border-radius: 3px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  font-size: var(--font-size-xs, 11px);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .copyButton {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-tertiary);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    transition: all 0.15s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .copyButton:hover {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .manualDepBadge {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 10px;
-    color: var(--color-status-warning);
-    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
-    padding: 1px 6px;
-    border-radius: 3px;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
+  padding: 1px 6px;
+  border-radius: 3px;
 }
 
 /* 操作按钮组（复制 + 安装） */
 .depActions {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
 }
 
 /* 安装状态 pill 按钮（图标 + 文字标签） */
 .tooltipButtonWrap {
-    display: inline-flex;
-    align-items: center;
-    flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .installPill {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    height: 20px;
-    padding: 0 8px;
-    border: 1px solid rgba(59, 130, 246, 0.4);
-    background: transparent;
-    color: var(--color-accent-primary, #3b82f6);
-    border-radius: var(--radius-button);
-    cursor: pointer;
-    font-size: 10px;
-    font-weight: 500;
-    white-space: nowrap;
-    transition: all 0.15s;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  background: transparent;
+  color: var(--color-accent-primary, #3b82f6);
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s;
 }
 
 .installPill:hover:not(:disabled) {
-    background: rgba(59, 130, 246, 0.12);
-    border-color: rgba(59, 130, 246, 0.6);
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.6);
 }
 
 .installPill:disabled {
-    cursor: default;
+  cursor: default;
 }
 
 /* 已安装：绿色 pill */
 .installPillSuccess {
-    color: var(--skill-success-color);
-    border-color: color-mix(in srgb, var(--skill-success-color) 36%, transparent);
-    background: color-mix(in srgb, var(--skill-success-color) 10%, transparent);
-    opacity: 0.9;
+  color: var(--skill-success-color);
+  border-color: color-mix(in srgb, var(--skill-success-color) 36%, transparent);
+  background: color-mix(in srgb, var(--skill-success-color) 10%, transparent);
+  opacity: 0.9;
 }
 
 /* 检测中/安装中：灰色 pill */
 .installPillBusy {
-    color: var(--color-text-secondary, #888);
-    border-color: rgba(136, 136, 136, 0.3);
-    background: transparent;
-    opacity: 0.8;
+  color: var(--color-text-secondary, #888);
+  border-color: rgba(136, 136, 136, 0.3);
+  background: transparent;
+  opacity: 0.8;
 }
 
 /* 错误/重试：橙色 pill */
 .installPillError {
-    color: var(--color-status-warning);
-    border-color: color-mix(in srgb, var(--color-status-warning) 46%, transparent);
+  color: var(--color-status-warning);
+  border-color: color-mix(in srgb, var(--color-status-warning) 46%, transparent);
 }
 
 .installPillError:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
-    border-color: color-mix(in srgb, var(--color-status-warning) 64%, transparent);
+  background: color-mix(in srgb, var(--color-status-warning) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-status-warning) 64%, transparent);
 }
 
 /* Spinner 旋转动画 */
 .spinning {
-    animation: spin 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
+  from {
+    transform: rotate(0deg);
+  }
 
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 依赖安装消息 */
 .depMessage {
-    width: 100%;
-    font-size: 10px;
-    line-height: 1.3;
-    padding: 3px 6px;
-    border-radius: 3px;
-    margin-top: 2px;
+  width: 100%;
+  font-size: 10px;
+  line-height: 1.3;
+  padding: 3px 6px;
+  border-radius: 3px;
+  margin-top: 2px;
 }
 
 .depMessageError {
-    color: var(--color-status-error);
-    background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
+  color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
 }
 
 .depMessageNetwork {
-    color: var(--color-status-warning);
-    background: color-mix(in srgb, var(--color-status-warning) 12%, transparent);
+  color: var(--color-status-warning);
+  background: color-mix(in srgb, var(--color-status-warning) 12%, transparent);
 }
 
 /* 重试链接按钮 */
 .retryLink {
-    display: inline;
-    border: none;
-    background: none;
-    color: var(--color-accent-primary, #3b82f6);
-    font-size: 10px;
-    cursor: pointer;
-    text-decoration: underline;
-    margin-left: 4px;
-    padding: 0;
+  display: inline;
+  border: none;
+  background: none;
+  color: var(--color-accent-primary, #3b82f6);
+  font-size: 10px;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 4px;
+  padding: 0;
 }
 
 .retryLink:hover {
-    color: var(--color-accent-primary-hover, #2563eb);
+  color: var(--color-accent-primary-hover, #2563eb);
 }
 
 /* 展开区域底部操作栏 */
 .skillExpandedActions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--color-border-primary);
-    margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-primary);
+  margin-top: 4px;
 }
 
 .openSkillButton {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-    background: transparent;
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 11px);
-    cursor: pointer;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .openSkillButton:hover {
-    border-color: currentColor;
-    background: color-mix(in srgb, currentColor 8%, transparent);
-    color: var(--color-text-primary);
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: var(--color-text-primary);
 }
 
 /* 删除按钮 — 与 dangerButton 同风格 */
 .deleteSkillButton {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
-    background: transparent;
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 11px);
-    cursor: pointer;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .deleteSkillButton:hover:not(:disabled) {
-    border-color: currentColor;
-    background: color-mix(in srgb, currentColor 8%, transparent);
-    color: var(--color-text-primary);
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: var(--color-text-primary);
 }
 
 .deleteSkillButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .emptyState {
-    padding: 24px;
-    text-align: center;
-    color: var(--color-text-tertiary);
-    font-size: var(--font-size-sm, 13px);
-    background: var(--color-bg-secondary);
-    border: 1px dashed var(--color-border-primary);
-    border-radius: var(--radius-surface);
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm, 13px);
+  background: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border-primary);
+  border-radius: var(--radius-surface);
 }
 
 /* ==================== 安装新技能 ==================== */
 
 .installActions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .buttonRow {
-    display: flex;
-    gap: 8px;
+  display: flex;
+  gap: 8px;
 }
 
 .actionButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: 1px solid var(--color-border-primary);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-secondary);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .actionButton:hover:not(:disabled) {
-    border-color: var(--color-border-secondary);
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-primary);
+  border-color: var(--color-border-secondary);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
 }
 
 .actionButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* GitHub URL 输入区 */
 .githubInputGroup {
-    display: flex;
-    gap: 8px;
+  display: flex;
+  gap: 8px;
 }
 
 .githubInput {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-control);
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm, 13px);
-    transition: border-color 0.15s, box-shadow 0.15s;
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 13px);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .githubInput:focus {
-    outline: none;
-    border-color: var(--focus-control-border);
-    box-shadow: var(--focus-control-shadow);
+  outline: none;
+  border-color: var(--focus-control-border);
+  box-shadow: var(--focus-control-shadow);
 }
 
 .githubInput::placeholder {
-    color: var(--color-text-tertiary);
+  color: var(--color-text-tertiary);
 }
 
 .installButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border: 1px solid var(--color-accent-primary, #3b82f6);
-    background: var(--color-accent-primary, #3b82f6);
-    color: white;
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-sm, 13px);
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-accent-primary, #3b82f6);
+  background: var(--color-accent-primary, #3b82f6);
+  color: white;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-sm, 13px);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .installButton:hover:not(:disabled) {
-    opacity: 0.9;
+  opacity: 0.9;
 }
 
 .installButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* ==================== Python 环境 ==================== */
 
 .envCard {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 16px;
-    background: var(--color-bg-secondary);
-    border: 1px solid var(--color-border-primary);
-    border-radius: var(--radius-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
 }
 
 .envRow {
-    display: grid;
-    grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
-    align-items: baseline;
-    column-gap: 16px;
-    min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 16px;
+  min-width: 0;
 }
 
 .envRowMultiline {
-    align-items: start;
+  align-items: start;
 }
 
 .envLabel {
-    font-size: var(--font-size-sm, 13px);
-    color: var(--color-text-secondary);
-    white-space: nowrap;
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .envValue {
-    min-width: 0;
-    font-size: var(--font-size-sm, 13px);
-    font-family: var(--font-family-mono);
-    color: var(--color-text-primary);
-    text-align: right;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+  min-width: 0;
+  font-size: var(--font-size-sm, 13px);
+  font-family: var(--font-family-mono);
+  color: var(--color-text-primary);
+  text-align: right;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .envValueMultiline {
-    justify-self: stretch;
-    text-align: left;
-    white-space: pre-wrap;
-    line-height: 1.5;
+  justify-self: stretch;
+  text-align: left;
+  white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 .envStatusReady {
-    color: var(--skill-success-color);
+  color: var(--skill-success-color);
 }
 
 .envStatusError {
-    color: var(--color-status-error);
+  color: var(--color-status-error);
 }
 
 .envStatusPending {
-    color: var(--color-status-warning);
+  color: var(--color-status-warning);
 }
 
 .envActions {
-    display: flex;
-    gap: 8px;
-    margin-top: 4px;
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .dangerButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border: 1px solid color-mix(in srgb, var(--color-status-error) 42%, transparent);
-    background: transparent;
-    color: var(--color-status-error);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 12px);
-    cursor: pointer;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-status-error) 42%, transparent);
+  background: transparent;
+  color: var(--color-status-error);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 12px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .dangerButton:hover:not(:disabled) {
-    border-color: var(--color-status-error);
-    background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
+  border-color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 14%, transparent);
 }
 
 .dangerButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 .primaryButton {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border: 1px solid color-mix(in srgb, var(--skill-success-color) 42%, transparent);
-    background: transparent;
-    color: var(--skill-success-color);
-    border-radius: var(--radius-button);
-    font-size: var(--font-size-xs, 12px);
-    cursor: pointer;
-    transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--skill-success-color) 42%, transparent);
+  background: transparent;
+  color: var(--skill-success-color);
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-xs, 12px);
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .primaryButton:hover:not(:disabled) {
-    border-color: var(--skill-success-color);
-    background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
+  border-color: var(--skill-success-color);
+  background: color-mix(in srgb, var(--skill-success-color) 14%, transparent);
 }
 
 .primaryButton:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* 进度条 */
 .progressBar {
-    width: 100%;
-    height: 4px;
-    background: var(--color-bg-tertiary);
-    border-radius: 2px;
-    overflow: hidden;
+  width: 100%;
+  height: 4px;
+  background: var(--color-bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
 }
 
 .progressFill {
-    height: 100%;
-    background: var(--color-accent-primary, #3b82f6);
-    border-radius: 2px;
-    transition: width 0.3s ease;
+  height: 100%;
+  background: var(--color-accent-primary, #3b82f6);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 .progressText {
-    font-size: var(--font-size-xs, 12px);
-    color: var(--color-text-secondary);
-    margin: 0;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-text-secondary);
+  margin: 0;
 }
 
 /* 安装结果提示 */
 .resultMessage {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: var(--radius-surface);
-    font-size: var(--font-size-sm, 13px);
-    line-height: 1.5;
-    min-width: 0;
-    overflow-wrap: anywhere;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-surface);
+  font-size: var(--font-size-sm, 13px);
+  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .resultMessage svg {
-    flex-shrink: 0;
-    margin-top: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .resultText {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    white-space: pre-wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .resultSuccess {
-    background: color-mix(in srgb, var(--skill-success-color) 12%, transparent);
-    color: var(--skill-success-color);
-    border: 1px solid color-mix(in srgb, var(--skill-success-color) 24%, transparent);
+  background: color-mix(in srgb, var(--skill-success-color) 12%, transparent);
+  color: var(--skill-success-color);
+  border: 1px solid color-mix(in srgb, var(--skill-success-color) 24%, transparent);
 }
 
 .resultError {
-    background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
-    color: var(--color-status-error);
-    border: 1px solid color-mix(in srgb, var(--color-status-error) 24%, transparent);
+  background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
+  color: var(--color-status-error);
+  border: 1px solid color-mix(in srgb, var(--color-status-error) 24%, transparent);
 }
 
 /* 加载动画 */
 .spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+  to {
+    transform: rotate(360deg);
+  }
 }

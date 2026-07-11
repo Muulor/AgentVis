@@ -11,99 +11,99 @@
 /* ==================== 未关联：打开项目按钮 ==================== */
 
 .openProjectBtn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    height: 28px;
-    padding: 0 var(--spacing-sm);
-    border: 1px solid transparent;
-    border-radius: var(--radius-button);
-    background-color: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 var(--spacing-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-button);
+  background-color: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
 .openProjectBtn:hover:not(:disabled),
 .openProjectBtn:focus-visible:not(:disabled) {
-    border-color: var(--color-border-hover);
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
-    outline: none;
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  outline: none;
 }
 
 .openProjectBtn:disabled {
-    opacity: 0.5;
-    cursor: var(--cursor-disabled);
+  opacity: 0.5;
+  cursor: var(--cursor-disabled);
 }
 
 /* ==================== 已关联：项目名称标签 ==================== */
 
 .linkedBadge {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    height: 28px;
-    padding: 0 6px 0 8px;
-    border-radius: var(--radius-md);
-    border: 1px solid transparent;
-    /* 使用微妙的主题色背景标识已关联状态 */
-    background-color: rgba(59, 130, 246, 0.08);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    color: var(--color-action-primary);
-    max-width: 180px;
-    cursor: default;
-    transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  /* 使用微妙的主题色背景标识已关联状态 */
+  background-color: rgba(59, 130, 246, 0.08);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-action-primary);
+  max-width: 180px;
+  cursor: default;
+  transition: all var(--transition-fast);
 }
 
 .linkedBadge:hover,
 .linkedBadge:focus-within {
-    border-color: rgba(59, 130, 246, 0.3);
-    background-color: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  background-color: rgba(59, 130, 246, 0.12);
 }
 
 .badgeIcon {
-    flex-shrink: 0;
-    opacity: 0.7;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .badgeName {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: 500;
-    line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  line-height: 1;
 }
 
 /* ==================== 解除关联按钮 ==================== */
 
 .unlinkBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-full);
-    background: transparent;
-    color: var(--color-action-primary);
-    cursor: pointer;
-    flex-shrink: 0;
-    opacity: 0.5;
-    transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-action-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: all var(--transition-fast);
 }
 
 .unlinkBtn:hover:not(:disabled) {
-    opacity: 1;
-    background-color: rgba(59, 130, 246, 0.15);
+  opacity: 1;
+  background-color: rgba(59, 130, 246, 0.15);
 }
 
 .unlinkBtn:disabled {
-    opacity: 0.3;
-    cursor: var(--cursor-disabled);
+  opacity: 0.3;
+  cursor: var(--cursor-disabled);
 }

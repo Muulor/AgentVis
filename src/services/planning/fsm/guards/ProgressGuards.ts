@@ -19,27 +19,27 @@ const DEFAULT_NO_PROGRESS_THRESHOLD = 2;
  * 失败感知：连续 2 次无进展 → TERMINATE
  */
 export const consecutiveNoProgressExceeded = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    threshold: number = DEFAULT_NO_PROGRESS_THRESHOLD
+  ctx: FSMContext,
+  _event: FSMEvent,
+  threshold: number = DEFAULT_NO_PROGRESS_THRESHOLD
 ): boolean => {
-    return ctx.consecutiveNoProgress >= threshold;
+  return ctx.consecutiveNoProgress >= threshold;
 };
 
 /**
  * 创建带阈值参数的无进展检查 Guard
  */
 export const createNoProgressGuard = (
-    threshold: number = DEFAULT_NO_PROGRESS_THRESHOLD
+  threshold: number = DEFAULT_NO_PROGRESS_THRESHOLD
 ): GuardFn<FSMEvent> => {
-    return (ctx: FSMContext) => ctx.consecutiveNoProgress >= threshold;
+  return (ctx: FSMContext) => ctx.consecutiveNoProgress >= threshold;
 };
 
 /**
  * 检查是否有进展
  */
 export const hasProgress: GuardFn<FSMEvent> = (ctx: FSMContext): boolean => {
-    return ctx.progress;
+  return ctx.progress;
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -59,33 +59,33 @@ const DEFAULT_TOOL_THRASHING_THRESHOLD = 3;
  * @param threshold - 阈值，默认 3
  */
 export const toolThrashingDetected = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    threshold: number = DEFAULT_TOOL_THRASHING_THRESHOLD
+  ctx: FSMContext,
+  _event: FSMEvent,
+  threshold: number = DEFAULT_TOOL_THRASHING_THRESHOLD
 ): boolean => {
-    const history = ctx.toolCallHistory;
+  const history = ctx.toolCallHistory;
 
-    if (history.length < threshold) {
-        return false;
-    }
+  if (history.length < threshold) {
+    return false;
+  }
 
-    // 检查最后 N 次是否都是同一工具
-    const lastN = history.slice(-threshold);
-    return lastN.every((tool) => tool === lastN[0]);
+  // 检查最后 N 次是否都是同一工具
+  const lastN = history.slice(-threshold);
+  return lastN.every((tool) => tool === lastN[0]);
 };
 
 /**
  * 创建带阈值参数的工具震荡检测 Guard
  */
 export const createToolThrashingGuard = (
-    threshold: number = DEFAULT_TOOL_THRASHING_THRESHOLD
+  threshold: number = DEFAULT_TOOL_THRASHING_THRESHOLD
 ): GuardFn<FSMEvent> => {
-    return (ctx: FSMContext) => {
-        const history = ctx.toolCallHistory;
-        if (history.length < threshold) return false;
-        const lastN = history.slice(-threshold);
-        return lastN.every((tool) => tool === lastN[0]);
-    };
+  return (ctx: FSMContext) => {
+    const history = ctx.toolCallHistory;
+    if (history.length < threshold) return false;
+    const lastN = history.slice(-threshold);
+    return lastN.every((tool) => tool === lastN[0]);
+  };
 };
 
 /** 默认子 Agent 创建限制 */
@@ -101,18 +101,18 @@ const DEFAULT_MAX_SUB_AGENTS = 5;
  * @param maxAgents - 最大子 Agent 数量，默认 5
  */
 export const overDelegationDetected = (
-    ctx: FSMContext,
-    _event: FSMEvent,
-    maxAgents: number = DEFAULT_MAX_SUB_AGENTS
+  ctx: FSMContext,
+  _event: FSMEvent,
+  maxAgents: number = DEFAULT_MAX_SUB_AGENTS
 ): boolean => {
-    return ctx.subAgentSpawnCount >= maxAgents;
+  return ctx.subAgentSpawnCount >= maxAgents;
 };
 
 /**
  * 创建带限制参数的过度授权检测 Guard
  */
 export const createOverDelegationGuard = (
-    maxAgents: number = DEFAULT_MAX_SUB_AGENTS
+  maxAgents: number = DEFAULT_MAX_SUB_AGENTS
 ): GuardFn<FSMEvent> => {
-    return (ctx: FSMContext) => ctx.subAgentSpawnCount >= maxAgents;
+  return (ctx: FSMContext) => ctx.subAgentSpawnCount >= maxAgents;
 };
