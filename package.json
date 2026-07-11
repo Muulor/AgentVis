@@ -15,8 +15,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "format": "prettier --write \"src/**/*.{js,ts,tsx,css}\" \"scripts/**/*.{js,mjs}\" \"{vite,vitest}.config.ts\" \"package.json\" \".github/**/*.yml\"",
+    "format:check": "prettier --check \"src/**/*.{js,ts,tsx,css}\" \"scripts/**/*.{js,mjs}\" \"{vite,vitest}.config.ts\" \"package.json\" \".github/**/*.yml\"",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -66,7 +66,7 @@
     "husky": "^9.1.7",
     "js-yaml": "^4.1.1",
     "lint-staged": "^17.0.5",
-    "prettier": "^3.4.2",
+    "prettier": "3.8.0",
     "typescript": "^5.7.3",
     "vite": "^6.4.2",
     "vitest": "^4.0.18"
@@ -77,7 +77,18 @@
     }
   },
   "lint-staged": {
-    "src/**/*.{ts,tsx}": "eslint --fix --quiet",
-    "{vite,vitest}.config.ts": "eslint --fix --quiet"
+    "src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix --quiet"
+    ],
+    "src/**/*.js": "prettier --write",
+    "src/**/*.css": "prettier --write",
+    "scripts/**/*.{js,mjs}": "prettier --write",
+    "{vite,vitest}.config.ts": [
+      "prettier --write",
+      "eslint --fix --quiet"
+    ],
+    "package.json": "prettier --write",
+    ".github/**/*.yml": "prettier --write"
   }
 }
