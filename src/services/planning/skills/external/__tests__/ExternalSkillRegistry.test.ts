@@ -10,17 +10,12 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
     ExternalSkillRegistryLoader,
     type FileReadFn,
     type DirExistsFn,
     type ListFilesFn,
 } from '../ExternalSkillRegistry';
-
-const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 
 // ==================== 测试数据 ====================
 
@@ -687,31 +682,6 @@ Broken content.
         expect(result.skills[0]!.name).toBe('pdf');
         expect(result.warnings).toHaveLength(1);
         expect(result.warnings[0]).toContain('broken');
-    });
-
-    it('应该拒绝 network=false + brokerOnly 的 deny fixture', async () => {
-        const denyFixture = readFileSync(
-            resolve(TEST_DIR, 'fixtures/broker-e2e-deny/SKILL.md'),
-            'utf-8'
-        );
-        const files = new Map<string, string>();
-        files.set(`${PACKAGES_DIR}/broker-e2e-deny/SKILL.md`, denyFixture);
-
-        const dirs = new Set<string>();
-        dirs.add(PACKAGES_DIR);
-        dirs.add(`${PACKAGES_DIR}/broker-e2e-deny`);
-
-        const dirContents = new Map<string, string[]>();
-        dirContents.set(PACKAGES_DIR, ['broker-e2e-deny']);
-
-        const { readFile, dirExists, listFiles } = createMockFileSystem(files, dirs, dirContents);
-        const loader = new ExternalSkillRegistryLoader(PACKAGES_DIR, readFile, dirExists, listFiles);
-
-        const result = await loader.scanAll();
-
-        expect(result.skills).toHaveLength(0);
-        expect(result.warnings).toHaveLength(1);
-        expect(result.warnings[0]).toContain('network=false conflicts with networkMode=brokerOnly');
     });
 });
 

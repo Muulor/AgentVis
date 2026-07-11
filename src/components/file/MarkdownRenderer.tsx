@@ -620,7 +620,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
                 </blockquote>
             );
         },
-    }), [contextId, handleLinkClick, messageId, onCodePreview, onProjectPreview]);
+    }), [contextId, deferWidgetSubmit, handleLinkClick, messageId, onCodePreview, onProjectPreview]);
 
     /** 图片组件的稳定 memo（仅依赖 imageMap，与代码块组件生命周期完全隔离） */
     const imgComponent = useMemo<Partial<Components>>(() => ({

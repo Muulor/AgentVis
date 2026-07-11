@@ -182,9 +182,9 @@ describe('buildSafeEChartsOption', () => {
         const secondLine = data?.[1]?.lineStyle as Record<string, unknown> | undefined;
         const thirdArea = data?.[2]?.areaStyle as Record<string, unknown> | undefined;
 
-        expect(firstLine?.color).toBe('#E34F53');
-        expect(secondLine?.color).toBe('#E27A3A');
-        expect(thirdArea).toMatchObject({ color: '#21804E', opacity: 0.15 });
+        expect(firstLine?.color).toBe('#3F7BD9');
+        expect(secondLine?.color).toBe('#7CB342');
+        expect(thirdArea).toMatchObject({ color: '#E0A238', opacity: 0.15 });
     });
 
     it('财务暖色主题的折线面积渐变保持可见', () => {

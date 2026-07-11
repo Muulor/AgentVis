@@ -656,7 +656,6 @@ agentvisNetworkEntrypoints:
 #### 最小验收 Skill
 
 - `broker-e2e` 是临时内置 Script Skill，用于手工验证 `ControlledNetwork + brokerOnly`：检查 broker env 注入、直连 Python 网络失败、helper 访问公网成功、helper 访问 localhost 被拒。运行后应能看到 `{AppDataDir}/runtime/bin/agentvis-broker-fetch.exe` 被复制或刷新。实测已在受控联网模式下通过四项检查，确认 `external_skill_execute -> ExternalExecutor -> shell_execute -> broker session` 链路打通。
-- `broker-e2e-deny` 只作为测试 fixture 存在，不进入内置 Skill 列表；它故意声明 `network=false + networkMode=brokerOnly`，用于验证 Contract 校验会拒绝冲突权限。
 - `github-lookup` 作为第一批真实迁移样例：新增 Script Contract wrapper，并在 `AGENTVIS_BROKER_FETCH` 可用时通过 broker helper 请求 GitHub API；没有 broker env 时仍保留原本的直接 `httpx` CLI 行为。由于它可能已存在于用户本地 packages，同版本启动时通过 `.bundle_revision` 触发一次增量刷新，避免手工删除旧目录。实测 broker 通路可用；若在受控联网下未获得 GitHub token，会以匿名配额请求并可能返回 403 quota exhausted，这属于 secret 注入能力缺口，不是 broker 链路失败。
 
 ### pip 安装策略
