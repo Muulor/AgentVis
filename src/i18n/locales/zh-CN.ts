@@ -875,6 +875,8 @@ export const zhCN = {
       extraPackagesFailed: '{failed}/{total} 个额外依赖安装失败：{packages}\n失败详情：\n{details}',
       prebuiltRuntimeUnavailable:
         '内置 Python 环境包不可用或解压失败，无法准备基础 Python 环境。请重新打包并确认 python-runtime-v1.zip 已包含在安装包资源中。原始错误：{error}',
+      runtimeInUse:
+        'AgentVis 已尝试结束占用旧环境的托管 Python 进程，但 Python 环境仍被其他进程或安全软件占用，暂时无法重建。请结束正在运行的 Agent 任务后重试；若仍失败，请完全退出 AgentVis 后重新打开。原始错误：{error}',
       prebuiltRuntimeMissingBasePackages:
         '预置 Python 环境缺少基础依赖模块：{modules}。请重新构建 python-runtime-v1.zip，确保 runtime-requirements-v1.txt 中的基础依赖已预装。原始错误：{error}',
       packageInstallFailureDetail: '- {package}: {reason}',
@@ -1900,7 +1902,7 @@ export const zhCN = {
       saveCustomModel: '保存修改',
       formProvider: 'Provider',
       formModelId: '模型 ID',
-      formModelIdPlaceholder: '例如 doubao-seed-2.0-pro',
+      formModelIdPlaceholder: '例如 gpt-5.5',
       formModelName: '显示名称',
       formModelNamePlaceholder: '留空则使用模型 ID',
       formContextWindow: '上下文窗口',

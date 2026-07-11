@@ -522,6 +522,8 @@ All external skills that need Python runtime share an application-managed Python
         +-- pip
 ```
 
+Runtime refresh uses an in-process single-flight, a cross-instance file lock, and staging-directory publication so startup, UI, and search entry points cannot concurrently delete or extract the same directory. Only when a signature change or failed health check requires replacement does the Windows backend enumerate and terminate stale processes whose executable path is inside the current `{AppDataDir}/runtime/python-v1`; it never kills system Python, Conda, or another application's process merely by the `python.exe` name. Removal has bounded retries. If security software or an external process still holds the directory, replacement stops with an actionable error instead of continuing to extract over the live directory.
+
 ### Environment State Machine
 
 The frontend Store / settings panel displays user-visible states:

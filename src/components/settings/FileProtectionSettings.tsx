@@ -460,6 +460,7 @@ export function FileProtectionSettings() {
               checked={allEntriesSelected}
               indeterminate={selectedCount > 0 && !allEntriesSelected}
               disabled={trashEntries.length === 0}
+              className={styles.trashSelectionIndicator}
             />
             <span>
               {t('settings.fileProtection.selectTrashEntries', { count: trashEntries.length })}
@@ -516,7 +517,10 @@ export function FileProtectionSettings() {
                         path: entry.originalPath,
                       })}
                     />
-                    <SelectionCheck checked={selectedIds.has(entry.id)} />
+                    <SelectionCheck
+                      checked={selectedIds.has(entry.id)}
+                      className={styles.trashSelectionIndicator}
+                    />
                   </label>
                   <span className={styles.entryIcon}>
                     {entry.isDirectory ? (

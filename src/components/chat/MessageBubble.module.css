@@ -284,6 +284,11 @@
   outline-offset: 1px;
 }
 
+.stopVisualEnhancementButton svg rect {
+  rx: 4px;
+  ry: 4px;
+}
+
 .visualEnhancementSpinner {
   width: 10px;
   height: 10px;

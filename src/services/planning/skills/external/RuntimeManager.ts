@@ -47,6 +47,7 @@ export const BASE_REQUIREMENTS_FILENAME = 'runtime-requirements-v1.txt';
 const PIP_INSTALL_TIMEOUT_SECS = 300;
 const PACKAGED_PYTHON_VERSION = '3.13.14';
 const EXTRA_REQUIREMENTS_PROBE_ENV = 'AGENTVIS_EXTRA_REQUIREMENTS_JSON';
+const RUNTIME_IN_USE_ERROR_CODE = '[PYTHON_RUNTIME_IN_USE]';
 
 /**
  * Windows 环境下 Python 可执行文件的候选路径
@@ -348,6 +349,13 @@ export class RuntimeManager {
 
       if (!this.isRuntimeBuildFallbackAllowed()) {
         this.status = 'base_incomplete';
+        if (message.includes(RUNTIME_IN_USE_ERROR_CODE)) {
+          throw new Error(
+            translate('runtime.errors.runtimeInUse', {
+              error: message.replace(RUNTIME_IN_USE_ERROR_CODE, '').trim(),
+            })
+          );
+        }
         throw new Error(
           translate('runtime.errors.prebuiltRuntimeUnavailable', {
             error: message,

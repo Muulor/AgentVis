@@ -904,6 +904,8 @@ export const enUS = {
         '{failed}/{total} extra dependencies failed to install: {packages}\nFailure details:\n{details}',
       prebuiltRuntimeUnavailable:
         'The bundled Python runtime package is unavailable or failed to extract, so the base Python environment cannot be prepared. Rebuild the installer and confirm python-runtime-v1.zip is included in bundled resources. Raw error: {error}',
+      runtimeInUse:
+        'AgentVis tried to stop managed Python processes that were using the old environment, but another process or security scanner still has the Python environment open. Finish running Agent tasks and retry. If it still fails, fully exit AgentVis and reopen it. Raw error: {error}',
       prebuiltRuntimeMissingBasePackages:
         'The bundled Python runtime is missing base dependency modules: {modules}. Rebuild python-runtime-v1.zip and ensure the packages in runtime-requirements-v1.txt are preinstalled. Raw error: {error}',
       packageInstallFailureDetail: '- {package}: {reason}',
@@ -1986,7 +1988,7 @@ export const enUS = {
       saveCustomModel: 'Save Changes',
       formProvider: 'Provider',
       formModelId: 'Model ID',
-      formModelIdPlaceholder: 'e.g. doubao-seed-2.0-pro',
+      formModelIdPlaceholder: 'e.g. gpt-5.5',
       formModelName: 'Display Name',
       formModelNamePlaceholder: 'Use model ID when empty',
       formContextWindow: 'Context Window',

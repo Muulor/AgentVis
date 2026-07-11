@@ -1,6 +1,6 @@
 [package]
 name = "agentvis"
-version = "0.3.5"
+version = "0.3.6"
 description = "AgentVis - Visual Agent Workspace"
 authors = ["AgentVis Team"]
 edition = "2021"
@@ -92,6 +92,7 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_Security_Isolation",
     "Win32_NetworkManagement_WindowsFilteringPlatform",
     "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_JobObjects",
     "Win32_System_Com",
     "Win32_System_Pipes",

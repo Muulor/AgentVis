@@ -106,6 +106,183 @@ use commands::{
 use commands::shell::BackgroundProcessRegistry;
 use db::Database;
 
+const TARGET_WINDOW_WIDTH: f64 = 1600.0;
+const TARGET_WINDOW_HEIGHT: f64 = 900.0;
+const MIN_WINDOW_WIDTH: f64 = 1024.0;
+const MIN_WINDOW_HEIGHT: f64 = 600.0;
+const RESTORED_WINDOW_MARGIN: f64 = 48.0;
+#[cfg(windows)]
+const WINDOW_EVENT_SETTLE_DELAY_MS: u64 = 120;
+
+#[derive(Debug, PartialEq)]
+struct StartupWindowLayout {
+    width: f64,
+    height: f64,
+    should_maximize: bool,
+}
+
+#[cfg(any(windows, test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct WindowBounds {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[cfg(any(windows, test))]
+#[derive(Debug)]
+struct WindowRestoreTracker {
+    last_normal_bounds: WindowBounds,
+    was_maximized: bool,
+    observation_generation: u64,
+}
+
+#[cfg(any(windows, test))]
+impl WindowRestoreTracker {
+    fn schedule_observation(&mut self) -> u64 {
+        self.observation_generation = self.observation_generation.wrapping_add(1);
+        self.observation_generation
+    }
+
+    fn observe_stable(
+        &mut self,
+        generation: u64,
+        is_maximized: bool,
+        current_bounds: WindowBounds,
+    ) -> Option<WindowBounds> {
+        if generation != self.observation_generation {
+            return None;
+        }
+
+        if is_maximized {
+            self.was_maximized = true;
+            return None;
+        }
+
+        if self.was_maximized {
+            self.was_maximized = false;
+            return (current_bounds != self.last_normal_bounds).then_some(self.last_normal_bounds);
+        }
+
+        self.last_normal_bounds = current_bounds;
+        None
+    }
+}
+
+fn calculate_startup_window_layout(
+    work_area_width: f64,
+    work_area_height: f64,
+) -> StartupWindowLayout {
+    let available_width = (work_area_width - RESTORED_WINDOW_MARGIN).max(MIN_WINDOW_WIDTH);
+    let available_height = (work_area_height - RESTORED_WINDOW_MARGIN).max(MIN_WINDOW_HEIGHT);
+    let width = TARGET_WINDOW_WIDTH.min(available_width);
+    let height = TARGET_WINDOW_HEIGHT.min(available_height);
+
+    StartupWindowLayout {
+        width,
+        height,
+        should_maximize: width < TARGET_WINDOW_WIDTH || height < TARGET_WINDOW_HEIGHT,
+    }
+}
+
+#[cfg(windows)]
+fn capture_window_bounds(window: &tauri::WebviewWindow) -> tauri::Result<WindowBounds> {
+    let position = window.outer_position()?;
+    let size = window.inner_size()?;
+    Ok(WindowBounds {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    })
+}
+
+#[cfg(windows)]
+fn install_window_restore_tracking(
+    window: &tauri::WebviewWindow,
+    should_maximize_on_startup: bool,
+) {
+    let initial_bounds = match capture_window_bounds(window) {
+        Ok(bounds) => bounds,
+        Err(error) => {
+            log::warn!("初始化窗口还原跟踪失败: {}", error);
+            return;
+        }
+    };
+    let initially_maximized =
+        window.is_maximized().unwrap_or(false) || should_maximize_on_startup;
+    let tracker = Arc::new(std::sync::Mutex::new(WindowRestoreTracker {
+        last_normal_bounds: initial_bounds,
+        was_maximized: initially_maximized,
+        observation_generation: 0,
+    }));
+    let tracked_window = window.clone();
+
+    window.on_window_event(move |event| {
+        if !matches!(
+            event,
+            tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_)
+        ) {
+            return;
+        }
+
+        let generation = {
+            let mut tracker = match tracker.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            tracker.schedule_observation()
+        };
+        let observation_window = tracked_window.clone();
+        let observation_tracker = Arc::clone(&tracker);
+        tauri::async_runtime::spawn(async move {
+            // Maximize/restore emits intermediate move events before Windows updates IsZoomed.
+            // Only the final stable event may update the tracked normal bounds.
+            tokio::time::sleep(std::time::Duration::from_millis(
+                WINDOW_EVENT_SETTLE_DELAY_MS,
+            ))
+            .await;
+            let is_maximized = match observation_window.is_maximized() {
+                Ok(value) => value,
+                Err(error) => {
+                    log::warn!("读取窗口最大化状态失败: {}", error);
+                    return;
+                }
+            };
+            let current_bounds = match capture_window_bounds(&observation_window) {
+                Ok(bounds) => bounds,
+                Err(error) => {
+                    log::warn!("读取窗口位置和尺寸失败: {}", error);
+                    return;
+                }
+            };
+            let restore_bounds = {
+                let mut tracker = match observation_tracker.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                tracker.observe_stable(generation, is_maximized, current_bounds)
+            };
+
+            if let Some(bounds) = restore_bounds {
+                if let Err(error) = observation_window.set_size(tauri::PhysicalSize::new(
+                    bounds.width,
+                    bounds.height,
+                )) {
+                    log::warn!("恢复最大化前窗口尺寸失败: {}", error);
+                    return;
+                }
+                if let Err(error) = observation_window
+                    .set_position(tauri::PhysicalPosition::new(bounds.x, bounds.y))
+                {
+                    log::warn!("恢复最大化前窗口位置失败: {}", error);
+                }
+            }
+        });
+    });
+}
+
 /// 应用程序全局状态
 pub struct AppState {
     /// 数据库连接
@@ -221,9 +398,8 @@ pub fn run() {
             log::info!("AgentVis 应用已初始化");
             log::trace!("数据库路径: {}", db_path_str);
 
-            // 自适应窗口尺寸策略：
-            //   大屏（逻辑宽≥1600 且 逻辑高≥900）→ 以 1600×900 居中启动
-            //   小屏（任意一边不足）→ 最大化启动，保留任务栏和标题栏，确保小屏最佳呈现
+            // 自适应窗口尺寸策略：先建立一个位于工作区内的普通窗口矩形，
+            // 小屏再最大化，确保点击“还原”时能回到正确的尺寸和位置。
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(windows)]
                 {
@@ -231,37 +407,48 @@ pub fn run() {
                     webview_diagnostics::install_navigation_guard(&window);
                 }
 
+                let mut should_maximize_on_startup = false;
                 match window.primary_monitor() {
                     Ok(Some(monitor)) => {
                         let physical_size = monitor.size();
+                        let physical_work_area = monitor.work_area();
                         let scale_factor = monitor.scale_factor();
-                        // 将物理像素转换为逻辑像素，与 tauri 逻辑尺寸单位统一
-                        let logical_width  = physical_size.width  as f64 / scale_factor;
-                        let logical_height = physical_size.height as f64 / scale_factor;
-
-                        const TARGET_WIDTH:  f64 = 1600.0;
-                        const TARGET_HEIGHT: f64 = 900.0;
-
-                        log::trace!(
-                            "Detected primary monitor logical resolution {:.0}x{:.0} (physical {}x{}, scale {:.2})",
-                            logical_width, logical_height,
-                            physical_size.width, physical_size.height, scale_factor
+                        // 使用工作区而非完整屏幕，避免普通窗口被任务栏遮挡。
+                        let logical_work_width =
+                            physical_work_area.size.width as f64 / scale_factor;
+                        let logical_work_height =
+                            physical_work_area.size.height as f64 / scale_factor;
+                        let layout = calculate_startup_window_layout(
+                            logical_work_width,
+                            logical_work_height,
                         );
 
-                        // 屏幕任意一边小于目标尺寸时，最大化显示以获得最佳小屏体验
-                        if logical_width < TARGET_WIDTH || logical_height < TARGET_HEIGHT {
-                            log::trace!("屏幕尺寸不足 {TARGET_WIDTH}×{TARGET_HEIGHT}，自动最大化窗口");
-                            if let Err(e) = window.maximize() {
-                                log::warn!("窗口最大化失败: {}", e);
-                            }
-                        } else {
-                            // 大屏：固定 1600×900 居中启动
-                            if let Err(e) = window.set_size(tauri::LogicalSize::new(TARGET_WIDTH, TARGET_HEIGHT)) {
-                                log::warn!("设置窗口尺寸失败: {}", e);
-                            }
-                            if let Err(e) = window.center() {
-                                log::warn!("窗口居中失败: {}", e);
-                            }
+                        log::trace!(
+                            "Detected primary monitor physical {}x{}, logical work area {:.0}x{:.0} (scale {:.2})",
+                            physical_size.width,
+                            physical_size.height,
+                            logical_work_width,
+                            logical_work_height,
+                            scale_factor
+                        );
+
+                        if let Err(e) = window.set_size(tauri::LogicalSize::new(
+                            layout.width,
+                            layout.height,
+                        )) {
+                            log::warn!("设置启动窗口尺寸失败: {}", e);
+                        }
+                        if let Err(e) = window.center() {
+                            log::warn!("启动窗口居中失败: {}", e);
+                        }
+
+                        if layout.should_maximize {
+                            log::trace!(
+                                "工作区小于目标尺寸，使用 {:.0}×{:.0} 作为还原尺寸后自动最大化",
+                                layout.width,
+                                layout.height
+                            );
+                            should_maximize_on_startup = true;
                         }
                     }
                     Ok(None) => {
@@ -270,6 +457,15 @@ pub fn run() {
                     }
                     Err(e) => {
                         log::warn!("获取显示器信息失败: {}，使用默认窗口尺寸", e);
+                    }
+                }
+
+                // Must be installed before startup maximization so the normal bounds are captured.
+                #[cfg(windows)]
+                install_window_restore_tracking(&window, should_maximize_on_startup);
+                if should_maximize_on_startup {
+                    if let Err(e) = window.maximize() {
+                        log::warn!("窗口最大化失败: {}", e);
                     }
                 }
             }
@@ -528,4 +724,148 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("An error occurred while running the Tauri application");
+}
+
+#[cfg(test)]
+mod startup_window_tests {
+    use super::*;
+
+    #[test]
+    fn keeps_target_size_on_a_large_work_area() {
+        assert_eq!(
+            calculate_startup_window_layout(1920.0, 1040.0),
+            StartupWindowLayout {
+                width: 1600.0,
+                height: 900.0,
+                should_maximize: false,
+            }
+        );
+    }
+
+    #[test]
+    fn creates_a_fitting_restore_size_before_maximizing() {
+        assert_eq!(
+            calculate_startup_window_layout(1440.0, 852.0),
+            StartupWindowLayout {
+                width: 1392.0,
+                height: 804.0,
+                should_maximize: true,
+            }
+        );
+    }
+
+    #[test]
+    fn respects_the_configured_minimum_window_size() {
+        assert_eq!(
+            calculate_startup_window_layout(1000.0, 580.0),
+            StartupWindowLayout {
+                width: 1024.0,
+                height: 600.0,
+                should_maximize: true,
+            }
+        );
+    }
+
+    #[test]
+    fn restores_the_last_visible_bounds_after_maximizing() {
+        let startup_bounds = WindowBounds {
+            x: 420,
+            y: 36,
+            width: 1280,
+            height: 720,
+        };
+        let vertically_resized_bounds = WindowBounds {
+            x: 420,
+            y: 0,
+            width: 1280,
+            height: 1080,
+        };
+        let maximized_bounds = WindowBounds {
+            x: 0,
+            y: 0,
+            width: 2048,
+            height: 1112,
+        };
+        let mut tracker = WindowRestoreTracker {
+            last_normal_bounds: startup_bounds,
+            was_maximized: false,
+            observation_generation: 0,
+        };
+
+        let resized_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(resized_generation, false, vertically_resized_bounds),
+            None
+        );
+        let maximized_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(maximized_generation, true, maximized_bounds),
+            None
+        );
+        let restored_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(restored_generation, false, startup_bounds),
+            Some(vertically_resized_bounds)
+        );
+    }
+
+    #[test]
+    fn leaves_native_restore_untouched_when_bounds_are_already_correct() {
+        let normal_bounds = WindowBounds {
+            x: 320,
+            y: 180,
+            width: 1200,
+            height: 760,
+        };
+        let mut tracker = WindowRestoreTracker {
+            last_normal_bounds: normal_bounds,
+            was_maximized: false,
+            observation_generation: 0,
+        };
+
+        let maximized_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(maximized_generation, true, normal_bounds),
+            None
+        );
+        let restored_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(restored_generation, false, normal_bounds),
+            None
+        );
+    }
+
+    #[test]
+    fn ignores_intermediate_window_events() {
+        let normal_bounds = WindowBounds {
+            x: 420,
+            y: 0,
+            width: 1280,
+            height: 1080,
+        };
+        let intermediate_bounds = WindowBounds {
+            x: 0,
+            y: 0,
+            width: 1600,
+            height: 900,
+        };
+        let mut tracker = WindowRestoreTracker {
+            last_normal_bounds: normal_bounds,
+            was_maximized: false,
+            observation_generation: 0,
+        };
+
+        let intermediate_generation = tracker.schedule_observation();
+        let stable_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(intermediate_generation, false, intermediate_bounds),
+            None
+        );
+        assert_eq!(tracker.last_normal_bounds, normal_bounds);
+        assert_eq!(
+            tracker.observe_stable(stable_generation, true, intermediate_bounds),
+            None
+        );
+        assert_eq!(tracker.last_normal_bounds, normal_bounds);
+    }
 }

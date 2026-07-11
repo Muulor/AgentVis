@@ -9,14 +9,25 @@
 //! 幂等：若解压目录已存在且 python.exe 可访问，跳过解压直接返回路径。
 
 use crate::error::AppError;
-use std::io::Read;
-use std::path::PathBuf;
+use fs2::FileExt;
+use std::fs::{File, OpenOptions};
+use std::io::{ErrorKind, Read};
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
+use tokio::sync::Mutex as AsyncMutex;
 
 const EMBEDDED_PYTHON_VERSION: &str = "3.13.14";
 const EMBEDDED_PYTHON_ABI_TAG: &str = "313";
 const EMBEDDED_PYTHON_CACHE_DIR: &str = "python-embed-3.13";
+const RUNTIME_IN_USE_ERROR_CODE: &str = "[PYTHON_RUNTIME_IN_USE]";
+const RUNTIME_PREPARE_LOCK_ATTEMPTS: usize = 1_200;
+const RUNTIME_PREPARE_LOCK_RETRY_MS: u64 = 100;
+const RUNTIME_REMOVE_RETRY_DELAYS_MS: &[u64] = &[0, 100, 250, 500, 1_000, 2_000];
+
+static PREBUILT_RUNTIME_PREPARE_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
 
 type CommandResult<T> = Result<T, AppError>;
 
@@ -52,6 +63,9 @@ pub struct PrebuiltPythonRuntimeInfo {
 pub async fn prepare_prebuilt_python_runtime(
     app: tauri::AppHandle,
 ) -> CommandResult<PrebuiltPythonRuntimeInfo> {
+    let prepare_lock = PREBUILT_RUNTIME_PREPARE_LOCK.get_or_init(|| AsyncMutex::new(()));
+    let _prepare_guard = prepare_lock.lock().await;
+
     let app_data_dir = app
         .path()
         .app_data_dir()
@@ -62,7 +76,14 @@ pub async fn prepare_prebuilt_python_runtime(
         .resource_dir()
         .map_err(|e| AppError::FileSystem(format!("Failed to get resource_dir: {}", e)))?;
 
-    let runtime_dir = app_data_dir.join("runtime").join("python-v1");
+    let runtime_parent = app_data_dir.join("runtime");
+    std::fs::create_dir_all(&runtime_parent).map_err(|e| {
+        AppError::FileSystem(format!("Failed to create runtime parent directory: {}", e))
+    })?;
+    let runtime_lock_path = runtime_parent.join("python-v1.prepare.lock");
+    let _runtime_file_lock = acquire_runtime_prepare_file_lock(&runtime_lock_path).await?;
+
+    let runtime_dir = runtime_parent.join("python-v1");
     let venv_path = runtime_dir.join(".venv");
     let python_exe = get_prebuilt_venv_python_exe(&venv_path);
     let signature_src = resource_dir
@@ -71,9 +92,7 @@ pub async fn prepare_prebuilt_python_runtime(
     let bundled_signature = read_optional_signature(&signature_src)?;
     let signature_dest = runtime_dir.join(".agentvis-runtime-signature");
 
-    let mut just_extracted = false;
-
-    if python_exe.exists() {
+    let needs_refresh = if python_exe.exists() {
         let signature_matches = bundled_signature
             .as_deref()
             .map(|signature| runtime_signature_matches(&signature_dest, signature))
@@ -84,24 +103,21 @@ pub async fn prepare_prebuilt_python_runtime(
                 "[EmbeddedPython] 预置 Python runtime 签名已变化，将重新解压: {}",
                 runtime_dir.display()
             );
-            std::fs::remove_dir_all(&runtime_dir).map_err(|e| {
-                AppError::FileSystem(format!("Failed to remove stale python-v1 directory: {}", e))
-            })?;
+            true
         } else if !prebuilt_runtime_healthy(&runtime_dir, &python_exe) {
             log::warn!(
                 "[EmbeddedPython] 已存在的预置 Python runtime 不健康，将重新解压: {}",
                 runtime_dir.display()
             );
-            std::fs::remove_dir_all(&runtime_dir).map_err(|e| {
-                AppError::FileSystem(format!(
-                    "Failed to remove unhealthy python-v1 directory: {}",
-                    e
-                ))
-            })?;
+            true
+        } else {
+            false
         }
-    }
+    } else {
+        true
+    };
 
-    if !python_exe.exists() {
+    let just_extracted = if needs_refresh {
         let zip_src = resource_dir
             .join("python-runtime")
             .join("python-runtime-v1.zip");
@@ -113,30 +129,17 @@ pub async fn prepare_prebuilt_python_runtime(
             )));
         }
 
-        if let Some(parent) = runtime_dir.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                AppError::FileSystem(format!("Failed to create runtime parent directory: {}", e))
-            })?;
-        }
-
-        if runtime_dir.exists() {
-            std::fs::remove_dir_all(&runtime_dir).map_err(|e| {
-                AppError::FileSystem(format!("Failed to reset python-v1 directory: {}", e))
-            })?;
-        }
-        std::fs::create_dir_all(&runtime_dir).map_err(|e| {
-            AppError::FileSystem(format!("Failed to create python-v1 directory: {}", e))
-        })?;
-
-        extract_zip_stripping_optional_root(&zip_src, &runtime_dir, "python-v1")?;
-        just_extracted = true;
+        replace_prebuilt_runtime_from_archive(&runtime_dir, &zip_src, bundled_signature.as_deref())
+            .await?;
         log::info!(
             "[EmbeddedPython] 已解压预置 Python runtime 到 {}",
             runtime_dir.display()
         );
+        true
     } else {
         log::debug!("[EmbeddedPython] 预置 Python runtime 已存在，跳过解压");
-    }
+        false
+    };
 
     if !prebuilt_runtime_healthy(&runtime_dir, &python_exe) {
         return Err(AppError::FileSystem(format!(
@@ -157,6 +160,317 @@ pub async fn prepare_prebuilt_python_runtime(
         python_exe: python_exe.to_string_lossy().to_string(),
         just_extracted,
     })
+}
+
+async fn acquire_runtime_prepare_file_lock(lock_path: &Path) -> Result<File, AppError> {
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to open Python runtime prepare lock {}: {}",
+                lock_path.display(),
+                error
+            ))
+        })?;
+
+    for attempt in 0..RUNTIME_PREPARE_LOCK_ATTEMPTS {
+        match FileExt::try_lock_exclusive(&lock_file) {
+            Ok(()) => return Ok(lock_file),
+            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                if attempt + 1 < RUNTIME_PREPARE_LOCK_ATTEMPTS {
+                    tokio::time::sleep(std::time::Duration::from_millis(
+                        RUNTIME_PREPARE_LOCK_RETRY_MS,
+                    ))
+                    .await;
+                }
+            }
+            Err(error) => {
+                return Err(AppError::FileSystem(format!(
+                    "Failed to lock Python runtime preparation: {}",
+                    error
+                )))
+            }
+        }
+    }
+
+    Err(AppError::FileSystem(format!(
+        "{} Another AgentVis instance is preparing the Python runtime. Close the other instance or wait for it to finish.",
+        RUNTIME_IN_USE_ERROR_CODE
+    )))
+}
+
+async fn replace_prebuilt_runtime_from_archive(
+    runtime_dir: &Path,
+    zip_src: &Path,
+    bundled_signature: Option<&str>,
+) -> Result<(), AppError> {
+    let runtime_parent = runtime_dir.parent().ok_or_else(|| {
+        AppError::FileSystem(format!(
+            "Python runtime directory has no parent: {}",
+            runtime_dir.display()
+        ))
+    })?;
+    let unique_suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let staging_dir = runtime_parent.join(format!(
+        "python-v1.staging-{}-{}",
+        std::process::id(),
+        unique_suffix
+    ));
+
+    cleanup_stale_runtime_staging_dirs(runtime_parent, &staging_dir);
+    if staging_dir.exists() {
+        std::fs::remove_dir_all(&staging_dir).map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to reset Python runtime staging directory {}: {}",
+                staging_dir.display(),
+                error
+            ))
+        })?;
+    }
+    std::fs::create_dir_all(&staging_dir).map_err(|error| {
+        AppError::FileSystem(format!(
+            "Failed to create Python runtime staging directory {}: {}",
+            staging_dir.display(),
+            error
+        ))
+    })?;
+
+    let stage_result = (|| -> Result<(), AppError> {
+        extract_zip_stripping_optional_root(zip_src, &staging_dir, "python-v1")?;
+        let staged_venv = staging_dir.join(".venv");
+        let staged_python = get_prebuilt_venv_python_exe(&staged_venv);
+        if !prebuilt_runtime_healthy(&staging_dir.to_path_buf(), &staged_python) {
+            return Err(AppError::FileSystem(format!(
+                "Staged prebuilt Python runtime health check failed: {}",
+                staged_python.display()
+            )));
+        }
+        if let Some(signature) = bundled_signature {
+            std::fs::write(staging_dir.join(".agentvis-runtime-signature"), signature).map_err(
+                |error| {
+                    AppError::FileSystem(format!(
+                        "Failed to write staged Python runtime signature: {}",
+                        error
+                    ))
+                },
+            )?;
+        }
+        Ok(())
+    })();
+
+    if let Err(error) = stage_result {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        return Err(error);
+    }
+
+    if runtime_dir.exists() {
+        if let Err(error) = remove_runtime_dir_with_retries(runtime_dir).await {
+            let _ = std::fs::remove_dir_all(&staging_dir);
+            return Err(error);
+        }
+    }
+
+    if let Err(error) = std::fs::rename(&staging_dir, runtime_dir) {
+        let _ = std::fs::remove_dir_all(&staging_dir);
+        return Err(AppError::FileSystem(format!(
+            "Failed to publish staged Python runtime to {}: {}",
+            runtime_dir.display(),
+            error
+        )));
+    }
+
+    Ok(())
+}
+
+fn cleanup_stale_runtime_staging_dirs(runtime_parent: &Path, current_staging_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(runtime_parent) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_stale_staging = path != current_staging_dir
+            && entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("python-v1.staging-");
+        if is_stale_staging {
+            if let Err(error) = std::fs::remove_dir_all(&path) {
+                log::debug!(
+                    "[EmbeddedPython] 清理旧 runtime staging 目录失败（忽略）: {} - {}",
+                    path.display(),
+                    error
+                );
+            }
+        }
+    }
+}
+
+async fn remove_runtime_dir_with_retries(runtime_dir: &Path) -> Result<(), AppError> {
+    let mut last_error = None;
+
+    for delay_ms in RUNTIME_REMOVE_RETRY_DELAYS_MS {
+        if *delay_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(*delay_ms)).await;
+        }
+
+        match terminate_processes_from_runtime(runtime_dir) {
+            Ok(terminated) if !terminated.is_empty() => {
+                log::warn!(
+                    "[EmbeddedPython] 已终止占用旧 runtime 的 AgentVis Python 进程: {:?}",
+                    terminated
+                );
+            }
+            Ok(_) => {}
+            Err(error) => {
+                log::warn!(
+                    "[EmbeddedPython] 无法枚举占用 Python runtime 的进程，将继续尝试删除: {}",
+                    error
+                );
+            }
+        }
+
+        match std::fs::remove_dir_all(runtime_dir) {
+            Ok(()) => return Ok(()),
+            Err(error) if is_retryable_runtime_remove_error(&error) => {
+                last_error = Some(error);
+            }
+            Err(error) => {
+                return Err(AppError::FileSystem(format!(
+                    "Failed to replace Python runtime directory {}: {}",
+                    runtime_dir.display(),
+                    error
+                )))
+            }
+        }
+    }
+
+    let error = last_error
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "unknown file lock".to_string());
+    Err(AppError::FileSystem(format!(
+        "{} The AgentVis Python runtime is still in use and could not be replaced. Close running AgentVis tasks and retry. Runtime: {}. Raw error: {}",
+        RUNTIME_IN_USE_ERROR_CODE,
+        runtime_dir.display(),
+        error
+    )))
+}
+
+fn is_retryable_runtime_remove_error(error: &std::io::Error) -> bool {
+    error.kind() == ErrorKind::PermissionDenied
+        || matches!(error.raw_os_error(), Some(5 | 32 | 145))
+}
+
+#[cfg(windows)]
+fn terminate_processes_from_runtime(runtime_dir: &Path) -> std::io::Result<Vec<u32>> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
+        PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+    };
+
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    let mut entry = PROCESSENTRY32W::default();
+    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    let mut terminated = Vec::new();
+    let mut has_entry = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
+
+    while has_entry {
+        let pid = entry.th32ProcessID;
+        if pid != 0 && pid != std::process::id() {
+            let query_handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+            if !query_handle.is_null() {
+                let mut path_buffer = vec![0_u16; 32_768];
+                let mut path_len = path_buffer.len() as u32;
+                let query_succeeded = unsafe {
+                    QueryFullProcessImageNameW(
+                        query_handle,
+                        0,
+                        path_buffer.as_mut_ptr(),
+                        &mut path_len,
+                    )
+                } != 0;
+                unsafe {
+                    CloseHandle(query_handle);
+                }
+
+                if query_succeeded {
+                    let image_path = PathBuf::from(std::ffi::OsString::from_wide(
+                        &path_buffer[..path_len as usize],
+                    ));
+                    if windows_path_is_within_runtime(&image_path, runtime_dir) {
+                        let terminate_handle =
+                            unsafe { OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, 0, pid) };
+                        if !terminate_handle.is_null() {
+                            let terminate_succeeded =
+                                unsafe { TerminateProcess(terminate_handle, 1) } != 0;
+                            if terminate_succeeded {
+                                unsafe {
+                                    WaitForSingleObject(terminate_handle, 5_000);
+                                }
+                                terminated.push(pid);
+                            } else {
+                                log::warn!(
+                                    "[EmbeddedPython] 无法终止占用 runtime 的进程 PID={}: {}",
+                                    pid,
+                                    std::io::Error::last_os_error()
+                                );
+                            }
+                            unsafe {
+                                CloseHandle(terminate_handle);
+                            }
+                        } else {
+                            log::warn!(
+                                "[EmbeddedPython] 无法打开占用 runtime 的进程 PID={} 以终止: {}",
+                                pid,
+                                std::io::Error::last_os_error()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        has_entry = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
+    }
+
+    unsafe {
+        CloseHandle(snapshot);
+    }
+    Ok(terminated)
+}
+
+#[cfg(not(windows))]
+fn terminate_processes_from_runtime(_runtime_dir: &Path) -> std::io::Result<Vec<u32>> {
+    Ok(Vec::new())
+}
+
+fn windows_path_is_within_runtime(image_path: &Path, runtime_dir: &Path) -> bool {
+    let normalize = |path: &Path| {
+        path.to_string_lossy()
+            .replace('/', "\\")
+            .trim_start_matches("\\\\?\\")
+            .trim_end_matches('\\')
+            .to_lowercase()
+    };
+    let image = normalize(image_path);
+    let runtime = normalize(runtime_dir);
+    image == runtime || image.starts_with(&format!("{}\\", runtime))
 }
 
 /// 准备内嵌 Python 运行时（幂等）
@@ -438,8 +752,8 @@ fn apply_no_window(command: &mut Command) {
 fn apply_no_window(_command: &mut Command) {}
 
 fn extract_zip_stripping_optional_root(
-    zip_path: &PathBuf,
-    dest_dir: &PathBuf,
+    zip_path: &Path,
+    dest_dir: &Path,
     optional_root: &str,
 ) -> Result<(), AppError> {
     let file = std::fs::File::open(zip_path)
@@ -501,7 +815,7 @@ fn extract_zip_stripping_optional_root(
 }
 
 /// 解压 zip 文件到目标目录
-fn extract_zip(zip_path: &PathBuf, dest_dir: &PathBuf) -> Result<(), AppError> {
+fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), AppError> {
     let file = std::fs::File::open(zip_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to open zip file: {}", e)))?;
 
@@ -567,4 +881,106 @@ fn fix_pth_file(pth_path: &PathBuf) -> Result<(), AppError> {
         .map_err(|e| AppError::FileSystem(format!("Failed to write _pth file: {}", e)))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_process_scope_is_case_insensitive_and_path_bounded() {
+        let runtime =
+            Path::new(r"C:\Users\Test\AppData\Roaming\com.agentvis.app\runtime\python-v1");
+
+        assert!(windows_path_is_within_runtime(
+            Path::new(
+                r"c:\users\test\appdata\roaming\com.agentvis.app\runtime\python-v1\.venv\Scripts\python.exe"
+            ),
+            runtime
+        ));
+        assert!(windows_path_is_within_runtime(
+            Path::new(
+                r"\\?\C:\Users\Test\AppData\Roaming\com.agentvis.app\runtime\python-v1\.venv\Scripts\python.exe"
+            ),
+            runtime
+        ));
+        assert!(!windows_path_is_within_runtime(
+            Path::new(
+                r"C:\Users\Test\AppData\Roaming\com.agentvis.app\runtime\python-v10\python.exe"
+            ),
+            runtime
+        ));
+        assert!(!windows_path_is_within_runtime(
+            Path::new(r"C:\Users\Test\miniconda3\python.exe"),
+            runtime
+        ));
+    }
+
+    #[test]
+    fn runtime_remove_retries_windows_lock_errors_only() {
+        assert!(is_retryable_runtime_remove_error(
+            &std::io::Error::from_raw_os_error(5)
+        ));
+        assert!(is_retryable_runtime_remove_error(
+            &std::io::Error::from_raw_os_error(32)
+        ));
+        assert!(is_retryable_runtime_remove_error(
+            &std::io::Error::from_raw_os_error(145)
+        ));
+        assert!(!is_retryable_runtime_remove_error(
+            &std::io::Error::from_raw_os_error(3)
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn terminates_a_process_running_from_the_managed_runtime_only() {
+        let test_root = std::env::temp_dir().join(format!(
+            "agentvis-runtime-process-cleanup-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        ));
+        let runtime_dir = test_root.join("python-v1");
+        std::fs::create_dir_all(&runtime_dir).unwrap();
+        let fixture_exe = runtime_dir.join("python.exe");
+        std::fs::copy(std::env::current_exe().unwrap(), &fixture_exe).unwrap();
+
+        let mut child = std::process::Command::new(&fixture_exe)
+            .arg("commands::embedded_python_setup::tests::runtime_process_cleanup_child_fixture")
+            .arg("--exact")
+            .env("AGENTVIS_RUNTIME_PROCESS_FIXTURE", "1")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let child_pid = child.id();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+
+        let terminated = terminate_processes_from_runtime(&runtime_dir).unwrap();
+        if !terminated.contains(&child_pid) {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = std::fs::remove_dir_all(&test_root);
+            panic!(
+                "managed runtime process PID={} was not terminated; terminated={:?}",
+                child_pid, terminated
+            );
+        }
+
+        let status = child.wait().unwrap();
+        assert!(!status.success());
+        std::fs::remove_dir_all(&test_root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn runtime_process_cleanup_child_fixture() {
+        if std::env::var_os("AGENTVIS_RUNTIME_PROCESS_FIXTURE").is_some() {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+        }
+    }
 }

@@ -88,6 +88,9 @@ const RUNTIME_HEALTH_CHECK_MODULES = [
 /** 初始化 Promise 锁（确保并发调用者都能等待扫描完成） */
 let bootstrapPromise: Promise<void> | null = null;
 
+/** Runtime 物理状态协调 Promise 锁，避免多个 UI 入口并发刷新同一目录。 */
+let reconcilePromise: Promise<void> | null = null;
+
 /** 缓存的 packages 目录路径 */
 let cachedPackagesDir: string | null = null;
 
@@ -315,7 +318,16 @@ async function isRuntimeUsable(venvPath: string): Promise<boolean> {
  * 独立导出：可由 SkillSettings 组件在挂载时调用，
  * 无需等待完整的 bootstrapExternalSkills 懒加载流程。
  */
-export async function reconcileVenvState(): Promise<void> {
+export function reconcileVenvState(): Promise<void> {
+  if (reconcilePromise) return reconcilePromise;
+
+  reconcilePromise = reconcileVenvStateOnce().finally(() => {
+    reconcilePromise = null;
+  });
+  return reconcilePromise;
+}
+
+async function reconcileVenvStateOnce(): Promise<void> {
   try {
     const { appDataDir, join } = await import('@tauri-apps/api/path');
     const { exists } = await import('@tauri-apps/plugin-fs');
