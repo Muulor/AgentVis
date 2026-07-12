@@ -463,6 +463,12 @@ export const zhCN = {
     subAgentReasoningExpand: '展开思考内容',
     subAgentReasoningCollapse: '收起思考内容',
     subAgentEmptyDecisionRetry: '模型在 {seconds} 秒后返回空决策，正在用更强约束重试。',
+    subAgentOutputTruncatedRetryObservation:
+      '模型输出因达到 provider token 上限（{reason}）被截断；系统已丢弃该响应中的所有工具调用，并进行唯一一次安全重试。',
+    subAgentOutputTruncatedRetryInstruction:
+      '上一次模型响应因达到 provider 输出 token 上限（{reason}）被截断。系统已丢弃该响应中的所有工具调用，任何 file_write 都没有执行。这是唯一一次安全重试。\n不要再次生成超长的 full-mode file_write 参数。对于长文件，先调用 file_write 写入可独立解析的短完整骨架（建议不超过 100 行），再在后续步骤使用 mode="patch" 分段补齐。确保每个工具调用的 JSON 参数完整闭合；如果无法安全拆分，请输出包含 TASK_COMPLETE 的阻塞报告。',
+    subAgentOutputTruncatedFailure:
+      '模型连续两次因达到 provider 输出 token 上限（{reason}）而截断响应。为防止执行残缺工具参数，Sub-Agent 已失败终止；本次响应中的所有工具调用均已丢弃。',
     subAgentTextOnlyDecisionRetry:
       'Sub-Agent 连续 {count} 步只输出文字且未调用工具，已提醒下一步必须调用工具或完成交接。',
     subAgentTextOnlyDecisionRetryInstruction:
@@ -531,6 +537,7 @@ export const zhCN = {
     subAgentTerminationNoProgress: '连续多轮未调用工具，任务没有进展',
     subAgentTerminationNoChangeWrites: '连续多次 file_write 没有产生变化，系统已自动终止',
     subAgentTerminationApiError: 'API 调用失败（网络错误或限流）；已完成的中间成果如下',
+    subAgentTerminationOutputTokenLimit: '模型输出连续被 token 上限截断，系统已安全终止',
     subAgentTerminationCancelled: '用户已手动取消',
     subAgentTerminationCompletedNormally: '正常完成',
     subAgentToolOutputOmissionMarker: '\n[... 已省略 {tokens} tokens，{meta} ...]\n',

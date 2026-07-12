@@ -252,6 +252,12 @@ Message organization for each SA LLM call (`callWithContext`):
 
 > **Key design**: the tail user message is the attention hot zone for every SA call. `SAFETY_FOOTER_TEXT` is placed in that hot zone when enabled. If the user intervenes through HITL, `persistedIntervention` is appended after the Safety Footer, giving it higher priority and keeping it present in every subsequent step.
 
+> **MaxTokens Budget**：The per-call provider output budget is independent of this input-context organization. Normal SA
+calls use the `subAgent` output profile (32K with one explicit parameter-rejection fallback to
+24K). Context-window ratios below measure accumulated input history and must not be used as model
+output ceilings. Accepted responses that finish because their output budget is exhausted are
+discarded before tool execution and retried with a split-work instruction.
+
 ---
 
 ## 3. SA Three-Level Progressive Context Compression Strategy

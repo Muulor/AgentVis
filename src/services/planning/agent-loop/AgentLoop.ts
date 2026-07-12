@@ -68,6 +68,7 @@ import type { VisionFallbackMode } from './callers/SubAgentLLMCaller';
 import {
   classifyLlmRetry,
   getLlmRetryDelayMs,
+  isMaxTokensParameterRejection,
   MASTER_BRAIN_LLM_RETRY_DELAYS_MS,
 } from '../utils/LlmRetryPolicy';
 import {
@@ -122,7 +123,6 @@ const VISION_UNSUPPORTED_ERROR_PATTERNS = [
   'does not support images',
   'unsupported image',
   'failed to read request',
-  '400 bad request',
 ];
 
 function retryErrorFromToolResponse(response: LLMResponseWithTools): unknown {
@@ -1248,7 +1248,11 @@ export class AgentLoop {
           // 保持原有的同步 invoke('llm_chat_with_tools') 行为
           // 在发送前清理 messages 中的非法 Unicode 字符（孤立代理字符等），
           // 防止 serde_json 反序列化 ToolChatRequest 时报 "unexpected end of hex escape"
-          const invokeMasterBrain = (messagesForCall: AgentLoopLLMMessage[]) =>
+          const finalDecisionMaxTokens =
+            options?.maxTokens ?? PLANNING_CONSTANTS.MASTER_BRAIN_MAX_OUTPUT_TOKENS;
+          let activeTransportMaxTokens = this.getMbTransportMaxTokens(finalDecisionMaxTokens);
+          let transportFallbackUsed = false;
+          const invokeMasterBrainOnce = (messagesForCall: AgentLoopLLMMessage[]) =>
             callMasterBrainWithRetry(
               'MB non-stream',
               () =>
@@ -1263,13 +1267,53 @@ export class AgentLoop {
                       this.config.providerId
                     ),
                     tools: [], // MasterBrain 决策不使用工具
-                    maxTokens: options?.maxTokens ?? 24576,
+                    maxTokens: activeTransportMaxTokens,
                     temperature: options?.temperature,
                   },
                   sessionId: this.currentSessionId,
                 }),
               retryErrorFromToolResponse
             );
+          const applyTransportFallback = (error: unknown): boolean => {
+            const fallbackMaxTokens =
+              transportFallbackUsed || !this.isMbMaxTokensParameterRejection(error)
+                ? null
+                : this.getMbTransportFallbackMaxTokens(
+                    activeTransportMaxTokens,
+                    finalDecisionMaxTokens
+                  );
+            if (fallbackMaxTokens === null) return false;
+
+            const rejectedMaxTokens = activeTransportMaxTokens;
+            activeTransportMaxTokens = fallbackMaxTokens;
+            transportFallbackUsed = true;
+            logger.warn(
+              '[AgentLoop] MB non-stream token 参数被 provider 拒绝，降低预算后重试一次:',
+              {
+                providerId: this.config.providerId,
+                modelId: this.config.modelId,
+                rejectedMaxTokens,
+                fallbackMaxTokens,
+                error: error instanceof Error ? error.message : String(error),
+              }
+            );
+            return true;
+          };
+          const invokeMasterBrain = async (
+            messagesForCall: AgentLoopLLMMessage[]
+          ): Promise<LLMResponseWithTools> => {
+            const invokeOnce = () => invokeMasterBrainOnce(messagesForCall);
+            try {
+              const response = await invokeOnce();
+              const responseError = retryErrorFromToolResponse(response);
+              return responseError !== undefined && applyTransportFallback(responseError)
+                ? await invokeOnce()
+                : response;
+            } catch (error) {
+              if (!applyTransportFallback(error)) throw error;
+              return await invokeOnce();
+            }
+          };
 
           let response: LLMResponseWithTools;
           try {
@@ -1392,6 +1436,30 @@ export class AgentLoop {
               });
               response = await invokeMasterBrain(allStripped.messages);
               this.setVisionFallbackMode('strip-all');
+            }
+          }
+
+          if (this.isTruncatedMbFinishReason(response.finishReason)) {
+            const contentLength = response.content?.length ?? 0;
+            throw new MbAnomalousDecisionContentError(
+              'truncated_output',
+              `provider finish reason: ${response.finishReason ?? 'unknown'}; ` +
+                `finalContentChars=${contentLength}`,
+              contentLength
+            );
+          }
+
+          // 非流式路径同样保持最终决策正文的 8K 本地上限，传输预算只为推理留余量。
+          if (response.type === 'text' && response.content) {
+            const finalDecisionTokenCounter = new MbEstimatedTokenCounter();
+            finalDecisionTokenCounter.append(response.content);
+            if (finalDecisionTokenCounter.estimatedTokens > finalDecisionMaxTokens) {
+              throw new MbAnomalousDecisionContentError(
+                'truncated_output',
+                `final decision exceeded the local ${finalDecisionMaxTokens}-token limit ` +
+                  `(estimated=${finalDecisionTokenCounter.estimatedTokens})`,
+                response.content.length
+              );
             }
           }
 
@@ -1562,17 +1630,7 @@ export class AgentLoop {
 
   private isMbMaxTokensParameterRejection(error: unknown): boolean {
     if (this.isMbLocalStreamGuardError(error)) return false;
-
-    const message = error instanceof Error ? error.message : String(error);
-    const mentionsMaxTokensParameter =
-      /\bmax_(?:completion_|output_)?tokens?\b|\bmaximum\s+(?:number\s+of\s+)?(?:completion\s+|output\s+)?tokens?\b/i.test(
-        message
-      );
-    if (!mentionsMaxTokensParameter) return false;
-
-    return /\b400\b|bad\s*request|invalid|unsupported|not\s+support|must\s+be|should\s+be|at\s+most|less\s+than|too\s+(?:large|high)|exceed|out\s+of\s+range|maximum\s+allowed|参数|最大|不能超过|取值范围|超出/i.test(
-      message
-    );
+    return isMaxTokensParameterRejection(error);
   }
 
   private buildMbDecisionRetryMessages(

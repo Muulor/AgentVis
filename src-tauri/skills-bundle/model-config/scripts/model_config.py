@@ -78,8 +78,7 @@ BUILTIN_MODELS: list[dict] = [
     {"id": "gemini-3.1-pro-preview", "name": "Gemini-3.1-Pro", "providerId": "gemini", "contextWindow": 200000, "supportsVision": True},
     {"id": "gemini-3.5-flash", "name": "Gemini-3.5-Flash", "providerId": "gemini", "contextWindow": 1000000, "supportsVision": True},
     # ZhipuAI
-    {"id": "glm-4-flash", "name": "GLM-4-Flash(free)", "providerId": "zhipu", "contextWindow": 128000, "supportsVision": False},
-    {"id": "glm-4.6v-flash", "name": "GLM-4.6V-Flash(free)", "providerId": "zhipu", "contextWindow": 128000, "supportsVision": True},
+    {"id": "glm-4.6v-flash", "name": "GLM-4.6V-Flash", "providerId": "zhipu", "contextWindow": 128000, "supportsVision": True},
     {"id": "glm-5.1", "name": "GLM-5.1", "providerId": "zhipu", "contextWindow": 204800, "supportsVision": False},
     {"id": "glm-5.2", "name": "GLM-5.2", "providerId": "zhipu", "contextWindow": 1000000, "supportsVision": False},
     # DeepSeek (official API, OpenAI-compatible protocol, supports thinking mode)

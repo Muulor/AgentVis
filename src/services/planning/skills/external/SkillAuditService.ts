@@ -599,6 +599,7 @@ export async function auditSkillPackage(
       providerId: config.providerId,
       modelId: config.modelId,
       baseUrl: config.baseUrl,
+      tokenPolicy: 'skillAudit',
     });
     const llmCaller = callerFactory.create();
 

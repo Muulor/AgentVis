@@ -1754,9 +1754,130 @@ describe('AgentLoop MB vision fallback', () => {
 
       expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2);
       expect(result).toContain('"decision":"RESPOND_TO_USER"');
+      const nonStreamRequests = vi
+        .mocked(invoke)
+        .mock.calls.filter(([command]) => command === 'llm_chat_with_tools')
+        .map(([, args]) => (args as { request: { maxTokens: number } }).request);
+      expect(nonStreamRequests.map(({ maxTokens }) => maxTokens)).toEqual([
+        PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
+        PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
+      ]);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('uses reasoning transport and falls back once for non-stream MB calls', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({
+        type: 'error',
+        error: '400 Bad Request: max_tokens must be less than or equal to 16384',
+      })
+      .mockResolvedValueOnce({
+        type: 'text',
+        content: '{"decision":"RESPOND_TO_USER"}',
+        finishReason: 'stop',
+      });
+
+    const session = createSession([{ role: 'user', content: 'current task' }]);
+    const loop = new AgentLoop({ providerId: 'openai', modelId: 'gpt-5.4' }, session);
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => { generate: (prompt: string) => Promise<string> };
+      }
+    ).createLLMService();
+
+    const result = await llmService.generate('system prompt');
+    const requests = vi
+      .mocked(invoke)
+      .mock.calls.filter(([command]) => command === 'llm_chat_with_tools')
+      .map(([, args]) => (args as { request: { maxTokens: number } }).request);
+
+    expect(result).toContain('"decision":"RESPOND_TO_USER"');
+    expect(requests.map(({ maxTokens }) => maxTokens)).toEqual([
+      PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_TRANSPORT_MAX_TOKENS,
+      PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
+    ]);
+  });
+
+  it('rejects a non-stream MB decision marked as token-truncated', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      type: 'text',
+      content: '{"decision":"RESPOND_TO_USER"',
+      finishReason: 'length',
+    });
+
+    const session = createSession([{ role: 'user', content: 'current task' }]);
+    const loop = new AgentLoop(
+      { providerId: 'local', modelId: 'generic-compatible-model' },
+      session
+    );
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => { generate: (prompt: string) => Promise<string> };
+      }
+    ).createLLMService();
+
+    await expect(llmService.generate('system prompt')).rejects.toThrow(
+      'provider finish reason: length'
+    );
+    expect(vi.mocked(invoke)).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a non-stream MB decision above the local 8K body limit', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      type: 'text',
+      content: 'a'.repeat(PLANNING_CONSTANTS.MASTER_BRAIN_MAX_OUTPUT_TOKENS * 4 + 1),
+      finishReason: 'stop',
+    });
+
+    const session = createSession([{ role: 'user', content: 'current task' }]);
+    const loop = new AgentLoop(
+      { providerId: 'local', modelId: 'generic-compatible-model' },
+      session
+    );
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => { generate: (prompt: string) => Promise<string> };
+      }
+    ).createLLMService();
+
+    await expect(llmService.generate('system prompt')).rejects.toThrow(
+      `local ${PLANNING_CONSTANTS.MASTER_BRAIN_MAX_OUTPUT_TOKENS}-token limit`
+    );
+    expect(vi.mocked(invoke)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not try a third budget after the non-stream transport fallback is rejected', async () => {
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({
+        type: 'error',
+        error: '400 Bad Request: max_tokens must be less than or equal to 16384',
+      })
+      .mockResolvedValueOnce({
+        type: 'error',
+        error: '400 Bad Request: max_tokens must be less than or equal to 8192',
+      });
+
+    const session = createSession([{ role: 'user', content: 'current task' }]);
+    const loop = new AgentLoop({ providerId: 'openai', modelId: 'gpt-5.4' }, session);
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => { generate: (prompt: string) => Promise<string> };
+      }
+    ).createLLMService();
+
+    await expect(llmService.generate('system prompt')).rejects.toThrow(
+      'max_tokens must be less than or equal to 8192'
+    );
+    const requests = vi
+      .mocked(invoke)
+      .mock.calls.filter(([command]) => command === 'llm_chat_with_tools')
+      .map(([, args]) => (args as { request: { maxTokens: number } }).request);
+    expect(requests.map(({ maxTokens }) => maxTokens)).toEqual([
+      PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_TRANSPORT_MAX_TOKENS,
+      PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
+    ]);
   });
 
   it('retries MB stream after transient 524 API errors without empty-decision guidance', async () => {

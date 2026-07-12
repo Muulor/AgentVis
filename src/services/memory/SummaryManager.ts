@@ -11,6 +11,7 @@ import type { Message, SummaryResult, LLMService } from './types';
 import { parseWithFallback } from './utils/JsonParser';
 import { getMemoryVectorIndex } from './MemoryVectorIndex';
 import { getLogger } from '@services/logger';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 import { SOURCE_LANGUAGE_PRESERVATION_RULES } from './PromptLanguagePolicy';
 
 const logger = getLogger('SummaryManager');
@@ -206,7 +207,7 @@ export class SummaryManager {
       logger.trace('[SummaryManager] 调用 LLM...');
       const response = await this.llm.generate(prompt, {
         temperature: 1,
-        maxTokens: 24576,
+        maxTokens: LLM_TOKEN_POLICIES.memory.primaryMaxTokens,
       });
 
       logger.trace('[SummaryManager]  LLM 响应成功');

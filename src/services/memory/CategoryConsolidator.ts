@@ -12,6 +12,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { LongTermFactCategory, LLMService } from './types';
 import { parseWithFallback } from './utils/JsonParser';
 import { getLogger } from '@services/logger';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 import { SOURCE_LANGUAGE_PRESERVATION_RULES } from './PromptLanguagePolicy';
 
 const logger = getLogger('CategoryConsolidator');
@@ -179,7 +180,7 @@ export class CategoryConsolidator {
       // 调用 LLM
       const response = await this.llm.generate(fullPrompt, {
         temperature: 1,
-        maxTokens: 24576,
+        maxTokens: LLM_TOKEN_POLICIES.memory.primaryMaxTokens,
       });
 
       // 解析响应

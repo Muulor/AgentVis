@@ -40,6 +40,7 @@ import {
 } from './chatAttachmentContext';
 import { serializeQuotesForMessage } from '@utils/quoteContent';
 import { modelSupportsVision } from '@/config/modelRegistry';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 
 const logger = getLogger('useChatSender');
 const CHARS_PER_TOKEN_ESTIMATE = 2.5;
@@ -1060,7 +1061,9 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
               model: effectiveModel,
               messages,
               temperature: 1,
-              max_tokens: 24576,
+              max_tokens: isImageModel
+                ? LLM_TOKEN_POLICIES.imageGeneration.primaryMaxTokens
+                : LLM_TOKEN_POLICIES.chat.primaryMaxTokens,
               supports_vision: supportsVisionInput,
               base_url: baseUrl,
               ...imageModelConfig,

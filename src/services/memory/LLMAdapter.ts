@@ -15,6 +15,7 @@ import {
   getLlmRetryDelayMs,
   MEMORY_LLM_RETRY_DELAYS_MS,
 } from '@services/planning/utils/LlmRetryPolicy';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 
 const logger = getLogger('LLMAdapter');
 
@@ -36,7 +37,7 @@ const DEFAULT_CONFIG: LLMConfig = {
   provider: '',
   model: '',
   temperature: 1,
-  maxTokens: 24576,
+  maxTokens: LLM_TOKEN_POLICIES.memory.primaryMaxTokens,
 };
 
 // ============================================================================

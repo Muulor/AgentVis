@@ -477,6 +477,12 @@ export const enUS = {
     subAgentReasoningCollapse: 'Collapse thinking details',
     subAgentEmptyDecisionRetry:
       'Model returned an empty decision after {seconds}s. Retrying with stricter instructions.',
+    subAgentOutputTruncatedRetryObservation:
+      'The model output hit the provider token limit ({reason}). All tool calls from that response were discarded, and the system is making its one safe retry.',
+    subAgentOutputTruncatedRetryInstruction:
+      'The previous model response was truncated by the provider output-token limit ({reason}). The system discarded every tool call from that response; no file_write was executed. This is the only safe retry.\nDo not generate another oversized full-mode file_write argument. For a long file, first call file_write with a short, complete, independently parseable skeleton (preferably 100 lines or fewer), then fill sections in later steps with mode="patch". Ensure every tool-call JSON argument is complete and closed. If you cannot split the write safely, output a blocker report that includes TASK_COMPLETE.',
+    subAgentOutputTruncatedFailure:
+      'The model response hit the provider output-token limit twice ({reason}). To prevent incomplete tool arguments from executing, the Sub-Agent failed safely and discarded every tool call from this response.',
     subAgentTextOnlyDecisionRetry:
       'Sub-Agent returned text without tool calls for {count} consecutive steps. Reminding it to call a tool or hand off on the next step.',
     subAgentTextOnlyDecisionRetryInstruction:
@@ -547,6 +553,8 @@ export const enUS = {
       'Automatically terminated after repeated no-change file_write calls',
     subAgentTerminationApiError:
       'API call failed (network error or rate limit); completed intermediate artifacts are below',
+    subAgentTerminationOutputTokenLimit:
+      'Model output repeatedly hit the token limit, so the system terminated safely',
     subAgentTerminationCancelled: 'User manually cancelled',
     subAgentTerminationCompletedNormally: 'completed normally',
     subAgentToolOutputOmissionMarker: '\n[... omitted {tokens} tokens, {meta} ...]\n',

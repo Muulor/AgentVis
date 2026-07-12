@@ -100,6 +100,17 @@ Before each decision, MB receives a context bundle assembled by `MasterBrainInpu
 | Task experience | Trial-and-error experience accumulated during historical execution, provided by the memory system. |
 | External skill content | Guide skills hit by semantic retrieval and Script skills matched on demand. |
 
+#### 3.2.1 MB Output And Reasoning Budgets
+
+MB uses separate local guards around one provider transport budget. The final structured decision
+body is locally capped at 8,192 tokens. Unknown and non-reasoning routes request 16,384 transport
+tokens, while provider/model routes whose reasoning shares the output budget request 32,768.
+An independent 16,384-token reasoning fuse stops anomalous reasoning streams.
+
+If a provider explicitly rejects the requested max-token parameter, MB retries once at the next
+lower transport tier (32K to 16K, or 16K to 8K). This is not used for an accepted response that
+finishes with `length` or `max_tokens`; provider exhaustion follows semantic truncation recovery.
+
 ### 3.3 SPAWN_SUB_AGENT Decision Content
 
 When MB decides to dispatch an SA, the emitted `nextStep` structure is JIT-built by `SubAgentSpecBuilder` into a complete `SubAgentSpec`:
@@ -147,6 +158,19 @@ while (!terminated && toolCallSteps < maxSteps) {
     +-- periodic check mechanism is retained, but disabled by default
 }
 ```
+
+#### 4.1.1 SA Output Budget And Truncated Tool Calls
+
+Normal SA calls request 32,768 output tokens so large function-call arguments have more room. If a
+provider explicitly rejects that token parameter, the caller retries the same request once at the
+24,576 compatibility baseline and remembers the downgrade for later steps in the same factory.
+Skill-audit calls keep their separate 24,576 profile.
+
+A provider rejection is different from an accepted response whose finish reason is `length`,
+`max_tokens`, `MAX_TOKENS`, or `incomplete`. The latter is marked as truncated: the backend discards
+all tool calls before large-argument staging, and Runner writes nothing. It retries with a strategy
+instruction that asks the SA to create a short complete skeleton and then fill long files with patch
+mode. A repeated truncation terminates as a failure for MB handoff.
 
 ### 4.2 behaviorHint Behavior Modifier
 

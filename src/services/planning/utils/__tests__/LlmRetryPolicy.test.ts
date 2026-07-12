@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { classifyLlmRetry, getLlmRetryDelayMs } from '../LlmRetryPolicy';
+import {
+  classifyLlmRetry,
+  getLlmRetryDelayMs,
+  isMaxTokensParameterRejection,
+} from '../LlmRetryPolicy';
 
 describe('LlmRetryPolicy', () => {
   it('classifies transient provider and gateway status codes as retryable', () => {
@@ -68,4 +72,29 @@ describe('LlmRetryPolicy', () => {
     expect(getLlmRetryDelayMs(3, [3000, 8000, 20000])).toBe(20000);
     expect(getLlmRetryDelayMs(99, [3000, 8000, 20000])).toBe(20000);
   });
+
+  it.each([
+    '400 Bad Request: max_tokens must be less than or equal to 24576',
+    'invalid parameter: max_completion_tokens is too high',
+    '{"error":{"message":"max_output_tokens exceeds maximum allowed"}}',
+    '参数 max_tokens 超出最大允许值',
+  ])('recognizes explicit max-token parameter rejection: %s', (message) => {
+    expect(isMaxTokensParameterRejection(message)).toBe(true);
+  });
+
+  it.each([
+    'finish_reason=max_tokens',
+    '{"finish_reason":"max_tokens","status":400}',
+    '429 Too Many Requests: max_tokens usage quota reached',
+    '500 Internal Server Error',
+    'Sub-agent LLM request cancelled: max_tokens=32768',
+    '400 Bad Request: invalid image input',
+    '400 Bad Request: invalid image input; request max_tokens=32768',
+    '400 Bad Request: max_tokens=32768',
+  ])(
+    'does not confuse truncation or unrelated failures with parameter rejection: %s',
+    (message) => {
+      expect(isMaxTokensParameterRejection(message)).toBe(false);
+    }
+  );
 });

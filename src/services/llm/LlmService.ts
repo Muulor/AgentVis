@@ -8,16 +8,24 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ChatMessage, ChatOptions, StreamCallbacks, ConnectionTestResult } from './types';
 import { getDefaultModelIdForProvider } from '@/config/modelRegistry';
+import { LLM_TOKEN_POLICIES } from './LlmTokenPolicy';
 
 // ==================== 默认配置 ====================
 
 const DEFAULT_PROVIDER = 'local';
 
+interface LlmChatResponseDto {
+  content: string;
+  model: string;
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
 const DEFAULT_OPTIONS: Required<ChatOptions> = {
   provider: DEFAULT_PROVIDER,
   model: getDefaultModelIdForProvider(DEFAULT_PROVIDER),
   temperature: 1,
-  maxTokens: 24576,
+  maxTokens: LLM_TOKEN_POLICIES.chat.primaryMaxTokens,
   stream: true,
 };
 
@@ -65,19 +73,20 @@ export class LlmService {
 
     try {
       // 调用 Tauri command（非流式模式）
-      const result = await invoke<string>('llm_chat', {
-        provider: mergedOptions.provider,
-        model: mergedOptions.model,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        temperature: mergedOptions.temperature,
-        maxTokens: mergedOptions.maxTokens,
-        stream: false,
+      const result = await invoke<LlmChatResponseDto>('llm_chat', {
+        request: {
+          provider: mergedOptions.provider,
+          model: mergedOptions.model,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          temperature: mergedOptions.temperature,
+          max_tokens: mergedOptions.maxTokens,
+        },
       });
 
-      return result;
+      return result.content;
     } catch (error) {
       throw this.wrapError(error, mergedOptions.provider);
     }
@@ -103,22 +112,23 @@ export class LlmService {
       // 调用 Tauri command（流式模式）
       // 注意：实际的流式实现需要使用 Tauri 的 event 系统
       // 这里暂时使用简化的实现
-      const result = await invoke<string>('llm_chat', {
-        provider: mergedOptions.provider,
-        model: mergedOptions.model,
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        temperature: mergedOptions.temperature,
-        maxTokens: mergedOptions.maxTokens,
-        stream: true,
+      const result = await invoke<LlmChatResponseDto>('llm_chat', {
+        request: {
+          provider: mergedOptions.provider,
+          model: mergedOptions.model,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          temperature: mergedOptions.temperature,
+          max_tokens: mergedOptions.maxTokens,
+        },
       });
 
       // 模拟流式输出（后续可以改为真正的 event stream）
-      fullContent = result;
+      fullContent = result.content;
       if (callbacks.onChunk) {
-        callbacks.onChunk(result);
+        callbacks.onChunk(result.content);
       }
       if (callbacks.onComplete) {
         callbacks.onComplete(fullContent);

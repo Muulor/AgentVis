@@ -835,6 +835,7 @@ impl OpenAIAdapter {
                 content: Some(error_msg.clone()),
                 tool_calls: None,
                 error: Some(error_msg),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -925,6 +926,7 @@ impl OpenAIAdapter {
                 content: Some(error_msg.clone()),
                 tool_calls: None,
                 error: Some(error_msg),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -938,6 +940,7 @@ impl OpenAIAdapter {
         let mut chunk_count: u64 = 0;
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
+        let mut final_finish_reason: Option<String> = None;
         let idle_timeout = stream_idle_timeout();
 
         loop {
@@ -1058,6 +1061,7 @@ impl OpenAIAdapter {
                             let (input_tokens, output_tokens) = responses_usage_tokens(&value);
                             final_input_tokens = input_tokens;
                             final_output_tokens = output_tokens;
+                            final_finish_reason = responses_tool_finish_reason(&value);
 
                             if let Some(output) = value
                                 .get("response")
@@ -1129,6 +1133,7 @@ impl OpenAIAdapter {
                 },
                 tool_calls: Some(parsed_calls),
                 error: None,
+                finish_reason: final_finish_reason,
                 input_tokens: final_input_tokens,
                 output_tokens: final_output_tokens,
                 reasoning_content: if reasoning_buffer.is_empty() {
@@ -1147,6 +1152,7 @@ impl OpenAIAdapter {
                 },
                 tool_calls: None,
                 error: None,
+                finish_reason: final_finish_reason,
                 input_tokens: final_input_tokens,
                 output_tokens: final_output_tokens,
                 reasoning_content: if reasoning_buffer.is_empty() {
@@ -1229,6 +1235,7 @@ impl OpenAIAdapter {
                 content: Some(error_msg.clone()),
                 tool_calls: None,
                 error: Some(error_msg),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -1244,6 +1251,7 @@ impl OpenAIAdapter {
         // 累积 usage 数据（从包含 usage 的 chunk 中提取）
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
+        let mut final_finish_reason: Option<String> = None;
         let no_useful_progress_timeout = self.no_useful_stream_progress_timeout();
         let mut last_useful_progress_at = Instant::now();
 
@@ -1331,8 +1339,9 @@ impl OpenAIAdapter {
                             }
                         }
 
-                        // finish_reason 出现时记录
-                        if choice.finish_reason.is_some() {
+                        // finish_reason 出现时保留 provider 原值并结束消费
+                        if let Some(reason) = choice.finish_reason.as_ref() {
+                            final_finish_reason = Some(reason.clone());
                             chunk_count += 1;
                             break;
                         }
@@ -1402,6 +1411,7 @@ impl OpenAIAdapter {
                 },
                 tool_calls: Some(parsed_calls),
                 error: None,
+                finish_reason: final_finish_reason,
                 input_tokens: final_input_tokens,
                 output_tokens: final_output_tokens,
                 reasoning_content: if reasoning_buffer.is_empty() {
@@ -1425,6 +1435,7 @@ impl OpenAIAdapter {
                 },
                 tool_calls: None,
                 error: None,
+                finish_reason: final_finish_reason,
                 input_tokens: final_input_tokens,
                 output_tokens: final_output_tokens,
                 reasoning_content: if reasoning_buffer.is_empty() {
@@ -1548,6 +1559,7 @@ impl OpenAIAdapter {
                     content,
                     tool_calls: Some(parsed_calls),
                     error: None,
+                    finish_reason: choice.finish_reason.clone(),
                     input_tokens: None,
                     output_tokens: None,
                     reasoning_content: None,
@@ -1566,6 +1578,7 @@ impl OpenAIAdapter {
             content,
             tool_calls: None,
             error: None,
+            finish_reason: choice.finish_reason.clone(),
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
@@ -1998,6 +2011,7 @@ struct OpenAIToolResponseMessage {
 #[derive(Debug, Deserialize)]
 struct OpenAIToolChoice {
     message: OpenAIToolResponseMessage,
+    finish_reason: Option<String>,
 }
 
 /// 带 tool_calls 的 API 响应
@@ -2068,6 +2082,32 @@ fn responses_event_u32(value: &serde_json::Value, key: &str) -> Option<u32> {
         .get(key)
         .and_then(|v| v.as_u64())
         .and_then(|v| u32::try_from(v).ok())
+}
+
+/// 提取 Responses API 工具调用流的结束原因。
+///
+/// `response.incomplete` 的具体原因位于 `response.incomplete_details.reason`；
+/// 当兼容网关省略详情时回退为明确的 `incomplete`，避免截断信号丢失。
+fn responses_tool_finish_reason(value: &serde_json::Value) -> Option<String> {
+    let response = value.get("response");
+
+    if responses_event_type(value) == Some("response.incomplete") {
+        return response
+            .and_then(|response| response.get("incomplete_details"))
+            .and_then(|details| details.get("reason"))
+            .and_then(|reason| reason.as_str())
+            .map(str::to_string)
+            .or_else(|| Some("incomplete".to_string()));
+    }
+
+    response
+        .and_then(|response| response.get("status"))
+        .and_then(|status| status.as_str())
+        .map(str::to_string)
+        .or_else(|| {
+            (responses_event_type(value) == Some("response.completed"))
+                .then(|| "completed".to_string())
+        })
 }
 
 fn responses_usage_tokens(value: &serde_json::Value) -> (Option<u32>, Option<u32>) {
@@ -2671,6 +2711,60 @@ mod tests {
     }
 
     #[test]
+    fn test_responses_tool_finish_reason_preserves_incomplete_detail() {
+        let event = serde_json::json!({
+            "type": "response.incomplete",
+            "response": {
+                "status": "incomplete",
+                "incomplete_details": {
+                    "reason": "max_output_tokens"
+                }
+            }
+        });
+
+        assert_eq!(
+            responses_tool_finish_reason(&event).as_deref(),
+            Some("max_output_tokens")
+        );
+    }
+
+    #[test]
+    fn test_responses_tool_finish_reason_falls_back_to_incomplete() {
+        let event = serde_json::json!({
+            "type": "response.incomplete",
+            "response": { "status": "incomplete" }
+        });
+
+        assert_eq!(
+            responses_tool_finish_reason(&event).as_deref(),
+            Some("incomplete")
+        );
+    }
+
+    #[test]
+    fn test_non_stream_tool_response_preserves_length_finish_reason() {
+        let choice: OpenAIToolChoice = serde_json::from_value(serde_json::json!({
+            "message": {
+                "content": null,
+                "tool_calls": [{
+                    "id": "call_123",
+                    "function": {
+                        "name": "file_write",
+                        "arguments": { "path": "index.html", "content": "<html>" }
+                    }
+                }]
+            },
+            "finish_reason": "length"
+        }))
+        .expect("parse tool response choice");
+
+        let response =
+            OpenAIAdapter::extract_tool_response(&choice).expect("extract tool response");
+
+        assert_eq!(response.finish_reason.as_deref(), Some("length"));
+    }
+
+    #[test]
     fn test_responses_tool_accumulator_preserves_call_id() {
         let mut acc = ResponsesToolCallAccumulator::new();
         acc.update_from_item(
@@ -2835,6 +2929,21 @@ mod tests {
         assert_eq!(calls[0].name, "file_write");
         assert_eq!(calls[0].args["path"], "test.md");
         assert_eq!(calls[0].args["content"], "hello");
+    }
+
+    #[test]
+    fn test_stream_tool_chunk_preserves_length_finish_reason() {
+        let data = r#"{
+            "choices": [{
+                "delta": {},
+                "finish_reason": "length"
+            }],
+            "usage": null
+        }"#;
+
+        let chunk: OpenAIStreamChunkWithTools = serde_json::from_str(data).unwrap();
+
+        assert_eq!(chunk.choices[0].finish_reason.as_deref(), Some("length"));
     }
 
     #[test]

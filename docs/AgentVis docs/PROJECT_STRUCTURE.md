@@ -441,10 +441,12 @@ update/
 
 ```
 config/
-└── modelRegistry.ts              # 模型/供应商注册表（唯一数据源）
-                                  # - 内置供应商与模型定义
-                                  # - 用户自定义模型加载/保存/导入/导出/重置
-                                  # - 供 UI 组件和服务层统一查询的函数接口
+├── modelRegistry.ts              # 模型/供应商注册表（唯一数据源）
+│                                 # - 内置供应商与模型定义
+│                                 # - 用户自定义模型加载/保存/导入/导出/重置
+│                                 # - 供 UI 组件和服务层统一查询的函数接口
+└── 📁 __tests__/
+    └── modelRegistry.test.ts     # provider/model 推理预算路由完整性测试
 ```
 
 > 集中管理所有 AI 供应商和模型配置，消除各组件中的硬编码重复。  
@@ -595,7 +597,11 @@ fast-apply/
 llm/
 ├── index.ts                      # 模块导出索引
 ├── types.ts                      # LLM 类型定义
-└── LlmService.ts                 # LLM 统一调用服务
+├── LlmService.ts                 # LLM 统一调用服务
+├── LlmTokenPolicy.ts             # 按调用场景集中定义输出 token 预算与兼容降级
+└── 📁 __tests__/
+    ├── LlmService.test.ts        # Tauri request/response DTO 合约测试
+    └── LlmTokenPolicy.test.ts    # 输出预算场景策略测试
 ```
 
 ### 📁 services/language/
@@ -680,12 +686,13 @@ planning/
 │   │
 │   ├── 📁 callers/               # LLM 调用器模块
 │   │   ├── index.ts              # 模块导出
-│   │   ├── SubAgentLLMCaller.ts  # SubAgent LLM 调用器
+│   │   ├── SubAgentLLMCaller.ts  # SubAgent LLM 调用器（32K→24K 参数拒绝降级、finish reason 透传）
 │   │   │                         # - call()：单次调用（向后兼容）
 │   │   │                         # - callWithContext()：多轮会话调用 
 │   │   │                         # - buildMessagesWithContext()：消息历史构建 
 │   │   └── 📁 __tests__/         # 调用器测试
-│   │       └── SubAgentLLMCaller.loop.test.ts # Loop 会话测试
+│   │       ├── SubAgentLLMCaller.loop.test.ts # Loop 会话测试
+│   │       └── SubAgentLLMCaller.tokenPolicy.test.ts # 输出预算、降级与视觉保留测试
 │   │
 │   ├── 📁 dispatchers/           # 派遣器模块
 │   │   ├── index.ts              # 模块导出
@@ -766,7 +773,7 @@ planning/
 │   │                             # - ProgressReport（进度报告
 │   │                             # - AccumulatedMessage/LoopState（Loop 状态）     
 │   ├── SubAgentFactory.ts        # 实例创建工厂（spec 验证 + venv 路径解析）
-│   ├── SubAgentRunner.ts         # 执行器（LLM 调用 + 策略验证）
+│   ├── SubAgentRunner.ts         # 执行器（LLM 调用、策略验证、截断工具调用安全拦截）
 │   ├── SubAgentSafetyFooter.ts   # Safety Footer 默认提示词
 │   ├── SubAgentPromptBuilder.ts  # Prompt 构建器（上下文隔离 + venv 约束注入）
 │   │
@@ -776,6 +783,7 @@ planning/
 │       ├── SubAgentRunner.test.ts # 执行器测试
 │       ├── SubAgentRunner.loop.test.ts # Loop 执行测试
 │       ├── SubAgentRunnerToolCalls.test.ts # ToolCalls 执行测试
+│       ├── SubAgentRunner.outputTruncation.test.ts # 输出截断零执行与单次安全重试测试
 │       └── SubAgentPromptBuilder.test.ts # Prompt 构建测试
 │
 ├── 📁 observability/             # 观测性系统
@@ -893,7 +901,7 @@ planning/
     ├── ChunkProcessor.ts         # 分块处理器
     ├── SubAgentObservationEvent  # SA观测事件工具
     ├── ExecTimeoutObservation.ts  Exec 超时观测辅助
-    ├── LlmRetryPolicy.ts         
+    ├── LlmRetryPolicy.ts         # LLM 重试分类与 max-token 参数拒绝判定
     ├── DeliverableIndexer.ts     # 交付物二进制文件
     └── FileWriter.ts             # 文件写入器
 ```
@@ -1113,9 +1121,10 @@ db/
 ```
 llm/
 ├── mod.rs                        # 模块入口
-├── types.rs                      # LLM 类型定义
+├── types.rs                      # LLM 类型、默认输出预算与 tool-call finish reason
 ├── http_client.rs                # HTTP 客户端（连接池）
 ├── schema_compat.rs
+├── json_repair.rs                # 流式/截断 JSON 参数修复（上层须结合 finish reason 安全处置）
 ├── gemini.rs                     # Google Gemini 适配器
 ├── openai.rs                     # OpenAI 适配器（ZhipuAI/火山引擎复用）
 └── anthropic.rs                  # Anthropic Claude 适配器（百炼/Minimax 复用）

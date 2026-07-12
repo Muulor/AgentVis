@@ -20,6 +20,12 @@ import { getLogger } from '@services/logger';
 import { normalizeSafetyFooterText } from '../../sub-agents/SubAgentSafetyFooter';
 import { modelSupportsVision } from '@/config/modelRegistry';
 import { translate } from '@/i18n';
+import {
+  getLlmTokenPolicy,
+  type LlmTokenPolicy,
+  type LlmTokenPolicyPurpose,
+} from '@services/llm/LlmTokenPolicy';
+import { isMaxTokensParameterRejection } from '../../utils/LlmRetryPolicy';
 
 const logger = getLogger('SubAgentLLMCaller');
 const SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS = 5000;
@@ -63,6 +69,8 @@ interface LLMResponseWithTools {
   inputTokens?: number;
   /** API 返回的输出 token 数 */
   outputTokens?: number;
+  /** Provider 返回的完成原因；token 截断与参数拒绝是两类不同信号。 */
+  finishReason?: string;
   /** 思考内容（DeepSeek 思考模式返回的推理链，需在多轮工具调用中回传） */
   reasoningContent?: string;
 }
@@ -117,7 +125,6 @@ const VISION_UNSUPPORTED_ERROR_PATTERNS = [
   'multimodal',
   'content part',
   'failed to read request',
-  '400 bad request',
 ];
 
 export type VisionFallbackMode = 'none' | 'strip-unmarked' | 'strip-all';
@@ -133,6 +140,8 @@ export interface SubAgentLLMCallerConfig {
   subAgentSafetyFooterEnabled?: boolean;
   /** Safety Footer 的可编辑提示词文本。为空时回退到内置默认值。 */
   subAgentSafetyFooterText?: string;
+  /** 输出 token 场景策略。普通 Sub-Agent 默认使用 subAgent，复用调用方应显式声明。 */
+  tokenPolicy?: LlmTokenPolicyPurpose;
 }
 
 /**
@@ -142,12 +151,17 @@ export interface SubAgentLLMCallerConfig {
  */
 export class SubAgentLLMCallerFactory {
   private visionFallbackMode: VisionFallbackMode = 'none';
+  private readonly tokenPolicy: LlmTokenPolicy;
+  private activeMaxTokens: number;
 
   constructor(
     private config: SubAgentLLMCallerConfig,
     // executeTool 保留接口兼容性，但不再在此处使用（工具执行移到 Runner）
     _executeTool?: (toolCall: ToolCallInfo) => Promise<ToolExecutionResult>
-  ) {}
+  ) {
+    this.tokenPolicy = getLlmTokenPolicy(config.tokenPolicy ?? 'subAgent');
+    this.activeMaxTokens = this.tokenPolicy.primaryMaxTokens;
+  }
 
   setVisionFallbackMode(mode: VisionFallbackMode): void {
     if (mode === 'none') return;
@@ -459,7 +473,10 @@ export class SubAgentLLMCallerFactory {
       });
     }
 
-    const invokeOnce = async (messagesForCall: Message[]): Promise<LLMResponseWithTools> => {
+    const invokeOnce = async (
+      messagesForCall: Message[],
+      maxTokens: number
+    ): Promise<LLMResponseWithTools> => {
       if (signal?.aborted) {
         return {
           type: 'cancelled',
@@ -475,7 +492,7 @@ export class SubAgentLLMCallerFactory {
           baseUrl,
           supportsVision: modelSupportsVision(modelId, providerId),
           tools: toolsPayload,
-          maxTokens: 24576,
+          maxTokens,
           temperature: PLANNING_CONSTANTS.SUB_AGENT_TEMPERATURE,
         },
         sessionId,
@@ -511,9 +528,52 @@ export class SubAgentLLMCallerFactory {
       }
     };
 
+    const invokeWithTokenFallback = async (
+      messagesForCall: Message[]
+    ): Promise<LLMResponseWithTools> => {
+      const attemptedMaxTokens = this.activeMaxTokens;
+      let tokenFallbackUsed = false;
+      try {
+        const result = await invokeOnce(messagesForCall, attemptedMaxTokens);
+        if (
+          result.type !== 'error' ||
+          !this.shouldUseTokenParameterFallback(
+            result.error ?? result.content,
+            attemptedMaxTokens,
+            signal
+          )
+        ) {
+          return result;
+        }
+
+        tokenFallbackUsed = true;
+        return await this.retryWithTokenParameterFallback(
+          messagesForCall,
+          attemptedMaxTokens,
+          result.error ?? result.content,
+          invokeOnce
+        );
+      } catch (error) {
+        if (
+          tokenFallbackUsed ||
+          !this.shouldUseTokenParameterFallback(error, attemptedMaxTokens, signal)
+        ) {
+          throw error;
+        }
+
+        tokenFallbackUsed = true;
+        return await this.retryWithTokenParameterFallback(
+          messagesForCall,
+          attemptedMaxTokens,
+          error,
+          invokeOnce
+        );
+      }
+    };
+
     let response: LLMResponseWithTools;
     try {
-      response = await invokeOnce(initialMessages);
+      response = await invokeWithTokenFallback(initialMessages);
     } catch (invokeError) {
       logger.error('[SubAgentLLMCaller] invoke 调用失败:', invokeError);
       if (
@@ -529,7 +589,7 @@ export class SubAgentLLMCallerFactory {
           strippedImageCount: allStripped.imageCount,
           error: String(invokeError).slice(0, 240),
         });
-        response = await invokeOnce(allStripped.messages);
+        response = await invokeWithTokenFallback(allStripped.messages);
         this.visionFallbackMode = 'strip-all';
       } else if (
         !alreadyStrippedImages &&
@@ -547,7 +607,7 @@ export class SubAgentLLMCallerFactory {
           error: String(invokeError).slice(0, 240),
         });
         alreadyStrippedImages = true;
-        response = await invokeOnce(stripped.messages);
+        response = await invokeWithTokenFallback(stripped.messages);
         this.rememberVisionFallbackMode(partial, response);
         if (
           response.type === 'error' &&
@@ -561,7 +621,7 @@ export class SubAgentLLMCallerFactory {
             strippedImageCount: allStripped.imageCount,
             error: (response.error ?? response.content ?? '').slice(0, 240),
           });
-          response = await invokeOnce(allStripped.messages);
+          response = await invokeWithTokenFallback(allStripped.messages);
           this.visionFallbackMode = 'strip-all';
         }
       } else {
@@ -591,6 +651,7 @@ export class SubAgentLLMCallerFactory {
         error: response.error ?? response.content ?? 'Sub-agent LLM request cancelled.',
         inputTokens: response.inputTokens,
         outputTokens: response.outputTokens,
+        ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
       };
     }
 
@@ -612,7 +673,7 @@ export class SubAgentLLMCallerFactory {
           error: (response.error ?? response.content ?? '').slice(0, 240),
         }
       );
-      response = await invokeOnce(allStripped.messages);
+      response = await invokeWithTokenFallback(allStripped.messages);
       this.visionFallbackMode = 'strip-all';
     }
 
@@ -633,7 +694,7 @@ export class SubAgentLLMCallerFactory {
         error: (response.error ?? response.content ?? '').slice(0, 240),
       });
       alreadyStrippedImages = true;
-      response = await invokeOnce(stripped.messages);
+      response = await invokeWithTokenFallback(stripped.messages);
       this.rememberVisionFallbackMode(partial, response);
       if (
         response.type === 'error' &&
@@ -647,7 +708,7 @@ export class SubAgentLLMCallerFactory {
           strippedImageCount: allStripped.imageCount,
           error: (response.error ?? response.content ?? '').slice(0, 240),
         });
-        response = await invokeOnce(allStripped.messages);
+        response = await invokeWithTokenFallback(allStripped.messages);
         this.visionFallbackMode = 'strip-all';
       }
     }
@@ -668,6 +729,7 @@ export class SubAgentLLMCallerFactory {
         })),
         inputTokens: response.inputTokens,
         outputTokens: response.outputTokens,
+        ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
         // DeepSeek 思考模式：透传 reasoning_content 给 Runner 存入消息历史
         reasoningContent: response.reasoningContent,
       };
@@ -685,6 +747,7 @@ export class SubAgentLLMCallerFactory {
         error: errorDetail,
         inputTokens: response.inputTokens,
         outputTokens: response.outputTokens,
+        ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
         reasoningContent: response.reasoningContent,
       };
     }
@@ -696,8 +759,46 @@ export class SubAgentLLMCallerFactory {
       toolCalls: [],
       inputTokens: response.inputTokens,
       outputTokens: response.outputTokens,
+      ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
       reasoningContent: response.reasoningContent,
     };
+  }
+
+  private shouldUseTokenParameterFallback(
+    error: unknown,
+    attemptedMaxTokens: number,
+    signal?: AbortSignal
+  ): boolean {
+    const fallbackMaxTokens = this.tokenPolicy.parameterFallbackMaxTokens;
+    return (
+      !signal?.aborted &&
+      fallbackMaxTokens !== undefined &&
+      attemptedMaxTokens === this.tokenPolicy.primaryMaxTokens &&
+      fallbackMaxTokens < attemptedMaxTokens &&
+      isMaxTokensParameterRejection(error)
+    );
+  }
+
+  private async retryWithTokenParameterFallback(
+    messages: Message[],
+    rejectedMaxTokens: number,
+    error: unknown,
+    invokeOnce: (messagesForCall: Message[], maxTokens: number) => Promise<LLMResponseWithTools>
+  ): Promise<LLMResponseWithTools> {
+    const fallbackMaxTokens = this.tokenPolicy.parameterFallbackMaxTokens;
+    if (fallbackMaxTokens === undefined) {
+      throw error;
+    }
+
+    this.activeMaxTokens = fallbackMaxTokens;
+    logger.warn('[SubAgentLLMCaller] token 参数被 provider 拒绝，降低预算后重试一次:', {
+      providerId: this.config.providerId,
+      modelId: this.config.modelId,
+      rejectedMaxTokens,
+      fallbackMaxTokens,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return await invokeOnce(messages, fallbackMaxTokens);
   }
 
   private hasImages(messages: Message[]): boolean {
@@ -725,6 +826,8 @@ export class SubAgentLLMCallerFactory {
   }
 
   private isVisionUnsupportedError(error: unknown): boolean {
+    if (isMaxTokensParameterRejection(error)) return false;
+
     let errorText = '';
     if (error instanceof Error) {
       errorText = `${error.name}: ${error.message}`;

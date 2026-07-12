@@ -59,6 +59,18 @@ const FILE_WRITE_ARGS_COMPRESS_TOKEN_THRESHOLD = 8000;
 const TEXT_ONLY_DECISION_RETRY_AFTER = 2;
 const TEXT_ONLY_DECISION_TERMINATE_AFTER = 3;
 
+const OUTPUT_TOKEN_LIMIT_FINISH_REASONS = new Set([
+  'length',
+  'max_token',
+  'max_tokens',
+  'max_completion_tokens',
+  'max_output_tokens',
+  'maximum_tokens',
+  'token_limit',
+  'output_token_limit',
+  'incomplete',
+]);
+
 function stringifyToolArg(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
@@ -243,6 +255,15 @@ function getPositiveTokenCount(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+function isOutputTokenLimitFinishReason(finishReason: string | undefined): boolean {
+  if (!finishReason) return false;
+  const normalized = finishReason
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  return OUTPUT_TOKEN_LIMIT_FINISH_REASONS.has(normalized);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 上下文重置指令
 // ═══════════════════════════════════════════════════════════════
@@ -328,6 +349,8 @@ export interface LLMResponse {
   inputTokens?: number;
   /** API 返回的输出 token 数（来自 LLM usage） */
   outputTokens?: number;
+  /** Provider 返回的完成原因（如 stop、length、max_tokens、MAX_TOKENS） */
+  finishReason?: string;
   /** 思考内容（DeepSeek 思考模式返回的推理链，需在多轮工具调用中回传 API） */
   reasoningContent?: string;
 }
@@ -954,6 +977,7 @@ export class SubAgentRunner {
     let additionalInstructions: string | undefined; // 用于 ADJUST_STRATEGY 决策
     let maxSteps = config.maxSteps; // 可变步数预算，用于 EXTEND_BUDGET 决策
     let consecutiveApiErrors = 0; // 连续 API 错误计数（用于重试上限控制）
+    let outputTruncationRetryUsed = false; // Provider 输出上限截断只允许一次安全重试
     let consecutiveEmptyResponses = 0; // Consecutive text responses with no content and no tool calls.
     let consecutiveTextOnlyResponses = 0; // 连续有文本但无工具调用、无终止信号的响应计数。
     // 用户介入消息持久化字段：介入发生后始终注入到每步 LLM 调用的尾部热区，
@@ -1491,6 +1515,47 @@ export class SubAgentRunner {
 
       // 成功响应时重置连续 API 错误计数
       consecutiveApiErrors = 0;
+
+      // Provider 明确报告输出 token 上限时，响应中的 tool-call 参数可能只有半截。
+      // 必须在任何 assistant/tool 消息入栈、Checkpoint 或工具执行之前拦截，
+      // 避免 Rust JSON repair 将残缺的 file_write 参数修成可执行的半文件写入。
+      if (isOutputTokenLimitFinishReason(response.finishReason)) {
+        const finishReason = response.finishReason?.trim() ?? 'unknown';
+        if (!outputTruncationRetryUsed) {
+          outputTruncationRetryUsed = true;
+          additionalInstructions = translate('chat.subAgentOutputTruncatedRetryInstruction', {
+            reason: finishReason,
+          });
+          this.emitObservation({
+            thinking: translate('chat.subAgentOutputTruncatedRetryObservation', {
+              reason: finishReason,
+            }),
+            step: stepCount,
+            timestamp: Date.now(),
+          });
+          logger.warn(
+            `[SubAgentRunner] Provider 输出被截断 (${finishReason})，已丢弃 ` +
+              `${response.rawToolCalls?.length ?? 0} 个工具调用并安全重试一次`
+          );
+          continue;
+        }
+
+        lastContent = translate('chat.subAgentOutputTruncatedFailure', {
+          reason: finishReason,
+        });
+        this.emitObservation({
+          thinking: lastContent,
+          step: stepCount,
+          timestamp: Date.now(),
+        });
+        logger.warn(
+          `[SubAgentRunner] Provider 输出再次被截断 (${finishReason})，` +
+            `已丢弃 ${response.rawToolCalls?.length ?? 0} 个工具调用并终止`
+        );
+        terminated = true;
+        terminationReason = 'output_token_limit';
+        break;
+      }
 
       const hasToolCalls = (response.rawToolCalls?.length ?? 0) > 0;
       const isEmptyTextDecision = !hasToolCalls && response.content.trim().length === 0;
@@ -2606,22 +2671,23 @@ export class SubAgentRunner {
         ? this.buildExecutionSummary(messages, terminationReason)
         : translate('chat.subAgentTaskExecutionCompleted'));
 
-    // API 错误导致的终止：标记为失败状态
-    const isApiError = terminationReason === 'api_error';
+    // API 错误或重复输出截断导致的终止：标记为失败状态
+    const isFailure =
+      terminationReason === 'api_error' || terminationReason === 'output_token_limit';
 
     const output: SubAgentOutput = {
-      status: isApiError ? 'failed' : 'completed',
-      outputValid: !isApiError,
+      status: isFailure ? 'failed' : 'completed',
+      outputValid: !isFailure,
       observations,
       uncertaintyDelta: -0.2,
-      executionStatus: isApiError ? 'failure' : 'success',
+      executionStatus: isFailure ? 'failure' : 'success',
       observedEffects: translate('chat.subAgentObservedEffects', {
         count: toolCalls.length,
         tools: toolCalls.join(', '),
       }),
       requiresInteraction,
       toolCalls,
-      ...(isApiError && { error: content }),
+      ...(isFailure && { error: content }),
     };
 
     // 附加 Diff 数据（非空时才添加，避免污染输出）
@@ -2840,6 +2906,7 @@ export class SubAgentRunner {
       consecutive_no_change_writes: translate('chat.subAgentTerminationNoChangeWrites'),
       consecutive_identical_execs: translate('chat.subAgentRepeatedExecsTermination'),
       api_error: translate('chat.subAgentTerminationApiError'),
+      output_token_limit: translate('chat.subAgentTerminationOutputTokenLimit'),
       cancelled: translate('chat.subAgentTerminationCancelled'),
     };
     return (

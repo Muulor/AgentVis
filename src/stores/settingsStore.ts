@@ -135,7 +135,7 @@ export const useSettingsStore = create<SettingsState>()(
       localLlmModelPath: null,
       localEmbeddingModelPath: null,
       nGpuLayers: -1,
-      nCtx: 24576,
+      nCtx: 32768,
       memoryProvider: '', // 空值表示跟随 defaultProvider
       memoryModel: '', // 空值表示跟随 defaultModel
       localApiUrl: 'http://127.0.0.1:8050/v1',

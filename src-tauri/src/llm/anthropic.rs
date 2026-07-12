@@ -123,6 +123,29 @@ mod tests {
     }
 
     #[test]
+    fn non_stream_tool_response_preserves_max_tokens_stop_reason() {
+        let api_response: AnthropicToolResponse = serde_json::from_value(serde_json::json!({
+            "model": "claude-test",
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_123",
+                "name": "file_write",
+                "input": { "path": "index.html", "content": "<html>" }
+            }],
+            "stop_reason": "max_tokens"
+        }))
+        .expect("parse Anthropic tool response");
+
+        let response = AnthropicAdapter::extract_tool_response_from_blocks(
+            &api_response.content,
+            api_response.stop_reason.clone(),
+        )
+        .expect("extract tool response");
+
+        assert_eq!(response.finish_reason.as_deref(), Some("max_tokens"));
+    }
+
+    #[test]
     fn native_adaptive_thinking_request_omits_temperature() {
         let adapter = AnthropicAdapter::new(ProviderConfig::new("test-key"));
         let request = ChatRequest {
@@ -273,7 +296,9 @@ impl AnthropicAdapter {
     /// 构建Request body
     fn build_request_body(&self, request: &ChatRequest) -> AnthropicRequest {
         let model = self.get_model(request.model.as_deref());
-        let max_tokens = request.max_tokens.unwrap_or(24576);
+        let max_tokens = request
+            .max_tokens
+            .unwrap_or(super::types::DEFAULT_LLM_MAX_TOKENS);
         let thinking = self.thinking_config_for_model(&model, max_tokens);
         let output_config = Self::output_config_for_thinking(&thinking);
         let temperature = if thinking.is_some() {
@@ -560,7 +585,9 @@ impl AnthropicAdapter {
         });
 
         // 构建Request body（不含 stream 字段，由调用方设置）
-        let max_tokens = request.max_tokens.unwrap_or(24576);
+        let max_tokens = request
+            .max_tokens
+            .unwrap_or(super::types::DEFAULT_LLM_MAX_TOKENS);
         let mut body = serde_json::json!({
             "model": model,
             "messages": messages,
@@ -636,6 +663,7 @@ impl AnthropicAdapter {
                 content: Some(error_msg.clone()),
                 tool_calls: None,
                 error: Some(error_msg),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -659,8 +687,8 @@ impl AnthropicAdapter {
                 ))
             })?;
 
-        // 从 content blocks 中分离 text 和 tool_use
-        Self::extract_tool_response_from_blocks(&api_response.content)
+        // 从 content blocks 中分离 text 和 tool_use，并保留 provider 的结束原因。
+        Self::extract_tool_response_from_blocks(&api_response.content, api_response.stop_reason)
     }
 
     /// 流式 Function Calling 请求（内部消费 SSE，外部返回完整响应）
@@ -721,6 +749,7 @@ impl AnthropicAdapter {
                 content: Some(error_msg.clone()),
                 tool_calls: None,
                 error: Some(error_msg),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -738,6 +767,7 @@ impl AnthropicAdapter {
         // 累积 usage 数据
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
+        let mut final_finish_reason: Option<String> = None;
 
         let idle_timeout = stream_idle_timeout();
         loop {
@@ -828,6 +858,11 @@ impl AnthropicAdapter {
                                 if let Some(usage) = msg.usage {
                                     final_output_tokens = Some(usage.output_tokens as u32);
                                 }
+                                if let Some(stop_reason) =
+                                    msg.delta.and_then(|delta| delta.stop_reason)
+                                {
+                                    final_finish_reason = Some(stop_reason);
+                                }
                             }
                         }
                         "message_stop" => {
@@ -917,6 +952,7 @@ impl AnthropicAdapter {
                 content,
                 tool_calls: Some(tool_calls),
                 error: None,
+                finish_reason: final_finish_reason,
                 input_tokens: final_input_tokens,
                 output_tokens: final_output_tokens,
                 reasoning_content: None,
@@ -932,9 +968,10 @@ impl AnthropicAdapter {
                     content,
                     tool_calls: Some(xml_tool_calls),
                     error: None,
+                    finish_reason: final_finish_reason,
                     input_tokens: final_input_tokens,
                     output_tokens: final_output_tokens,
-                reasoning_content: None,
+                    reasoning_content: None,
                 });
             }
         }
@@ -946,6 +983,7 @@ impl AnthropicAdapter {
             content,
             tool_calls: None,
             error: None,
+            finish_reason: final_finish_reason,
             input_tokens: final_input_tokens,
             output_tokens: final_output_tokens,
             reasoning_content: None,
@@ -955,6 +993,7 @@ impl AnthropicAdapter {
     /// 从非流式响应的 content blocks 中提取 text 和 tool_use
     fn extract_tool_response_from_blocks(
         blocks: &[AnthropicToolContentBlock],
+        finish_reason: Option<String>,
     ) -> AppResult<super::types::ToolChatResponse> {
         use super::types::{ToolChatResponse, ToolCall as TypesToolCall};
 
@@ -994,6 +1033,7 @@ impl AnthropicAdapter {
                 content,
                 tool_calls: Some(tool_calls),
                 error: None,
+                finish_reason,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -1009,9 +1049,10 @@ impl AnthropicAdapter {
                     content,
                     tool_calls: Some(xml_tool_calls),
                     error: None,
+                    finish_reason,
                     input_tokens: None,
                     output_tokens: None,
-                reasoning_content: None,
+                    reasoning_content: None,
                 });
             }
         }
@@ -1023,6 +1064,7 @@ impl AnthropicAdapter {
             content,
             tool_calls: None,
             error: None,
+            finish_reason,
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
@@ -1489,6 +1531,7 @@ struct AnthropicToolResponse {
     #[allow(dead_code)]
     model: String,
     content: Vec<AnthropicToolContentBlock>,
+    stop_reason: Option<String>,
 }
 
 // ==================== 流式 Function Calling 类型 ====================

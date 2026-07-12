@@ -282,15 +282,8 @@ const BUILTIN_MODELS: ModelDefinition[] = [
 
   // ━━ ZhipuAI ━━
   {
-    id: 'glm-4-flash',
-    name: 'GLM-4-Flash(free)',
-    providerId: 'zhipu',
-    contextWindow: 128000,
-    supportsVision: false,
-  },
-  {
     id: 'glm-4.6v-flash',
-    name: 'GLM-4.6V-Flash(free)',
+    name: 'GLM-4.6V-Flash',
     providerId: 'zhipu',
     contextWindow: 128000,
     supportsVision: true,
@@ -533,37 +526,47 @@ const CONFIG_VERSION = 1;
  * Keep this provider-scoped: the same model ID routed through a compatible local
  * endpoint does not necessarily expose or account for reasoning the same way.
  */
-const SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS = new Set([
-  'openai::gpt-5.4',
-  'openai::gpt-5.4-mini',
-  'openai::gpt-5.4-nano',
-  'openai::gpt-5.5',
-  'openai::gpt-5.6-luna',
-  'openai::gpt-5.6-terra',
-  'openai::gpt-5.6-sol',
-  'anthropic::claude-sonnet-4-6',
-  'anthropic::claude-sonnet-5',
-  'anthropic::claude-opus-4-7',
-  'anthropic::claude-opus-4-8',
-  'anthropic::claude-fable-5',
-  'gemini::gemini-3-flash-preview',
-  'gemini::gemini-3.1-pro-preview',
-  'gemini::gemini-3.5-flash',
-  'zhipu::glm-5.1',
-  'zhipu::glm-5.2',
-  'stepfun::step-3.7-flash',
-  'deepseek::deepseek-v4-pro',
-  'deepseek::deepseek-v4-flash',
-  'xiaomi-mimo::mimo-v2.5',
-  'xiaomi-mimo::mimo-v2.5-pro',
-  'zhipu-coding::glm-5.2',
-  'volcengine::deepseek-v4-flash',
-  'volcengine::deepseek-v4-pro',
-  'volcengine::kimi-k2.6',
-  'volcengine::Kimi-K2.7-Code',
-  'volcengine::MiniMax M3',
-  'volcengine::glm-5.2',
-]);
+const SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES = [
+  ['openai', 'gpt-5.4'],
+  ['openai', 'gpt-5.4-mini'],
+  ['openai', 'gpt-5.4-nano'],
+  ['openai', 'gpt-5.5'],
+  ['openai', 'gpt-5.6-luna'],
+  ['openai', 'gpt-5.6-terra'],
+  ['openai', 'gpt-5.6-sol'],
+  ['anthropic', 'claude-sonnet-4-6'],
+  ['anthropic', 'claude-sonnet-5'],
+  ['anthropic', 'claude-opus-4-7'],
+  ['anthropic', 'claude-opus-4-8'],
+  ['anthropic', 'claude-fable-5'],
+  ['gemini', 'gemini-3-flash-preview'],
+  ['gemini', 'gemini-3.1-pro-preview'],
+  ['gemini', 'gemini-3.5-flash'],
+  ['zhipu', 'glm-5.1'],
+  ['zhipu', 'glm-5.2'],
+  ['stepfun', 'step-3.7-flash'],
+  ['deepseek', 'deepseek-v4-pro'],
+  ['deepseek', 'deepseek-v4-flash'],
+  ['xiaomi-mimo', 'mimo-v2.5'],
+  ['xiaomi-mimo', 'mimo-v2.5-pro'],
+  ['zhipu-coding', 'glm-5.2'],
+  ['volcengine', 'deepseek-v4-flash'],
+  ['volcengine', 'deepseek-v4-pro'],
+  ['volcengine', 'kimi-k2.6'],
+  ['volcengine', 'Kimi-K2.7-Code'],
+  ['volcengine', 'MiniMax-M3'],
+  ['volcengine', 'glm-5.2'],
+] as const;
+
+function getModelRouteKey(providerId: string, modelId: string): string {
+  return `${providerId.trim().toLowerCase()}::${modelId.trim().toLowerCase()}`;
+}
+
+const SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS = new Set(
+  SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES.map(([providerId, modelId]) =>
+    getModelRouteKey(providerId, modelId)
+  )
+);
 
 // ==================== 用户自定义模型（运行时状态） ====================
 
@@ -701,8 +704,23 @@ export function modelSupportsVision(modelId: string, providerId?: string): boole
  * the same transport output budget as the final response.
  */
 export function modelUsesSharedReasoningOutputBudget(modelId: string, providerId: string): boolean {
-  const normalizedKey = `${providerId.trim().toLowerCase()}::${modelId.trim().toLowerCase()}`;
-  return SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS.has(normalizedKey);
+  return SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS.has(getModelRouteKey(providerId, modelId));
+}
+
+/**
+ * Return shared-reasoning routes that no longer resolve to a built-in model.
+ *
+ * This is exposed for registry invariant tests so renamed model IDs cannot
+ * silently fall back from the reasoning transport budget to the default one.
+ */
+export function getUnregisteredSharedReasoningOutputBudgetRoutes(): string[] {
+  const builtinKeys = new Set(
+    BUILTIN_MODELS.map((model) => getModelRouteKey(model.providerId, model.id))
+  );
+  return SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES.flatMap(([providerId, modelId]) => {
+    const routeKey = getModelRouteKey(providerId, modelId);
+    return builtinKeys.has(routeKey) ? [] : [routeKey];
+  });
 }
 
 /**

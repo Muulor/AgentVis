@@ -32,6 +32,8 @@ pub type ReasoningTraceCallback = Arc<dyn Fn(ReasoningTraceProgress) + Send + Sy
 pub const TOOL_CALL_PROGRESS_MIN_BYTES: usize = 4 * 1024;
 /// 工具参数进度节流步长
 pub const TOOL_CALL_PROGRESS_STEP_BYTES: usize = 8 * 1024;
+/// 通用 LLM 输出 token 默认值；场景或模型有明确策略时应由调用方覆盖。
+pub const DEFAULT_LLM_MAX_TOKENS: u32 = 24_576;
 
 /// 聊天消息角色
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -148,7 +150,7 @@ impl Default for ChatRequest {
             messages: Vec::new(),
             model: None,
             temperature: Some(0.7),
-            max_tokens: Some(24576),
+            max_tokens: Some(DEFAULT_LLM_MAX_TOKENS),
             stream: false,
             response_modalities: None,
             image_config: None,
@@ -375,6 +377,9 @@ pub struct ToolChatResponse {
     /// 错误信息（如果是 error 类型）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Provider 返回的完成原因（例如 length / max_tokens / MAX_TOKENS / incomplete）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish_reason: Option<String>,
     /// 输入 token 数（来自 API usage 响应）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_tokens: Option<u32>,
@@ -384,4 +389,28 @@ pub struct ToolChatResponse {
     /// 思考内容（DeepSeek 思考模式返回的推理链，需在多轮工具调用中回传）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolChatResponse;
+
+    #[test]
+    fn tool_chat_response_serializes_finish_reason_as_camel_case() {
+        let response = ToolChatResponse {
+            response_type: "tool_use".to_string(),
+            content: None,
+            tool_calls: None,
+            error: None,
+            finish_reason: Some("max_tokens".to_string()),
+            input_tokens: None,
+            output_tokens: Some(8192),
+            reasoning_content: None,
+        };
+
+        let value = serde_json::to_value(response).expect("serialize tool chat response");
+
+        assert_eq!(value["finishReason"], "max_tokens");
+        assert!(value.get("finish_reason").is_none());
+    }
 }

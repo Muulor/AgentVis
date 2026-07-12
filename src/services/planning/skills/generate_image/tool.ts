@@ -22,6 +22,7 @@ import { useAgentStore } from '@stores/agentStore';
 import { useHubStore } from '@stores/hubStore';
 import { useSettingsStore } from '@stores/settingsStore';
 import { getLogger } from '@services/logger';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 
 const logger = getLogger('GenerateImageTool');
 
@@ -858,7 +859,7 @@ class GenerateImageToolImpl implements Tool {
         model: candidate.model,
         messages,
         temperature: 1.0,
-        max_tokens: 32768,
+        max_tokens: LLM_TOKEN_POLICIES.imageGeneration.primaryMaxTokens,
         response_modalities: ['Text', 'Image'],
         ...((aspectRatio ?? imageSize) && {
           image_config: {

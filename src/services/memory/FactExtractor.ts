@@ -19,6 +19,7 @@ import type {
 import { parseWithFallback } from './utils/JsonParser';
 import { embeddingService } from '@services/rag/EmbeddingService';
 import { getLogger } from '@services/logger';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 import { SOURCE_LANGUAGE_PRESERVATION_RULES } from './PromptLanguagePolicy';
 
 const logger = getLogger('FactExtractor');
@@ -179,7 +180,7 @@ export class FactExtractor {
     try {
       const response = await this.llm.generate(prompt, {
         temperature: 1, // 更低的温度以提高一致性
-        maxTokens: 24576,
+        maxTokens: LLM_TOKEN_POLICIES.memory.primaryMaxTokens,
       });
 
       return this.parseMemoryExtractorResponse(response);

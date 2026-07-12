@@ -217,6 +217,7 @@ AgentVis/
 | [四大核心特性解析](<docs/AgentVis docs/features_deep_dive.md>) | 可视化增强、实时预览、Cron、IM 通道深度解析。 |
 | [MB / SA 协同工作机制](<docs/AgentVis docs/MB_SA_协同工作机制.md>) | Master Brain 与 Sub-Agent 协同执行框架。 |
 | [上下文管理机制](<docs/AgentVis docs/上下文管理机制.md>) | MB / SA 上下文、压缩、Task Artifact 和 HITL。 |
+| [LLM Token Budget Policy]（<docs/AgentVis docs/LLM Token Budget Policy.md>）|场景输出配置文件、推理保护、提供程序回退和截断的工具调用安全。|
 | [记忆机制介绍](<docs/AgentVis docs/记忆机制介绍.md>) | 三层记忆、触发、注入和 UI 设计。 |
 | [RAG 机制](<docs/AgentVis docs/Rag机制.md>) | Hybrid Search + RRF 的 RAG 管线。 |
 | [Skill 功能技术文档](<docs/AgentVis docs/Skill 功能技术文档.md>) | Native / External Skill、执行合约、安全审查和 runtime。 |

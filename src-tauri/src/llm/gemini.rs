@@ -471,6 +471,7 @@ impl GeminiAdapter {
     fn extract_tool_response_from_parts(
         parts: &[GeminiPart],
         name_mapping: &std::collections::HashMap<String, String>,
+        finish_reason: Option<String>,
     ) -> super::types::ToolChatResponse {
         use super::types::{ToolChatResponse, ToolCall as TypesToolCall};
 
@@ -501,6 +502,7 @@ impl GeminiAdapter {
                 content,
                 tool_calls: Some(function_calls),
                 error: None,
+                finish_reason,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -518,6 +520,7 @@ impl GeminiAdapter {
             content: Some(text_content),
             tool_calls: None,
             error: None,
+            finish_reason,
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
@@ -602,6 +605,7 @@ impl GeminiAdapter {
                 content: None,
                 tool_calls: None,
                 error: Some(format!("API returned an error ({}): {}", status, error_text)),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -629,6 +633,7 @@ impl GeminiAdapter {
             return Ok(Self::extract_tool_response_from_parts(
                 &candidate.content.parts,
                 &name_mapping,
+                candidate.finish_reason.clone(),
             ));
         }
 
@@ -637,6 +642,7 @@ impl GeminiAdapter {
             content: Some(String::new()),
             tool_calls: None,
             error: None,
+            finish_reason: None,
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
@@ -699,6 +705,7 @@ impl GeminiAdapter {
                 content: None,
                 tool_calls: None,
                 error: Some(error_msg),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -715,6 +722,7 @@ impl GeminiAdapter {
         // 累积 usage 数据
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
+        let mut final_finish_reason: Option<String> = None;
 
         let idle_timeout = stream_idle_timeout();
         loop {
@@ -737,6 +745,9 @@ impl GeminiAdapter {
                     match serde_json::from_str::<GeminiStreamChunk>(&data) {
                         Ok(chunk) => {
                             if let Some(candidate) = chunk.candidates.first() {
+                                if let Some(reason) = candidate.finish_reason.as_ref() {
+                                    final_finish_reason = Some(reason.clone());
+                                }
                                 if let Some(content) = candidate.content.as_ref() {
                                     let parts = content.parts.clone();
                                     for part in &parts {
@@ -796,7 +807,11 @@ impl GeminiAdapter {
             }
         }
 
-        let mut result = Self::extract_tool_response_from_parts(&all_parts, &name_mapping);
+        let mut result = Self::extract_tool_response_from_parts(
+            &all_parts,
+            &name_mapping,
+            final_finish_reason,
+        );
         // 注入 token 用量
         result.input_tokens = final_input_tokens;
         result.output_tokens = final_output_tokens;
@@ -1371,7 +1386,8 @@ mod tests {
             function_response: None,
         }];
 
-        let response = GeminiAdapter::extract_tool_response_from_parts(&parts, &HashMap::new());
+        let response =
+            GeminiAdapter::extract_tool_response_from_parts(&parts, &HashMap::new(), None);
         let tool_call = response
             .tool_calls
             .as_ref()
@@ -1380,5 +1396,46 @@ mod tests {
 
         assert_eq!(tool_call.id.as_deref(), Some("call-a"));
         assert_eq!(tool_call.thought_signature.as_deref(), Some("signature-a"));
+    }
+
+    #[test]
+    fn extracts_max_tokens_finish_reason_from_tool_response() {
+        let api_response: GeminiResponse = serde_json::from_value(serde_json::json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "file_write",
+                            "args": { "path": "index.html", "content": "<html>" }
+                        }
+                    }]
+                },
+                "finishReason": "MAX_TOKENS"
+            }]
+        }))
+        .expect("parse Gemini tool response");
+        let candidate = api_response.candidates.first().expect("candidate");
+
+        let response = GeminiAdapter::extract_tool_response_from_parts(
+            &candidate.content.parts,
+            &HashMap::new(),
+            candidate.finish_reason.clone(),
+        );
+
+        assert_eq!(response.finish_reason.as_deref(), Some("MAX_TOKENS"));
+    }
+
+    #[test]
+    fn stream_candidate_preserves_max_tokens_finish_reason_without_content() {
+        let chunk: GeminiStreamChunk = serde_json::from_value(serde_json::json!({
+            "candidates": [{ "finishReason": "MAX_TOKENS" }]
+        }))
+        .expect("parse final Gemini stream chunk");
+
+        assert_eq!(
+            chunk.candidates[0].finish_reason.as_deref(),
+            Some("MAX_TOKENS")
+        );
+        assert!(chunk.candidates[0].content.is_none());
     }
 }

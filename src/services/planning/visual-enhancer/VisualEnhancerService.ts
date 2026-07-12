@@ -16,6 +16,7 @@ import {
   buildVisualEnhancerUserPrompt,
 } from './VisualEnhancerPrompt';
 import { removeDuplicateWidgetHeadings } from './VisualEnhancerPostProcess';
+import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 
 const logger = getLogger('VisualEnhancerService');
 
@@ -486,7 +487,7 @@ async function collectStreamResponse(
           model: options.model,
           messages,
           temperature: 1,
-          max_tokens: 24576,
+          max_tokens: LLM_TOKEN_POLICIES.visualEnhancer.primaryMaxTokens,
         };
         if (options.baseUrl) {
           request.base_url = options.baseUrl;

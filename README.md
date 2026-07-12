@@ -222,6 +222,7 @@ For a source-code index, see [PROJECT_STRUCTURE.md](<docs/AgentVis docs/PROJECT_
 | [Four Core Feature Deep Dive](<docs/AgentVis docs/features_deep_dive.en.md>) | Visualization enhancement, live preview, Cron, and IM channel deep dives. |
 | [MB / SA Collaboration Mechanism](<docs/AgentVis docs/MB_SA Collaboration Mechanism.en.md>) | The collaboration framework between Master Brain and Sub-Agents. |
 | [Context Management Mechanism](<docs/AgentVis docs/Context Management Mechanism.en.md>) | MB / SA context, compression, Task Artifact, and HITL. |
+| [LLM Token Budget Policy](<docs/AgentVis docs/LLM Token Budget Policy.en.md>) | Scenario output profiles, reasoning guards, provider fallback, and truncated tool-call safety. |
 | [Memory Mechanism Introduction](<docs/AgentVis docs/Memory Mechanism Introduction.en.md>) | Three-layer memory, triggers, injection, and UI design. |
 | [RAG Mechanism](<docs/AgentVis docs/RAG Mechanism.en.md>) | The RAG pipeline based on hybrid search and RRF. |
 | [Skill Feature Technical Documentation](<docs/AgentVis docs/Skill Feature Technical Documentation.en.md>) | Native / External Skills, execution contracts, security review, and runtime. |

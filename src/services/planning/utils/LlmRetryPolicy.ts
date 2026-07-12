@@ -29,6 +29,20 @@ const CANCELLED_PATTERNS = [
   /手动停止/,
 ];
 
+const MAX_TOKENS_PARAMETER_NAME = String.raw`(?:max_tokens|max_completion_tokens|max_output_tokens|maxTokens|maxCompletionTokens|maxOutputTokens)`;
+const MAX_TOKENS_PARAMETER_REJECTION_PATTERNS = [
+  new RegExp(
+    String.raw`(?:invalid|unsupported|unrecognized|unknown|reject(?:ed|ion)?|参数(?:无效|不支持)?)[^,;\r\n]{0,64}\b${MAX_TOKENS_PARAMETER_NAME}\b`,
+    'i'
+  ),
+  new RegExp(
+    String.raw`\b${MAX_TOKENS_PARAMETER_NAME}\b[^,;\r\n]{0,160}(?:invalid|unsupported|unrecognized|unknown|reject(?:ed|ion)?|not\s+support(?:ed)?|must\s+be|has\s+to\s+be|should\s+be|cannot\s+exceed|at\s+most|less\s+than(?:\s+or\s+equal\s+to)?|greater\s+than|too\s+(?:large|high)|out\s+of\s+range|maximum\s+(?:allowed|value|limit)|exceeds?\s+(?:the\s+)?(?:maximum|allowed|limit)|expected(?:\s+(?:a\s+)?value)?|(?:<=|>=)|参数|最大(?:值|限制|允许)?|不能超过|取值范围|超出)`,
+    'i'
+  ),
+];
+const FINISH_REASON_MAX_TOKENS_PATTERN =
+  /\bfinish[_\s-]?reason\b\s*["']?\s*[:=]\s*["']?\s*(?:max_tokens|max_completion_tokens|max_output_tokens)\b/gi;
+
 const NON_RETRYABLE_PATTERNS = [
   /payload too large/i,
   /invalid[_\s-]?request/i,
@@ -138,6 +152,19 @@ export function classifyLlmRetry(error: unknown): LlmRetryClassification {
     reason: 'unknown',
     message,
   };
+}
+
+/**
+ * 判断 provider 是否明确拒绝了输出 token 参数。
+ *
+ * finish reason 表示响应已被截断，不是请求参数校验失败，因此会先从判定文本中排除。
+ */
+export function isMaxTokensParameterRejection(error: unknown): boolean {
+  const message = normalizeErrorMessage(error);
+  if (CANCELLED_PATTERNS.some((pattern) => pattern.test(message))) return false;
+
+  const rejectionText = message.replace(FINISH_REASON_MAX_TOKENS_PATTERN, '');
+  return MAX_TOKENS_PARAMETER_REJECTION_PATTERNS.some((pattern) => pattern.test(rejectionText));
 }
 
 function normalizeErrorMessage(error: unknown): string {

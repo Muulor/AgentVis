@@ -258,21 +258,6 @@ fn get_api_key(provider: &str) -> CommandResult<String> {
     key.ok_or_else(|| AppError::Keystore(format!("{} API key is not configured", provider)))
 }
 
-/// 按供应商钳位 max_tokens
-///
-/// 部分供应商对 max_tokens 有严格上限，
-/// 前端全局默认值（24576）可能超出限制导致 400 Bad Request。
-/// 在 Rust 后端统一钳位，保护所有调用路径。
-fn clamp_max_tokens_for_provider(provider: &str, max_tokens: Option<u32>) -> Option<u32> {
-    let limit = match provider {
-        _ => None,
-    };
-    match (max_tokens, limit) {
-        (Some(requested), Some(cap)) => Some(requested.min(cap)),
-        _ => max_tokens,
-    }
-}
-
 // ==================== GPT Image 2 generation via local OpenAI-compatible relay ====================
 
 #[derive(Debug, Deserialize)]
@@ -863,7 +848,7 @@ pub async fn llm_chat(
         messages: convert_messages(request.messages),
         model: request.model,
         temperature: request.temperature,
-        max_tokens: clamp_max_tokens_for_provider(&request.provider, request.max_tokens),
+        max_tokens: request.max_tokens,
         stream: false,
         response_modalities: request.response_modalities,
         image_config: request.image_config.map(|c| {
@@ -1065,7 +1050,7 @@ pub async fn llm_chat_stream(
         messages: convert_messages(request.messages),
         model: request.model,
         temperature: request.temperature,
-        max_tokens: clamp_max_tokens_for_provider(&request.provider, request.max_tokens),
+        max_tokens: request.max_tokens,
         stream: true,
         // 图像生成参数透传
         response_modalities: request.response_modalities,
@@ -1616,6 +1601,40 @@ fn stage_large_file_write_args(
     Ok(())
 }
 
+fn is_output_token_limit_finish_reason(finish_reason: Option<&str>) -> bool {
+    let Some(finish_reason) = finish_reason else {
+        return false;
+    };
+    let normalized = finish_reason
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|character| match character {
+            ' ' | '-' => '_',
+            other => other,
+        })
+        .collect::<String>();
+
+    matches!(
+        normalized.as_str(),
+        "length"
+            | "max_tokens"
+            | "max_completion_tokens"
+            | "max_output_tokens"
+            | "incomplete"
+    )
+}
+
+/// 截断响应中的工具参数可能已被 JSON repair 补成可解析但不完整的值。
+/// 在大参数暂存和 WebView IPC 之前丢弃全部工具调用，避免执行或遗留临时文件。
+fn discard_truncated_tool_calls(response: &mut ToolChatResponse) -> usize {
+    if !is_output_token_limit_finish_reason(response.finish_reason.as_deref()) {
+        return 0;
+    }
+
+    response.tool_calls.take().map_or(0, |tool_calls| tool_calls.len())
+}
+
 fn make_tool_call_progress_callback(
     app_handle: AppHandle,
     session_id: Option<String>,
@@ -1672,10 +1691,7 @@ pub async fn llm_chat_with_tools(
     let provider_id = request.provider_id.clone();
     let provider = provider_id.as_deref().unwrap_or("gemini");
 
-    // 按供应商钳位 max_tokens（部分供应商有严格上限）
-    let mut request = request;
     let supports_vision = request.supports_vision;
-    request.max_tokens = clamp_max_tokens_for_provider(provider, request.max_tokens);
 
     // 如果提供了 session_id，注册取消通道
     let (cancel_rx, cancel_registration_id) = if let Some(ref sid) = session_id {
@@ -1824,6 +1840,7 @@ pub async fn llm_chat_with_tools(
                 content: None,
                 tool_calls: None,
                 error: Some(format!("Unsupported provider: {}", provider)),
+                finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
@@ -1833,6 +1850,14 @@ pub async fn llm_chat_with_tools(
 
     match result {
         Ok(mut response) => {
+            let discarded_tool_calls = discard_truncated_tool_calls(&mut response);
+            if discarded_tool_calls > 0 {
+                log::warn!(
+                    "[LLM] discarded {} tool calls before staging because provider output was truncated: finish_reason={:?}",
+                    discarded_tool_calls,
+                    response.finish_reason
+                );
+            }
             if let Err(e) = stage_large_file_write_args(&app_handle, &mut response) {
                 log::error!("[LLM] failed to stage large file_write args: {}", e);
                 return Ok(ToolChatResponse {
@@ -1840,6 +1865,7 @@ pub async fn llm_chat_with_tools(
                     content: None,
                     tool_calls: None,
                     error: Some(format!("Failed to stage large file_write content: {}", e)),
+                    finish_reason: None,
                     input_tokens: None,
                     output_tokens: None,
                     reasoning_content: None,
@@ -1852,6 +1878,7 @@ pub async fn llm_chat_with_tools(
             content: None,
             tool_calls: None,
             error: Some(e.to_string()),
+            finish_reason: None,
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
@@ -1887,6 +1914,7 @@ async fn dispatch_with_cancel(
                     content: Some("Request cancelled".to_string()),
                     tool_calls: None,
                     error: None,
+                    finish_reason: None,
                     input_tokens: None,
                     output_tokens: None,
                     reasoning_content: None,
@@ -2238,8 +2266,9 @@ pub async fn zhipu_image_generate(
 }
 
 #[cfg(test)]
-mod cancellation_tests {
+mod command_tests {
     use super::*;
+    use crate::llm::types::ToolCall;
 
     #[test]
     fn attempt_scoped_cancel_keeps_other_session_registrations_alive() {
@@ -2265,5 +2294,53 @@ mod cancellation_tests {
 
         assert_eq!(cancel_session(session_id), 1);
         assert_eq!(second_receiver.try_recv(), Ok(()));
+    }
+
+    #[test]
+    fn truncated_tool_calls_are_discarded_before_large_argument_staging() {
+        let mut response = ToolChatResponse {
+            response_type: "tool_use".to_string(),
+            content: Some("Writing a generated page".to_string()),
+            tool_calls: Some(vec![ToolCall {
+                name: "file_write".to_string(),
+                args: serde_json::json!({
+                    "path": "index.html",
+                    "content": "x".repeat(FILE_WRITE_IPC_INLINE_CONTENT_LIMIT_BYTES + 1)
+                }),
+                id: Some("call-truncated".to_string()),
+                thought_signature: None,
+            }]),
+            error: None,
+            finish_reason: Some("MAX-TOKENS".to_string()),
+            input_tokens: None,
+            output_tokens: Some(32_768),
+            reasoning_content: None,
+        };
+
+        assert_eq!(discard_truncated_tool_calls(&mut response), 1);
+        assert!(response.tool_calls.is_none());
+        assert_eq!(response.finish_reason.as_deref(), Some("MAX-TOKENS"));
+    }
+
+    #[test]
+    fn completed_tool_calls_remain_available_for_staging() {
+        let mut response = ToolChatResponse {
+            response_type: "tool_use".to_string(),
+            content: None,
+            tool_calls: Some(vec![ToolCall {
+                name: "file_write".to_string(),
+                args: serde_json::json!({ "path": "index.html", "content": "complete" }),
+                id: Some("call-complete".to_string()),
+                thought_signature: None,
+            }]),
+            error: None,
+            finish_reason: Some("stop".to_string()),
+            input_tokens: None,
+            output_tokens: Some(8),
+            reasoning_content: None,
+        };
+
+        assert_eq!(discard_truncated_tool_calls(&mut response), 0);
+        assert_eq!(response.tool_calls.as_ref().map(Vec::len), Some(1));
     }
 }

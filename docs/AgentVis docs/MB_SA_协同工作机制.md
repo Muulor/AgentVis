@@ -100,6 +100,15 @@ MB 每次决策前会收到由 `MasterBrainInputBuilder.build()` 组装的上下
 | 任务经验 | 历史执行过程中积累的试错经验（memory 系统） |
 | 外部技能内容 | 语义检索命中的 Guide 技能，以及按需匹配的 Script 技能 |
 
+#### 3.2.1 MB 输出与推理预算
+
+MB 在同一个 provider 传输预算外设置了彼此独立的本地保护：结构化最终决策正文上限为
+8,192 tokens；未知或非推理路由请求 16,384 transport tokens；推理与最终输出共享预算的
+provider/model 路由请求 32,768；异常推理流另有 16,384 tokens 的硬熔断。
+
+当 provider 明确拒绝 max-token 参数时，MB 只向下重试一档（32K→16K 或 16K→8K）。如果
+请求已经被接受、只是以 `length` 或 `max_tokens` 结束，则属于输出耗尽，不走参数降级。
+
 ### 3.3 SPAWN_SUB_AGENT 决策内容
 
 当 MB 决策派遣 SA 时，输出的 `nextStep` 结构由 `SubAgentSpecBuilder` JIT 构建为完整的 `SubAgentSpec`：
@@ -146,6 +155,18 @@ while (!terminated && toolCallSteps < maxSteps) {
     └── 定期检查机制保留（默认关闭）
 }
 ```
+
+#### 4.1.1 SA 输出预算与截断工具调用
+
+普通 SA 首次请求 32,768 output tokens，为大型 function-call 参数保留更多空间。如果
+provider 明确拒绝该 token 参数，Caller 使用完全相同的消息、工具和 session 以 24,576
+重试一次，并在当前 Factory 后续步骤中记住降级。Skill 安全审计继续使用独立的 24,576
+profile。
+
+参数拒绝与 `length`、`max_tokens`、`MAX_TOKENS`、`incomplete` 等已接受但耗尽预算的结束
+原因不同。后者会被标记为截断：后端在大参数暂存前丢弃该响应中的全部工具调用，Runner
+不写入任何文件，并提示 SA 先创建短小完整骨架、再用 patch 模式分段填充长文件。若再次
+截断，则以失败状态交回 MB 决策。
 
 ### 4.2 behaviorHint 行为修饰符
 

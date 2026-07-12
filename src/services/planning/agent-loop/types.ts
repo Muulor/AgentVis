@@ -356,4 +356,6 @@ export interface LLMResponseWithTools {
   toolCalls?: ToolCall[];
   /** 错误信息（如果是 error 类型） */
   error?: string;
+  /** Provider 返回的完成原因（如 stop、length、max_tokens、MAX_TOKENS） */
+  finishReason?: string;
 }
