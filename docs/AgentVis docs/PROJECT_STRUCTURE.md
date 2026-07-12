@@ -224,6 +224,7 @@ file/
 ├── PreviewStore.ts               # 实时代码预览状态管理（已迁移至 stores/previewStore.ts）
 ├── LivePreviewPanel.tsx          # 实时代码预览面板（HTML + Vite 项目双模式）
 ├── LivePreviewPanel.module.css   # 实时代码预览面板样式
+├── LargeTextPreview.tsx          # 大型文本/Markdown 有界分页安全预览组件
 ├── MarkdownRenderer.tsx          # Markdown 渲染器（支持 Widget/Mermaid/ECharts 代码块拦截）
 ├── MarkdownRenderer.module.css   # Markdown 样式
 ├── MermaidBlock.tsx              # Mermaid 图表渲染组件（防抖+流式静默错误+SVG 输出）
@@ -233,6 +234,7 @@ file/
 ├── EchartsVisualTheme.ts         # Echarts 视觉主题
 ├── EChartsBlock.tsx              # ECharts 数据图表渲染（按需引入+深色模式适配+ResizeObserver）
 ├── EChartsBlock.module.css       # ECharts 样式
+├── TextPreviewPolicy.ts          # 文本预览大小/复杂度预算与 rich/safe/external 决策
 └── index.ts                      # 模块导出索引
 ```
 
@@ -1028,6 +1030,7 @@ commands/
 ├── hub.rs                        # Hub 相关命令
 ├── message.rs                    # 消息相关命令
 ├── file.rs                       # 文件管理命令
+├── text_preview.rs               # 大型文本有界读取与 Markdown 复杂度分析命令
 ├── trash_bin.rs                  # 回收站管理命令
 ├── command_validator.rs          # 命令安全校验器
 ├── memory.rs                     # 记忆系统命令

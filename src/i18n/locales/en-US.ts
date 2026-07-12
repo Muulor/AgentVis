@@ -1677,6 +1677,25 @@ export const enUS = {
     largeHtmlHint:
       'This file is large, so syntax highlighting was skipped to avoid UI stalls while rendering source.',
     renderHtmlTitle: 'Render this HTML in the preview panel',
+    textPreviewReasonSize: 'This file is large, so bounded safe preview is active',
+    textPreviewReasonLines: 'This file has many lines, so bounded safe preview is active',
+    textPreviewReasonLongLine:
+      'This file contains a very long line, so costly rendering was skipped',
+    textPreviewReasonLinks: 'This Markdown has many links, so segmented preview is active',
+    textPreviewReasonTable: 'This Markdown has a large table, so segmented preview is active',
+    textPreviewReasonCodeBlock:
+      'This Markdown has a large code block, so full syntax highlighting was skipped',
+    textPreviewReasonHardLimit:
+      'This file exceeds the automatic preview limit. Use a system app or safe preview.',
+    textPreviewAnalysis: '{lines} lines · {links} links · {tableRows} table rows',
+    textPreviewLineAnalysis: '{lines} lines · longest line {maxLine}',
+    safePreview: 'Safe Preview',
+    previewPage: 'Preview page {page}',
+    textPreviewViewSource: 'View Source',
+    textPreviewViewFormatted: 'Formatted Preview',
+    previousPreviewPage: 'Previous preview page',
+    nextPreviewPage: 'Next preview page',
+    safePreviewFailed: 'Safe preview failed to load. Open the file with a system app.',
     extractedPreview: 'Extracted Content Preview',
     selectFilePreview: 'Select a file to preview',
     selectFileHint: 'Click a file in the list above to view its contents',

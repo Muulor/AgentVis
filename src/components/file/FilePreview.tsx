@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { CodeHighlight } from './CodeHighlight';
+import { LargeTextPreview } from './LargeTextPreview';
+import { decideTextPreview, type TextPreviewDecision } from './TextPreviewPolicy';
 import { TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
 import { usePreviewStore } from '@stores/previewStore';
 import { getLogger } from '@services/logger';
@@ -63,6 +65,10 @@ interface FilePreviewProps {
   filePath: string | null;
   /** 是否正在加载 */
   isLoading: boolean;
+  /** 文件大小（用于统一文本预览预算） */
+  fileSize?: number;
+  /** 由读取入口根据大小和复杂度生成的预览决策 */
+  textPreviewDecision?: TextPreviewDecision | null;
 }
 
 /** 获取文件扩展名（小写） */
@@ -557,6 +563,10 @@ function BinaryDocCard({
     /^\[(?:Auto parsed from|Parsed from|\u81ea\u52a8\u89e3\u6790\u81ea).*?\]\n\n/i,
     ''
   );
+  const extractedDecision = decideTextPreview(
+    `${fileName}.extracted.md`,
+    new TextEncoder().encode(extractedContent).length
+  );
 
   return (
     <div className={styles.binaryDocWrapper}>
@@ -588,7 +598,18 @@ function BinaryDocCard({
       {extractedContent.trim() && (
         <div className={styles.extractedContent}>
           <div className={styles.extractedHeader}>{t('file.extractedPreview')}</div>
-          <MarkdownRenderer content={extractedContent} />
+          {extractedDecision.mode === 'rich' ? (
+            <MarkdownRenderer content={extractedContent} />
+          ) : (
+            <LargeTextPreview
+              fileName={fileName}
+              filePath={filePath}
+              fileSize={extractedDecision.size}
+              decision={extractedDecision}
+              inlineContent={extractedContent}
+              showFileCard={false}
+            />
+          )}
         </div>
       )}
     </div>
@@ -597,7 +618,14 @@ function BinaryDocCard({
 
 // ==================== 主组件 ====================
 
-export function FilePreview({ fileName, content, filePath, isLoading }: FilePreviewProps) {
+export function FilePreview({
+  fileName,
+  content,
+  filePath,
+  isLoading,
+  fileSize,
+  textPreviewDecision,
+}: FilePreviewProps) {
   const { t } = useI18n();
   // 滚动容器引用，用于在切换文件时重置滚动位置
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -723,7 +751,14 @@ export function FilePreview({ fileName, content, filePath, isLoading }: FilePrev
         data-custom-context-menu
         onContextMenu={handleContextMenu}
       >
-        {isImageFile(fileName) && filePath ? (
+        {textPreviewDecision && textPreviewDecision.mode !== 'rich' && filePath ? (
+          <LargeTextPreview
+            fileName={fileName}
+            filePath={filePath}
+            fileSize={fileSize ?? textPreviewDecision.size}
+            decision={textPreviewDecision}
+          />
+        ) : isImageFile(fileName) && filePath ? (
           <ImagePreview filePath={filePath} fileName={fileName} />
         ) : isInlineVideoFile(fileName) && filePath ? (
           <VideoPreview filePath={filePath} fileName={fileName} />

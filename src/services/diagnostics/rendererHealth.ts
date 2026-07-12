@@ -124,6 +124,11 @@ async function sendHeartbeat(driftMs: number): Promise<void> {
   });
 }
 
+/** 立即把当前阶段写入 Rust 侧快照，便于后续主线程阻塞时准确归因。 */
+export function reportRendererHealthSnapshot(): void {
+  void sendHeartbeat(0);
+}
+
 export function setRendererHealthStage(name: string, details?: StageDetails): () => void {
   const stage: RendererStage = {
     name,

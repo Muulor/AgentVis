@@ -8,7 +8,14 @@ import { useAttachmentViewerStore } from '@stores/attachmentViewerStore';
 import { usePreviewStore } from '@stores/previewStore';
 import styles from './RightPanel.module.css';
 import { FullFileDiffViewer, SnapshotHistory } from '../diff';
-import { FileList, FilePreview, type FileItemData } from '../file';
+import {
+  FileList,
+  FilePreview,
+  decideTextPreview,
+  type FileItemData,
+  type TextPreviewAnalysis,
+  type TextPreviewDecision,
+} from '../file';
 import { LivePreviewPanel } from '../file/LivePreviewPanel';
 import { ResizeHandle } from '../ui/ResizeHandle';
 import { Tooltip } from '@components/ui/Tooltip';
@@ -16,6 +23,11 @@ import { Undo2, Redo2, Maximize2, Minimize2 } from 'lucide-react';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
+import { getPreviewRenderer } from '@services/file-types';
+import {
+  reportRendererHealthSnapshot,
+  setRendererHealthStage,
+} from '@services/diagnostics/rendererHealth';
 
 const logger = getLogger('RightPanel');
 
@@ -159,6 +171,9 @@ export function RightPanel() {
   const [selectedFile, setSelectedFile] = useState<FileItemData | null>(null);
   const [previewContent, setPreviewContent] = useState<string>('');
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [textPreviewDecision, setTextPreviewDecision] = useState<TextPreviewDecision | null>(null);
+  const previewRequestIdRef = useRef(0);
+  const previewHealthStageCleanupRef = useRef<(() => void) | null>(null);
   // 文件预览全屏状态
   const [isFilePreviewFullscreen, setIsFilePreviewFullscreen] = useState(false);
 
@@ -168,9 +183,14 @@ export function RightPanel() {
   }, []);
 
   const handleCloseFilePreview = useCallback(() => {
+    previewRequestIdRef.current += 1;
+    previewHealthStageCleanupRef.current?.();
+    previewHealthStageCleanupRef.current = null;
     setIsFilePreviewFullscreen(false);
     setSelectedFile(null);
     setPreviewContent('');
+    setTextPreviewDecision(null);
+    setIsPreviewLoading(false);
   }, []);
 
   // Escape 键退出全屏
@@ -204,7 +224,12 @@ export function RightPanel() {
   // 加载文件预览内容
   const loadFilePreview = useCallback(
     async (file: FileItemData) => {
+      const requestId = ++previewRequestIdRef.current;
+      previewHealthStageCleanupRef.current?.();
+      previewHealthStageCleanupRef.current = null;
       setSelectedFile(file);
+      setPreviewContent('');
+      setTextPreviewDecision(null);
 
       // 二进制文件（图片/视频/音频等）不通过 file_read_content 读取，交由 FilePreview 通过路径渲染
       const binaryExtensions = [
@@ -236,22 +261,57 @@ export function RightPanel() {
       ];
       const ext = file.fileName.split('.').pop()?.toLowerCase() ?? '';
       if (binaryExtensions.includes(ext)) {
-        setPreviewContent('');
         setIsPreviewLoading(false);
         return;
       }
 
       setIsPreviewLoading(true);
       try {
+        const renderer = getPreviewRenderer(file.fileName);
+        const usesTextBudget = ['markdown', 'code', 'plainText'].includes(renderer);
+        let decision: TextPreviewDecision | null = null;
+
+        if (usesTextBudget) {
+          decision = decideTextPreview(file.fileName, file.size);
+          if (decision.mode !== 'external') {
+            const analysis = await invoke<TextPreviewAnalysis>('file_analyze_text_preview', {
+              filePath: file.filePath,
+            });
+            if (requestId !== previewRequestIdRef.current) return;
+            decision = decideTextPreview(file.fileName, analysis.totalBytes, analysis);
+          }
+          setTextPreviewDecision(decision);
+          if (decision.mode !== 'rich') return;
+        }
+
         const content = await invoke<string>('file_read_content', {
           filePath: file.filePath,
         });
+        if (requestId !== previewRequestIdRef.current) return;
+
+        const clearPreviewStage = setRendererHealthStage('file-preview:rich-text', {
+          fileName: file.fileName,
+          bytes: file.size,
+          chars: content.length,
+          kind: decision?.kind ?? renderer,
+        });
+        previewHealthStageCleanupRef.current = clearPreviewStage;
+        reportRendererHealthSnapshot();
         setPreviewContent(content);
+        window.setTimeout(() => {
+          clearPreviewStage();
+          if (previewHealthStageCleanupRef.current === clearPreviewStage) {
+            previewHealthStageCleanupRef.current = null;
+          }
+        }, 0);
       } catch (err) {
+        if (requestId !== previewRequestIdRef.current) return;
         logger.error('[RightPanel] 加载文件预览失败:', err);
         setPreviewContent(t('layout.loadFileContentFailed'));
       } finally {
-        setIsPreviewLoading(false);
+        if (requestId === previewRequestIdRef.current) {
+          setIsPreviewLoading(false);
+        }
       }
     },
     [t]
@@ -312,12 +372,18 @@ export function RightPanel() {
         setDocumentPreviewRef.current(savedAttachment);
       } else {
         // 没有保存的预览，清空状态
+        previewRequestIdRef.current += 1;
         setSelectedFile(null);
         setPreviewContent('');
+        setTextPreviewDecision(null);
+        setIsPreviewLoading(false);
       }
     } else {
+      previewRequestIdRef.current += 1;
       setSelectedFile(null);
       setPreviewContent('');
+      setTextPreviewDecision(null);
+      setIsPreviewLoading(false);
     }
 
     prevContextIdRef.current = contextId;
@@ -326,8 +392,11 @@ export function RightPanel() {
   // 监听清空预览信号：当撤销消息等操作时清空本地预览状态
   useEffect(() => {
     if (clearPreviewSignal > 0) {
+      previewRequestIdRef.current += 1;
       setSelectedFile(null);
       setPreviewContent('');
+      setTextPreviewDecision(null);
+      setIsPreviewLoading(false);
       logger.debug('[RightPanel] 收到清空预览信号，已清理本地预览状态');
     }
   }, [clearPreviewSignal]);
@@ -337,41 +406,55 @@ export function RightPanel() {
     if (previewDocument) {
       // 有附件文档需要预览时
       const loadAttachmentPreview = async () => {
+        const requestId = ++previewRequestIdRef.current;
         setIsPreviewLoading(true);
+        setPreviewContent('');
+        setTextPreviewDecision(null);
         try {
-          // 如果附件已有解析内容，直接使用
-          if (previewDocument.parsedContent) {
-            setPreviewContent(previewDocument.parsedContent);
-            setSelectedFile({
-              id: previewDocument.id,
-              fileName: previewDocument.fileName,
-              filePath: previewDocument.localPath,
-              size: previewDocument.size,
-              createdAt: previewDocument.createdAt,
-            });
-          } else {
-            // 否则从本地路径读取
-            const content = await invoke<string>('file_read_content', {
-              filePath: previewDocument.localPath,
-            });
-            setPreviewContent(content);
-            setSelectedFile({
-              id: previewDocument.id,
-              fileName: previewDocument.fileName,
-              filePath: previewDocument.localPath,
-              size: previewDocument.size,
-              createdAt: previewDocument.createdAt,
-            });
-          }
-          // 切换到普通模式以显示预览
+          const file: FileItemData = {
+            id: previewDocument.id,
+            fileName: previewDocument.fileName,
+            filePath: previewDocument.localPath,
+            size: previewDocument.size,
+            createdAt: previewDocument.createdAt,
+          };
+          setSelectedFile(file);
+          // 切换到普通模式以显示预览；安全预览分支不会继续读取全文。
           if (contextId && mode === 'diff') {
             setMode(contextId, 'normal');
           }
+
+          const renderer = getPreviewRenderer(file.fileName);
+          const usesTextBudget = ['markdown', 'code', 'plainText'].includes(renderer);
+          let decision: TextPreviewDecision | null = null;
+          if (usesTextBudget) {
+            decision = decideTextPreview(file.fileName, file.size);
+            if (decision.mode !== 'external') {
+              const analysis = await invoke<TextPreviewAnalysis>('file_analyze_text_preview', {
+                filePath: previewDocument.localPath,
+              });
+              if (requestId !== previewRequestIdRef.current) return;
+              decision = decideTextPreview(file.fileName, analysis.totalBytes, analysis);
+            }
+            setTextPreviewDecision(decision);
+            if (decision.mode !== 'rich') return;
+          }
+
+          const content =
+            previewDocument.parsedContent ??
+            (await invoke<string>('file_read_content', {
+              filePath: previewDocument.localPath,
+            }));
+          if (requestId !== previewRequestIdRef.current) return;
+          setPreviewContent(content);
         } catch (err) {
+          if (requestId !== previewRequestIdRef.current) return;
           logger.error('[RightPanel] 加载附件预览失败:', err);
           setPreviewContent(t('layout.loadAttachmentContentFailed'));
         } finally {
-          setIsPreviewLoading(false);
+          if (requestId === previewRequestIdRef.current) {
+            setIsPreviewLoading(false);
+          }
           // 清除预览请求状态，避免重复加载
           clearDocumentPreview();
         }
@@ -395,8 +478,11 @@ export function RightPanel() {
         if (firstDocument) {
           setDocumentPreview(firstDocument);
         } else {
+          previewRequestIdRef.current += 1;
           setSelectedFile(null);
           setPreviewContent('');
+          setTextPreviewDecision(null);
+          setIsPreviewLoading(false);
         }
         logger.debug('[RightPanel] 当前预览的附件已被移除，切换预览');
       }
@@ -431,8 +517,11 @@ export function RightPanel() {
     (deletedFileId: string) => {
       // 如果删除的是当前选中的文件，清理预览
       if (selectedFile?.id === deletedFileId) {
+        previewRequestIdRef.current += 1;
         setSelectedFile(null);
         setPreviewContent('');
+        setTextPreviewDecision(null);
+        setIsPreviewLoading(false);
       }
     },
     [selectedFile]
@@ -513,8 +602,11 @@ export function RightPanel() {
                   if (contextId) {
                     clearContextAttachments(contextId);
                   }
+                  previewRequestIdRef.current += 1;
                   setSelectedFile(null);
                   setPreviewContent('');
+                  setTextPreviewDecision(null);
+                  setIsPreviewLoading(false);
                 }}
                 aria-label={t('layout.clearAttachments')}
               >
@@ -629,6 +721,8 @@ export function RightPanel() {
           content={previewContent}
           filePath={selectedFile?.filePath ?? null}
           isLoading={isPreviewLoading}
+          fileSize={selectedFile?.size}
+          textPreviewDecision={textPreviewDecision}
         />
       </div>
     </>
