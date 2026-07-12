@@ -10,8 +10,26 @@ use crate::error::{AppError, CommandResult};
 use crate::AppState;
 
 const AGENT_LATEST_MESSAGE_PREVIEW_MAX_CHARS: usize = 200;
+const PLANNING_PERSIST_CONTEXT_MARKER: &str =
+    "\n\nMB decision progress (system-injected context for the next decision)";
 
-fn build_latest_message_preview(content: &str) -> Option<String> {
+fn build_latest_message_preview(message: &Message) -> Option<String> {
+    let persisted_content = if message.role == "assistant" {
+        message.metadata.as_deref().and_then(|metadata| {
+            let parsed = serde_json::from_str::<serde_json::Value>(metadata).ok()?;
+            parsed
+                .get("persistContent")?
+                .as_str()
+                .filter(|content| !content.trim().is_empty())
+                .map(str::to_owned)
+        })
+    } else {
+        None
+    };
+    let content = persisted_content.as_deref().unwrap_or(&message.content);
+    let content = content
+        .split_once(PLANNING_PERSIST_CONTEXT_MARKER)
+        .map_or(content, |(original, _)| original);
     let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
     if normalized.is_empty() {
         return None;
@@ -50,7 +68,7 @@ pub struct AgentItem {
     pub project_path: Option<String>,      // 用户关联的外部项目路径
     pub sandbox_mode: Option<String>,      // 用户可见的三档沙箱权限
     pub sub_agent_safety_footer_enabled: Option<bool>, // Sub-Agent 每步 Safety Footer 实验开关
-    pub sub_agent_safety_footer_text: Option<String>,  // Sub-Agent Safety Footer 自定义提示词
+    pub sub_agent_safety_footer_text: Option<String>, // Sub-Agent Safety Footer 自定义提示词
     pub latest_message_preview: Option<String>,
     pub latest_message_at: Option<i64>,
     pub created_at: i64,
@@ -60,7 +78,7 @@ pub struct AgentItem {
 impl AgentItem {
     fn with_latest_message(mut self, latest_message: Option<&Message>) -> Self {
         if let Some(message) = latest_message {
-            self.latest_message_preview = build_latest_message_preview(&message.content);
+            self.latest_message_preview = build_latest_message_preview(message);
             self.latest_message_at = Some(message.created_at);
         }
         self
@@ -377,5 +395,78 @@ pub(crate) fn sanitize_folder_name(name: &str) -> String {
         "unnamed".to_string()
     } else {
         collapsed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn message(role: &str, content: &str, metadata: Option<&str>) -> Message {
+        Message {
+            id: "message-id".to_string(),
+            agent_id: "agent-id".to_string(),
+            role: role.to_string(),
+            content: content.to_string(),
+            metadata: metadata.map(str::to_owned),
+            created_at: 1,
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn latest_message_preview_prefers_assistant_persist_content() {
+        let metadata = serde_json::json!({
+            "persistContent": "Original inbox summary",
+            "visualEnhanced": true
+        })
+        .to_string();
+        let message = message(
+            "assistant",
+            "```widget-card\n{\"title\":\"Inbox Summary\"}\n```",
+            Some(&metadata),
+        );
+
+        assert_eq!(
+            build_latest_message_preview(&message).as_deref(),
+            Some("Original inbox summary")
+        );
+    }
+
+    #[test]
+    fn latest_message_preview_strips_planning_persist_context() {
+        let metadata = serde_json::json!({
+            "persistContent": format!(
+                "Original response{}internal progress",
+                PLANNING_PERSIST_CONTEXT_MARKER
+            )
+        })
+        .to_string();
+        let message = message("assistant", "Enhanced response", Some(&metadata));
+
+        assert_eq!(
+            build_latest_message_preview(&message).as_deref(),
+            Some("Original response")
+        );
+    }
+
+    #[test]
+    fn latest_message_preview_falls_back_to_content() {
+        let assistant = message(
+            "assistant",
+            "Plain assistant response",
+            Some("invalid json"),
+        );
+        let user_metadata = serde_json::json!({ "persistContent": "Not user-visible" }).to_string();
+        let user = message("user", "User request", Some(&user_metadata));
+
+        assert_eq!(
+            build_latest_message_preview(&assistant).as_deref(),
+            Some("Plain assistant response")
+        );
+        assert_eq!(
+            build_latest_message_preview(&user).as_deref(),
+            Some("User request")
+        );
     }
 }

@@ -6,8 +6,8 @@
  */
 
 import { useState } from 'react';
-import { FileText, FileCode, File, Folder } from 'lucide-react';
 import { FileContextMenu } from './FileContextMenu';
+import { FileTypeIcon } from './FileTypeIcon';
 import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -37,29 +37,6 @@ interface FileItemProps {
   onRevealInExplorer: () => void;
   /** 删除回调 */
   onDelete: () => void;
-}
-
-// 获取文件类型图标
-function getFileIcon(fileName: string, isDirectory?: boolean): React.ReactNode {
-  // 文件夹使用专用图标
-  if (isDirectory) {
-    return <Folder size={16} className={styles.iconFolder} />;
-  }
-
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
-
-  // Markdown 文件
-  if (['md', 'markdown'].includes(ext)) {
-    return <FileText size={16} className={styles.iconMarkdown} />;
-  }
-
-  // 代码文件
-  if (['js', 'ts', 'tsx', 'jsx', 'py', 'rs', 'json', 'css', 'html', 'yml', 'yaml'].includes(ext)) {
-    return <FileCode size={16} className={styles.iconCode} />;
-  }
-
-  // 默认文件图标
-  return <File size={16} className={styles.iconDefault} />;
 }
 
 // 格式化文件大小
@@ -121,7 +98,9 @@ export function FileItem({
           }
         }}
       >
-        <div className={styles.icon}>{getFileIcon(file.fileName, file.isDirectory)}</div>
+        <div className={styles.icon}>
+          <FileTypeIcon fileName={file.fileName} isDirectory={file.isDirectory} />
+        </div>
         <div className={styles.info}>
           <Tooltip content={file.fileName}>
             <span className={styles.name}>{file.fileName}</span>

@@ -39,22 +39,6 @@
   color: var(--color-text-secondary);
 }
 
-.iconMarkdown {
-  color: var(--color-primary);
-}
-
-.iconCode {
-  color: var(--color-success);
-}
-
-.iconDefault {
-  color: var(--color-text-tertiary);
-}
-
-.iconFolder {
-  color: #e8a838;
-}
-
 .info {
   flex: 1;
   min-width: 0;

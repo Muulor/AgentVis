@@ -12,6 +12,7 @@ import { DiffLine } from './DiffLine';
 import { DiffActions } from './DiffActions';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
+import { getDiffLineTokens, type DiffSyntaxHighlightData } from './DiffSyntaxHighlight';
 import type { FullFileDiffLine, ApplyStatus } from '../../services/fast-apply/types';
 
 // ==================== 类型定义 ====================
@@ -29,6 +30,8 @@ export interface DiffBlockProps {
   onReject: () => void;
   /** 是否正在处理 */
   isProcessing?: boolean;
+  /** 全文件语法高亮结果；未生成时使用纯文本 */
+  syntaxHighlight?: DiffSyntaxHighlightData | null;
 }
 
 // ==================== 辅助函数 ====================
@@ -58,6 +61,7 @@ export function DiffBlock({
   onAccept,
   onReject,
   isProcessing = false,
+  syntaxHighlight,
 }: DiffBlockProps) {
   const { t } = useI18n();
   const statusClass = getStatusClass(status);
@@ -68,7 +72,12 @@ export function DiffBlock({
       {/* Diff 行内容 */}
       <div className={styles.content}>
         {lines.map((line, index) => (
-          <DiffLine key={`${modificationId}-${index}`} line={line} showLineNumbers={true} />
+          <DiffLine
+            key={`${modificationId}-${index}`}
+            line={line}
+            showLineNumbers={true}
+            syntaxTokens={getDiffLineTokens(line, syntaxHighlight ?? null)}
+          />
         ))}
       </div>
 

@@ -1,7 +1,5 @@
 # AgentVis Memory Mechanism Introduction
 
-> Version: 1.0  
-> Last updated: 2026-04-07  
 > Document scope: the full `src/services/memory/` module plus the `src/components/memory/` UI layer
 
 ---

@@ -53,6 +53,67 @@
   word-break: break-all;
 }
 
+/* ==================== 语法高亮 ==================== */
+
+.lineContent :global(.token.comment),
+.lineContent :global(.token.prolog),
+.lineContent :global(.token.doctype),
+.lineContent :global(.token.cdata) {
+  color: var(--color-syntax-comment);
+}
+
+.lineContent :global(.token.tag),
+.lineContent :global(.token.deleted),
+.lineContent :global(.token.keyword),
+.lineContent :global(.token.atrule),
+.lineContent :global(.token.important) {
+  color: var(--color-syntax-keyword);
+}
+
+.lineContent :global(.token.function) {
+  color: var(--color-syntax-function);
+}
+
+.lineContent :global(.token.property),
+.lineContent :global(.token.attr-name),
+.lineContent :global(.token.builtin),
+.lineContent :global(.token.variable),
+.lineContent :global(.token.entity),
+.lineContent :global(.token.property-access) {
+  color: var(--color-syntax-identifier);
+}
+
+.lineContent :global(.token.parameter) {
+  color: var(--color-syntax-parameter);
+}
+
+.lineContent :global(.token.selector),
+.lineContent :global(.token.class-name),
+.lineContent :global(.token.type-name) {
+  color: var(--color-syntax-type);
+}
+
+.lineContent :global(.token.string),
+.lineContent :global(.token.char),
+.lineContent :global(.token.attr-value),
+.lineContent :global(.token.regex),
+.lineContent :global(.token.url),
+.lineContent :global(.token.inserted) {
+  color: var(--color-syntax-string);
+}
+
+.lineContent :global(.token.boolean),
+.lineContent :global(.token.number),
+.lineContent :global(.token.constant),
+.lineContent :global(.token.symbol) {
+  color: var(--color-syntax-number);
+}
+
+.lineContent :global(.token.punctuation),
+.lineContent :global(.token.operator) {
+  color: var(--color-syntax-punctuation);
+}
+
 /* ==================== 新增行样式（柔和绿色） ==================== */
 
 .lineAdd {

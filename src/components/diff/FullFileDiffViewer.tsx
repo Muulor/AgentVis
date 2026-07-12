@@ -24,6 +24,11 @@ import { DiffLine } from './DiffLine';
 import { DiffBlock } from './DiffBlock';
 import { CollapsedLines } from './CollapsedLines';
 import {
+  getDiffLineTokens,
+  useDiffSyntaxHighlight,
+  type DiffSyntaxHighlightData,
+} from './DiffSyntaxHighlight';
+import {
   buildFullFileDiff,
   toggleRegionExpanded,
 } from '../../services/fast-apply/FullFileDiffBuilder';
@@ -47,6 +52,7 @@ const ESTIMATED_LINE_CHROME_WIDTH = 88;
 const ESTIMATED_MONO_CHAR_WIDTH = 8;
 const MIN_ESTIMATED_WRAP_CHARS = 24;
 const MAX_ESTIMATED_LINE_WRAP = 80;
+const EMPTY_FULL_DIFF_LINES: FullFileDiffLine[] = [];
 
 // ==================== 类型定义 ====================
 
@@ -457,6 +463,7 @@ interface VirtualizedDiffContentProps {
   onReject: (id: string) => void;
   onToggleRegion: (regionIndex: number) => void;
   processingId?: string;
+  syntaxHighlight?: DiffSyntaxHighlightData | null;
 }
 
 /**
@@ -472,6 +479,7 @@ function VirtualizedDiffContent({
   onReject,
   onToggleRegion,
   processingId,
+  syntaxHighlight,
 }: VirtualizedDiffContentProps) {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const rowObserverRef = useRef<ResizeObserver | null>(null);
@@ -645,7 +653,13 @@ function VirtualizedDiffContent({
       switch (item.type) {
         case 'context-line':
           if (!item.line) return null;
-          return <DiffLine line={item.line} showLineNumbers={true} />;
+          return (
+            <DiffLine
+              line={item.line}
+              showLineNumbers={true}
+              syntaxTokens={getDiffLineTokens(item.line, syntaxHighlight ?? null)}
+            />
+          );
 
         case 'diff-block': {
           const { modificationId, lines, status } = item;
@@ -658,6 +672,7 @@ function VirtualizedDiffContent({
               onAccept={() => onAccept(modificationId)}
               onReject={() => onReject(modificationId)}
               isProcessing={processingId === modificationId}
+              syntaxHighlight={syntaxHighlight}
             />
           );
         }
@@ -674,7 +689,7 @@ function VirtualizedDiffContent({
           return null;
       }
     },
-    [onAccept, onReject, onToggleRegion, processingId]
+    [onAccept, onReject, onToggleRegion, processingId, syntaxHighlight]
   );
 
   return (
@@ -846,6 +861,12 @@ export function FullFileDiffViewer({
     return items;
   }, [fullDiffData, collapsibleRegions, modificationMap]);
 
+  const syntaxHighlight = useDiffSyntaxHighlight(
+    originalContent,
+    fullDiffData?.lines ?? EMPTY_FULL_DIFF_LINES,
+    fileName
+  );
+
   // 空状态：无修改或无文件
   if (modifications.length === 0 || !fileName) {
     return (
@@ -904,6 +925,7 @@ export function FullFileDiffViewer({
         onReject={onReject}
         onToggleRegion={handleToggleRegion}
         processingId={processingId}
+        syntaxHighlight={syntaxHighlight}
       />
 
       {/* 底部操作栏 */}

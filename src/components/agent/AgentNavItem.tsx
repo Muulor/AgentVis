@@ -7,6 +7,7 @@ import { useUIStore } from '@stores/uiStore';
 import { AgentContextMenu } from './AgentContextMenu';
 import { Tooltip } from '@components/ui/Tooltip';
 import { useI18n } from '@/i18n';
+import { getMessageOriginalDisplayContent } from '@utils/quoteContent';
 import styles from './AgentNavItem.module.css';
 
 interface AgentNavItemProps {
@@ -119,7 +120,10 @@ export function AgentNavItem({
 
     if (agentMessages) {
       const latestMsg = agentMessages[agentMessages.length - 1];
-      return latestMsg ? getMessagePreview(latestMsg.content) : '';
+      if (!latestMsg) return '';
+
+      const previewContent = getMessageOriginalDisplayContent(latestMsg) ?? latestMsg.content;
+      return getMessagePreview(previewContent);
     }
 
     return getMessagePreview(persistedMessagePreview);

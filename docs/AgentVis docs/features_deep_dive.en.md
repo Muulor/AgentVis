@@ -1,8 +1,5 @@
 # AgentVis Four Core Features Deep-Dive Technical Analysis
 
-> Version: Pre-release technical document  
-> Last updated: 2026-06-21
-
 > Naming note: “Task mode” in the UI maps to the internal mode value `planning`; existing identifiers such as `usePlanningMode`, `services/planning`, and `cron:execute_planning` remain unchanged.
 
 ---

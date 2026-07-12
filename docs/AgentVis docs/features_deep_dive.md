@@ -1,7 +1,5 @@
 # AgentVis 四大核心特性深度技术解析
 
-> 版本：发布前技术文档  
-> 更新时间：2026-06-21
 
 > 命名说明：用户界面中的「Task 模式」对应内部模式值 `planning`；`usePlanningMode`、`services/planning` 和 `cron:execute_planning` 等既有代码标识保持不变。
 

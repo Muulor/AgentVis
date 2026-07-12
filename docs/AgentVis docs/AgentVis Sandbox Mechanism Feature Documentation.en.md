@@ -1,7 +1,5 @@
 # AgentVis Sandbox Mechanism Feature Documentation
 
-Last updated: 2026-06-01
-
 > Naming note: “Task mode” in the UI maps to the internal mode value and path `planning`; existing code identifiers remain unchanged.
 
 ## 1. Document Scope

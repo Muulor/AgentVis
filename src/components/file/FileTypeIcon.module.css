@@ -1,0 +1,81 @@
+/**
+ * FileTypeIcon 样式
+ *
+ * 色相复用语法高亮 Token，使文件图标在浅色/深色模式下保持一致的识别层级。
+ */
+
+.icon {
+  flex-shrink: 0;
+}
+
+.brandIcon {
+  display: block;
+  overflow: visible;
+}
+
+.brandIcon path {
+  fill: currentColor;
+}
+
+.brandIcon .vueInner {
+  fill: color-mix(in srgb, currentColor 58%, var(--color-text-primary));
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family-mono);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.35px;
+  white-space: nowrap;
+}
+
+.badge[data-label-length='1'] {
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.badge[data-label-length='3'] {
+  font-size: 11px;
+  letter-spacing: -0.55px;
+}
+
+.badge[data-label-length='4'] {
+  font-size: 10px;
+  letter-spacing: -0.7px;
+}
+
+.blue {
+  color: var(--color-syntax-identifier);
+}
+
+.cyan {
+  color: var(--color-syntax-type);
+}
+
+.green {
+  color: var(--color-syntax-number);
+}
+
+.orange {
+  color: var(--color-syntax-string);
+}
+
+.purple {
+  color: var(--color-syntax-function);
+}
+
+.red {
+  color: var(--color-syntax-keyword);
+}
+
+.yellow {
+  color: var(--color-syntax-parameter);
+}
+
+.neutral {
+  color: var(--color-text-tertiary);
+}

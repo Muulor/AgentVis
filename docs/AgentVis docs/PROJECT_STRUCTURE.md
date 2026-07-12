@@ -193,6 +193,7 @@ diff/
 ├── DiffBlock.module.css          # 差异块样式
 ├── DiffLine.tsx                  # 差异行组件
 ├── DiffLine.module.css           # 差异行样式
+├── DiffSyntaxHighlight.ts        # Diff 语法高亮与大文件性能降级
 ├── DiffViewer.tsx                # 差异查看器（内嵌）
 ├── DiffViewer.module.css         # 差异查看器样式
 ├── FullFileDiffViewer.tsx        # 完整文件差异视图
@@ -211,6 +212,9 @@ file/
 ├── FileContextMenu.module.css    # 右键菜单样式
 ├── FileItem.tsx                  # 文件列表项
 ├── FileItem.module.css           # 文件项样式
+├── FileTypeIcon.tsx              # 按文件名/扩展名映射的语言类型图标
+├── FileTypeIcon.module.css       # 文件类型图标与主题色样式
+├── FileTypeIconRegistry.ts       # 精确文件名、扩展名与文件家族图标映射
 ├── FileList.tsx                  # 文件列表组件（含交付物文件夹 ▶ Run Preview）
 ├── FileList.module.css           # 文件列表样式（含 projectPreviewBtn）
 ├── FileListPathRecovery.ts

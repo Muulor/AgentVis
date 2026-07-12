@@ -7,6 +7,7 @@ export { FileList } from './FileList';
 export { FileItem } from './FileItem';
 export { FilePreview } from './FilePreview';
 export { FileContextMenu } from './FileContextMenu';
+export { FileTypeIcon } from './FileTypeIcon';
 
 // 渲染组件
 export { MarkdownRenderer } from './MarkdownRenderer';

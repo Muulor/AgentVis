@@ -1,6 +1,5 @@
 # AgentVis Skill Feature Technical Documentation
 
-> Last updated: 2026-06-21
 > Audience: developers / skill-package developers / product team
 > Naming note: “Task mode” in the UI maps to the internal mode value and path `planning`; existing code identifiers remain unchanged.
 

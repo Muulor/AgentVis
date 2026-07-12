@@ -69,7 +69,7 @@
   --color-accent-primary: var(--color-action-primary);
   --color-accent-primary-hover: var(--color-action-primary-hover);
   --color-accent-primary-rgb: 63, 123, 217;
-  --color-inline-token: #778089;
+  --color-inline-token: #3f7bd9;
   --color-inline-token-hover: color-mix(
     in srgb,
     var(--color-inline-token) 74%,
@@ -91,6 +91,17 @@
   --color-diff-add-bg: #e6ffec;
   --color-diff-remove-bg: #ffebe9;
   --color-diff-modify-bg: #fff8e1;
+
+  /* Diff 语法高亮颜色 */
+  --color-syntax-comment: #566b80;
+  --color-syntax-keyword: #b23a4a;
+  --color-syntax-function: #6f4bc7;
+  --color-syntax-identifier: #0068a8;
+  --color-syntax-parameter: #a14f00;
+  --color-syntax-type: #067164;
+  --color-syntax-string: #9a4b16;
+  --color-syntax-number: #0b7668;
+  --color-syntax-punctuation: #4d5660;
 
   /* ============================================
    * 字体系统
@@ -249,6 +260,17 @@
   --color-diff-add-bg: #1a3d1a;
   --color-diff-remove-bg: #3d1a1a;
   --color-diff-modify-bg: #3d3a1a;
+
+  /* Diff 语法高亮颜色 */
+  --color-syntax-comment: #8ea0b2;
+  --color-syntax-keyword: #ff7a86;
+  --color-syntax-function: #b89aff;
+  --color-syntax-identifier: #61b7ff;
+  --color-syntax-parameter: #ffaa4a;
+  --color-syntax-type: #47d7be;
+  --color-syntax-string: #e6a06f;
+  --color-syntax-number: #a8d67b;
+  --color-syntax-punctuation: #d0d4d8;
 
   --focus-control-border: color-mix(
     in srgb,

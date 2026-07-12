@@ -6,6 +6,7 @@
  */
 
 import styles from './DiffLine.module.css';
+import type { Token } from 'prism-react-renderer';
 import type { DiffLine as DiffLineType } from '../../services/fast-apply/types';
 
 // ==================== 类型定义 ====================
@@ -19,6 +20,8 @@ export interface DiffLineProps {
   isHighlighted?: boolean;
   /** 点击回调（用于手动定位模式） */
   onClick?: () => void;
+  /** Prism 按行生成的语法 token；缺失时保持纯文本渲染 */
+  syntaxTokens?: Token[];
 }
 
 // ==================== 辅助函数 ====================
@@ -65,6 +68,7 @@ export function DiffLine({
   showLineNumbers = true,
   isHighlighted = false,
   onClick,
+  syntaxTokens,
 }: DiffLineProps) {
   const lineClasses = [
     styles.line,
@@ -100,7 +104,15 @@ export function DiffLine({
       <span className={styles.linePrefix}>{getLinePrefix(line.type)}</span>
 
       {/* 行内容 */}
-      <span className={styles.lineContent}>{line.content}</span>
+      <span className={styles.lineContent}>
+        {syntaxTokens
+          ? syntaxTokens.map((token, index) => (
+              <span key={index} className={`token ${token.types.join(' ')}`}>
+                {token.content}
+              </span>
+            ))
+          : line.content}
+      </span>
     </div>
   );
 }
