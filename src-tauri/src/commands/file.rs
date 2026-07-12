@@ -243,6 +243,9 @@ fn collect_files_recursively(
     if let Ok(entries) = fs::read_dir(current_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
+            if super::workspace_import::is_workspace_import_staging_dir(&path) {
+                continue;
+            }
             if path.is_file() {
                 if let Ok(metadata) = entry.metadata() {
                     let file_name = path.file_name()
@@ -1462,6 +1465,11 @@ pub async fn file_list_directory(
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
 
+            // 只隐藏带有效所有权标记的内部 staging，避免遮蔽用户同名目录。
+            if super::workspace_import::is_workspace_import_staging_dir(&path) {
+                continue;
+            }
+
             let is_directory = path.is_dir();
 
             let (size, created_at) = if let Ok(metadata) = entry.metadata() {
@@ -1557,6 +1565,11 @@ pub async fn file_list_project_directory(
             let name = path.file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
+
+            // 只隐藏带有效所有权标记的内部 staging，避免遮蔽用户同名目录。
+            if super::workspace_import::is_workspace_import_staging_dir(&path) {
+                continue;
+            }
 
             let is_directory = path.is_dir();
 

@@ -251,6 +251,16 @@ if file_str.starts_with(&protected_normalized) {
 }
 ```
 
+#### Transactional Imports into the Right-Side Workspace
+
+When files or folders are dropped into the right-side workspace, the frontend transfers them in 2 MiB chunks and the Rust backend writes the complete batch to internal staging on the target filesystem before committing it. Both the staging root and UUID session directories carry AgentVis ownership markers, while imported data is isolated under `payload/`. If an unowned `.agentvis-importing` directory already exists, the import fails closed without adopting or cleaning that user directory.
+
+A durable commit guard is written before destination moves begin. If moving multiple top-level items fails, the backend rolls completed moves back in reverse order and checks every rollback result. It reports a full rollback only when every move was restored. Otherwise, staging, the recovery record, and paths requiring review are preserved; the frontend refreshes the file list and asks the user to inspect the workspace. Cancellation is available before commit; after the commit guard is established, the backend exclusively owns finalization or recovery preservation.
+
+Stale cleanup only removes AgentVis-owned sessions that have a valid UUID, an exact session marker, no active session, an age of at least 24 hours, no commit guard, and no recovery record. A poisoned lock, symbolic link, missing marker, or damaged marker makes cleanup stop fail-closed.
+
+For diagnostics, the frontend marks cancellation and error rollback IPC as the `workspace-import:cancel` renderer-health stage. Chunk byte progress is coalesced to a minimum 100 ms interval, while initial state, every file/directory completion, and the commit stage are emitted immediately. Rust records the `reason`, `duration_ms`, and outcome of every owned staging deletion; successful deletes taking at least one second and all failed deletes are logged as warnings.
+
 ### 3.5 Static Script Content Scanning
 
 `validate_script_content()` is called before exec runs script files. It reads script source code and scans for dangerous APIs.

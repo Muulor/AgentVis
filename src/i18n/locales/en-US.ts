@@ -1654,7 +1654,22 @@ export const enUS = {
     dropToImport: 'Drop to import into this workspace',
     dropImportHint: 'Files and folders are copied into the current folder',
     importing: 'Importing files...',
+    importCommitting: 'Committing import...',
+    importCommitHint:
+      "Applying the completed batch to the workspace. This step can't be cancelled.",
     importProgress: 'Processed {done}/{total} items',
+    importProgressBytes: '{done}/{total} files · {bytesDone}/{totalBytes}',
+    importProgressItems: 'Processed {done}/{total} items',
+    importCancelling: 'Cancelling...',
+    importCancelled: 'Import cancelled. The workspace was not changed.',
+    importRolledBack: 'Import failed. The entire batch was rolled back.',
+    importPartialCommit: 'Import could not be fully rolled back',
+    importPartialCommitDescription:
+      '{count} top-level items may remain in the workspace. Check the file list; recovery details were written to diagnostics.',
+    importUnknownState: 'Import completion could not be confirmed',
+    importUnknownStateDescription:
+      'The commit response was interrupted. Check the workspace before trying again.',
+    importStalled: 'No new progress for 30 seconds. You can keep waiting or cancel the import.',
     importSuccess: 'Imported {count} items',
     importPartial: 'Imported {success} items, {failed} failed',
     importFailed: 'Failed to import files',

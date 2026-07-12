@@ -249,6 +249,16 @@ if file_str.starts_with(&protected_normalized) {
 }
 ```
 
+#### 右侧工作区事务式导入
+
+从右侧工作区拖入文件或文件夹时，前端按 2 MiB 分块传输，Rust 后端将完整批次先写入当前文件系统中的内部 staging，再提交到目标目录。staging 根和 UUID 会话目录都带有 AgentVis 所有权标记，实际载荷位于独立的 `payload/`；若工作区已存在无有效标记的同名 `.agentvis-importing`，导入会 fail closed，既不接管也不清理该用户目录。
+
+提交前会持久化 commit guard。多个顶层项目移动失败时，后端逆序回滚并检查每一次恢复结果：全部恢复成功才报告整批已回滚；任一恢复失败则保留 staging、恢复记录和仍需检查的工作区路径，前端刷新文件列表并提示用户检查，不再声称完整回滚。进入提交阶段前可以取消；commit guard 建立后进入不可取消阶段，由后端独占提交或保留恢复现场。
+
+过期清理只处理同时满足“合法 UUID、精确 session marker、非活动、超过 24 小时、无 commit guard、无 recovery 记录”的 AgentVis 自有会话。锁状态异常、符号链接、marker 缺失或损坏时一律停止清理。
+
+诊断方面，前端将取消/错误回滚 IPC 标记为 `workspace-import:cancel` renderer health 阶段；分块字节进度以 100 ms 为最小间隔合并，但初始状态、每个文件/目录完成和提交阶段立即上报。Rust 对所有自有 staging 删除记录 `reason`、`duration_ms` 和结果，达到或超过 1 秒的成功删除以及所有删除失败都会写入 warning 日志。
+
 ### 3.5 脚本内容静态扫描
 
 `validate_script_content()` 在 exec 执行脚本文件前调用，读取脚本源码并扫描危险 API：

@@ -37,14 +37,19 @@ import { isPreviewableFile, inferTemplateFromFileNames } from '@services/preview
 import type { ProjectFile } from '@services/preview/types';
 import { useI18n } from '@/i18n';
 import { getMissingDirectoryRecoveryPath } from './FileListPathRecovery';
+import {
+  getWorkspaceImportProgressPercent,
+  getWorkspaceImportTotals,
+  importWorkspaceItems,
+  WorkspaceImportCancelledError,
+  WorkspaceImportCommitError,
+  type WorkspaceImportProgress,
+} from './WorkspaceImportService';
 
 const logger = getLogger('FileList');
 
 /** 后台静默刷新的防抖间隔（ms）：合并短时间内的批量文件写入事件 */
 const SILENT_REFRESH_DEBOUNCE_MS = 300;
-
-/** 拖入工作区时 ArrayBuffer 转 base64 的分块大小，避免一次性展开大数组 */
-const BASE64_CHUNK_SIZE = 0x8000;
 
 /** 后端返回的目录条目类型 */
 interface DirectoryEntry {
@@ -63,16 +68,8 @@ interface DroppedWorkspaceItem {
   isDirectory: boolean;
 }
 
-/** 后端工作区导入结果 */
-interface WorkspaceImportResult {
-  filePath: string;
-  relativePath: string;
-  isDirectory: boolean;
-}
-
-interface ImportProgress {
-  done: number;
-  total: number;
+interface ImportProgress extends WorkspaceImportProgress {
+  cancelRequested: boolean;
 }
 
 interface FileListProps {
@@ -112,16 +109,11 @@ function sanitizeFolderName(name: string): string {
   );
 }
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-
-  for (let index = 0; index < bytes.length; index += BASE64_CHUNK_SIZE) {
-    const chunk = bytes.subarray(index, index + BASE64_CHUNK_SIZE);
-    binary += String.fromCharCode(...chunk);
-  }
-
-  return btoa(binary);
+function formatImportBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
@@ -137,12 +129,14 @@ function readDirectoryBatch(reader: FileSystemDirectoryReader): Promise<FileSyst
 }
 
 async function readAllDirectoryEntries(
-  reader: FileSystemDirectoryReader
+  reader: FileSystemDirectoryReader,
+  shouldCancel: () => boolean
 ): Promise<FileSystemEntry[]> {
   const entries: FileSystemEntry[] = [];
   let batch: FileSystemEntry[];
 
   do {
+    if (shouldCancel()) throw new WorkspaceImportCancelledError();
     batch = await readDirectoryBatch(reader);
     entries.push(...batch);
   } while (batch.length > 0);
@@ -152,8 +146,10 @@ async function readAllDirectoryEntries(
 
 async function collectFileSystemEntryItems(
   entry: FileSystemEntry,
-  parentPath = ''
+  parentPath: string,
+  shouldCancel: () => boolean
 ): Promise<DroppedWorkspaceItem[]> {
+  if (shouldCancel()) throw new WorkspaceImportCancelledError();
   const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
 
   if (entry.isFile) {
@@ -164,9 +160,11 @@ async function collectFileSystemEntryItems(
   if (entry.isDirectory) {
     const directory = entry as FileSystemDirectoryEntry;
     const reader = directory.createReader();
-    const childEntries = await readAllDirectoryEntries(reader);
+    const childEntries = await readAllDirectoryEntries(reader, shouldCancel);
     const childItems = await Promise.all(
-      childEntries.map((childEntry) => collectFileSystemEntryItems(childEntry, relativePath))
+      childEntries.map((childEntry) =>
+        collectFileSystemEntryItems(childEntry, relativePath, shouldCancel)
+      )
     );
     return [{ relativePath, file: null, isDirectory: true }, ...childItems.flat()];
   }
@@ -175,7 +173,8 @@ async function collectFileSystemEntryItems(
 }
 
 async function collectDroppedWorkspaceItems(
-  dataTransfer: DataTransfer
+  dataTransfer: DataTransfer,
+  shouldCancel: () => boolean
 ): Promise<DroppedWorkspaceItem[]> {
   const entryItems = Array.from(dataTransfer.items)
     .filter((item) => item.kind === 'file')
@@ -184,11 +183,12 @@ async function collectDroppedWorkspaceItems(
 
   if (entryItems.length > 0) {
     const collected = await Promise.all(
-      entryItems.map((entry) => collectFileSystemEntryItems(entry))
+      entryItems.map((entry) => collectFileSystemEntryItems(entry, '', shouldCancel))
     );
     return collected.flat();
   }
 
+  if (shouldCancel()) throw new WorkspaceImportCancelledError();
   return Array.from(dataTransfer.files).map((file) => ({
     relativePath: file.name,
     file,
@@ -220,8 +220,22 @@ export function FileList({
   const [isDropActive, setIsDropActive] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const importCancelRequestedRef = useRef(false);
+  const importPhaseRef = useRef<WorkspaceImportProgress['phase']>('uploading');
+  const lastImportProgressAtRef = useRef(0);
+  const [isImportStalled, setIsImportStalled] = useState(false);
   const workspaceDragCounterRef = useRef(0);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!isImporting) return undefined;
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastImportProgressAtRef.current >= 30_000) {
+        setIsImportStalled(true);
+      }
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [isImporting]);
   const { t } = useI18n();
   const { startProjectPreview, setProjectStatus, setProjectUrl } = usePreviewStore();
   const [isStartingPreview, setIsStartingPreview] = useState(false);
@@ -331,11 +345,23 @@ export function FileList({
 
   // Agent 切换或 rootDir 变化时重置导航状态并加载根目录
   useEffect(() => {
+    if (importPhaseRef.current !== 'committing') {
+      importCancelRequestedRef.current = true;
+    }
     setCurrentPath('');
     setHistoryStack([]);
     setForwardStack([]);
     void loadDirectory('');
   }, [agentId, hubName, agentName, rootDir]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(
+    () => () => {
+      if (importPhaseRef.current !== 'committing') {
+        importCancelRequestedRef.current = true;
+      }
+    },
+    []
+  );
 
   // currentPath 变化时加载目录（排除初始化场景，由上面的 effect 处理）
   const isInitialMount = useRef(true);
@@ -601,64 +627,102 @@ export function FileList({
 
       setIsImporting(true);
       setImportProgress(null);
+      importCancelRequestedRef.current = false;
+      importPhaseRef.current = 'uploading';
+      lastImportProgressAtRef.current = Date.now();
+      setIsImportStalled(false);
 
       try {
-        const droppedItems = await collectDroppedWorkspaceItems(e.dataTransfer);
+        const droppedItems = await collectDroppedWorkspaceItems(
+          e.dataTransfer,
+          () => importCancelRequestedRef.current
+        );
         if (droppedItems.length === 0) {
           toast({ type: 'warning', title: t('file.importUnsupported') });
           return;
         }
 
-        let importedCount = 0;
-        let failedCount = 0;
-        setImportProgress({ done: 0, total: droppedItems.length });
+        const totals = getWorkspaceImportTotals(droppedItems);
+        setImportProgress({
+          phase: 'uploading',
+          doneEntries: 0,
+          totalEntries: totals.totalEntries,
+          doneFiles: 0,
+          totalFiles: totals.totalFiles,
+          bytesDone: 0,
+          totalBytes: totals.totalBytes,
+          currentPath: '',
+          cancelRequested: false,
+        });
 
-        for (const item of droppedItems) {
-          try {
-            const base64Data = item.file
-              ? arrayBufferToBase64(await item.file.arrayBuffer())
-              : null;
-
-            await invoke<WorkspaceImportResult>('file_import_to_workspace', {
-              hubName: sanitizedHubName,
-              agentName: sanitizedAgentName,
-              rootDir: rootDir ?? null,
-              currentRelativePath: currentPath,
-              itemRelativePath: item.relativePath,
-              isDirectory: item.isDirectory,
-              base64Data,
-            });
-
-            importedCount++;
-          } catch (itemError) {
-            failedCount++;
-            logger.error('[FileList] 导入拖拽项目失败:', item.relativePath, itemError);
-          } finally {
-            setImportProgress({
-              done: importedCount + failedCount,
-              total: droppedItems.length,
-            });
+        const result = await importWorkspaceItems(
+          droppedItems,
+          {
+            hubName: sanitizedHubName,
+            agentName: sanitizedAgentName,
+            rootDir: rootDir ?? null,
+            currentRelativePath: currentPath,
+          },
+          {
+            shouldCancel: () => importCancelRequestedRef.current,
+            onProgress: (progress) => {
+              importPhaseRef.current = progress.phase;
+              lastImportProgressAtRef.current = Date.now();
+              setIsImportStalled(false);
+              setImportProgress({
+                ...progress,
+                cancelRequested: importCancelRequestedRef.current,
+              });
+            },
           }
-        }
+        );
 
         await loadDirectory(currentPath, true);
-
-        if (importedCount > 0 && failedCount === 0) {
-          toast({ type: 'success', title: t('file.importSuccess', { count: importedCount }) });
-        } else if (importedCount > 0) {
-          toast({
-            type: 'warning',
-            title: t('file.importPartial', { success: importedCount, failed: failedCount }),
-          });
-        } else {
-          toast({ type: 'error', title: t('file.importFailed') });
-        }
+        toast({
+          type: 'success',
+          title: t('file.importSuccess', { count: result.importedEntries }),
+        });
       } catch (dropError) {
-        logger.error('[FileList] 处理拖拽导入失败:', dropError);
-        toast({ type: 'error', title: t('file.importFailed') });
+        if (dropError instanceof WorkspaceImportCancelledError) {
+          toast({ type: 'info', title: t('file.importCancelled') });
+        } else if (dropError instanceof WorkspaceImportCommitError) {
+          logger.error('[FileList] 工作区导入提交未完整成功:', {
+            status: dropError.status,
+            result: dropError.result,
+            originalError: dropError.originalError,
+          });
+          if (dropError.status === 'rolledBack') {
+            toast({ type: 'error', title: t('file.importRolledBack') });
+          } else {
+            await loadDirectory(currentPath, true);
+            if (dropError.status === 'partial') {
+              toast({
+                type: 'error',
+                title: t('file.importPartialCommit'),
+                description: t('file.importPartialCommitDescription', {
+                  count: dropError.result?.topLevelPaths.length ?? 0,
+                }),
+                duration: 10_000,
+              });
+            } else {
+              toast({
+                type: 'warning',
+                title: t('file.importUnknownState'),
+                description: t('file.importUnknownStateDescription'),
+                duration: 10_000,
+              });
+            }
+          }
+        } else {
+          logger.error('[FileList] 处理拖拽导入失败，已回滚整个批次:', dropError);
+          toast({ type: 'error', title: t('file.importRolledBack') });
+        }
       } finally {
         setIsImporting(false);
         setImportProgress(null);
+        importCancelRequestedRef.current = false;
+        importPhaseRef.current = 'uploading';
+        setIsImportStalled(false);
       }
     },
     [
@@ -672,6 +736,12 @@ export function FileList({
       toast,
     ]
   );
+
+  const handleCancelImport = useCallback(() => {
+    if (importPhaseRef.current === 'committing') return;
+    importCancelRequestedRef.current = true;
+    setImportProgress((current) => (current ? { ...current, cancelRequested: true } : current));
+  }, []);
 
   /**
    * 运行项目预览
@@ -863,6 +933,10 @@ export function FileList({
     );
   }
 
+  const importProgressPercent = importProgress
+    ? getWorkspaceImportProgressPercent(importProgress)
+    : 0;
+
   return (
     <div
       className={cx(styles.fileList, isDropActive && styles.fileListDragActive)}
@@ -976,7 +1050,7 @@ export function FileList({
       )}
 
       {(isDropActive || isImporting) && (
-        <div className={styles.importOverlay}>
+        <div className={cx(styles.importOverlay, isImporting && styles.importOverlayInteractive)}>
           <div className={styles.importOverlayIcon}>
             {isImporting ? (
               <Loader2 size={22} className={styles.spinner} />
@@ -985,13 +1059,69 @@ export function FileList({
             )}
           </div>
           <span className={styles.importOverlayTitle}>
-            {isImporting ? t('file.importing') : t('file.dropToImport')}
+            {isImporting
+              ? importProgress?.phase === 'committing'
+                ? t('file.importCommitting')
+                : t('file.importing')
+              : t('file.dropToImport')}
           </span>
           <span className={styles.importOverlayHint}>
             {isImporting && importProgress
-              ? t('file.importProgress', { done: importProgress.done, total: importProgress.total })
+              ? importProgress.phase === 'committing'
+                ? t('file.importCommitHint')
+                : importProgress.totalFiles > 0
+                  ? t('file.importProgressBytes', {
+                      done: importProgress.doneFiles,
+                      total: importProgress.totalFiles,
+                      bytesDone: formatImportBytes(importProgress.bytesDone),
+                      totalBytes: formatImportBytes(importProgress.totalBytes),
+                    })
+                  : t('file.importProgressItems', {
+                      done: importProgress.doneEntries,
+                      total: importProgress.totalEntries,
+                    })
               : t('file.dropImportHint')}
           </span>
+          {isImporting && importProgress?.phase !== 'committing' && importProgress?.currentPath && (
+            <span className={styles.importCurrentPath} title={importProgress.currentPath}>
+              {importProgress.currentPath}
+            </span>
+          )}
+          {isImporting && isImportStalled && importProgress?.phase !== 'committing' && (
+            <span className={styles.importStalledHint}>{t('file.importStalled')}</span>
+          )}
+          {isImporting && importProgress && (
+            <div
+              className={styles.importProgressTrack}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={importProgressPercent}
+            >
+              <div
+                className={styles.importProgressFill}
+                style={{
+                  width: `${importProgressPercent}%`,
+                }}
+              />
+            </div>
+          )}
+          {isImporting && (
+            <button
+              type="button"
+              className={styles.importCancelBtn}
+              onClick={handleCancelImport}
+              disabled={
+                importProgress?.phase === 'committing' || importProgress?.cancelRequested === true
+              }
+            >
+              {importProgress?.phase === 'committing'
+                ? t('file.importCommitting')
+                : importProgress?.cancelRequested
+                  ? t('file.importCancelling')
+                  : t('common.cancel')}
+            </button>
+          )}
         </div>
       )}
 

@@ -64,6 +64,7 @@ use commands::{
     file_write_deliverable, file_read_content, file_read_text_window, file_analyze_text_preview, file_list_deliverables, file_delete, save_clipboard_image, save_dropped_file,
     file_write_to_path, file_write_staged_tool_arg_to_path, file_create_backup, file_read_as_base64, file_read_image_downscaled_as_base64, file_copy_to_attachments, file_get_size, file_open_system,
     file_reveal_in_explorer, file_list_directory, file_list_project_directory, file_import_to_workspace,
+    workspace_import_begin, workspace_import_append_chunk, workspace_import_commit, workspace_import_cancel,
     // Backup Management commands
     backup_get_stats, backup_clean,
     // Web Search commands
@@ -617,6 +618,10 @@ pub fn run() {
             file_list_directory,
             file_list_project_directory,
             file_import_to_workspace,
+            workspace_import_begin,
+            workspace_import_append_chunk,
+            workspace_import_commit,
+            workspace_import_cancel,
             // Backup Management 命令 (备份文件管理)
             backup_get_stats,
             backup_clean,

@@ -178,7 +178,7 @@ For example, tell the Agent: "Please implement this according to the plan docume
 
 ### 9.2 Drag in Files or Folders
 
-The right-side workspace supports dragging files or folders from any path on your computer. After import, the Agent can read these files within the workspace scope.
+The right-side workspace supports dragging files or folders from any path on your computer. Content is fully staged and validated before the batch is committed to the workspace. You can cancel before final commit; once final commit starts, wait for it to finish. Name collisions are avoided automatically, and a folder collision is imported as a separate directory such as `folder (1)`. After import, the Agent can read these files within the workspace scope.
 
 ### 9.3 Associate a Project Folder
 

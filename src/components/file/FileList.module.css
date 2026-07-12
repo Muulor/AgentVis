@@ -315,6 +315,10 @@
   box-shadow: var(--shadow-md);
 }
 
+.importOverlayInteractive {
+  pointer-events: auto;
+}
+
 .importOverlayIcon {
   display: flex;
   align-items: center;
@@ -337,4 +341,57 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-text-secondary);
+}
+
+.importCurrentPath {
+  max-width: min(360px, 90%);
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.importStalledHint {
+  max-width: min(360px, 90%);
+  color: var(--color-warning, #f5a623);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.importProgressTrack {
+  width: min(360px, 82%);
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border-primary) 70%, transparent);
+}
+
+.importProgressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 120ms ease-out;
+}
+
+.importCancelBtn {
+  margin-top: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-button);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.importCancelBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-bg-hover);
+}
+
+.importCancelBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

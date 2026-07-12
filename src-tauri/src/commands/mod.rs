@@ -33,6 +33,7 @@ pub mod embedded_python_setup;
 pub mod embedded_node_setup;
 pub mod renderer_health;
 pub mod text_preview;
+pub mod workspace_import;
 
 use serde::Serialize;
 
@@ -66,6 +67,7 @@ pub use embedded_python_setup::*;
 pub use embedded_node_setup::*;
 pub use renderer_health::*;
 pub use text_preview::*;
+pub use workspace_import::*;
 
 /// 应用信息结构
 #[derive(Serialize)]

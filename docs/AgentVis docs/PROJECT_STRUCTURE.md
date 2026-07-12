@@ -218,6 +218,7 @@ file/
 ├── FileList.tsx                  # 文件列表组件（含交付物文件夹 ▶ Run Preview）
 ├── FileList.module.css           # 文件列表样式（含 projectPreviewBtn）
 ├── FileListPathRecovery.ts
+├── WorkspaceImportService.ts     # HTML5 拖拽分块传输与事务式工作区导入协调
 ├── FilePreviewImageDataUrl.ts
 ├── FilePreview.tsx               # 文件预览组件
 ├── FilePreview.module.css        # 文件预览样式
@@ -1031,6 +1032,7 @@ commands/
 ├── message.rs                    # 消息相关命令
 ├── file.rs                       # 文件管理命令
 ├── text_preview.rs               # 大型文本有界读取与 Markdown 复杂度分析命令
+├── workspace_import.rs           # 工作区导入 session、staging、分块写入与整批提交/回滚
 ├── trash_bin.rs                  # 回收站管理命令
 ├── command_validator.rs          # 命令安全校验器
 ├── memory.rs                     # 记忆系统命令
