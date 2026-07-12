@@ -65,7 +65,7 @@ python scripts/model_config.py --action remove_model --app-data-dir "APP_DATA_DI
 | `deepseek` | DeepSeek | openai |
 | `agnes` | Agnes AI | openai |
 | `stepfun` | StepFun (Step Plan) | openai |
-| `xiaomi-mimo` | Xiaomi(Token Plan) | anthropic |
+| `xiaomi-mimo` | Xiaomi(Token Plan) | openai |
 | `zhipu-coding` | ZhipuAI (Coding Plan) | openai |
 | `minimax` | MiniMax(Token Plan) | anthropic |
 | `volcengine` | Volcengine (Coding Plan) | openai |

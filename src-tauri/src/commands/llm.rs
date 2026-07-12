@@ -912,10 +912,10 @@ pub async fn llm_chat(
             adapter.chat(chat_request).await?
         }
         "xiaomi-mimo" => {
-            // Xiaomi MiMo Token Plan 使用 Anthropic 兼容协议
-            let mimo_config = config
-                .with_base_url("https://token-plan-cn.xiaomimimo.com/anthropic/v1");
-            let adapter = AnthropicAdapter::new(mimo_config);
+            // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
+            let mimo_config =
+                config.with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
+            let adapter = OpenAIAdapter::new(mimo_config);
             adapter.chat(chat_request).await?
         }
         "local" => {
@@ -1115,10 +1115,10 @@ pub async fn llm_chat_stream(
                 adapter.chat_stream(chat_request).await
             }
             "xiaomi-mimo" => {
-                // Xiaomi MiMo Token Plan 使用 Anthropic 兼容协议
+                // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
                 let mimo_config =
-                    config.with_base_url("https://token-plan-cn.xiaomimimo.com/anthropic/v1");
-                let adapter = AnthropicAdapter::new(mimo_config);
+                    config.with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
+                let adapter = OpenAIAdapter::new(mimo_config);
                 adapter.chat_stream(chat_request).await
             }
             "zhipu-coding" => {
@@ -1789,11 +1789,11 @@ pub async fn llm_chat_with_tools(
             dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "xiaomi-mimo" => {
-            // Xiaomi MiMo Token Plan 使用 Anthropic 兼容协议
+            // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
             let api_key = get_api_key("xiaomi-mimo")?;
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
-                .with_base_url("https://token-plan-cn.xiaomimimo.com/anthropic/v1");
-            let adapter = AnthropicAdapter::new(config);
+                .with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
+            let adapter = OpenAIAdapter::new(config);
             dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
         }
         "zhipu-coding" => {

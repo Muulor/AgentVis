@@ -49,7 +49,7 @@ BUILTIN_PROVIDERS: list[dict[str, str]] = [
     {"id": "deepseek", "name": "DeepSeek", "protocol": "openai"},
     {"id": "agnes", "name": "Agnes AI", "protocol": "openai"},
     {"id": "stepfun", "name": "StepFun (Step Plan)", "protocol": "openai"},
-    {"id": "xiaomi-mimo", "name": "Xiaomi(Token Plan)", "protocol": "anthropic"},
+    {"id": "xiaomi-mimo", "name": "Xiaomi(Token Plan)", "protocol": "openai"},
     {"id": "zhipu-coding", "name": "ZhipuAI (Coding Plan)", "protocol": "openai"},
     {"id": "minimax", "name": "MiniMax(Token Plan)", "protocol": "anthropic"},
     {"id": "volcengine", "name": "Volcengine (Coding Plan)", "protocol": "openai"},
@@ -88,7 +88,7 @@ BUILTIN_MODELS: list[dict] = [
     {"id": "agnes-2.0-flash", "name": "Agnes 2.0 Flash", "providerId": "agnes", "contextWindow": 512000, "supportsVision": False},
     # StepFun Step Plan (OpenAI-compatible protocol)
     {"id": "step-3.7-flash", "name": "Step 3.7 Flash", "providerId": "stepfun", "contextWindow": 256000, "supportsVision": True},
-    # Xiaomi MiMo (Token Plan API, Anthropic-compatible protocol)
+    # Xiaomi MiMo (Token Plan API, OpenAI-compatible protocol)
     {"id": "mimo-v2.5", "name": "MiMo V2.5", "providerId": "xiaomi-mimo", "contextWindow": 1000000, "supportsVision": True},
     {"id": "mimo-v2.5-pro", "name": "MiMo V2.5 Pro", "providerId": "xiaomi-mimo", "contextWindow": 1000000, "supportsVision": False},
     # ZhipuAI Coding Plan (dedicated endpoint, independent quota from the coding package)

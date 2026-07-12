@@ -3,7 +3,8 @@
 //! 实现 OpenAI Chat Completion API 的调用
 
 use super::http_client::{
-    get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout,
+    format_stream_idle_timeout, get_client, get_streaming_client, stream_idle_timeout,
+    stream_start_timeout, StreamIdleDiagnostics,
 };
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -938,6 +939,7 @@ impl OpenAIAdapter {
         let mut reasoning_buffer = String::new();
         let mut tool_acc = ResponsesToolCallAccumulator::with_progress(progress_callback);
         let mut chunk_count: u64 = 0;
+        let mut last_event_type: Option<String> = None;
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
         let mut final_finish_reason: Option<String> = None;
@@ -948,9 +950,21 @@ impl OpenAIAdapter {
                 Ok(Some(event)) => event,
                 Ok(None) => break,
                 Err(_) => {
-                    return Err(AppError::LlmApi(format!(
-                        "Streaming response idle timeout (no data for {} seconds)",
-                        idle_timeout.as_secs()
+                    return Err(AppError::LlmApi(format_stream_idle_timeout(
+                        idle_timeout,
+                        StreamIdleDiagnostics {
+                            protocol: "openai-responses",
+                            events: chunk_count,
+                            last_event: last_event_type.as_deref(),
+                            content_chars: content_buffer.chars().count(),
+                            reasoning_chars: reasoning_buffer.chars().count(),
+                            tool_calls: tool_acc.calls.len(),
+                            tool_arg_bytes: tool_acc
+                                .calls
+                                .values()
+                                .map(|call| call.arguments.len())
+                                .sum(),
+                        },
                     )));
                 }
             };
@@ -973,6 +987,7 @@ impl OpenAIAdapter {
                             continue;
                         }
                     };
+                    last_event_type = responses_event_type(&value).map(str::to_string);
 
                     match responses_event_type(&value) {
                         Some("response.output_text.delta") | Some("response.refusal.delta") => {
@@ -1248,6 +1263,7 @@ impl OpenAIAdapter {
         let mut reasoning_buffer = String::new();
         let mut tool_acc = ToolCallAccumulator::with_progress(progress_callback);
         let mut chunk_count: u64 = 0;
+        let mut last_event_type: Option<String> = None;
         // 累积 usage 数据（从包含 usage 的 chunk 中提取）
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
@@ -1261,15 +1277,32 @@ impl OpenAIAdapter {
                 Ok(Some(event)) => event,
                 Ok(None) => break,
                 Err(_) => {
-                    return Err(AppError::LlmApi(format!(
-                        "Streaming response idle timeout (no data for {} seconds)",
-                        idle_timeout.as_secs()
+                    return Err(AppError::LlmApi(format_stream_idle_timeout(
+                        idle_timeout,
+                        StreamIdleDiagnostics {
+                            protocol: "openai-chat-completions",
+                            events: chunk_count,
+                            last_event: last_event_type.as_deref(),
+                            content_chars: content_buffer.chars().count(),
+                            reasoning_chars: reasoning_buffer.chars().count(),
+                            tool_calls: tool_acc.calls.len(),
+                            tool_arg_bytes: tool_acc
+                                .calls
+                                .values()
+                                .map(|(_, _, arguments)| arguments.len())
+                                .sum(),
+                        },
                     )));
                 }
             };
 
             match event {
                 Ok(ev) => {
+                    last_event_type = Some(if ev.event.is_empty() {
+                        "message".to_string()
+                    } else {
+                        ev.event
+                    });
                     let data = ev.data;
 
                     // [DONE] 标记：流结束

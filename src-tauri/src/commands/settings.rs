@@ -264,11 +264,11 @@ pub async fn settings_test_api_key(
             adapter.test_connection().await
         }
         "xiaomi-mimo" => {
-            // Xiaomi MiMo Token Plan 使用 Anthropic 兼容协议
+            // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
             let mimo_config = config
-                .with_base_url("https://token-plan-cn.xiaomimimo.com/anthropic/v1")
+                .with_base_url("https://token-plan-cn.xiaomimimo.com/v1")
                 .with_model("mimo-v2.5");
-            let adapter = AnthropicAdapter::new(mimo_config);
+            let adapter = OpenAIAdapter::new(mimo_config);
             adapter.test_connection().await
         }
         "zhipu-coding" => {

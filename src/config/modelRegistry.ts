@@ -124,7 +124,7 @@ const BUILTIN_PROVIDERS: ProviderDefinition[] = [
   {
     id: 'xiaomi-mimo',
     name: 'Xiaomi(Token Plan)',
-    protocol: 'anthropic',
+    protocol: 'openai',
     apiKeyPlaceholder: 'API Key...',
     apiKeyUrl: 'https://platform.xiaomimimo.com/console/plan-manage',
   },
@@ -341,7 +341,7 @@ const BUILTIN_MODELS: ModelDefinition[] = [
   },
 
   // ━━ Xiaomi Token Plan  ━━
-  // Xiaomi MiMo Token Plan API，使用 Anthropic 兼容协议
+  // Xiaomi MiMo Token Plan API，使用 OpenAI 兼容协议
   {
     id: 'mimo-v2.5',
     name: 'MiMo V2.5',

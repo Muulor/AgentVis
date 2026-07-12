@@ -4,7 +4,10 @@
 
 use async_trait::async_trait;
 use futures::stream::Stream;
-use super::http_client::{get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout};
+use super::http_client::{
+    format_stream_idle_timeout, get_client, get_streaming_client, stream_idle_timeout,
+    stream_start_timeout, StreamIdleDiagnostics,
+};
 use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
@@ -764,6 +767,7 @@ impl AnthropicAdapter {
         let mut block_states: Vec<ContentBlockState> = Vec::new();
         let mut reasoning_buffer = String::new();
         let mut chunk_count: u64 = 0;
+        let mut last_event_type: Option<String> = None;
         // 累积 usage 数据
         let mut final_input_tokens: Option<u32> = None;
         let mut final_output_tokens: Option<u32> = None;
@@ -775,9 +779,27 @@ impl AnthropicAdapter {
                 Ok(Some(event)) => event,
                 Ok(None) => break,
                 Err(_) => {
-                    return Err(AppError::LlmApi(format!(
-                        "Streaming response idle timeout (no data for {} seconds)",
-                        idle_timeout.as_secs()
+                    return Err(AppError::LlmApi(format_stream_idle_timeout(
+                        idle_timeout,
+                        StreamIdleDiagnostics {
+                            protocol: "anthropic-messages",
+                            events: chunk_count,
+                            last_event: last_event_type.as_deref(),
+                            content_chars: block_states
+                                .iter()
+                                .map(|state| state.text_buffer.chars().count())
+                                .sum(),
+                            reasoning_chars: reasoning_buffer.chars().count(),
+                            tool_calls: block_states
+                                .iter()
+                                .filter(|state| state.block_type == "tool_use")
+                                .count(),
+                            tool_arg_bytes: block_states
+                                .iter()
+                                .filter(|state| state.block_type == "tool_use")
+                                .map(|state| state.json_buffer.len())
+                                .sum(),
+                        },
                     )));
                 }
             };
@@ -788,7 +810,12 @@ impl AnthropicAdapter {
                     // MiniMax 服务器 bug：长响应中偶尔生成 \uXX（2位）而非合法 \uXXXX（4位），
                     // serde_json 严格遵循规范会直接报 unexpected end of hex escape 导致 500
                     let data = super::json_repair::sanitize_sse_data(&ev.data);
-                    let event_type = ev.event;
+                    let event_type = if ev.event.is_empty() {
+                        "message".to_string()
+                    } else {
+                        ev.event
+                    };
+                    last_event_type = Some(event_type.clone());
 
                     match event_type.as_str() {
                         "message_start" => {
@@ -1664,4 +1691,3 @@ struct AnthropicStreamUsage {
     #[serde(default)]
     output_tokens: u32,
 }
-

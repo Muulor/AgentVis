@@ -142,6 +142,48 @@ pub fn stream_start_timeout() -> Duration {
     Duration::from_secs(config::STREAM_START_TIMEOUT_SECS)
 }
 
+/// Non-sensitive counters attached to streaming idle-timeout errors.
+///
+/// Keep diagnostics limited to protocol state and sizes. Prompt text, reasoning
+/// text, tool names, and tool arguments must not be included in the error.
+pub(super) struct StreamIdleDiagnostics<'a> {
+    pub protocol: &'a str,
+    pub events: u64,
+    pub last_event: Option<&'a str>,
+    pub content_chars: usize,
+    pub reasoning_chars: usize,
+    pub tool_calls: usize,
+    pub tool_arg_bytes: usize,
+}
+
+pub(super) fn format_stream_idle_timeout(
+    idle_timeout: Duration,
+    diagnostics: StreamIdleDiagnostics<'_>,
+) -> String {
+    let phase = if diagnostics.tool_calls > 0 {
+        "tool_arguments"
+    } else if diagnostics.reasoning_chars > 0 {
+        "reasoning"
+    } else if diagnostics.content_chars > 0 {
+        "content"
+    } else {
+        "awaiting_first_output"
+    };
+
+    format!(
+        "Streaming response idle timeout (no data for {} seconds; protocol={}; events={}; last_event={}; phase={}; content_chars={}; reasoning_chars={}; tool_calls={}; tool_arg_bytes={})",
+        idle_timeout.as_secs(),
+        diagnostics.protocol,
+        diagnostics.events,
+        diagnostics.last_event.unwrap_or("none"),
+        phase,
+        diagnostics.content_chars,
+        diagnostics.reasoning_chars,
+        diagnostics.tool_calls,
+        diagnostics.tool_arg_bytes,
+    )
+}
+
 // ==================== 预热功能（阶段3） ====================
 
 /// 预热常用 API 端点连接
@@ -192,6 +234,30 @@ pub async fn warmup_connections() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn idle_timeout_diagnostics_report_stream_phase_without_payload_content() {
+        let message = format_stream_idle_timeout(
+            Duration::from_secs(180),
+            StreamIdleDiagnostics {
+                protocol: "openai",
+                events: 42,
+                last_event: Some("message"),
+                content_chars: 0,
+                reasoning_chars: 512,
+                tool_calls: 1,
+                tool_arg_bytes: 8192,
+            },
+        );
+
+        assert!(message.starts_with("Streaming response idle timeout (no data for 180 seconds;"));
+        assert!(message.contains("protocol=openai"));
+        assert!(message.contains("events=42"));
+        assert!(message.contains("last_event=message"));
+        assert!(message.contains("phase=tool_arguments"));
+        assert!(message.contains("reasoning_chars=512"));
+        assert!(message.contains("tool_arg_bytes=8192"));
+    }
 
     #[test]
     fn test_get_client_returns_same_instance() {

@@ -4,9 +4,18 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  getProviders,
   getUnregisteredSharedReasoningOutputBudgetRoutes,
   modelUsesSharedReasoningOutputBudget,
 } from '../modelRegistry';
+
+describe('modelRegistry provider protocols', () => {
+  it('routes the Xiaomi token plan through its OpenAI-compatible endpoint', () => {
+    expect(getProviders().find((provider) => provider.id === 'xiaomi-mimo')?.protocol).toBe(
+      'openai'
+    );
+  });
+});
 
 describe('modelRegistry reasoning output budget capabilities', () => {
   it('keeps every shared-reasoning route attached to a built-in model', () => {
