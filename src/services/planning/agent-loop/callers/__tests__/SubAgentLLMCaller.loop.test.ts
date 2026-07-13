@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import {
   SubAgentLLMCallerFactory,
   type SubAgentLLMCallerConfig,
@@ -13,6 +14,8 @@ import {
 } from '../SubAgentLLMCaller';
 import type { AccumulatedMessage } from '../../../sub-agents/types';
 import { translate } from '@/i18n';
+import { useStatusStore } from '@stores/statusStore';
+import { estimateGeneratedTokens } from '@services/llm/tokenEstimator';
 
 // ═══════════════════════════════════════════════════════════════
 // Mock 数据
@@ -38,6 +41,10 @@ vi.mock('@tauri-apps/api/core', () => ({
     type: 'text',
     content: 'Mock LLM response',
   }),
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn().mockResolvedValue(vi.fn()),
 }));
 
 // Mock toolRegistry
@@ -73,6 +80,8 @@ describe('SubAgentLLMCaller Loop', () => {
       type: 'text',
       content: 'Mock LLM response',
     });
+    vi.mocked(listen).mockReset();
+    vi.mocked(listen).mockResolvedValue(vi.fn());
     factory = new SubAgentLLMCallerFactory(mockConfig, mockExecuteTool);
   });
 
@@ -520,6 +529,146 @@ describe('SubAgentLLMCaller Loop', () => {
       expect(finalUserMessage?.content).toContain('System Message: Correction Reminder');
       expect(finalUserMessage?.content).toContain('Custom correction reminder');
       expect(finalUserMessage?.content).toContain('feel free to lean into your strengths');
+    });
+
+    it('tracks the final messages and tool schemas for an explicitly bound Task context', async () => {
+      const contextId = 'task-context-sa-caller';
+      useStatusStore.getState().clearContextPressure(contextId);
+      let activeAtInvoke:
+        | ReturnType<typeof useStatusStore.getState>['contextPressureByAgent'][string]
+        | undefined;
+
+      vi.mocked(invoke).mockImplementation((async (command: string) => {
+        if (command !== 'llm_chat_with_tools') return undefined;
+        activeAtInvoke = useStatusStore.getState().getContextPressure(contextId) ?? undefined;
+        return {
+          type: 'tool_use',
+          content: 'I will read the file.',
+          reasoningContent: 'Need to inspect the source first.',
+          toolCalls: [{ id: 'call-1', name: 'read', args: { path: 'src/App.tsx' } }],
+          inputTokens: 101,
+          outputTokens: 23,
+        };
+      }) as unknown as typeof invoke);
+
+      const caller = factory.create();
+      await caller.callWithContext(
+        'System prompt',
+        ['read'],
+        [{ role: 'assistant', content: 'Previous step', timestamp: Date.now() }],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { contextId, contextWindowSize: 128_000 }
+      );
+
+      expect(activeAtInvoke).toMatchObject({
+        phase: 'active',
+        purpose: 'sub-agent',
+        providerId: 'test-provider',
+        modelId: 'test-model',
+        contextWindowSize: 128_000,
+        currentOutputTokens: 0,
+      });
+      expect(activeAtInvoke?.currentInputTokens).toBeGreaterThan(0);
+      expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+        phase: 'last',
+        purpose: 'sub-agent',
+        currentInputTokens: 101,
+        currentOutputTokens: 23,
+      });
+      useStatusStore.getState().clearContextPressure(contextId);
+    });
+
+    it('estimates visible, reasoning, and tool-call output and completes failures as Last Context', async () => {
+      const contextId = 'task-context-sa-output';
+      useStatusStore.getState().clearContextPressure(contextId);
+      const generated = {
+        content: 'Calling a tool.',
+        reasoningContent: 'Reasoning before the call.',
+        toolCalls: [{ id: 'call-2', name: 'read', args: { path: 'README.md' } }],
+      };
+      vi.mocked(invoke).mockResolvedValue({ type: 'tool_use', ...generated });
+
+      const caller = factory.create();
+      await caller.callWithContext(
+        'System prompt',
+        ['read'],
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { contextId, contextWindowSize: 128_000 }
+      );
+
+      expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+        phase: 'last',
+        currentOutputTokens: estimateGeneratedTokens(generated),
+      });
+
+      vi.mocked(invoke).mockRejectedValue(new Error('transport failed'));
+      await expect(
+        caller.callWithContext(
+          'System prompt',
+          ['read'],
+          [],
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { contextId, contextWindowSize: 128_000 }
+        )
+      ).rejects.toThrow('transport failed');
+      expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+        phase: 'last',
+        purpose: 'sub-agent',
+      });
+      useStatusStore.getState().clearContextPressure(contextId);
+    });
+
+    it('tracks large streamed file_write arguments even without a UI progress consumer', async () => {
+      const contextId = 'task-context-sa-large-tool-args';
+      useStatusStore.getState().clearContextPressure(contextId);
+      let toolProgressListener: ((event: { payload: unknown }) => void) | undefined;
+
+      vi.mocked(listen).mockImplementation((async (eventName, handler) => {
+        if (eventName === 'llm-tool-call-progress') {
+          toolProgressListener = handler as typeof toolProgressListener;
+        }
+        return vi.fn();
+      }) as typeof listen);
+      vi.mocked(invoke).mockImplementation((async (command: string, args?: unknown) => {
+        if (command !== 'llm_chat_with_tools') return undefined;
+        const sessionId = (args as { sessionId: string }).sessionId;
+        toolProgressListener?.({
+          payload: { sessionId, toolName: 'file_write', argBytes: 80_000 },
+        });
+        return { type: 'text', content: '' };
+      }) as unknown as typeof invoke);
+
+      const caller = factory.create();
+      await caller.callWithContext(
+        'System prompt',
+        ['file_write'],
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { contextId, contextWindowSize: 128_000 }
+      );
+
+      expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+        phase: 'last',
+        currentOutputTokens: 20_000,
+      });
+      useStatusStore.getState().clearContextPressure(contextId);
     });
   });
 });

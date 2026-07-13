@@ -61,8 +61,18 @@ import type {
   MemorySnapshot,
 } from '../brain/types';
 import { useRuntimeStore } from '@stores/runtimeStore';
+import { useStatusStore } from '@stores/statusStore';
 import { getLogger } from '@services/logger';
-import { modelSupportsVision, modelUsesSharedReasoningOutputBudget } from '@/config/modelRegistry';
+import {
+  getContextWindowSize,
+  modelSupportsVision,
+  modelUsesSharedReasoningOutputBudget,
+} from '@/config/modelRegistry';
+import {
+  estimateGeneratedTokens,
+  estimateRequestTokens,
+  normalizeReportedTokenCount,
+} from '@services/llm/tokenEstimator';
 import { formatTimestamp } from '@services/utils/TimeUtils';
 import type { VisionFallbackMode } from './callers/SubAgentLLMCaller';
 import {
@@ -92,6 +102,14 @@ interface AgentLoopLLMMessage {
   content: string;
   images?: unknown;
 }
+
+interface ActivePlanningContextUsage {
+  contextId: string;
+  callId: string;
+  estimatedInputTokens: number;
+}
+
+type PlanningContextPurpose = 'master-brain' | 'checkpoint';
 
 const DEEPSEEK_V4_MODEL_IDS = new Set(['deepseek-v4-pro', 'deepseek-v4-flash']);
 const DEEPSEEK_V4_MB_PRE_JSON_RETRY_CHARS = 2600;
@@ -670,22 +688,24 @@ export class AgentLoop {
             const response = await callMasterBrainWithRetry(
               'MB Checkpoint',
               () =>
-                invoke<LLMResponseWithTools>('llm_chat_with_tools', {
-                  request: {
-                    messages: this.sanitizeMessagesForIpc(messages),
-                    modelId: this.config.modelId,
-                    providerId: this.config.providerId,
-                    baseUrl: this.config.baseUrl,
-                    supportsVision: modelSupportsVision(
-                      this.config.modelId ?? '',
-                      this.config.providerId
-                    ),
-                    tools: [], // Checkpoint 评估不使用工具
-                    maxTokens: options.maxTokens ?? 4096,
-                    temperature: options.temperature,
-                  },
-                  sessionId: this.currentSessionId,
-                }),
+                this.invokeMasterBrainWithContextUsage(messages, 'checkpoint', () =>
+                  invoke<LLMResponseWithTools>('llm_chat_with_tools', {
+                    request: {
+                      messages: this.sanitizeMessagesForIpc(messages),
+                      modelId: this.config.modelId,
+                      providerId: this.config.providerId,
+                      baseUrl: this.config.baseUrl,
+                      supportsVision: modelSupportsVision(
+                        this.config.modelId ?? '',
+                        this.config.providerId
+                      ),
+                      tools: [], // Checkpoint 评估不使用工具
+                      maxTokens: options.maxTokens ?? 4096,
+                      temperature: options.temperature,
+                    },
+                    sessionId: this.currentSessionId,
+                  })
+                ),
               retryErrorFromToolResponse
             );
 
@@ -1256,22 +1276,24 @@ export class AgentLoop {
             callMasterBrainWithRetry(
               'MB non-stream',
               () =>
-                invoke<LLMResponseWithTools>('llm_chat_with_tools', {
-                  request: {
-                    messages: this.sanitizeMessagesForIpc(messagesForCall),
-                    modelId: this.config.modelId,
-                    providerId: this.config.providerId,
-                    baseUrl: this.config.baseUrl,
-                    supportsVision: modelSupportsVision(
-                      this.config.modelId ?? '',
-                      this.config.providerId
-                    ),
-                    tools: [], // MasterBrain 决策不使用工具
-                    maxTokens: activeTransportMaxTokens,
-                    temperature: options?.temperature,
-                  },
-                  sessionId: this.currentSessionId,
-                }),
+                this.invokeMasterBrainWithContextUsage(messagesForCall, 'master-brain', () =>
+                  invoke<LLMResponseWithTools>('llm_chat_with_tools', {
+                    request: {
+                      messages: this.sanitizeMessagesForIpc(messagesForCall),
+                      modelId: this.config.modelId,
+                      providerId: this.config.providerId,
+                      baseUrl: this.config.baseUrl,
+                      supportsVision: modelSupportsVision(
+                        this.config.modelId ?? '',
+                        this.config.providerId
+                      ),
+                      tools: [], // MasterBrain 决策不使用工具
+                      maxTokens: activeTransportMaxTokens,
+                      temperature: options?.temperature,
+                    },
+                    sessionId: this.currentSessionId,
+                  })
+                ),
               retryErrorFromToolResponse
             );
           const applyTransportFallback = (error: unknown): boolean => {
@@ -1480,6 +1502,88 @@ export class AgentLoop {
         }
       },
     };
+  }
+
+  private beginPlanningContextUsage(
+    messages: AgentLoopLLMMessage[],
+    purpose: PlanningContextPurpose,
+    callId: string,
+    tools?: unknown
+  ): ActivePlanningContextUsage | null {
+    // Only Task mode supplies tokenContextId explicitly. Background planning callers
+    // such as Skill Audit must not overwrite the foreground task's Current Context.
+    const contextId = this.config.tokenContextId;
+    if (!contextId) return null;
+
+    const estimatedInputTokens = estimateRequestTokens(
+      messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+        images: Array.isArray(message.images) ? message.images : undefined,
+      })),
+      { tools }
+    );
+    useStatusStore.getState().beginContextUsage(contextId, {
+      callId,
+      currentInputTokens: estimatedInputTokens,
+      currentOutputTokens: 0,
+      contextWindowSize: getContextWindowSize(this.config.modelId ?? '', this.config.providerId),
+      purpose,
+      providerId: this.config.providerId,
+      modelId: this.config.modelId,
+    });
+
+    return { contextId, callId, estimatedInputTokens };
+  }
+
+  private updatePlanningContextUsage(
+    activeUsage: ActivePlanningContextUsage | null,
+    patch: { currentInputTokens?: number; currentOutputTokens?: number }
+  ): void {
+    if (!activeUsage) return;
+    useStatusStore.getState().updateContextUsage(activeUsage.contextId, activeUsage.callId, patch);
+  }
+
+  private completePlanningContextUsage(
+    activeUsage: ActivePlanningContextUsage | null,
+    response: {
+      content?: string;
+      reasoningContent?: string;
+      toolCalls?: ToolCall[];
+      inputTokens?: number;
+      outputTokens?: number;
+    } = {}
+  ): void {
+    if (!activeUsage) return;
+
+    const currentInputTokens =
+      normalizeReportedTokenCount(response.inputTokens) ?? activeUsage.estimatedInputTokens;
+    const currentOutputTokens =
+      normalizeReportedTokenCount(response.outputTokens) ?? estimateGeneratedTokens(response);
+    useStatusStore.getState().completeContextUsage(activeUsage.contextId, activeUsage.callId, {
+      currentInputTokens,
+      currentOutputTokens,
+    });
+  }
+
+  private async invokeMasterBrainWithContextUsage(
+    messages: AgentLoopLLMMessage[],
+    purpose: PlanningContextPurpose,
+    invokeCall: () => Promise<LLMResponseWithTools>
+  ): Promise<LLMResponseWithTools> {
+    const callId = `planning-${purpose}-${crypto.randomUUID()}`;
+    const activeUsage = this.beginPlanningContextUsage(messages, purpose, callId, []);
+
+    try {
+      const response = await invokeCall();
+      this.completePlanningContextUsage(activeUsage, response);
+      return response;
+    } catch (error) {
+      // Preserve Last Context between retries/tool execution. The outer Planning
+      // finally remains responsible for clearing it when the task truly ends.
+      this.completePlanningContextUsage(activeUsage);
+      throw error;
+    }
   }
 
   private countMessagesWithImages(messages: AgentLoopLLMMessage[]): number {
@@ -1953,6 +2057,32 @@ export class AgentLoop {
       let pendingReasoningTraceContent = false;
       let streamDisplayFlushTimer: ReturnType<typeof setTimeout> | null = null;
       let pendingStreamDisplayContent: string | null = null;
+      let activeContextUsage: ActivePlanningContextUsage | null = null;
+      let contextReasoningContent = '';
+      let reportedInputTokens: number | undefined;
+      let reportedOutputTokens: number | undefined;
+      let contextUsageFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const flushContextUsage = () => {
+        if (contextUsageFlushTimer) {
+          clearTimeout(contextUsageFlushTimer);
+          contextUsageFlushTimer = null;
+        }
+        this.updatePlanningContextUsage(activeContextUsage, {
+          ...(reportedInputTokens !== undefined ? { currentInputTokens: reportedInputTokens } : {}),
+          currentOutputTokens:
+            reportedOutputTokens ??
+            estimateGeneratedTokens({
+              content: deltaContent,
+              reasoningContent: contextReasoningContent,
+            }),
+        });
+      };
+
+      const scheduleContextUsage = () => {
+        if (!activeContextUsage || contextUsageFlushTimer) return;
+        contextUsageFlushTimer = setTimeout(flushContextUsage, MB_STREAM_UI_FLUSH_INTERVAL_MS);
+      };
 
       const clearReasoningTraceFlushTimer = () => {
         if (reasoningTraceFlushTimer) {
@@ -2041,6 +2171,10 @@ export class AgentLoop {
         }
         clearReasoningTraceFlushTimer();
         clearStreamDisplayFlushTimer();
+        if (contextUsageFlushTimer) {
+          clearTimeout(contextUsageFlushTimer);
+          contextUsageFlushTimer = null;
+        }
         pendingReasoningTraceContent = false;
         pendingStreamDisplayContent = null;
         unlistenFn?.();
@@ -2051,6 +2185,12 @@ export class AgentLoop {
         if (settled) return;
         emitReasoningTraceComplete();
         settled = true;
+        this.completePlanningContextUsage(activeContextUsage, {
+          content: deltaContent,
+          reasoningContent: contextReasoningContent,
+          inputTokens: reportedInputTokens,
+          outputTokens: reportedOutputTokens,
+        });
         cleanup();
         reject(error);
       };
@@ -2059,6 +2199,12 @@ export class AgentLoop {
         if (settled) return;
         emitReasoningTraceComplete();
         settled = true;
+        this.completePlanningContextUsage(activeContextUsage, {
+          content,
+          reasoningContent: contextReasoningContent,
+          inputTokens: reportedInputTokens,
+          outputTokens: reportedOutputTokens,
+        });
         cleanup();
         resolve(content);
       };
@@ -2193,6 +2339,11 @@ export class AgentLoop {
           return;
         }
 
+        const eventInputTokens = normalizeReportedTokenCount(event.payload.inputTokens);
+        const eventOutputTokens = normalizeReportedTokenCount(event.payload.outputTokens);
+        if (eventInputTokens !== undefined) reportedInputTokens = eventInputTokens;
+        if (eventOutputTokens !== undefined) reportedOutputTokens = eventOutputTokens;
+
         const eventNow = Date.now();
         if (event.payload.delta) {
           reasoningGuard.noteFinalDelta(event.payload.delta, eventNow);
@@ -2200,6 +2351,7 @@ export class AgentLoop {
 
         let reasoningResult: MbReasoningGuardResult | null = null;
         if (event.payload.reasoning) {
+          contextReasoningContent += event.payload.reasoning;
           reasoningResult = reasoningGuard.appendReasoning(event.payload.reasoning, eventNow);
           reasoningTracePreview = this.formatMbReasoningPreview(reasoningGuard.getPreview());
 
@@ -2217,6 +2369,8 @@ export class AgentLoop {
           finalDecisionTokenCounter.append(event.payload.delta);
           emitReasoningTraceComplete();
         }
+
+        scheduleContextUsage();
 
         if (reasoningResult && handleReasoningGuardResult(reasoningResult, event.payload.done)) {
           return;
@@ -2357,6 +2511,11 @@ export class AgentLoop {
           }
 
           // 发起流式 LLM 调用
+          activeContextUsage = this.beginPlanningContextUsage(
+            messages,
+            'master-brain',
+            streamAttemptId
+          );
           invoke('llm_chat_stream', {
             request,
             sessionId: streamSessionId,

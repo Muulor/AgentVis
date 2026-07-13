@@ -1,9 +1,9 @@
 /**
  * StatusBar 底部状态栏
  *
- * 显示三类状态信息：
+ * 显示状态信息：
  * 1. 当前 Agent 使用的模型（无当前 Agent 时显示未配置）
- * 2. Token 使用情况（从 ContextWindowManager 估算）
+ * 2. 前台 LLM 当前或最近一次调用的上下文用量（任务忙碌时）
  * 3. 记忆系统状态（水位线触发/整理状态）
  */
 
@@ -20,9 +20,6 @@ import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 
 import styles from './StatusBar.module.css';
-
-/** Zustand selector 的稳定引用默认值（避免每次创建新对象导致无限重渲染） */
-const DEFAULT_TOKEN_USAGE = { inputTokens: 0, outputTokens: 0 };
 
 /**
  * 格式化 token 数量显示
@@ -63,16 +60,7 @@ export function StatusBar() {
   const connectionStates = useImChannelStore((s) => s.connectionStates);
   const imConnectedCount = Object.values(connectionStates).filter((s) => s.isConnected).length;
 
-  // 当前上下文的累积 Token 用量
-  // 优先使用 activeTokenContextId（由 AgentChatView/HubChatView 设置），
-  // 解决 Hub 视图下 currentAgentId 为 null 导致无法显示 token 的问题
-  const tokenUsage = useStatusStore((s) => {
-    return activeTokenContextId
-      ? (s.tokenUsageByAgent[activeTokenContextId] ?? DEFAULT_TOKEN_USAGE)
-      : DEFAULT_TOKEN_USAGE;
-  });
-
-  // 当前上下文的实时上下文压力（仅 LLM 调用时有值）
+  // 当前上下文正在进行或最近完成的调用用量
   const contextPressure = useStatusStore((s) => {
     return activeTokenContextId ? (s.contextPressureByAgent[activeTokenContextId] ?? null) : null;
   });
@@ -82,8 +70,14 @@ export function StatusBar() {
         (s.streamingByContext.get(activeTokenContextId)?.isStreaming ?? false)
       : false
   );
-  const visibleContextPressure =
-    isActiveTokenContextBusy && contextPressure?.currentInputTokens ? contextPressure : null;
+  const visibleContextPressure = isActiveTokenContextBusy ? contextPressure : null;
+  const visibleContextTokens = visibleContextPressure
+    ? visibleContextPressure.currentInputTokens + visibleContextPressure.currentOutputTokens
+    : 0;
+  const visibleContextRatio =
+    visibleContextPressure && visibleContextPressure.contextWindowSize > 0
+      ? visibleContextTokens / visibleContextPressure.contextWindowSize
+      : 0;
 
   // 检查当前 Provider 的 API Key 配置状态
   const currentProvider = currentAgent?.modelProvider ?? (currentAgent ? defaultProvider : '');
@@ -213,31 +207,40 @@ export function StatusBar() {
 
       <div className={styles.divider} />
 
-      {/* 第二类目：实时上下文压力（仅活跃 LLM 调用时显示） */}
+      {/* 第二类目：当前或最近一次调用的上下文用量（仅任务忙碌时显示） */}
       {visibleContextPressure && (
         <>
           <Tooltip
-            content={t('layout.currentLlmInputTitle', {
-              input: visibleContextPressure.currentInputTokens,
-              window: visibleContextPressure.contextWindowSize,
-            })}
+            multiline
+            content={t(
+              visibleContextPressure.phase === 'active'
+                ? 'layout.currentContextUsageTitle'
+                : 'layout.lastContextUsageTitle',
+              {
+                input: visibleContextPressure.currentInputTokens,
+                output: visibleContextPressure.currentOutputTokens,
+                window: visibleContextPressure.contextWindowSize,
+              }
+            )}
           >
             <div className={styles.section}>
               <span
                 className={styles.label}
                 data-pressure={
-                  visibleContextPressure.currentInputTokens /
-                    visibleContextPressure.contextWindowSize >
-                  0.95
+                  visibleContextRatio > 0.95
                     ? 'critical'
-                    : visibleContextPressure.currentInputTokens /
-                          visibleContextPressure.contextWindowSize >
-                        0.8
+                    : visibleContextRatio > 0.8
                       ? 'warning'
                       : 'normal'
                 }
               >
-                ContextUsage: ⬇ {formatTokenCount(visibleContextPressure.currentInputTokens)}/
+                {t(
+                  visibleContextPressure.phase === 'active'
+                    ? 'layout.currentContextUsageLabel'
+                    : 'layout.lastContextUsageLabel'
+                )}
+                : ≈ ↓ {formatTokenCount(visibleContextPressure.currentInputTokens)} + ↑{' '}
+                {formatTokenCount(visibleContextPressure.currentOutputTokens)} /{' '}
                 {formatTokenCount(visibleContextPressure.contextWindowSize)}
               </span>
             </div>
@@ -246,23 +249,6 @@ export function StatusBar() {
           <div className={styles.divider} />
         </>
       )}
-
-      {/* 第三类目：累积 Token 花费（Input + Output） */}
-      <Tooltip
-        content={t('layout.tokenUsageTitle', {
-          input: tokenUsage.inputTokens,
-          output: tokenUsage.outputTokens,
-        })}
-      >
-        <div className={styles.section}>
-          <span className={styles.label}>
-            Est.TotalIn: {formatTokenCount(tokenUsage.inputTokens)} / Est.TotalOut:{' '}
-            {formatTokenCount(tokenUsage.outputTokens)}
-          </span>
-        </div>
-      </Tooltip>
-
-      <div className={styles.divider} />
 
       {/* 第三类目：记忆/Planning 状态 */}
       <div className={styles.section}>{getThirdSectionContent()}</div>

@@ -674,14 +674,18 @@ export function getProviderDisplayName(providerId: string): string {
  * 获取模型的上下文窗口大小
  *
  * 查找注册表中的 contextWindow 值。
- * 同一模型 ID 可能存在于多个供应商中，
- * 返回第一个匹配的 contextWindow（通常相同）。
+ * 同一模型 ID 可能存在于多个供应商中。调用方提供 providerId 时，
+ * 仅使用完整路由匹配，避免把其他供应商的同名模型窗口用于当前调用。
  *
  * @param modelId - 模型 ID
+ * @param providerId - 可选供应商 ID；已知实际路由时应始终传入
  * @returns 上下文窗口大小 (tokens)；未找到时返回默认值 128000
  */
-export function getContextWindowSize(modelId: string): number {
-  const model = getMergedModels().find((m) => m.id === modelId);
+export function getContextWindowSize(modelId: string, providerId?: string): number {
+  const models = getMergedModels();
+  const model = providerId
+    ? models.find((m) => m.id === modelId && m.providerId === providerId)
+    : models.find((m) => m.id === modelId);
   return model?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
 }
 

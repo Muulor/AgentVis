@@ -358,4 +358,10 @@ export interface LLMResponseWithTools {
   error?: string;
   /** Provider 返回的完成原因（如 stop、length、max_tokens、MAX_TOKENS） */
   finishReason?: string;
+  /** Provider 返回的输入 token 数。 */
+  inputTokens?: number;
+  /** Provider 返回的输出 token 数。 */
+  outputTokens?: number;
+  /** Provider 返回的推理内容（若可用）。 */
+  reasoningContent?: string;
 }

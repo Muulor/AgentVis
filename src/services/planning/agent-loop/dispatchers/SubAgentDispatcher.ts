@@ -17,7 +17,7 @@ import {
   type ToolExecutionResult,
   type VisionFallbackMode,
 } from '../callers/SubAgentLLMCaller';
-import { MODEL_CONTEXT_WINDOWS } from '../../ContextWindowManager';
+import { getContextWindowSize } from '@/config/modelRegistry';
 import type { AgentSession } from '../AgentSession';
 import type { AgentLoopCallbacks } from '../types';
 import type {
@@ -150,6 +150,9 @@ export class SubAgentDispatcher {
     const runnerContextId = config.tokenContextId ?? config.agentId;
     if (runnerContextId) {
       this.runner.setContextId(runnerContextId);
+    }
+    if (config.tokenContextId) {
+      this.runner.setTokenContextId(config.tokenContextId);
     }
     // 实时观测：将 UI 层回调传递给 Runner
     if (callbacks.onSubAgentObservation) {
@@ -578,9 +581,7 @@ export class SubAgentDispatcher {
       .slice(-3);
 
     // 获取模型总上下文窗口（用于 SA 内部阈值计算和 Artifact 快照预算）
-    const modelKey = this.config.modelId || 'default';
-    const totalTokens =
-      MODEL_CONTEXT_WINDOWS[modelKey] ?? MODEL_CONTEXT_WINDOWS['default'] ?? 128000;
+    const totalTokens = getContextWindowSize(this.config.modelId, this.config.providerId);
 
     // 从 Artifact Store 获取前序 SA 的中间成果快照
     // Artifact 预算 = 总窗口的 15%（SA 总结文字体量远小于此上限，留足余量）

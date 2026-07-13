@@ -101,3 +101,18 @@ WebView 大型参数暂存仅在模型生成和解析之后发生。截断的工
 - OpenAI、Anthropic 和 Gemini 工具路径的服务商完成原因传递；
 - 被截断的工具响应零文件写入；
 - 共享推理注册表路由解析为实际的内置服务商/模型对。
+
+## 8. StatusBar Current Context
+
+StatusBar 的 Token 指标是上下文容量提示，不是服务商账单或成本统计。Session Usage 在统一调用账本完成前不对用户展示；实际用量和费用以服务商控制台为准。
+
+Current Context 仅跟踪当前可见 Agent/Hub Task 明确归属的前台 LLM 调用：Chat、Master Brain、Checkpoint 和 Sub-Agent。后台 Memory、Visual Enhancer、Skill Audit、Embedding、Rerank 以及媒体生成调用不得覆盖当前窗口的上下文状态。
+
+显示生命周期如下：
+
+- 调用发起后显示 `Current Context`；输入基于最终请求中的 messages（含历史工具调用与推理内容）、协议字段、工具 Schema 和图片数量进行统一估算。
+- 流式生成期间，输出包含可见正文、可获得的推理内容和大型工具参数进度，并以节流后的频率更新；完成后也计入工具调用参数。
+- 调用完成而 Task 仍在执行工具或调度下一步时显示 `Last Context`。
+- Task 结束、取消后进入空闲状态时隐藏；旧调用必须通过 `callId` 保护，不能覆盖或清除较新的调用。
+
+主显示口径为 `input + output / contextWindow`。服务商返回基础 usage 时可在完成阶段修正估算；缺失时继续使用应用统一估算。图片不得按 base64 字符长度换算，使用与供应商无关的固定媒体回退值。`contextWindow` 必须按实际 `providerId + modelId` 路由解析，不能借用其他供应商的同名模型配置。

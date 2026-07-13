@@ -38,17 +38,18 @@ import {
   buildChatHistoricalAttachmentContext,
   getChatHistoricalMessageAttachments,
 } from './chatAttachmentContext';
+import { selectChatHistoryMessages } from './useChatSenderContext';
 import { serializeQuotesForMessage } from '@utils/quoteContent';
 import { modelSupportsVision } from '@/config/modelRegistry';
 import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
+import {
+  estimateGeneratedTokens,
+  estimateRequestTokens,
+  normalizeReportedTokenCount,
+} from '@services/llm/tokenEstimator';
 
 const logger = getLogger('useChatSender');
-const CHARS_PER_TOKEN_ESTIMATE = 2.5;
 const STREAM_UI_FLUSH_INTERVAL_MS = 64;
-
-function getPositiveTokenCount(value: number | undefined): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
-}
 
 // ============================================================================
 // 类型定义
@@ -316,7 +317,9 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
       } = sendOptions ?? {};
 
       sendingContextsRef.current.add(contextId);
+      useStatusStore.getState().clearContextPressure(contextId);
       startSending(contextId);
+      let currentContextCallId: string | null = null;
 
       // 获取 chatStore 流式操作方法
       const { startStreaming, appendStreamingContent, appendStreamingReasoning, finishStreaming } =
@@ -614,100 +617,98 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           content: string;
           createdAt?: number;
           images?: Array<{ mime_type: string; data: string }>;
-        }> = currentMessages
-          .filter((m: { role: string }) => m.role !== 'system')
-          .map(
-            (m: {
-              id?: string;
-              role: string;
-              content: string;
-              createdAt?: number;
-              metadata?: Message['metadata'];
-            }) => {
-              let effectiveContent = m.content;
+        }> = selectChatHistoryMessages(currentMessages, userMessageId).map(
+          (m: {
+            id?: string;
+            role: string;
+            content: string;
+            createdAt?: number;
+            metadata?: Message['metadata'];
+          }) => {
+            let effectiveContent = m.content;
 
-              if (m.role === 'user' && m.id !== userMessageId && m.metadata) {
-                const historicalAttachmentContext = buildChatHistoricalAttachmentContext(
-                  getChatHistoricalMessageAttachments(m.metadata),
-                  effectiveContent,
-                  t
+            if (m.role === 'user' && m.id !== userMessageId && m.metadata) {
+              const historicalAttachmentContext = buildChatHistoricalAttachmentContext(
+                getChatHistoricalMessageAttachments(m.metadata),
+                effectiveContent,
+                t
+              );
+              if (historicalAttachmentContext) {
+                effectiveContent = `${historicalAttachmentContext}\n\n${effectiveContent}`;
+              }
+            }
+
+            // assistant 消息中的 AI 生成图片：提取后替换为占位符
+            if (m.role === 'assistant' && effectiveContent.includes('](data:image/')) {
+              const { cleanedContent, images } = extractGeneratedImages(effectiveContent);
+              if (images.length > 0 && supportsVisionInput) {
+                historyImages.push(...images);
+                logger.trace('[useChatSender] 从历史消息提取生成图片:', images.length, '张');
+              }
+              return { role: m.role, content: cleanedContent, createdAt: m.createdAt };
+            }
+
+            // 历史 user 消息的图片附件恢复：
+            // 图片绑定原始消息而非合并到最新消息，避免跨话题时注入无关图片噪音
+            if (supportsVisionInput && m.role === 'user' && m.metadata) {
+              const attachmentsList = (
+                m.metadata as {
+                  attachments?: Array<{
+                    type: string;
+                    base64Data?: string;
+                    fileExtension?: string;
+                  }>;
+                }
+              ).attachments;
+              if (attachmentsList) {
+                const imgAttachments = attachmentsList.filter(
+                  (a) => a.type === 'image' && a.base64Data
                 );
-                if (historicalAttachmentContext) {
-                  effectiveContent = `${historicalAttachmentContext}\n\n${effectiveContent}`;
-                }
-              }
-
-              // assistant 消息中的 AI 生成图片：提取后替换为占位符
-              if (m.role === 'assistant' && effectiveContent.includes('](data:image/')) {
-                const { cleanedContent, images } = extractGeneratedImages(effectiveContent);
-                if (images.length > 0 && supportsVisionInput) {
-                  historyImages.push(...images);
-                  logger.trace('[useChatSender] 从历史消息提取生成图片:', images.length, '张');
-                }
-                return { role: m.role, content: cleanedContent, createdAt: m.createdAt };
-              }
-
-              // 历史 user 消息的图片附件恢复：
-              // 图片绑定原始消息而非合并到最新消息，避免跨话题时注入无关图片噪音
-              if (supportsVisionInput && m.role === 'user' && m.metadata) {
-                const attachmentsList = (
-                  m.metadata as {
-                    attachments?: Array<{
-                      type: string;
-                      base64Data?: string;
-                      fileExtension?: string;
-                    }>;
-                  }
-                ).attachments;
-                if (attachmentsList) {
-                  const imgAttachments = attachmentsList.filter(
-                    (a) => a.type === 'image' && a.base64Data
+                if (imgAttachments.length > 0) {
+                  const restoredImages = imgAttachments.flatMap((img) => {
+                    if (!img.base64Data) return [];
+                    let base64 = img.base64Data;
+                    const match = base64.match(/^data:([^;]+);base64,(.+)$/);
+                    if (match?.[2]) base64 = match[2];
+                    const ext = img.fileExtension ?? 'webp';
+                    return [
+                      {
+                        mime_type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+                        data: base64,
+                      },
+                    ];
+                  });
+                  logger.trace(
+                    '[useChatSender] 🖼️ 恢复历史 user 消息图片:',
+                    restoredImages.length,
+                    '张'
                   );
-                  if (imgAttachments.length > 0) {
-                    const restoredImages = imgAttachments.flatMap((img) => {
-                      if (!img.base64Data) return [];
-                      let base64 = img.base64Data;
-                      const match = base64.match(/^data:([^;]+);base64,(.+)$/);
-                      if (match?.[2]) base64 = match[2];
-                      const ext = img.fileExtension ?? 'webp';
-                      return [
-                        {
-                          mime_type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
-                          data: base64,
-                        },
-                      ];
-                    });
-                    logger.trace(
-                      '[useChatSender] 🖼️ 恢复历史 user 消息图片:',
-                      restoredImages.length,
-                      '张'
-                    );
-                    return {
-                      role: m.role,
-                      content: effectiveContent,
-                      createdAt: m.createdAt,
-                      images: restoredImages,
-                    };
-                  }
-                }
-              }
-
-              // 恢复上一轮 Planning assistant 通过 generate_image 生成的最后一张图片（跨模式短期图片感知）
-              if (supportsVisionInput && m.role === 'assistant' && m.metadata) {
-                const genImages = (m.metadata as { generatedImages?: string[] }).generatedImages;
-                if (genImages && genImages.length > 0) {
                   return {
                     role: m.role,
                     content: effectiveContent,
                     createdAt: m.createdAt,
-                    _pendingImagePaths: genImages,
+                    images: restoredImages,
                   };
                 }
               }
-
-              return { role: m.role, content: effectiveContent, createdAt: m.createdAt };
             }
-          );
+
+            // 恢复上一轮 Planning assistant 通过 generate_image 生成的最后一张图片（跨模式短期图片感知）
+            if (supportsVisionInput && m.role === 'assistant' && m.metadata) {
+              const genImages = (m.metadata as { generatedImages?: string[] }).generatedImages;
+              if (genImages && genImages.length > 0) {
+                return {
+                  role: m.role,
+                  content: effectiveContent,
+                  createdAt: m.createdAt,
+                  _pendingImagePaths: genImages,
+                };
+              }
+            }
+
+            return { role: m.role, content: effectiveContent, createdAt: m.createdAt };
+          }
+        );
 
         // 异步解析 assistant 消息标记的生成图片路径为 base64
         // 后端只处理 user 消息的 images，因此拆分为 assistant 文本 + user 图片消息
@@ -801,7 +802,17 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           identityPrompt,
           effectiveModel,
           contextLayers,
-          HISTORY_CONFIG.CHAT_MODE_MAX_HISTORY_ROUNDS
+          HISTORY_CONFIG.CHAT_MODE_MAX_HISTORY_ROUNDS,
+          estimateRequestTokens([
+            {
+              role: 'user',
+              content,
+              images: supportsVisionInput
+                ? Array.from({ length: imageAttachments.length + historyImages.length })
+                : undefined,
+            },
+          ]),
+          effectiveProvider
         );
 
         logger.trace(
@@ -875,6 +886,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
 
         // ====== 步骤 3: 流式 LLM 调用 ======
         const sessionId = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        currentContextCallId = sessionId;
 
         // 注册 sessionId 和 AbortController 到 chatStore（用于取消信号传递）
         const abortController = new AbortController();
@@ -889,6 +901,19 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         let pendingContentDelta = '';
         let pendingReasoningDelta = '';
         let streamFlushTimer: number | null = null;
+        const estimatedInputTokens = estimateRequestTokens(messages);
+        const { getContextWindowSize } = await import('@/config/modelRegistry');
+        const contextWindow = getContextWindowSize(effectiveModel, effectiveProvider);
+
+        useStatusStore.getState().beginContextUsage(contextId, {
+          callId: sessionId,
+          currentInputTokens: estimatedInputTokens,
+          currentOutputTokens: 0,
+          contextWindowSize: contextWindow,
+          purpose: 'chat',
+          providerId: effectiveProvider,
+          modelId: effectiveModel,
+        });
 
         const clearStreamFlushTimer = () => {
           if (streamFlushTimer !== null) {
@@ -917,6 +942,15 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
 
           if (reasoningDelta) {
             appendStreamingReasoning(contextId, reasoningDelta);
+          }
+
+          if (contentDelta || reasoningDelta) {
+            useStatusStore.getState().updateContextUsage(contextId, sessionId, {
+              currentOutputTokens: estimateGeneratedTokens({
+                content: accumulatedContent,
+                reasoningContent: accumulatedReasoning,
+              }),
+            });
           }
         };
 
@@ -977,17 +1011,23 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           if (event.payload.done) {
             flushStreamingDeltas();
 
-            const inputChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-            const estimatedInput = Math.ceil(inputChars / CHARS_PER_TOKEN_ESTIMATE);
-            const estimatedOutput = Math.ceil(accumulatedContent.length / CHARS_PER_TOKEN_ESTIMATE);
-            const inputTokens = getPositiveTokenCount(event.payload.inputTokens) ?? estimatedInput;
-            const outputTokens =
-              getPositiveTokenCount(event.payload.outputTokens) ?? estimatedOutput;
-            const hasApiUsage =
-              getPositiveTokenCount(event.payload.inputTokens) !== undefined ||
-              getPositiveTokenCount(event.payload.outputTokens) !== undefined;
+            const estimatedOutput = estimateGeneratedTokens({
+              content: accumulatedContent,
+              reasoningContent: accumulatedReasoning,
+            });
+            const reportedInput = normalizeReportedTokenCount(event.payload.inputTokens);
+            const reportedOutput = normalizeReportedTokenCount(event.payload.outputTokens);
+            const inputTokens = reportedInput ?? estimatedInputTokens;
+            const outputTokens = reportedOutput ?? estimatedOutput;
+            const hasApiUsage = reportedInput !== undefined || reportedOutput !== undefined;
+
+            useStatusStore.getState().completeContextUsage(contextId, sessionId, {
+              currentInputTokens: inputTokens,
+              currentOutputTokens: outputTokens,
+            });
 
             if (hasApiUsage || accumulatedContent.length > 0 || accumulatedReasoning.length > 0) {
+              // eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO(token-usage-ledger): 保留旧累计直到账本接管。
               useStatusStore.getState().addTokenUsage(contextId, inputTokens, outputTokens);
             }
           }
@@ -1002,20 +1042,6 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           sessionId,
           messageCount: messages.length,
         });
-
-        // 设置实时上下文压力指示器（基于字符数估算，待 API 返回后替换为精确值）
-        try {
-          const { getContextWindowSize } = await import('@/config/modelRegistry');
-          const contextWindow = getContextWindowSize(effectiveModel);
-          // 简化估算：中文约 1.5 字符/token，英文约 4 字符/token，取混合平均 ~2.5
-          const totalChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-          const estimatedInputTokens = Math.ceil(totalChars / CHARS_PER_TOKEN_ESTIMATE);
-          useStatusStore
-            .getState()
-            .setContextPressure(contextId, estimatedInputTokens, contextWindow);
-        } catch {
-          // 上下文压力设置失败不影响主流程
-        }
 
         // 打印完整 System Prompt 便于调试时间注入效果
         const systemMessages = messages.filter((m) => m.role === 'system');
@@ -1241,9 +1267,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           finishStreaming(contextId);
         }
 
-        // Token 统计已在 stream-chunk done 事件中通过 addTokenUsage 完成
-        // 清除上下文压力指示器（LLM 调用已结束）
-        useStatusStore.getState().clearContextPressure(contextId);
+        // Legacy Session Usage accumulation happens in the stream done event.
       } catch (error) {
         logger.error('[useChatSender] 发送失败:', error);
         useChatStore.getState().finishStreaming(contextId);
@@ -1256,6 +1280,9 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         useStatusStore.getState().setModelStatus('error');
       } finally {
         if (contextId) {
+          if (currentContextCallId) {
+            useStatusStore.getState().clearContextPressure(contextId, currentContextCallId);
+          }
           sendingContextsRef.current.delete(contextId);
           finishSending(contextId);
         }

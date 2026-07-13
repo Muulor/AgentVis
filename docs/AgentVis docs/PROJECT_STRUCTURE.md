@@ -403,6 +403,7 @@ hooks/
 ├── chatAttachmentContext.ts      # Chat 模式附件上下文辅助函数
 ├── useChatSender.ts              # Chat 模式消息发送 Hook
 ├── useChatSenderPrompt.ts        # Chat 模式Prompt Hook
+├── useChatSenderContext.ts
 ├── usePlanningMode.ts            # Task 模式消息发送 Hook（内部 planning）
 ├── useDataLoader.ts              # 数据加载 Hook（Hub/Agent 初始化）
 └── useTheme.ts                   # 主题切换 Hook
@@ -604,6 +605,7 @@ llm/
 ├── index.ts                      # 模块导出索引
 ├── types.ts                      # LLM 类型定义
 ├── LlmService.ts                 # LLM 统一调用服务
+├── tokenEstimator.ts             # 用于 StatusBar tokens 估算方法
 ├── LlmTokenPolicy.ts             # 按调用场景集中定义输出 token 预算与兼容降级
 └── 📁 __tests__/
     ├── LlmService.test.ts        # Tauri request/response DTO 合约测试

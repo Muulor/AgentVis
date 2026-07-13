@@ -28,7 +28,7 @@ export interface DocumentProgress {
   fileName: string;
 }
 
-/** 单个 Agent 的累积 Token 用量（应用重启自动清零） */
+/** TODO(token-usage-ledger): 迁移到统一调用账本后移除 Session 累计类型。 */
 export interface AgentTokenUsage {
   /** 累积输入 token 总和（所有 LLM 调用的 input_tokens） */
   inputTokens: number;
@@ -36,21 +36,49 @@ export interface AgentTokenUsage {
   outputTokens: number;
 }
 
-/** 实时上下文压力（当前 LLM 调用的 input 占上下文窗口比例） */
+export type ContextUsagePhase = 'active' | 'last';
+
+/** 当前或最近一次 LLM 调用的上下文用量。 */
 export interface ContextPressure {
-  /** 当前调用的 input token 数 */
+  /** 当前或最近一次调用的 input token 数 */
   currentInputTokens: number;
+  /** 当前或最近一次调用的 output token 数 */
+  currentOutputTokens: number;
   /** 模型上下文窗口大小 */
   contextWindowSize: number;
+  /** active 表示调用进行中，last 表示调用已完成但任务仍在继续。 */
+  phase: ContextUsagePhase;
+  /** 调用唯一 ID，用于阻止旧调用覆盖较新的上下文状态。 */
+  callId: string;
+  /** 调用用途，例如 chat、master-brain、sub-agent。 */
+  purpose?: string;
+  /** 调用使用的 Provider ID。 */
+  providerId?: string;
+  /** 调用使用的模型 ID。 */
+  modelId?: string;
 }
+
+/** 开始追踪一次上下文调用所需的数据。 */
+export interface BeginContextUsageData {
+  callId: string;
+  currentInputTokens?: number;
+  currentOutputTokens?: number;
+  contextWindowSize: number;
+  purpose?: string;
+  providerId?: string;
+  modelId?: string;
+}
+
+/** 调用进行中或完成时可更新的上下文字段。 */
+export type ContextUsagePatch = Partial<Omit<ContextPressure, 'phase' | 'callId'>>;
 
 /** 状态栏状态 */
 interface StatusState {
   // ══ Token 统计（双维度，按 Agent 隔离） ══
 
-  /** 累积 Token 用量（按 Agent 隔离） */
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除 Session 累计。 */
   tokenUsageByAgent: Record<string, AgentTokenUsage>;
-  /** 实时上下文压力（按 Agent 隔离，仅活跃 LLM 调用时有值） */
+  /** 当前或最近一次调用的上下文用量（按 Agent/Hub 上下文隔离） */
   contextPressureByAgent: Record<string, ContextPressure>;
 
   /**
@@ -80,13 +108,19 @@ interface StatusState {
 
   // ══ Token Actions ══
 
-  /** 累加一次 LLM 调用的 token 用量（来自 API usage 响应） */
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除 Session 累计。 */
   addTokenUsage: (agentId: string, inputTokens: number, outputTokens: number) => void;
-  /** 更新实时上下文压力（LLM 调用开始时） */
+  /** 开始追踪一次 LLM 调用的上下文用量。 */
+  beginContextUsage: (contextId: string, data: BeginContextUsageData) => void;
+  /** 更新仍在进行中的调用；callId 不匹配或调用已完成时忽略。 */
+  updateContextUsage: (contextId: string, callId: string, patch: ContextUsagePatch) => void;
+  /** 完成调用并保留 Last Context；callId 不匹配时忽略。 */
+  completeContextUsage: (contextId: string, callId: string, patch?: ContextUsagePatch) => void;
+  /** @deprecated 使用 beginContextUsage / updateContextUsage / completeContextUsage 代替。 */
   setContextPressure: (agentId: string, currentInput: number, windowSize: number) => void;
-  /** 清除实时上下文压力（LLM 调用结束时） */
-  clearContextPressure: (agentId: string) => void;
-  /** 获取指定 Agent 的累积 token 用量 */
+  /** 清除上下文用量；传入 callId 时仅清除匹配调用。 */
+  clearContextPressure: (contextId: string, callId?: string) => void;
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除 Session 累计。 */
   getAgentTokenUsage: (agentId: string) => AgentTokenUsage;
   /** 获取指定 Agent 的实时上下文压力（无则返回 null） */
   getContextPressure: (agentId: string) => ContextPressure | null;
@@ -95,13 +129,13 @@ interface StatusState {
 
   // ══ 兼容旧 Actions（逐步废弃） ══
 
-  /** @deprecated 使用 addTokenUsage 代替 */
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除。 */
   setTokenUsage: (agentId: string, used: number, total: number) => void;
-  /** @deprecated 使用 addTokenUsage 代替 */
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除。 */
   setTokenUsed: (agentId: string, used: number) => void;
-  /** @deprecated 使用 getAgentTokenUsage 代替 */
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除。 */
   getTokenUsed: (agentId: string) => number;
-  /** 重置指定 Agent 的 token 使用量 */
+  /** @deprecated TODO(token-usage-ledger): 迁移到统一调用账本后移除。 */
   resetTokenUsage: (agentId: string) => void;
 
   // ══ 其他 Actions ══
@@ -131,6 +165,7 @@ export const useStatusStore = create<StatusState>((set, get) => ({
 
   addTokenUsage: (agentId, inputTokens, outputTokens) =>
     set((state) => {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
       const existing = state.tokenUsageByAgent[agentId] ?? { inputTokens: 0, outputTokens: 0 };
       const newUsage: AgentTokenUsage = {
         inputTokens: existing.inputTokens + inputTokens,
@@ -139,9 +174,57 @@ export const useStatusStore = create<StatusState>((set, get) => ({
       // 同步更新旧接口的 tokenUsedByAgent（向后兼容）
       const totalUsed = newUsage.inputTokens + newUsage.outputTokens;
       return {
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
         tokenUsageByAgent: { ...state.tokenUsageByAgent, [agentId]: newUsage },
         // eslint-disable-next-line @typescript-eslint/no-deprecated
         tokenUsedByAgent: { ...state.tokenUsedByAgent, [agentId]: totalUsed },
+      };
+    }),
+
+  beginContextUsage: (contextId, data) =>
+    set((state) => ({
+      contextPressureByAgent: {
+        ...state.contextPressureByAgent,
+        [contextId]: {
+          currentInputTokens: data.currentInputTokens ?? 0,
+          currentOutputTokens: data.currentOutputTokens ?? 0,
+          contextWindowSize: data.contextWindowSize,
+          phase: 'active',
+          callId: data.callId,
+          ...(data.purpose !== undefined ? { purpose: data.purpose } : {}),
+          ...(data.providerId !== undefined ? { providerId: data.providerId } : {}),
+          ...(data.modelId !== undefined ? { modelId: data.modelId } : {}),
+        },
+      },
+    })),
+
+  updateContextUsage: (contextId, callId, patch) =>
+    set((state) => {
+      const existing = state.contextPressureByAgent[contextId];
+      if (existing?.callId !== callId || existing.phase !== 'active') {
+        return state;
+      }
+
+      return {
+        contextPressureByAgent: {
+          ...state.contextPressureByAgent,
+          [contextId]: { ...existing, ...patch, phase: 'active', callId },
+        },
+      };
+    }),
+
+  completeContextUsage: (contextId, callId, patch = {}) =>
+    set((state) => {
+      const existing = state.contextPressureByAgent[contextId];
+      if (existing?.callId !== callId) {
+        return state;
+      }
+
+      return {
+        contextPressureByAgent: {
+          ...state.contextPressureByAgent,
+          [contextId]: { ...existing, ...patch, phase: 'last', callId },
+        },
       };
     }),
 
@@ -149,18 +232,31 @@ export const useStatusStore = create<StatusState>((set, get) => ({
     set((state) => ({
       contextPressureByAgent: {
         ...state.contextPressureByAgent,
-        [agentId]: { currentInputTokens: currentInput, contextWindowSize: windowSize },
+        [agentId]: {
+          currentInputTokens: currentInput,
+          currentOutputTokens: 0,
+          contextWindowSize: windowSize,
+          phase: 'active',
+          callId: `legacy:${agentId}`,
+        },
       },
     })),
 
-  clearContextPressure: (agentId) =>
+  clearContextPressure: (contextId, callId) =>
     set((state) => {
-      const { [agentId]: _, ...rest } = state.contextPressureByAgent;
+      const existing = state.contextPressureByAgent[contextId];
+      if (!existing || (callId !== undefined && existing.callId !== callId)) {
+        return state;
+      }
+
+      const { [contextId]: _, ...rest } = state.contextPressureByAgent;
       return { contextPressureByAgent: rest };
     }),
 
-  getAgentTokenUsage: (agentId) =>
-    get().tokenUsageByAgent[agentId] ?? { inputTokens: 0, outputTokens: 0 },
+  getAgentTokenUsage: (agentId) => {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    return get().tokenUsageByAgent[agentId] ?? { inputTokens: 0, outputTokens: 0 };
+  },
 
   getContextPressure: (agentId) => get().contextPressureByAgent[agentId] ?? null,
 
@@ -184,6 +280,7 @@ export const useStatusStore = create<StatusState>((set, get) => ({
       // eslint-disable-next-line @typescript-eslint/no-deprecated
       tokenUsedByAgent: { ...state.tokenUsedByAgent, [agentId]: 0 },
       tokenUsageByAgent: {
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
         ...state.tokenUsageByAgent,
         [agentId]: { inputTokens: 0, outputTokens: 0 },
       },

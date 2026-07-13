@@ -310,8 +310,15 @@ export interface LLMCaller {
     persistedIntervention?: { message: string; stepsSinceIntervention: number },
     /** 流式工具调用参数接收进度（不包含参数正文） */
     onToolCallProgress?: (progress: ToolCallProgress) => void,
-    onReasoningTrace?: (progress: ReasoningTraceProgress) => void
+    onReasoningTrace?: (progress: ReasoningTraceProgress) => void,
+    /** 仅由前台 Task 模式显式传入；后台审计调用不得设置。 */
+    contextUsage?: LLMContextUsageOptions
   ): Promise<LLMResponse>;
+}
+
+export interface LLMContextUsageOptions {
+  contextId: string;
+  contextWindowSize: number;
 }
 
 export interface ToolCallProgress {
@@ -491,6 +498,8 @@ export class SubAgentRunner {
    * undefined 时跳过暂停检查（测试环境或未注入 contextId 的场景）。
    */
   private contextId?: string;
+  /** 前台 Task Current Context 的稳定归属；不从可变全局状态回退。 */
+  private tokenContextId?: string;
 
   constructor(llmCaller?: LLMCaller) {
     this.factory = new SubAgentFactory();
@@ -633,6 +642,11 @@ export class SubAgentRunner {
    */
   setContextId(contextId: string): void {
     this.contextId = contextId;
+  }
+
+  /** 绑定前台 Task 的 token 上下文；未显式绑定时不写 Current Context。 */
+  setTokenContextId(contextId: string): void {
+    this.tokenContextId = contextId;
   }
 
   /**
@@ -1406,7 +1420,13 @@ export class SubAgentRunner {
               }
             : undefined,
           onToolCallProgress,
-          onReasoningTrace
+          onReasoningTrace,
+          this.tokenContextId
+            ? {
+                contextId: this.tokenContextId,
+                contextWindowSize: this.contextWindowSize,
+              }
+            : undefined
         );
       } finally {
         if (slowDecisionTimer) {
@@ -1428,9 +1448,7 @@ export class SubAgentRunner {
       try {
         const { useStatusStore } = await import('@stores/statusStore');
         const statusState = useStatusStore.getState();
-        const tokenContextId =
-          this.contextId ??
-          (await import('@stores/agentStore')).useAgentStore.getState().currentAgentId;
+        const tokenContextId = this.tokenContextId;
         if (tokenContextId) {
           const estimatedOutput = this.estimateMessageTokens([
             {
@@ -1441,8 +1459,9 @@ export class SubAgentRunner {
           ]);
           const inputTokens = getPositiveTokenCount(response.inputTokens) ?? preCallTokens;
           const outputTokens = getPositiveTokenCount(response.outputTokens) ?? estimatedOutput;
+          // TODO(token-usage-ledger): 统一调用账本落地前保留旧的 Session 累计。
+          // eslint-disable-next-line @typescript-eslint/no-deprecated -- 保留旧累计直到账本接管。
           statusState.addTokenUsage(tokenContextId, inputTokens, outputTokens);
-          statusState.setContextPressure(tokenContextId, inputTokens, this.contextWindowSize);
         }
       } catch {
         // statusStore 访问失败不影响主流程

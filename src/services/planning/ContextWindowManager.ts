@@ -18,7 +18,7 @@
 
 import { PLANNING_CONSTANTS } from './PlanningConstants';
 import { formatTimestamp } from '@services/utils/TimeUtils';
-import { getContextWindowMap } from '@/config/modelRegistry';
+import { getContextWindowMap, getContextWindowSize } from '@/config/modelRegistry';
 
 import { getLogger } from '@services/logger';
 
@@ -273,14 +273,10 @@ export class ContextWindowManager {
    * 获取模型的预算配置
    *
    * @param modelId 模型 ID
+   * @param providerId 供应商 ID；提供时按完整路由解析同名模型
    */
-  getBudget(modelId?: string): ContextBudget {
-    // 获取模型的上下文窗口大小
-    const modelKey = modelId ?? 'default';
-    const totalTokens =
-      MODEL_CONTEXT_WINDOWS[modelKey] ??
-      MODEL_CONTEXT_WINDOWS['default'] ??
-      PLANNING_CONSTANTS.DEFAULT_CONTEXT_WINDOW;
+  getBudget(modelId?: string, providerId?: string): ContextBudget {
+    const totalTokens = getContextWindowSize(modelId ?? 'default', providerId);
 
     const identityBudget = Math.floor(totalTokens * BUDGET_RATIOS.IDENTITY);
     const contextBudget = Math.floor(totalTokens * BUDGET_RATIOS.CONTEXT);
@@ -308,6 +304,8 @@ export class ContextWindowManager {
    * @param identityPrompt 身份层内容（Agent Rules + 偏好事实）
    * @param modelId 模型 ID
    * @param contextLayers 分层上下文内容（可选）
+   * @param reservedInputTokens 在历史之外追加到最终请求的输入（例如当前 user turn）
+   * @param providerId 供应商 ID；提供时按 providerId + modelId 解析上下文窗口
    * @returns 预处理后的上下文
    */
   prepareContext(
@@ -315,7 +313,9 @@ export class ContextWindowManager {
     identityPrompt?: string,
     modelId?: string,
     contextLayers?: ContextLayers,
-    maxRounds?: number
+    maxRounds?: number,
+    reservedInputTokens = 0,
+    providerId?: string
   ): Promise<PreparedContext> {
     // 轮次截断：在 token 预算管理之前执行，避免对超长历史做无意义的 token 估算
     if (maxRounds !== undefined && maxRounds > 0) {
@@ -328,12 +328,18 @@ export class ContextWindowManager {
       }
     }
 
-    const budget = this.getBudget(modelId);
+    const budget = this.getBudget(modelId, providerId);
+    const normalizedReservedInputTokens = Math.max(0, Math.floor(reservedInputTokens));
+    const effectiveHistoryBudget = Math.max(
+      0,
+      budget.historyBudget - normalizedReservedInputTokens
+    );
     const identity = identityPrompt ?? '';
     const identityTokens = this.estimateTokens(identity);
 
     logger.trace(
-      `[ContextWindowManager] 模型: ${modelId ?? 'default'}, 总预算: ${budget.totalTokens} tokens`
+      `[ContextWindowManager] 模型路由: ${providerId ?? 'unknown'}/${modelId ?? 'default'}, ` +
+        `总预算: ${budget.totalTokens} tokens`
     );
     logger.trace(
       `[ContextWindowManager] 三层预算: Identity=${budget.identityBudget}, Context=${budget.contextBudget}, History=${budget.historyBudget}`
@@ -429,16 +435,19 @@ export class ContextWindowManager {
     logger.trace(
       `[ContextWindowManager] 对话历史: ${chatHistory.length} 条, ${historyTokens} tokens`
     );
-    logger.trace(`[ContextWindowManager] 历史预算: ${budget.historyBudget} tokens`);
+    logger.trace(
+      `[ContextWindowManager] 历史预算: ${effectiveHistoryBudget} tokens ` +
+        `(当前请求预留 ${normalizedReservedInputTokens})`
+    );
 
-    if (historyTokens <= budget.historyBudget) {
+    if (historyTokens <= effectiveHistoryBudget) {
       // 历史完整放入
       conversationHistory = historyText;
       logger.trace('[ContextWindowManager] 历史未超预算，完整保留');
     } else {
       // 历史超限，纯截断（不调用 LLM 生成摘要）
       logger.trace('[ContextWindowManager] 历史超出预算，执行截断（不生成摘要）');
-      const truncated = this.truncateHistory(chatHistory, budget.historyBudget);
+      const truncated = this.truncateHistory(chatHistory, effectiveHistoryBudget);
       conversationHistory = truncated.text;
       usedMessageCount = truncated.usedCount;
       wasTruncated = true;
@@ -452,7 +461,8 @@ export class ContextWindowManager {
     const finalHistoryTokens = this.estimateTokens(conversationHistory);
 
     // ==================== 构建预算报告 ====================
-    const totalUsed = identityTokens + contextUsed + finalHistoryTokens;
+    const totalUsed =
+      identityTokens + contextUsed + finalHistoryTokens + normalizedReservedInputTokens;
     const budgetReport: BudgetReport = {
       modelContextWindow: budget.totalTokens,
       layers: {
@@ -469,7 +479,7 @@ export class ContextWindowManager {
         },
         historyAndOutput: {
           budget: budget.historyBudget + budget.outputReserve,
-          historyUsed: finalHistoryTokens,
+          historyUsed: finalHistoryTokens + normalizedReservedInputTokens,
           outputReserve: budget.outputReserve,
         },
       },

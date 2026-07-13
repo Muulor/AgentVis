@@ -532,6 +532,8 @@ async function reportVisualEnhancerTokens(
     const inputChars = messages.reduce((sum, m) => sum + m.content.length, 0);
     const estimatedInput = Math.ceil(inputChars / CHARS_PER_TOKEN_ESTIMATE);
     const estimatedOutput = Math.ceil(outputContent.length / CHARS_PER_TOKEN_ESTIMATE);
+    // TODO(token-usage-ledger): 统一调用账本落地前保留旧的 Session 累计；StatusBar 不展示该值。
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- 保留旧累计直到账本接管。
     statusState.addTokenUsage(
       resolvedTokenContextId,
       getPositiveTokenCount(apiInputTokens) ?? estimatedInput,

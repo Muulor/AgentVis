@@ -402,8 +402,8 @@ export async function handleMasterDecision(
       decision.response = (decision.response || '') + rationaleBlock + taskBlock + saBlock;
     }
 
-    // 上报 MB 调用的 token 估算到 statusStore
-    // MB 的 generate() 返回纯 string（无 API usage），使用字符数估算
+    // TODO(token-usage-ledger): 统一调用账本落地前保留旧的 Session 累计。
+    // Current Context 已在 AgentLoop 的真实 invoke 边界维护，不能在解析完成后用粗估值覆盖。
     try {
       const { useStatusStore } = await import('@stores/statusStore');
       const CHARS_PER_TOKEN = 2.5;
@@ -414,13 +414,8 @@ export async function handleMasterDecision(
       const estimatedOutput = Math.ceil(JSON.stringify(decision).length / CHARS_PER_TOKEN);
       // 使用任务启动时绑定的 tokenContextId，避免前台切换污染后台任务归属。
       const tokenContextId = config.tokenContextId ?? config.agentId;
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- TODO(token-usage-ledger): 保留旧累计直到账本接管。
       useStatusStore.getState().addTokenUsage(tokenContextId, estimatedInput, estimatedOutput);
-      // 设置上下文压力指示器（MB 的输入约占模型上下文窗口）
-      const { getContextWindowSize } = await import('@/config/modelRegistry');
-      const modelContextWindow = getContextWindowSize(config.modelId ?? '');
-      useStatusStore
-        .getState()
-        .setContextPressure(tokenContextId, estimatedInput, modelContextWindow);
     } catch {
       // statusStore 访问失败不影响主流程
     }

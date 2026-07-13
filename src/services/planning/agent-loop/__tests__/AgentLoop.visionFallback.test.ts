@@ -5,6 +5,7 @@ import { AgentLoop } from '../AgentLoop';
 import type { AgentSession } from '../AgentSession';
 import { translate } from '@/i18n';
 import { PLANNING_CONSTANTS } from '../../PlanningConstants';
+import { useStatusStore } from '@stores/statusStore';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -1976,5 +1977,168 @@ describe('AgentLoop MB vision fallback', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('tracks streaming Master Brain Current Context from invoke start through provider usage', async () => {
+    const contextId = 'task-context-mb-stream';
+    useStatusStore.getState().clearContextPressure(contextId);
+    let activeAtInvoke:
+      | ReturnType<typeof useStatusStore.getState>['contextPressureByAgent'][string]
+      | undefined;
+    let streamHandler: StreamHandler | undefined;
+
+    vi.mocked(listen).mockImplementation(((_eventName: string, handler: StreamHandler) => {
+      streamHandler = handler;
+      return Promise.resolve(vi.fn());
+    }) as unknown as typeof listen);
+    vi.mocked(invoke).mockImplementation((async (command: string, args: unknown) => {
+      if (command !== 'llm_chat_stream') return undefined;
+      activeAtInvoke = useStatusStore.getState().getContextPressure(contextId) ?? undefined;
+      const { sessionId } = args as { sessionId: string };
+      queueMicrotask(() => {
+        streamHandler?.({
+          payload: {
+            sessionId,
+            delta: '{"decision":"RESPOND_TO_USER"}',
+            reasoning: 'reasoning trace',
+            done: true,
+            error: null,
+            inputTokens: 41,
+            outputTokens: 9,
+          },
+        });
+      });
+      return undefined;
+    }) as unknown as typeof invoke);
+
+    const loop = new AgentLoop(
+      {
+        agentId: 'agent-mb-stream',
+        tokenContextId: contextId,
+        providerId: 'gemini',
+        modelId: 'gemini-2.5-pro',
+      },
+      createSession([{ role: 'user', content: 'current task' }])
+    );
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => {
+          generate: (
+            prompt: string,
+            options?: { onStreamDelta?: (content: string) => void }
+          ) => Promise<string>;
+        };
+      }
+    ).createLLMService();
+
+    await llmService.generate('system prompt', { onStreamDelta: vi.fn() });
+
+    expect(activeAtInvoke).toMatchObject({
+      phase: 'active',
+      purpose: 'master-brain',
+      providerId: 'gemini',
+      modelId: 'gemini-2.5-pro',
+      currentOutputTokens: 0,
+    });
+    expect(activeAtInvoke?.currentInputTokens).toBeGreaterThan(0);
+    expect(activeAtInvoke?.contextWindowSize).toBeGreaterThan(0);
+    expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+      phase: 'last',
+      purpose: 'master-brain',
+      currentInputTokens: 41,
+      currentOutputTokens: 9,
+    });
+    useStatusStore.getState().clearContextPressure(contextId);
+  });
+
+  it('tracks Checkpoint Current Context and leaves a completed Last Context', async () => {
+    const contextId = 'task-context-checkpoint';
+    useStatusStore.getState().clearContextPressure(contextId);
+    let activeAtInvoke:
+      | ReturnType<typeof useStatusStore.getState>['contextPressureByAgent'][string]
+      | undefined;
+
+    vi.mocked(invoke).mockImplementation((async (command: string) => {
+      if (command !== 'llm_chat_with_tools') return undefined;
+      activeAtInvoke = useStatusStore.getState().getContextPressure(contextId) ?? undefined;
+      return {
+        type: 'text',
+        content: '{"type":"EXTEND_BUDGET","additionalIterations":1,"reason":"continue"}',
+        inputTokens: 17,
+        outputTokens: 5,
+      };
+    }) as unknown as typeof invoke);
+
+    const loop = new AgentLoop(
+      {
+        agentId: 'agent-checkpoint',
+        tokenContextId: contextId,
+        providerId: 'openai',
+        modelId: 'gpt-5.4',
+      },
+      createSession([])
+    );
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => {
+          generate: (
+            prompt: string,
+            options?: { skipSessionMessages?: boolean; taskContext?: string }
+          ) => Promise<string>;
+        };
+      }
+    ).createLLMService();
+
+    await llmService.generate('checkpoint system prompt', {
+      skipSessionMessages: true,
+      taskContext: 'checkpoint task context',
+    });
+
+    expect(activeAtInvoke).toMatchObject({
+      phase: 'active',
+      purpose: 'checkpoint',
+      providerId: 'openai',
+      modelId: 'gpt-5.4',
+      currentOutputTokens: 0,
+    });
+    expect(activeAtInvoke?.currentInputTokens).toBeGreaterThan(0);
+    expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+      phase: 'last',
+      purpose: 'checkpoint',
+      currentInputTokens: 17,
+      currentOutputTokens: 5,
+    });
+    useStatusStore.getState().clearContextPressure(contextId);
+  });
+
+  it('completes failed Master Brain calls instead of leaving Current Context active', async () => {
+    const contextId = 'task-context-mb-error';
+    useStatusStore.getState().clearContextPressure(contextId);
+    vi.mocked(invoke).mockResolvedValue({
+      type: 'error',
+      error: 'invalid request',
+    });
+
+    const loop = new AgentLoop(
+      {
+        agentId: 'agent-mb-error',
+        tokenContextId: contextId,
+        providerId: 'openai',
+        modelId: 'gpt-5.4',
+      },
+      createSession([{ role: 'user', content: 'current task' }])
+    );
+    const llmService = (
+      loop as unknown as {
+        createLLMService: () => { generate: (prompt: string) => Promise<string> };
+      }
+    ).createLLMService();
+
+    await expect(llmService.generate('system prompt')).rejects.toThrow('invalid request');
+    expect(useStatusStore.getState().getContextPressure(contextId)).toMatchObject({
+      phase: 'last',
+      purpose: 'master-brain',
+    });
+    useStatusStore.getState().clearContextPressure(contextId);
   });
 });

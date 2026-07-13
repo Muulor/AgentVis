@@ -10,6 +10,7 @@ import { toolRegistry } from '../../tools/ToolRegistry';
 import { getToolNamesForSchemaFilter } from '../../tools/ToolAliases';
 import type {
   LLMCaller,
+  LLMContextUsageOptions,
   LLMResponse,
   ReasoningTraceProgress,
   ToolCallProgress,
@@ -26,6 +27,12 @@ import {
   type LlmTokenPolicyPurpose,
 } from '@services/llm/LlmTokenPolicy';
 import { isMaxTokensParameterRejection } from '../../utils/LlmRetryPolicy';
+import {
+  estimateGeneratedTokens,
+  estimateRequestTokens,
+  normalizeReportedTokenCount,
+} from '@services/llm/tokenEstimator';
+import { useStatusStore } from '@stores/statusStore';
 
 const logger = getLogger('SubAgentLLMCaller');
 const SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS = 5000;
@@ -183,7 +190,8 @@ export class SubAgentLLMCallerFactory {
         signal?: AbortSignal,
         persistedIntervention?: { message: string; stepsSinceIntervention: number },
         onToolCallProgress?: (progress: ToolCallProgress) => void,
-        onReasoningTrace?: (progress: ReasoningTraceProgress) => void
+        onReasoningTrace?: (progress: ReasoningTraceProgress) => void,
+        contextUsage?: LLMContextUsageOptions
       ): Promise<LLMResponse> => {
         const messages = this.buildMessagesWithContext(
           systemPrompt,
@@ -196,7 +204,8 @@ export class SubAgentLLMCallerFactory {
           tools,
           signal,
           onToolCallProgress,
-          onReasoningTrace
+          onReasoningTrace,
+          contextUsage
         );
       },
     };
@@ -291,7 +300,8 @@ export class SubAgentLLMCallerFactory {
     tools: string[],
     signal?: AbortSignal,
     onToolCallProgress?: (progress: ToolCallProgress) => void,
-    onReasoningTrace?: (progress: ReasoningTraceProgress) => void
+    onReasoningTrace?: (progress: ReasoningTraceProgress) => void,
+    contextUsage?: LLMContextUsageOptions
   ): Promise<LLMResponse> {
     // 获取所有已注册的工具 Schema
     const allSchemas = toolRegistry.getSchemas();
@@ -338,6 +348,35 @@ export class SubAgentLLMCallerFactory {
     let reasoningProgressFlushTimer: ReturnType<typeof setTimeout> | null = null;
     let pendingReasoningProgress = false;
     let pendingReasoningDone = false;
+    let contextUsageAttemptSequence = 0;
+    let activeContextUsageCallId: string | null = null;
+    let activeAttemptReasoningContent = '';
+    let activeAttemptToolArgumentBytes = 0;
+    let contextUsageFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushActiveContextUsage = () => {
+      if (contextUsageFlushTimer) {
+        clearTimeout(contextUsageFlushTimer);
+        contextUsageFlushTimer = null;
+      }
+      if (!contextUsage || !activeContextUsageCallId) return;
+      useStatusStore
+        .getState()
+        .updateContextUsage(contextUsage.contextId, activeContextUsageCallId, {
+          currentOutputTokens:
+            estimateGeneratedTokens({
+              reasoningContent: activeAttemptReasoningContent,
+            }) + Math.ceil(activeAttemptToolArgumentBytes / 4),
+        });
+    };
+
+    const scheduleActiveContextUsage = () => {
+      if (!contextUsage || !activeContextUsageCallId || contextUsageFlushTimer) return;
+      contextUsageFlushTimer = setTimeout(
+        flushActiveContextUsage,
+        SUB_AGENT_REASONING_UI_FLUSH_INTERVAL_MS
+      );
+    };
 
     const clearReasoningProgressFlushTimer = () => {
       if (reasoningProgressFlushTimer) {
@@ -382,7 +421,7 @@ export class SubAgentLLMCallerFactory {
       );
     };
 
-    if (onToolCallProgress) {
+    if (onToolCallProgress || contextUsage) {
       try {
         const { listen } = await import('@tauri-apps/api/event');
         unlistenToolCallProgress = await listen<ToolCallProgressPayload>(
@@ -390,7 +429,12 @@ export class SubAgentLLMCallerFactory {
           (event) => {
             const payload = event.payload;
             if (payload.sessionId !== sessionId) return;
-            onToolCallProgress({
+            activeAttemptToolArgumentBytes = Math.max(
+              activeAttemptToolArgumentBytes,
+              payload.argBytes
+            );
+            scheduleActiveContextUsage();
+            onToolCallProgress?.({
               toolName: payload.toolName,
               argBytes: payload.argBytes,
             });
@@ -402,7 +446,7 @@ export class SubAgentLLMCallerFactory {
     }
 
     // 调试：检查是否有 tool 消息携带 images
-    if (onReasoningTrace) {
+    if (onReasoningTrace || contextUsage) {
       try {
         const { listen } = await import('@tauri-apps/api/event');
         unlistenReasoningProgress = await listen<ReasoningProgressPayload>(
@@ -412,6 +456,8 @@ export class SubAgentLLMCallerFactory {
             if (payload.sessionId !== sessionId) return;
             if (payload.delta) {
               reasoningProgressContent += payload.delta;
+              activeAttemptReasoningContent += payload.delta;
+              scheduleActiveContextUsage();
             }
             scheduleReasoningProgress(payload.done);
           }
@@ -484,46 +530,104 @@ export class SubAgentLLMCallerFactory {
         };
       }
 
-      const invokePromise = invoke<LLMResponseWithTools>('llm_chat_with_tools', {
-        request: {
-          messages: messagesForCall,
-          modelId,
+      const callId = contextUsage ? `${sessionId}-attempt-${++contextUsageAttemptSequence}` : null;
+      const estimatedInputTokens = contextUsage
+        ? estimateRequestTokens(messagesForCall, { tools: toolsPayload })
+        : 0;
+      if (contextUsage && callId) {
+        activeContextUsageCallId = callId;
+        activeAttemptReasoningContent = '';
+        activeAttemptToolArgumentBytes = 0;
+        useStatusStore.getState().beginContextUsage(contextUsage.contextId, {
+          callId,
+          currentInputTokens: estimatedInputTokens,
+          currentOutputTokens: 0,
+          contextWindowSize: contextUsage.contextWindowSize,
+          purpose: 'sub-agent',
           providerId,
-          baseUrl,
-          supportsVision: modelSupportsVision(modelId, providerId),
-          tools: toolsPayload,
-          maxTokens,
-          temperature: PLANNING_CONSTANTS.SUB_AGENT_TEMPERATURE,
-        },
-        sessionId,
-      });
-
-      if (!signal) {
-        return invokePromise;
+          modelId,
+        });
       }
 
+      let attemptCompleted = false;
       let fallbackTimeout: ReturnType<typeof setTimeout> | undefined;
       let fallbackHandler: (() => void) | undefined;
-      const abortFallback = new Promise<LLMResponseWithTools>((resolve) => {
-        fallbackHandler = () => {
-          fallbackTimeout = setTimeout(() => {
-            resolve({
-              type: 'cancelled',
-              content: `Sub-agent LLM request cancelled; backend stream did not settle within ${SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS}ms.`,
-            });
-          }, SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS);
-        };
-        signal.addEventListener('abort', fallbackHandler, { once: true });
-      });
+      const completeAttempt = (response?: LLMResponseWithTools) => {
+        if (!contextUsage || !callId || attemptCompleted) return;
+        attemptCompleted = true;
+        flushActiveContextUsage();
+        const responseContent =
+          response?.type === 'text' || response?.type === 'tool_use' ? response.content : undefined;
+        const responseToolCalls = response?.type === 'tool_use' ? response.toolCalls : undefined;
+        const currentInputTokens =
+          normalizeReportedTokenCount(response?.inputTokens) ?? estimatedInputTokens;
+        const estimatedOutputTokens = estimateGeneratedTokens({
+          content: responseContent,
+          reasoningContent: response?.reasoningContent ?? activeAttemptReasoningContent,
+          toolCalls: responseToolCalls,
+        });
+        const currentOutputTokens =
+          normalizeReportedTokenCount(response?.outputTokens) ??
+          Math.max(
+            estimatedOutputTokens,
+            estimateGeneratedTokens({ reasoningContent: activeAttemptReasoningContent }) +
+              Math.ceil(activeAttemptToolArgumentBytes / 4)
+          );
+        useStatusStore.getState().completeContextUsage(contextUsage.contextId, callId, {
+          currentInputTokens,
+          currentOutputTokens,
+        });
+      };
 
       try {
-        return await Promise.race([invokePromise, abortFallback]);
+        const invokePromise = invoke<LLMResponseWithTools>('llm_chat_with_tools', {
+          request: {
+            messages: messagesForCall,
+            modelId,
+            providerId,
+            baseUrl,
+            supportsVision: modelSupportsVision(modelId, providerId),
+            tools: toolsPayload,
+            maxTokens,
+            temperature: PLANNING_CONSTANTS.SUB_AGENT_TEMPERATURE,
+          },
+          sessionId,
+        });
+
+        let response: LLMResponseWithTools;
+        if (!signal) {
+          response = await invokePromise;
+        } else {
+          const abortFallback = new Promise<LLMResponseWithTools>((resolve) => {
+            fallbackHandler = () => {
+              fallbackTimeout = setTimeout(() => {
+                resolve({
+                  type: 'cancelled',
+                  content: `Sub-agent LLM request cancelled; backend stream did not settle within ${SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS}ms.`,
+                });
+              }, SUB_AGENT_LLM_CANCEL_SETTLE_TIMEOUT_MS);
+            };
+            signal.addEventListener('abort', fallbackHandler, { once: true });
+          });
+          response = await Promise.race([invokePromise, abortFallback]);
+        }
+
+        completeAttempt(response);
+        return response;
+      } catch (error) {
+        completeAttempt();
+        throw error;
       } finally {
         if (fallbackHandler) {
-          signal.removeEventListener('abort', fallbackHandler);
+          signal?.removeEventListener('abort', fallbackHandler);
         }
         if (fallbackTimeout) {
           clearTimeout(fallbackTimeout);
+        }
+        if (activeContextUsageCallId === callId) {
+          activeContextUsageCallId = null;
+          activeAttemptReasoningContent = '';
+          activeAttemptToolArgumentBytes = 0;
         }
       }
     };

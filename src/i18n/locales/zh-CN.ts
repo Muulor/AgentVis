@@ -742,6 +742,12 @@ export const zhCN = {
     statusMemoryCompleted: '整理完成',
     currentLlmInputTitle: '当前 LLM 调用输入: {input} / 上下文窗口: {window}',
     tokenUsageTitle: '累积输入: {input} tokens | 累积输出: {output} tokens',
+    currentContextUsageLabel: 'Current Context',
+    lastContextUsageLabel: 'Last Context',
+    currentContextUsageTitle:
+      '当前调用上下文（通用估算）：输入 {input} tokens + 输出 {output} tokens / 窗口 {window} tokens',
+    lastContextUsageTitle:
+      '上次调用上下文（通用估算）：输入 {input} tokens + 输出 {output} tokens / 窗口 {window} tokens',
     imConnectedTitle: 'IM 通道已连接 ({count} 个机器人)',
     diffMode: 'Diff View',
     historyHint: '点击查看已审批文件的历史版本',

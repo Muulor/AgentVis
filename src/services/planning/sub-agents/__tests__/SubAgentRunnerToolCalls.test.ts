@@ -1368,6 +1368,7 @@ describe('SubAgentRunner - Live Tool Observations', () => {
     };
     const runner = new SubAgentRunner(mockLLMCaller);
     runner.setContextId(contextId);
+    runner.setTokenContextId(contextId);
     runner.setToolExecutor(
       vi.fn().mockResolvedValue({
         success: true,
@@ -1389,13 +1390,19 @@ describe('SubAgentRunner - Live Tool Observations', () => {
 
     await runner.runWithDynamicLoop(spec, { files: [], cwd: '/' }, vi.fn(), []);
 
+    expect(mockLLMCaller.callWithContext).toHaveBeenCalledTimes(2);
+    for (const call of vi.mocked(mockLLMCaller.callWithContext).mock.calls) {
+      expect(call[8]).toEqual({
+        contextId,
+        contextWindowSize: expect.any(Number),
+      });
+    }
+
     const state = useStatusStore.getState();
     const tokenUsage = state.getAgentTokenUsage(contextId);
-    const contextPressure = state.getContextPressure(contextId);
 
     expect(tokenUsage.inputTokens).toBeGreaterThan(0);
     expect(tokenUsage.outputTokens).toBe(22);
-    expect(contextPressure?.currentInputTokens).toBeGreaterThan(0);
 
     state.resetTokenUsage(contextId);
     state.clearContextPressure(contextId);

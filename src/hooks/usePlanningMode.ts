@@ -724,6 +724,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
   const { t } = useI18n();
   // 同步防护：按 contextId 隔离，避免跨 Agent 共享导致的阻塞
   const sendingContextsRef = useRef<Set<string>>(new Set());
+  const contextUsageRunIdsRef = useRef<Map<string, string>>(new Map());
   // 预取消防护：按钮终止可能发生在 AgentService 引用挂载前，先记账，服务创建后立即取消。
   const cancelRequestedContextsRef = useRef<Set<string>>(new Set());
   // AgentService 引用（按 contextId 隔离，确保停止按钮取消正确 Agent 的任务）
@@ -806,6 +807,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
       sendingContextsRef.current.add(contextId);
       cancelRequestedContextsRef.current.delete(contextId);
+      const contextUsageRunId = crypto.randomUUID();
+      contextUsageRunIdsRef.current.set(contextId, contextUsageRunId);
+      useStatusStore.getState().clearContextPressure(contextId);
       startSending(contextId);
 
       if (imBotId) {
@@ -2101,10 +2105,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         // 任务结束后恢复模型状态灯（瞬时错误不应持续红灯）
         useStatusStore.getState().setModelStatus('online');
 
-        // Token 统计已在 SubAgentRunner/AgentLoopFSMIntegration 的 LLM 调用后
-        // 通过 addTokenUsage 实时累计，此处仅清除上下文压力指示
-        if (contextId) {
+        // Only the latest task in this context may clear Current Context. Cancellation
+        // unlocks the UI immediately, so a replacement task can start before an older
+        // service has finished unwinding its finally block.
+        if (contextId && contextUsageRunIdsRef.current.get(contextId) === contextUsageRunId) {
           useStatusStore.getState().clearContextPressure(contextId);
+          contextUsageRunIdsRef.current.delete(contextId);
         }
 
         // 清理 HITL 残留状态（任务结束时的幂等兜底）。

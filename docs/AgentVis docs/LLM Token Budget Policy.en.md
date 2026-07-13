@@ -123,3 +123,18 @@ Required regression coverage includes:
 - provider finish-reason propagation for OpenAI, Anthropic, and Gemini tool paths;
 - zero file writes from truncated tool responses;
 - shared-reasoning registry routes resolving to real built-in provider/model pairs.
+
+## 8. StatusBar Current Context
+
+The StatusBar token indicator is a context-capacity aid, not a provider bill or cost report. Session Usage remains hidden until a unified per-attempt ledger exists; provider dashboards remain authoritative for actual usage and cost.
+
+Current Context only tracks explicitly attributed foreground LLM calls for the visible Agent/Hub task: Chat, Master Brain, Checkpoint, and Sub-Agent. Background Memory, Visual Enhancer, Skill Audit, Embedding, Rerank, and media-generation calls must not replace the visible window's context state.
+
+Its lifecycle is:
+
+- Show `Current Context` after a call begins. Estimate input from the final request messages (including historical tool calls and reasoning content), protocol fields, tool schemas, and image count.
+- During streaming generation, include visible response text, available reasoning content, and large tool-argument progress at a throttled rate; include tool-call arguments on completion as well.
+- Show `Last Context` after the LLM call completes while the task is still executing tools or scheduling its next step.
+- Hide the metric when the task finishes, is cancelled, or otherwise becomes idle. A stale call must not overwrite or clear a newer call; updates are guarded by `callId`.
+
+The primary display is `input + output / contextWindow`. Provider-reported base usage may correct the estimate when a call completes; otherwise the application-wide fallback remains in use. Image payloads must never be estimated from base64 character length and instead use a provider-neutral fixed media fallback. `contextWindow` must resolve from the actual `providerId + modelId` route and must not borrow a same-named model configuration from another provider.

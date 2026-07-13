@@ -765,6 +765,12 @@ export const enUS = {
     statusMemoryCompleted: 'Memory organized',
     currentLlmInputTitle: 'Current LLM input: {input} / context window: {window}',
     tokenUsageTitle: 'Total input: {input} tokens | total output: {output} tokens',
+    currentContextUsageLabel: 'Current Context',
+    lastContextUsageLabel: 'Last Context',
+    currentContextUsageTitle:
+      'Current context (shared estimate): {input} input tokens + {output} output tokens / {window} token window',
+    lastContextUsageTitle:
+      'Last context (shared estimate): {input} input tokens + {output} output tokens / {window} token window',
     imConnectedTitle: 'IM channel connected ({count} bots)',
     diffMode: 'Diff View',
     historyHint: 'View historical versions of approved files',

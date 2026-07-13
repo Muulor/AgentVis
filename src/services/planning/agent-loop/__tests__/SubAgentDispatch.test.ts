@@ -204,6 +204,30 @@ describe('Sub-Agent 派遣', () => {
   // ─────────────────────────────────────────────────────────────────
 
   describe('buildTaskContext', () => {
+    it('uses the provider route when duplicate model IDs have different context windows', async () => {
+      const buildContext = async (providerId: string) => {
+        const dispatcher = new SubAgentDispatcher(
+          createMockSession(),
+          {},
+          { providerId, modelId: 'gpt-5.4' },
+          vi.fn(),
+          []
+        );
+        return (
+          dispatcher as unknown as {
+            buildTaskContext: () => Promise<{ contextWindowSize?: number }>;
+          }
+        ).buildTaskContext();
+      };
+
+      await expect(buildContext('openai')).resolves.toMatchObject({
+        contextWindowSize: 1_050_000,
+      });
+      await expect(buildContext('local')).resolves.toMatchObject({
+        contextWindowSize: 400_000,
+      });
+    });
+
     it('includeHistory 历史应统一构造成 Runner messages[]，不再混入 system prompt', async () => {
       const sessionWithImageHistory = {
         id: 'test-session-id',

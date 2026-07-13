@@ -46,4 +46,41 @@ describe('ContextWindowManager prompt text invariants', () => {
     expect(prepared.conversationHistory).toContain('**Agent**:\nhi there');
     expect(prepared.conversationHistory).not.toMatch(HAN_CHARACTER_PATTERN);
   });
+
+  it('reserves capacity for the current user turn without injecting it into history', async () => {
+    const manager = new ContextWindowManager();
+    const reservedInputTokens = 50_000;
+
+    const prepared = await manager.prepareContext(
+      [{ role: 'user', content: 'historical message' }],
+      '',
+      'default',
+      undefined,
+      undefined,
+      reservedInputTokens
+    );
+
+    expect(prepared.conversationHistory).toBe('(History too long; omitted)');
+    expect(prepared.budgetReport.layers.historyAndOutput.historyUsed).toBeGreaterThanOrEqual(
+      reservedInputTokens
+    );
+  });
+
+  it('uses the provider route when duplicate model IDs have different context windows', async () => {
+    const manager = new ContextWindowManager();
+
+    const openai = await manager.prepareContext(
+      [],
+      '',
+      'gpt-5.4',
+      undefined,
+      undefined,
+      0,
+      'openai'
+    );
+    const local = await manager.prepareContext([], '', 'gpt-5.4', undefined, undefined, 0, 'local');
+
+    expect(openai.budgetReport.modelContextWindow).toBe(1_050_000);
+    expect(local.budgetReport.modelContextWindow).toBe(400_000);
+  });
 });
