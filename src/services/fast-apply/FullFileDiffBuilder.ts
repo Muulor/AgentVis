@@ -373,7 +373,10 @@ export class FullFileDiffBuilder {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line) continue;
-      const isContextLine = line.type === 'context' && !line.modificationId;
+      // 折叠只取决于行是否未变化，不应取决于它是否归属于某个修改。
+      // whole-file REPLACE 会给未变化的 Myers context 行附上 modificationId；
+      // 若在这里排除这些行，整份文件会被渲染成一个无法虚拟化的大修改块。
+      const isContextLine = line.type === 'context';
 
       if (isContextLine) {
         if (contextStartIndex === -1) {

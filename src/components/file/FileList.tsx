@@ -40,7 +40,10 @@ import { getMissingDirectoryRecoveryPath } from './FileListPathRecovery';
 import {
   getWorkspaceImportProgressPercent,
   getWorkspaceImportTotals,
+  collectDroppedWorkspaceItems,
+  createAbortSignalGuardedCallback,
   importWorkspaceItems,
+  registerAbortableDisposable,
   WorkspaceImportCancelledError,
   WorkspaceImportCommitError,
   type WorkspaceImportProgress,
@@ -62,14 +65,14 @@ interface DirectoryEntry {
 }
 
 /** 拖入工作区的待导入项目 */
-interface DroppedWorkspaceItem {
-  relativePath: string;
-  file: File | null;
-  isDirectory: boolean;
-}
-
 interface ImportProgress extends WorkspaceImportProgress {
   cancelRequested: boolean;
+}
+
+interface WorkspaceImportOperation {
+  controller: AbortController;
+  phase: WorkspaceImportProgress['phase'];
+  abortReason: 'user' | 'context-change' | null;
 }
 
 interface FileListProps {
@@ -116,86 +119,6 @@ function formatImportBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
-  return new Promise((resolve, reject) => {
-    entry.file(resolve, reject);
-  });
-}
-
-function readDirectoryBatch(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
-  return new Promise((resolve, reject) => {
-    reader.readEntries(resolve, reject);
-  });
-}
-
-async function readAllDirectoryEntries(
-  reader: FileSystemDirectoryReader,
-  shouldCancel: () => boolean
-): Promise<FileSystemEntry[]> {
-  const entries: FileSystemEntry[] = [];
-  let batch: FileSystemEntry[];
-
-  do {
-    if (shouldCancel()) throw new WorkspaceImportCancelledError();
-    batch = await readDirectoryBatch(reader);
-    entries.push(...batch);
-  } while (batch.length > 0);
-
-  return entries;
-}
-
-async function collectFileSystemEntryItems(
-  entry: FileSystemEntry,
-  parentPath: string,
-  shouldCancel: () => boolean
-): Promise<DroppedWorkspaceItem[]> {
-  if (shouldCancel()) throw new WorkspaceImportCancelledError();
-  const relativePath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-
-  if (entry.isFile) {
-    const file = await readFileEntry(entry as FileSystemFileEntry);
-    return [{ relativePath, file, isDirectory: false }];
-  }
-
-  if (entry.isDirectory) {
-    const directory = entry as FileSystemDirectoryEntry;
-    const reader = directory.createReader();
-    const childEntries = await readAllDirectoryEntries(reader, shouldCancel);
-    const childItems = await Promise.all(
-      childEntries.map((childEntry) =>
-        collectFileSystemEntryItems(childEntry, relativePath, shouldCancel)
-      )
-    );
-    return [{ relativePath, file: null, isDirectory: true }, ...childItems.flat()];
-  }
-
-  return [];
-}
-
-async function collectDroppedWorkspaceItems(
-  dataTransfer: DataTransfer,
-  shouldCancel: () => boolean
-): Promise<DroppedWorkspaceItem[]> {
-  const entryItems = Array.from(dataTransfer.items)
-    .filter((item) => item.kind === 'file')
-    .map((item) => item.webkitGetAsEntry())
-    .filter((entry): entry is FileSystemEntry => entry !== null);
-
-  if (entryItems.length > 0) {
-    const collected = await Promise.all(
-      entryItems.map((entry) => collectFileSystemEntryItems(entry, '', shouldCancel))
-    );
-    return collected.flat();
-  }
-
-  if (shouldCancel()) throw new WorkspaceImportCancelledError();
-  return Array.from(dataTransfer.files).map((file) => ({
-    relativePath: file.name,
-    file,
-    isDirectory: false,
-  }));
-}
-
 function isWorkspaceFileDrag(dataTransfer: DataTransfer): boolean {
   return (
     dataTransfer.types.includes('Files') &&
@@ -220,8 +143,8 @@ export function FileList({
   const [isDropActive, setIsDropActive] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
-  const importCancelRequestedRef = useRef(false);
-  const importPhaseRef = useRef<WorkspaceImportProgress['phase']>('uploading');
+  const activeImportRef = useRef<WorkspaceImportOperation | null>(null);
+  const isMountedRef = useRef(true);
   const lastImportProgressAtRef = useRef(0);
   const [isImportStalled, setIsImportStalled] = useState(false);
   const workspaceDragCounterRef = useRef(0);
@@ -345,8 +268,10 @@ export function FileList({
 
   // Agent 切换或 rootDir 变化时重置导航状态并加载根目录
   useEffect(() => {
-    if (importPhaseRef.current !== 'committing') {
-      importCancelRequestedRef.current = true;
+    const activeImport = activeImportRef.current;
+    if (activeImport) {
+      activeImport.abortReason = 'context-change';
+      activeImport.controller.abort();
     }
     setCurrentPath('');
     setHistoryStack([]);
@@ -354,14 +279,17 @@ export function FileList({
     void loadDirectory('');
   }, [agentId, hubName, agentName, rootDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(
-    () => () => {
-      if (importPhaseRef.current !== 'committing') {
-        importCancelRequestedRef.current = true;
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      const activeImport = activeImportRef.current;
+      if (activeImport) {
+        activeImport.abortReason = 'context-change';
+        activeImport.controller.abort();
       }
-    },
-    []
-  );
+    };
+  }, []);
 
   // currentPath 变化时加载目录（排除初始化场景，由上面的 effect 处理）
   const isInitialMount = useRef(true);
@@ -384,56 +312,53 @@ export function FileList({
   const silentRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // 使用 aborted 标志处理竞态：当 agentId 切换时，
-    // setupListener 是 async 的，如果旧的 await listen() 还未返回，
-    // cleanup 执行时 unlisten 仍为 undefined，导致旧 listener 泄漏。
-    // aborted 标志保证即使 listen() 在清理后才完成，也不会实际订阅事件。
-    let aborted = false;
-    let unlisten: (() => void) | undefined;
-
-    const setupListener = async () => {
+    const listenerController = new AbortController();
+    void registerAbortableDisposable(listenerController.signal, async () => {
       const { listen } = await import('@tauri-apps/api/event');
+      if (listenerController.signal.aborted) return () => undefined;
 
-      // 如果在 await 期间 agentId 已经变化（cleanup 已被调用），放弃注册
-      if (aborted) return;
-
-      unlisten = await listen<{ agentId: string; filePath: string }>(
+      return listen<{ agentId: string; filePath: string }>(
         'file:deliverable_created',
-        (event) => {
-          // 严格过滤：只响应当前显示 Agent 的事件
-          // 当用户切换到 Agent B 时，agentId 变为 B，Agent A 的事件被忽略，
-          // 避免后台 Agent 写文件导致右栏出现闪动刷新动画
-          if (event.payload.agentId !== agentId) {
-            return;
-          }
+        createAbortSignalGuardedCallback(
+          listenerController.signal,
+          (event: { payload: { agentId: string; filePath: string } }) => {
+            // 严格过滤：只响应当前显示 Agent 的事件
+            // 当用户切换到 Agent B 时，agentId 变为 B，Agent A 的事件被忽略，
+            // 避免后台 Agent 写文件导致右栏出现闪动刷新动画
+            if (event.payload.agentId !== agentId) {
+              return;
+            }
 
-          logger.trace('[FileList] 收到交付物创建事件，静默刷新:', event.payload);
+            logger.trace('[FileList] 收到交付物创建事件，静默刷新:', event.payload);
 
-          // 防抖：合并短时间内的多次写文件事件（如 Agent 连续写多个文件时）
-          // 避免每次写入都触发一次重渲染，降低 UI 抖动频率
-          if (silentRefreshTimerRef.current !== null) {
-            clearTimeout(silentRefreshTimerRef.current);
+            // 防抖：合并短时间内的多次写文件事件（如 Agent 连续写多个文件时）
+            // 避免每次写入都触发一次重渲染，降低 UI 抖动频率
+            if (silentRefreshTimerRef.current !== null) {
+              clearTimeout(silentRefreshTimerRef.current);
+            }
+            silentRefreshTimerRef.current = setTimeout(
+              createAbortSignalGuardedCallback(listenerController.signal, () => {
+                silentRefreshTimerRef.current = null;
+                // silent=true：不触发 loading 状态，内容相等时不重渲染
+                void loadDirectoryRef.current(currentPathRef.current, true);
+              }),
+              SILENT_REFRESH_DEBOUNCE_MS
+            );
           }
-          silentRefreshTimerRef.current = setTimeout(() => {
-            silentRefreshTimerRef.current = null;
-            // silent=true：不触发 loading 状态，内容相等时不重渲染
-            void loadDirectoryRef.current(currentPathRef.current, true);
-          }, SILENT_REFRESH_DEBOUNCE_MS);
-        }
+        )
       );
-    };
-
-    void setupListener();
+    }).catch((listenerError: unknown) => {
+      if (!listenerController.signal.aborted) {
+        logger.warn('[FileList] 注册交付物监听失败:', listenerError);
+      }
+    });
 
     return () => {
-      aborted = true;
+      listenerController.abort();
       // 清理防抖定时器，防止 Agent 切换后定时器仍然触发旧的刷新
       if (silentRefreshTimerRef.current !== null) {
         clearTimeout(silentRefreshTimerRef.current);
         silentRefreshTimerRef.current = null;
-      }
-      if (unlisten) {
-        unlisten();
       }
     };
   }, [agentId]);
@@ -621,39 +546,54 @@ export function FileList({
       workspaceDragCounterRef.current = 0;
       setIsDropActive(false);
 
-      if (isImporting) {
+      if (activeImportRef.current) {
         return;
       }
 
+      const operation: WorkspaceImportOperation = {
+        controller: new AbortController(),
+        phase: 'uploading',
+        abortReason: null,
+      };
+      activeImportRef.current = operation;
       setIsImporting(true);
       setImportProgress(null);
-      importCancelRequestedRef.current = false;
-      importPhaseRef.current = 'uploading';
       lastImportProgressAtRef.current = Date.now();
       setIsImportStalled(false);
+
+      const canUpdateOperationUi = () =>
+        isMountedRef.current &&
+        activeImportRef.current === operation &&
+        operation.abortReason !== 'context-change';
+      const canShowOperationUi = () =>
+        canUpdateOperationUi() && !operation.controller.signal.aborted;
 
       try {
         const droppedItems = await collectDroppedWorkspaceItems(
           e.dataTransfer,
-          () => importCancelRequestedRef.current
+          operation.controller.signal
         );
         if (droppedItems.length === 0) {
-          toast({ type: 'warning', title: t('file.importUnsupported') });
+          if (canUpdateOperationUi()) {
+            toast({ type: 'warning', title: t('file.importUnsupported') });
+          }
           return;
         }
 
         const totals = getWorkspaceImportTotals(droppedItems);
-        setImportProgress({
-          phase: 'uploading',
-          doneEntries: 0,
-          totalEntries: totals.totalEntries,
-          doneFiles: 0,
-          totalFiles: totals.totalFiles,
-          bytesDone: 0,
-          totalBytes: totals.totalBytes,
-          currentPath: '',
-          cancelRequested: false,
-        });
+        if (canUpdateOperationUi()) {
+          setImportProgress({
+            phase: 'uploading',
+            doneEntries: 0,
+            totalEntries: totals.totalEntries,
+            doneFiles: 0,
+            totalFiles: totals.totalFiles,
+            bytesDone: 0,
+            totalBytes: totals.totalBytes,
+            currentPath: '',
+            cancelRequested: false,
+          });
+        }
 
         const result = await importWorkspaceItems(
           droppedItems,
@@ -664,37 +604,48 @@ export function FileList({
             currentRelativePath: currentPath,
           },
           {
-            shouldCancel: () => importCancelRequestedRef.current,
+            signal: operation.controller.signal,
             onProgress: (progress) => {
-              importPhaseRef.current = progress.phase;
+              operation.phase = progress.phase;
+              if (!canUpdateOperationUi()) return;
               lastImportProgressAtRef.current = Date.now();
               setIsImportStalled(false);
               setImportProgress({
                 ...progress,
-                cancelRequested: importCancelRequestedRef.current,
+                cancelRequested: operation.controller.signal.aborted,
               });
             },
           }
         );
 
-        await loadDirectory(currentPath, true);
-        toast({
-          type: 'success',
-          title: t('file.importSuccess', { count: result.importedEntries }),
-        });
+        if (canShowOperationUi()) {
+          await loadDirectory(currentPath, true);
+          if (canShowOperationUi()) {
+            toast({
+              type: 'success',
+              title: t('file.importSuccess', { count: result.importedEntries }),
+            });
+          }
+        }
       } catch (dropError) {
         if (dropError instanceof WorkspaceImportCancelledError) {
-          toast({ type: 'info', title: t('file.importCancelled') });
+          if (operation.abortReason === 'user' && canUpdateOperationUi()) {
+            toast({ type: 'info', title: t('file.importCancelled') });
+          }
         } else if (dropError instanceof WorkspaceImportCommitError) {
           logger.error('[FileList] 工作区导入提交未完整成功:', {
             status: dropError.status,
             result: dropError.result,
             originalError: dropError.originalError,
           });
+          if (!canUpdateOperationUi()) {
+            return;
+          }
           if (dropError.status === 'rolledBack') {
             toast({ type: 'error', title: t('file.importRolledBack') });
           } else {
             await loadDirectory(currentPath, true);
+            if (!canUpdateOperationUi()) return;
             if (dropError.status === 'partial') {
               toast({
                 type: 'error',
@@ -715,31 +666,29 @@ export function FileList({
           }
         } else {
           logger.error('[FileList] 处理拖拽导入失败，已回滚整个批次:', dropError);
-          toast({ type: 'error', title: t('file.importRolledBack') });
+          if (canUpdateOperationUi()) {
+            toast({ type: 'error', title: t('file.importRolledBack') });
+          }
         }
       } finally {
-        setIsImporting(false);
-        setImportProgress(null);
-        importCancelRequestedRef.current = false;
-        importPhaseRef.current = 'uploading';
-        setIsImportStalled(false);
+        if (activeImportRef.current === operation) {
+          activeImportRef.current = null;
+          if (isMountedRef.current) {
+            setIsImporting(false);
+            setImportProgress(null);
+            setIsImportStalled(false);
+          }
+        }
       }
     },
-    [
-      currentPath,
-      isImporting,
-      loadDirectory,
-      rootDir,
-      sanitizedAgentName,
-      sanitizedHubName,
-      t,
-      toast,
-    ]
+    [currentPath, loadDirectory, rootDir, sanitizedAgentName, sanitizedHubName, t, toast]
   );
 
   const handleCancelImport = useCallback(() => {
-    if (importPhaseRef.current === 'committing') return;
-    importCancelRequestedRef.current = true;
+    const activeImport = activeImportRef.current;
+    if (!activeImport || activeImport.phase === 'committing') return;
+    activeImport.abortReason = 'user';
+    activeImport.controller.abort();
     setImportProgress((current) => (current ? { ...current, cancelRequested: true } : current));
   }, []);
 

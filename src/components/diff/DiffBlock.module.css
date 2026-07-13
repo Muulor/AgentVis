@@ -8,7 +8,6 @@
 .container {
   position: relative;
   overflow: visible;
-  margin: 2px 0;
 }
 
 /* 状态样式 */
@@ -29,21 +28,23 @@
   position: relative;
 }
 
-/* 操作按钮区域 - 绝对定位覆盖在最后一行右侧 */
+/* 独立操作行，避免审批控件与大型代码块共享同一个虚拟项 */
+.actionRow {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 3px 8px;
+  box-sizing: border-box;
+}
+
 .actions {
-  position: absolute;
-  bottom: 2px;
-  right: 8px;
-  z-index: 10;
   display: flex;
   gap: 4px;
 }
 
-/* 状态标签 - 绝对定位在右下角 */
+/* 非 pending 状态标签 */
 .statusLabel {
-  position: absolute;
-  bottom: 2px;
-  right: 8px;
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 4px;

@@ -16,43 +16,51 @@
  * />
  */
 
-import { useState, useMemo, useCallback, useEffect, useRef, type UIEvent } from 'react';
+import {
+  memo,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type UIEvent,
+  type ReactNode,
+} from 'react';
 import { AlertTriangle, CheckCheck, X } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import styles from './FullFileDiffViewer.module.css';
 import { DiffLine } from './DiffLine';
-import { DiffBlock } from './DiffBlock';
+import { DiffBlock, DiffBlockActions } from './DiffBlock';
 import { CollapsedLines } from './CollapsedLines';
 import {
   getDiffLineTokens,
   useDiffSyntaxHighlight,
   type DiffSyntaxHighlightData,
 } from './DiffSyntaxHighlight';
-import {
-  buildFullFileDiff,
-  toggleRegionExpanded,
-} from '../../services/fast-apply/FullFileDiffBuilder';
+import { buildFullFileDiff } from '../../services/fast-apply/FullFileDiffBuilder';
 import { countTextLines, measureRendererWork } from '@services/diagnostics/rendererHealth';
 import { getLogger } from '@services/logger';
-import type {
-  ModificationApplyResult,
-  FullFileDiffLine,
-  CollapsibleRegion,
-} from '../../services/fast-apply/types';
+import {
+  buildDiffRenderItems,
+  buildVirtualLayout,
+  clampVisibleRange,
+  DEFAULT_DIFF_VIEWPORT_HEIGHT as DEFAULT_VIEWPORT_HEIGHT,
+  getLargeDiffSummary,
+  resolveCollapsibleRegions,
+  toggleCollapsibleRegionRevision,
+  updateExpandedDiffLines,
+  type CollapsibleRegionRevisionState,
+  type DiffRenderItem,
+  type LargeDiffSummary,
+} from './FullFileDiffModel';
+import type { ModificationApplyResult, FullFileDiffLine } from '../../services/fast-apply/types';
 
 const logger = getLogger('FullFileDiffViewer');
 
-const LARGE_REPLACE_SINGLE_SIDE_LINE_LIMIT = 10_000;
-const LARGE_REPLACE_CHANGED_LINE_LIMIT = 1000;
-const VIRTUAL_OVERSCAN_PX = 720;
-const DEFAULT_VIEWPORT_HEIGHT = 600;
-const ESTIMATED_LINE_HEIGHT = 24;
-const ESTIMATED_COLLAPSED_HEIGHT = 36;
-const ESTIMATED_LINE_CHROME_WIDTH = 88;
-const ESTIMATED_MONO_CHAR_WIDTH = 8;
-const MIN_ESTIMATED_WRAP_CHARS = 24;
-const MAX_ESTIMATED_LINE_WRAP = 80;
+// Keep this module's runtime exports component-only so Vite can preserve provider boundaries.
 const EMPTY_FULL_DIFF_LINES: FullFileDiffLine[] = [];
+const EMPTY_EXPANDED_LINES: ReadonlySet<FullFileDiffLine> = new Set();
 
 // ==================== 类型定义 ====================
 
@@ -200,236 +208,19 @@ function EmptyState() {
   );
 }
 
-// ==================== 渲染项类型 ====================
-
-interface RenderItem {
-  type: 'context-line' | 'diff-block' | 'collapsed';
-  key: string;
-  // 上下文行
-  line?: FullFileDiffLine;
-  // 修改块
-  modificationId?: string;
-  lines?: FullFileDiffLine[];
-  status?: ModificationApplyResult['status'];
-  // 折叠区域
-  regionIndex?: number;
-  lineCount?: number;
-}
-
-interface LargeDiffSummary {
-  oldLines: number;
-  newLines: number;
-  addedLines: number;
-  removedLines: number;
-  pending: number;
-  failed: number;
-}
-
-interface VirtualLayout {
-  offsets: number[];
-  heights: number[];
-  totalHeight: number;
-}
-
-function getEstimatedWrapChars(containerWidth: number): number {
-  if (containerWidth <= 0) return 80;
-
-  const textWidth = Math.max(160, containerWidth - ESTIMATED_LINE_CHROME_WIDTH);
-  return Math.max(MIN_ESTIMATED_WRAP_CHARS, Math.floor(textWidth / ESTIMATED_MONO_CHAR_WIDTH));
-}
-
-function estimateWrappedLineHeight(content: string | undefined, wrapChars: number): number {
-  const lineCount = Math.max(
-    1,
-    Math.min(MAX_ESTIMATED_LINE_WRAP, Math.ceil((content?.length ?? 0) / wrapChars))
-  );
-  return lineCount * ESTIMATED_LINE_HEIGHT;
-}
-
-function estimateRenderItemHeight(item: RenderItem, wrapChars: number): number {
-  switch (item.type) {
-    case 'context-line':
-      return estimateWrappedLineHeight(item.line?.content, wrapChars);
-    case 'diff-block':
-      return Math.max(
-        ESTIMATED_LINE_HEIGHT,
-        (item.lines ?? []).reduce(
-          (total, line) => total + estimateWrappedLineHeight(line.content, wrapChars),
-          4
-        )
-      );
-    case 'collapsed':
-      return ESTIMATED_COLLAPSED_HEIGHT;
-    default:
-      return ESTIMATED_LINE_HEIGHT;
-  }
-}
-
-function buildVirtualLayout(
-  items: RenderItem[],
-  measuredHeights: Map<string, number>,
-  containerWidth: number
-): VirtualLayout {
-  const offsets: number[] = [];
-  const heights: number[] = [];
-  const wrapChars = getEstimatedWrapChars(containerWidth);
-  let totalHeight = 0;
-
-  for (const item of items) {
-    offsets.push(totalHeight);
-    const height = measuredHeights.get(item.key) ?? estimateRenderItemHeight(item, wrapChars);
-    heights.push(height);
-    totalHeight += height;
-  }
-
-  return {
-    offsets,
-    heights,
-    totalHeight,
-  };
-}
-
-function findFirstVisibleIndex(layout: VirtualLayout, targetOffset: number): number {
-  if (layout.offsets.length === 0) return 0;
-
-  let low = 0;
-  let high = layout.offsets.length - 1;
-  let result = 0;
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const start = layout.offsets[mid] ?? 0;
-    const end = start + (layout.heights[mid] ?? ESTIMATED_LINE_HEIGHT);
-
-    if (end < targetOffset) {
-      low = mid + 1;
-    } else {
-      result = mid;
-      high = mid - 1;
-    }
-  }
-
-  return result;
-}
-
-function findLastVisibleIndex(layout: VirtualLayout, targetOffset: number): number {
-  if (layout.offsets.length === 0) return -1;
-
-  let low = 0;
-  let high = layout.offsets.length - 1;
-  let result = layout.offsets.length - 1;
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const start = layout.offsets[mid] ?? 0;
-
-    if (start <= targetOffset) {
-      result = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  return result;
-}
-
-function clampVisibleRange(
-  layout: VirtualLayout,
-  scrollTop: number,
-  viewportHeight: number
-): { startIndex: number; endIndex: number } {
-  const startOffset = Math.max(0, scrollTop - VIRTUAL_OVERSCAN_PX);
-  const endOffset =
-    scrollTop + Math.max(viewportHeight, DEFAULT_VIEWPORT_HEIGHT) + VIRTUAL_OVERSCAN_PX;
-  const startIndex = findFirstVisibleIndex(layout, startOffset);
-  const endIndex = findLastVisibleIndex(layout, endOffset);
-
-  return {
-    startIndex,
-    endIndex: Math.max(startIndex, endIndex),
-  };
-}
-
-function isMostlyWholeFileReplace(
-  originalContent: string,
-  mod: ModificationApplyResult,
-  searchLines: number
-): boolean {
-  if (mod.modification.operation !== 'REPLACE') return false;
-  if (mod.modification.search === originalContent) return true;
-
-  const originalLines = countTextLines(originalContent);
-  const coversMatchedRange =
-    mod.matchResult.startLine <= 1 && mod.matchResult.endLine >= Math.max(1, originalLines - 1);
-  const coversMostContent =
-    mod.modification.search.length >= originalContent.length * 0.8 &&
-    searchLines >= Math.max(1, Math.floor(originalLines * 0.8));
-
-  return coversMatchedRange || coversMostContent;
-}
-
-function countChangedDiffLines(mod: ModificationApplyResult): {
-  addedLines: number;
-  removedLines: number;
-} {
-  let addedLines = 0;
-  let removedLines = 0;
-
-  for (const hunk of mod.diff.hunks) {
-    for (const line of hunk.lines) {
-      if (line.type === 'add') {
-        addedLines++;
-      } else if (line.type === 'remove') {
-        removedLines++;
-      }
-    }
-  }
-
-  return { addedLines, removedLines };
-}
-
-function getLargeDiffSummary(
-  originalContent: string,
-  modifications: ModificationApplyResult[]
-): LargeDiffSummary | null {
-  if (modifications.length !== 1) return null;
-
-  const [mod] = modifications;
-  if (!mod) return null;
-
-  const search = mod.modification.search;
-  const replace = mod.modification.replace ?? '';
-  const oldLines = countTextLines(search);
-  const newLines = countTextLines(replace);
-
-  if (!isMostlyWholeFileReplace(originalContent, mod, oldLines)) {
-    return null;
-  }
-
-  const maxSideLines = Math.max(oldLines, newLines);
-  const { addedLines, removedLines } = countChangedDiffLines(mod);
-  const changedLines = addedLines + removedLines;
-
-  if (
-    maxSideLines < LARGE_REPLACE_SINGLE_SIDE_LINE_LIMIT ||
-    changedLines < LARGE_REPLACE_CHANGED_LINE_LIMIT
-  ) {
-    return null;
-  }
-
-  return {
-    oldLines,
-    newLines,
-    addedLines,
-    removedLines,
-    pending: modifications.filter((item) => item.status === 'pending').length,
-    failed: modifications.filter((item) => item.status === 'failed').length,
-  };
-}
-
-function LargeDiffSummaryView({ summary }: { summary: LargeDiffSummary }) {
+function LargeDiffSummaryView({
+  summary,
+  onAccept,
+  onReject,
+  processingId,
+}: {
+  summary: LargeDiffSummary;
+  onAccept: (id: string) => Promise<void>;
+  onReject: (id: string) => void;
+  processingId?: string;
+}) {
   const { t } = useI18n();
+  const guarded = summary.guardedModification;
 
   return (
     <div className={styles.largeDiffSummary}>
@@ -438,18 +229,53 @@ function LargeDiffSummaryView({ summary }: { summary: LargeDiffSummary }) {
         <h3>{t('diff.largeDiffSummaryTitle')}</h3>
         <p>
           {t('diff.largeDiffSummaryDescription', {
-            oldLines: summary.oldLines,
-            newLines: summary.newLines,
-            added: summary.addedLines,
-            removed: summary.removedLines,
+            oldLines: guarded.oldLines,
+            newLines: guarded.newLines,
+            added: guarded.addedLines,
+            removed: guarded.removedLines,
           })}
         </p>
         <div className={styles.largeDiffMeta}>
-          <span>{t('diff.largeDiffOldLines', { count: summary.oldLines })}</span>
-          <span>{t('diff.largeDiffNewLines', { count: summary.newLines })}</span>
+          <span>{t('diff.largeDiffOldLines', { count: guarded.oldLines })}</span>
+          <span>{t('diff.largeDiffNewLines', { count: guarded.newLines })}</span>
           <span>
-            {t('diff.largeDiffChangedLines', { count: summary.addedLines + summary.removedLines })}
+            {t('diff.largeDiffChangedLines', {
+              count: guarded.addedLines + guarded.removedLines,
+            })}
           </span>
+        </div>
+        <div className={styles.largeDiffItems}>
+          {summary.modifications.map((modification) => (
+            <div
+              key={modification.modificationId}
+              className={styles.largeDiffItem}
+              data-modification-summary-id={modification.modificationId}
+            >
+              <div className={styles.largeDiffItemBody}>
+                <span className={styles.largeDiffItemLabel} title={modification.label}>
+                  {modification.label}
+                </span>
+                <div className={styles.largeDiffMeta}>
+                  <span>{t('diff.largeDiffOldLines', { count: modification.oldLines })}</span>
+                  <span>{t('diff.largeDiffNewLines', { count: modification.newLines })}</span>
+                  <span>
+                    {t('diff.largeDiffChangedLines', {
+                      count: modification.addedLines + modification.removedLines,
+                    })}
+                  </span>
+                </div>
+              </div>
+              <DiffBlockActions
+                modificationId={modification.modificationId}
+                status={modification.status}
+                onAccept={() => {
+                  void onAccept(modification.modificationId);
+                }}
+                onReject={() => onReject(modification.modificationId)}
+                isProcessing={processingId === modification.modificationId}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -457,14 +283,107 @@ function LargeDiffSummaryView({ summary }: { summary: LargeDiffSummary }) {
 }
 
 interface VirtualizedDiffContentProps {
-  items: RenderItem[];
+  items: DiffRenderItem[];
   resetKey: string;
+  dataRevision: FullFileDiffLine[];
   onAccept: (id: string) => Promise<void>;
   onReject: (id: string) => void;
   onToggleRegion: (regionIndex: number) => void;
   processingId?: string;
   syntaxHighlight?: DiffSyntaxHighlightData | null;
 }
+
+interface VirtualDiffRowProps {
+  item: DiffRenderItem;
+  onElement: (key: string, node: HTMLDivElement | null) => void;
+  onAccept: (id: string) => Promise<void>;
+  onReject: (id: string) => void;
+  onToggleRegion: (regionIndex: number) => void;
+  processingId?: string;
+  syntaxHighlight?: DiffSyntaxHighlightData | null;
+  expandedLines: ReadonlySet<FullFileDiffLine>;
+  onLongLineExpandedChange: (line: FullFileDiffLine, expanded: boolean) => void;
+}
+
+/** 渲染一个有界的虚拟行，并保持 DOM ref 在相同 item 生命周期内稳定。 */
+const VirtualDiffRow = memo(function VirtualDiffRow({
+  item,
+  onElement,
+  onAccept,
+  onReject,
+  onToggleRegion,
+  processingId,
+  syntaxHighlight,
+  expandedLines,
+  onLongLineExpandedChange,
+}: VirtualDiffRowProps) {
+  const setElement = useCallback(
+    (node: HTMLDivElement | null) => onElement(item.key, node),
+    [item.key, onElement]
+  );
+  const acceptModification = useCallback(() => {
+    if (item.type === 'diff-actions') {
+      void onAccept(item.modificationId);
+    }
+  }, [item, onAccept]);
+  const rejectModification = useCallback(() => {
+    if (item.type === 'diff-actions') {
+      onReject(item.modificationId);
+    }
+  }, [item, onReject]);
+  const expandRegion = useCallback(() => {
+    if (item.type === 'collapsed') {
+      onToggleRegion(item.regionIndex);
+    }
+  }, [item, onToggleRegion]);
+
+  let content: ReactNode;
+  switch (item.type) {
+    case 'context-line':
+      content = (
+        <DiffLine
+          line={item.line}
+          showLineNumbers={true}
+          syntaxTokens={getDiffLineTokens(item.line, syntaxHighlight ?? null)}
+          isLongLineExpanded={expandedLines.has(item.line)}
+          onLongLineExpandedChange={(expanded) => onLongLineExpandedChange(item.line, expanded)}
+        />
+      );
+      break;
+    case 'diff-lines':
+      content = (
+        <DiffBlock
+          modificationId={item.modificationId}
+          lines={item.lines}
+          status={item.status}
+          syntaxHighlight={syntaxHighlight}
+          expandedLines={expandedLines}
+          onLongLineExpandedChange={onLongLineExpandedChange}
+        />
+      );
+      break;
+    case 'diff-actions':
+      content = (
+        <DiffBlockActions
+          modificationId={item.modificationId}
+          status={item.status}
+          onAccept={acceptModification}
+          onReject={rejectModification}
+          isProcessing={processingId === item.modificationId}
+        />
+      );
+      break;
+    case 'collapsed':
+      content = <CollapsedLines lineCount={item.lineCount} onExpand={expandRegion} />;
+      break;
+  }
+
+  return (
+    <div ref={setElement} data-virtual-key={item.key} className={styles.virtualRow}>
+      {content}
+    </div>
+  );
+});
 
 /**
  * 虚拟化 Diff 内容区域
@@ -475,6 +394,7 @@ interface VirtualizedDiffContentProps {
 function VirtualizedDiffContent({
   items,
   resetKey,
+  dataRevision,
   onAccept,
   onReject,
   onToggleRegion,
@@ -488,17 +408,46 @@ function VirtualizedDiffContent({
   const scrollFrameRef = useRef<number | null>(null);
   const measureFrameRef = useRef<number | null>(null);
   const pendingScrollTopRef = useRef(0);
+  const containerWidthRef = useRef(0);
 
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
   const [containerWidth, setContainerWidth] = useState(0);
   const [measureVersion, setMeasureVersion] = useState(0);
+  const [expandedLinesByDocument, setExpandedLinesByDocument] = useState<
+    Map<string, ReadonlySet<FullFileDiffLine>>
+  >(new Map());
+  const expandedLines = expandedLinesByDocument.get(resetKey) ?? EMPTY_EXPANDED_LINES;
+
+  const handleLongLineExpandedChange = useCallback(
+    (line: FullFileDiffLine, expanded: boolean) => {
+      for (const item of items) {
+        const containsLine =
+          (item.type === 'context-line' && item.line === line) ||
+          (item.type === 'diff-lines' && item.lines.includes(line));
+        if (containsLine) {
+          rowHeightsRef.current.delete(item.key);
+          break;
+        }
+      }
+      setExpandedLinesByDocument((current) =>
+        updateExpandedDiffLines(current, resetKey, line, expanded)
+      );
+    },
+    [items, resetKey]
+  );
 
   const scheduleMeasureUpdate = useCallback(() => {
     if (measureFrameRef.current !== null) return;
 
     measureFrameRef.current = window.requestAnimationFrame(() => {
       measureFrameRef.current = null;
+      rowElementsRef.current.forEach((node, key) => {
+        rowHeightsRef.current.set(key, Math.max(1, Math.ceil(node.getBoundingClientRect().height)));
+      });
+      const nextScrollTop = contentRef.current?.scrollTop ?? 0;
+      pendingScrollTopRef.current = nextScrollTop;
+      setScrollTop(nextScrollTop);
       setMeasureVersion((version) => version + 1);
     });
   }, []);
@@ -547,15 +496,12 @@ function VirtualizedDiffContent({
         Math.abs(previousHeight - nextHeight) > 1 ? nextHeight : previousHeight
       );
 
-      setContainerWidth((previousWidth) => {
-        if (Math.abs(previousWidth - nextWidth) <= 1) {
-          return previousWidth;
-        }
-
+      if (Math.abs(containerWidthRef.current - nextWidth) > 1) {
+        containerWidthRef.current = nextWidth;
         rowHeightsRef.current.clear();
+        setContainerWidth(nextWidth);
         scheduleMeasureUpdate();
-        return nextWidth;
-      });
+      }
     };
 
     updateViewport();
@@ -565,18 +511,20 @@ function VirtualizedDiffContent({
     return () => observer.disconnect();
   }, [scheduleMeasureUpdate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const contentEl = contentRef.current;
-    rowElementsRef.current.forEach((node) => rowObserverRef.current?.unobserve(node));
-    rowElementsRef.current.clear();
+    // Keep mounted rows observed. React can reuse the same keyed DOM nodes for a new diff
+    // revision, so clearing this registry here would prevent their new heights being measured.
     rowHeightsRef.current.clear();
+    pendingScrollTopRef.current = 0;
+    setExpandedLinesByDocument(new Map());
     setScrollTop(0);
     setMeasureVersion((version) => version + 1);
 
     if (contentEl) {
       contentEl.scrollTop = 0;
     }
-  }, [resetKey]);
+  }, [dataRevision, resetKey]);
 
   useEffect(
     () => () => {
@@ -592,9 +540,8 @@ function VirtualizedDiffContent({
 
   const layout = useMemo(() => {
     void measureVersion;
-    return buildVirtualLayout(items, rowHeightsRef.current, containerWidth);
-  }, [items, measureVersion, containerWidth]);
-
+    return buildVirtualLayout(items, rowHeightsRef.current, containerWidth, expandedLines);
+  }, [items, measureVersion, containerWidth, expandedLines]);
   const { startIndex, endIndex } = useMemo(
     () => clampVisibleRange(layout, scrollTop, viewportHeight),
     [layout, scrollTop, viewportHeight]
@@ -612,7 +559,7 @@ function VirtualizedDiffContent({
   }, [layout, startIndex, endIndex]);
 
   const visibleItems = useMemo(() => {
-    const result: RenderItem[] = [];
+    const result: DiffRenderItem[] = [];
     for (let index = startIndex; index <= endIndex; index++) {
       const item = items[index];
       if (!item) continue;
@@ -631,66 +578,20 @@ function VirtualizedDiffContent({
     });
   }, []);
 
-  const setRowElement = useCallback(
-    (key: string, node: HTMLDivElement | null) => {
-      const previousNode = rowElementsRef.current.get(key);
-      if (previousNode && previousNode !== node) {
-        rowObserverRef.current?.unobserve(previousNode);
-        rowElementsRef.current.delete(key);
-      }
+  const setRowElement = useCallback((key: string, node: HTMLDivElement | null) => {
+    const previousNode = rowElementsRef.current.get(key);
+    if (previousNode === node) return;
 
-      if (!node) return;
+    if (previousNode) {
+      rowObserverRef.current?.unobserve(previousNode);
+      rowElementsRef.current.delete(key);
+    }
 
-      rowElementsRef.current.set(key, node);
-      rowObserverRef.current?.observe(node);
-      updateMeasuredHeight(key, node.getBoundingClientRect().height);
-    },
-    [updateMeasuredHeight]
-  );
+    if (!node) return;
 
-  const renderItem = useCallback(
-    (item: RenderItem) => {
-      switch (item.type) {
-        case 'context-line':
-          if (!item.line) return null;
-          return (
-            <DiffLine
-              line={item.line}
-              showLineNumbers={true}
-              syntaxTokens={getDiffLineTokens(item.line, syntaxHighlight ?? null)}
-            />
-          );
-
-        case 'diff-block': {
-          const { modificationId, lines, status } = item;
-          if (!modificationId || !lines || !status) return null;
-          return (
-            <DiffBlock
-              modificationId={modificationId}
-              lines={lines}
-              status={status}
-              onAccept={() => onAccept(modificationId)}
-              onReject={() => onReject(modificationId)}
-              isProcessing={processingId === modificationId}
-              syntaxHighlight={syntaxHighlight}
-            />
-          );
-        }
-
-        case 'collapsed': {
-          const { lineCount, regionIndex } = item;
-          if (lineCount === undefined || regionIndex === undefined) return null;
-          return (
-            <CollapsedLines lineCount={lineCount} onExpand={() => onToggleRegion(regionIndex)} />
-          );
-        }
-
-        default:
-          return null;
-      }
-    },
-    [onAccept, onReject, onToggleRegion, processingId, syntaxHighlight]
-  );
+    rowElementsRef.current.set(key, node);
+    rowObserverRef.current?.observe(node);
+  }, []);
 
   return (
     <div ref={contentRef} className={styles.content} onScroll={handleScroll}>
@@ -699,14 +600,18 @@ function VirtualizedDiffContent({
           <div style={{ height: virtualPadding.top }} aria-hidden="true" />
         )}
         {visibleItems.map((item) => (
-          <div
+          <VirtualDiffRow
             key={item.key}
-            ref={(node) => setRowElement(item.key, node)}
-            data-virtual-key={item.key}
-            className={styles.virtualRow}
-          >
-            {renderItem(item)}
-          </div>
+            item={item}
+            onElement={setRowElement}
+            onAccept={onAccept}
+            onReject={onReject}
+            onToggleRegion={onToggleRegion}
+            processingId={processingId}
+            syntaxHighlight={syntaxHighlight}
+            expandedLines={expandedLines}
+            onLongLineExpandedChange={handleLongLineExpandedChange}
+          />
         ))}
         {virtualPadding.bottom > 0 && (
           <div style={{ height: virtualPadding.bottom }} aria-hidden="true" />
@@ -718,7 +623,7 @@ function VirtualizedDiffContent({
 
 // ==================== 主组件 ====================
 
-export function FullFileDiffViewer({
+function FullFileDiffViewerComponent({
   originalContent,
   modifications,
   fileName,
@@ -765,101 +670,46 @@ export function FullFileDiffViewer({
     });
   }, [fileName, documentId, largeDiffSummary]);
 
-  // 折叠区域状态（可展开/收起）
-  const [collapsibleRegions, setCollapsibleRegions] = useState<CollapsibleRegion[]>([]);
+  const [collapsibleRegionState, setCollapsibleRegionState] =
+    useState<CollapsibleRegionRevisionState | null>(null);
+  const collapsibleRegions = useMemo(
+    () =>
+      fullDiffData
+        ? resolveCollapsibleRegions(
+            fullDiffData.lines,
+            fullDiffData.collapsibleRegions,
+            collapsibleRegionState
+          )
+        : [],
+    [collapsibleRegionState, fullDiffData]
+  );
 
-  // 当 fullDiffData 变化时，重置折叠区域
-  useEffect(() => {
-    setCollapsibleRegions(fullDiffData?.collapsibleRegions ?? []);
-  }, [fullDiffData]);
+  // Apply expansion state synchronously to the current revision. A cold mount must never
+  // render the entire file once before its collapsed regions become available.
+  const handleToggleRegion = useCallback(
+    (regionIndex: number) => {
+      if (!fullDiffData) return;
 
-  // 切换折叠区域展开状态
-  const handleToggleRegion = useCallback((regionIndex: number) => {
-    setCollapsibleRegions((prev) => toggleRegionExpanded(prev, regionIndex));
-  }, []);
-
-  // 构建修改 ID 到修改数据的映射
-  const modificationMap = useMemo(() => {
-    const map = new Map<string, ModificationApplyResult>();
-    for (const mod of modifications) {
-      map.set(mod.modificationId, mod);
-    }
-    return map;
-  }, [modifications]);
+      setCollapsibleRegionState((current) =>
+        toggleCollapsibleRegionRevision(
+          fullDiffData.lines,
+          fullDiffData.collapsibleRegions,
+          current,
+          regionIndex
+        )
+      );
+    },
+    [fullDiffData]
+  );
 
   // 构建渲染项列表
-  const renderItems = useMemo(() => {
-    if (!fullDiffData) return [];
-
-    const items: RenderItem[] = [];
-    const { lines } = fullDiffData;
-    const processedModIds = new Set<string>();
-
-    let i = 0;
-    while (i < lines.length) {
-      // 检查是否在折叠区域内
-      const collapsedRegion = collapsibleRegions.find(
-        (r) => !r.isExpanded && i >= r.startIndex && i <= r.endIndex
-      );
-
-      if (collapsedRegion) {
-        // 添加折叠占位符
-        const regionIndex = collapsibleRegions.indexOf(collapsedRegion);
-        items.push({
-          type: 'collapsed',
-          key: `collapsed-${regionIndex}`,
-          regionIndex,
-          lineCount: collapsedRegion.lineCount,
-        });
-        // 跳过折叠区域内的所有行
-        i = collapsedRegion.endIndex + 1;
-        continue;
-      }
-
-      const line = lines[i];
-      if (!line) {
-        i++;
-        continue;
-      }
-
-      if (line.modificationId && !processedModIds.has(line.modificationId)) {
-        // 遇到新的修改块，收集该修改的所有行
-        processedModIds.add(line.modificationId);
-        const modId = line.modificationId;
-        const modLines: FullFileDiffLine[] = [];
-
-        // 收集属于同一修改的所有连续行
-        while (i < lines.length) {
-          const currentLine = lines[i];
-          if (currentLine?.modificationId !== modId) break;
-          modLines.push(currentLine);
-          i++;
-        }
-
-        const mod = modificationMap.get(modId);
-        items.push({
-          type: 'diff-block',
-          key: `diff-${modId}`,
-          modificationId: modId,
-          lines: modLines,
-          status: mod?.status ?? 'pending',
-        });
-      } else if (!line.modificationId) {
-        // 上下文行
-        items.push({
-          type: 'context-line',
-          key: `line-${i}`,
-          line,
-        });
-        i++;
-      } else {
-        // 已处理的修改行，跳过
-        i++;
-      }
-    }
-
-    return items;
-  }, [fullDiffData, collapsibleRegions, modificationMap]);
+  const renderItems = useMemo(
+    () =>
+      fullDiffData
+        ? buildDiffRenderItems(fullDiffData.lines, collapsibleRegions, modifications)
+        : [],
+    [fullDiffData, collapsibleRegions, modifications]
+  );
 
   const syntaxHighlight = useDiffSyntaxHighlight(
     originalContent,
@@ -885,7 +735,12 @@ export function FullFileDiffViewer({
           stats={{ added: largeDiffSummary.addedLines, removed: largeDiffSummary.removedLines }}
         />
         <div className={styles.content}>
-          <LargeDiffSummaryView summary={largeDiffSummary} />
+          <LargeDiffSummaryView
+            summary={largeDiffSummary}
+            onAccept={onAccept}
+            onReject={onReject}
+            processingId={processingId}
+          />
         </div>
         <FooterActions
           stats={{
@@ -921,6 +776,7 @@ export function FullFileDiffViewer({
       <VirtualizedDiffContent
         items={renderItems}
         resetKey={`${documentId ?? ''}:${fileName}`}
+        dataRevision={fullDiffData.lines}
         onAccept={onAccept}
         onReject={onReject}
         onToggleRegion={handleToggleRegion}
@@ -941,3 +797,5 @@ export function FullFileDiffViewer({
     </div>
   );
 }
+
+export const FullFileDiffViewer = memo(FullFileDiffViewerComponent);

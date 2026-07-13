@@ -189,14 +189,17 @@ diff/
 ├── CollapsedLines.module.css     # 折叠行样式
 ├── DiffActions.tsx               # 差异操作按钮（接受/拒绝）
 ├── DiffActions.module.css        # 差异操作样式
-├── DiffBlock.tsx                 # 差异代码块
+├── DiffBlock.tsx                 # 差异代码分块与独立审批行组件
 ├── DiffBlock.module.css          # 差异块样式
+├── DiffBlockTokenBudget.ts       # 差异块累计语法 token DOM 预算
 ├── DiffLine.tsx                  # 差异行组件
 ├── DiffLine.module.css           # 差异行样式
+├── DiffLinePreview.ts            # 超长差异行预览与 UTF-16 安全截断
 ├── DiffSyntaxHighlight.ts        # Diff 语法高亮与大文件性能降级
 ├── DiffViewer.tsx                # 差异查看器（内嵌）
 ├── DiffViewer.module.css         # 差异查看器样式
-├── FullFileDiffViewer.tsx        # 完整文件差异视图
+├── FullFileDiffModel.ts          # 完整差异的分块、护栏与虚拟布局纯逻辑
+├── FullFileDiffViewer.tsx        # 完整文件差异视图（小块虚拟化与稳定测量行）
 ├── FullFileDiffViewer.module.css # 完整差异样式
 ├── SnapshotHistory.tsx           # 快照历史记录
 ├── SnapshotHistory.module.css    # 快照历史样式

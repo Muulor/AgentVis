@@ -26,6 +26,7 @@ const logger = getLogger('diffStore');
  * 避免昂贵的 ContentMatcher.fuzzyMatch() 导致的 5 分钟阻塞叠加。
  */
 const loadModificationsGeneration = new Map<string, number>();
+const persistedDiffLoadsInFlight = new Set<string>();
 
 // ==================== 常量 ====================
 
@@ -795,6 +796,12 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
       return;
     }
 
+    if (persistedDiffLoadsInFlight.has(contextId)) {
+      logger.trace('[diffStore] Diff 恢复已在进行，跳过重复加载, contextId:', contextId);
+      return;
+    }
+    persistedDiffLoadsInFlight.add(contextId);
+
     // 从数据库加载该上下文的 pending 状态 Diff 记录
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -1070,6 +1077,8 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
       }
     } catch (error) {
       logger.error('[diffStore] 加载持久化 Diff 失败:', error);
+    } finally {
+      persistedDiffLoadsInFlight.delete(contextId);
     }
   },
 

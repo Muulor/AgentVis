@@ -5,8 +5,15 @@
  *
  */
 
-import styles from './DiffLine.module.css';
+import { memo, useEffect, useState } from 'react';
 import type { Token } from 'prism-react-renderer';
+import { useI18n } from '@/i18n';
+import styles from './DiffLine.module.css';
+import {
+  buildDiffLinePreview,
+  buildExpandedDiffLinePreview,
+  MAX_EXPANDED_RENDERED_DIFF_LINE_CHARS,
+} from './DiffLinePreview';
 import type { DiffLine as DiffLineType } from '../../services/fast-apply/types';
 
 // ==================== 类型定义 ====================
@@ -22,6 +29,10 @@ export interface DiffLineProps {
   onClick?: () => void;
   /** Prism 按行生成的语法 token；缺失时保持纯文本渲染 */
   syntaxTokens?: Token[];
+  /** 由虚拟化父级持有的长行展开状态；省略时使用组件本地状态 */
+  isLongLineExpanded?: boolean;
+  /** 长行展开状态变化回调 */
+  onLongLineExpandedChange?: (expanded: boolean) => void;
 }
 
 // ==================== 辅助函数 ====================
@@ -63,13 +74,32 @@ function getLineTypeClass(type: DiffLineType['type']): string {
 
 // ==================== 主组件 ====================
 
-export function DiffLine({
+function DiffLineComponent({
   line,
   showLineNumbers = true,
   isHighlighted = false,
   onClick,
   syntaxTokens,
+  isLongLineExpanded: controlledLongLineExpanded,
+  onLongLineExpandedChange,
 }: DiffLineProps) {
+  const { t } = useI18n();
+  const [uncontrolledLongLineState, setUncontrolledLongLineState] = useState({
+    content: line.content,
+    expanded: false,
+  });
+  const uncontrolledLongLineExpanded =
+    uncontrolledLongLineState.content === line.content && uncontrolledLongLineState.expanded;
+  const isLongLineExpanded = controlledLongLineExpanded ?? uncontrolledLongLineExpanded;
+  const preview = buildDiffLinePreview(line.content);
+  const isLongLine = preview.isTruncated;
+  const renderedPreview = isLongLineExpanded ? buildExpandedDiffLinePreview(line.content) : preview;
+
+  useEffect(() => {
+    setUncontrolledLongLineState((current) =>
+      current.content === line.content ? current : { content: line.content, expanded: false }
+    );
+  }, [line.content]);
   const lineClasses = [
     styles.line,
     getLineTypeClass(line.type),
@@ -105,14 +135,47 @@ export function DiffLine({
 
       {/* 行内容 */}
       <span className={styles.lineContent}>
-        {syntaxTokens
-          ? syntaxTokens.map((token, index) => (
-              <span key={index} className={`token ${token.types.join(' ')}`}>
-                {token.content}
-              </span>
-            ))
-          : line.content}
+        {isLongLine && (
+          <button
+            type="button"
+            className={styles.longLineToggle}
+            aria-expanded={isLongLineExpanded}
+            onClick={(event) => {
+              event.stopPropagation();
+              const nextExpanded = !isLongLineExpanded;
+              if (controlledLongLineExpanded === undefined) {
+                setUncontrolledLongLineState({ content: line.content, expanded: nextExpanded });
+              }
+              onLongLineExpandedChange?.(nextExpanded);
+            }}
+          >
+            {isLongLineExpanded
+              ? t('diff.collapseLongLine')
+              : t('diff.expandLongLine', {
+                  count: Math.min(line.content.length, MAX_EXPANDED_RENDERED_DIFF_LINE_CHARS),
+                })}
+          </button>
+        )}
+        {isLongLine && renderedPreview.isTruncated ? (
+          <>
+            {renderedPreview.leading}
+            <span className={styles.longLineOmission}>
+              {t('diff.longLineOmitted', { count: renderedPreview.omittedChars })}
+            </span>
+            {renderedPreview.trailing}
+          </>
+        ) : syntaxTokens && !isLongLine ? (
+          syntaxTokens.map((token, index) => (
+            <span key={index} className={`token ${token.types.join(' ')}`}>
+              {token.content}
+            </span>
+          ))
+        ) : (
+          line.content
+        )}
       </span>
     </div>
   );
 }
+
+export const DiffLine = memo(DiffLineComponent);

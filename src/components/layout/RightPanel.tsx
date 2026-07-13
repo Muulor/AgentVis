@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useUIStore } from '@stores/uiStore';
 import { useAgentStore } from '@stores/agentStore';
 import { useHubStore } from '@stores/hubStore';
-import { useDiffStore } from '@stores/diffStore';
+import { useDiffStore, type ContextDiffState } from '@stores/diffStore';
 import { useAttachmentViewerStore } from '@stores/attachmentViewerStore';
 import { usePreviewStore } from '@stores/previewStore';
 import styles from './RightPanel.module.css';
@@ -28,8 +28,28 @@ import {
   reportRendererHealthSnapshot,
   setRendererHealthStage,
 } from '@services/diagnostics/rendererHealth';
+import type { AttachmentInfo } from '@/types/message';
 
 const logger = getLogger('RightPanel');
+const EMPTY_ATTACHMENTS: AttachmentInfo[] = [];
+const EMPTY_CONTEXT_DIFF_STATE: ContextDiffState = {
+  mode: 'normal',
+  documentId: null,
+  content: '',
+  originalContent: '',
+  fileName: '',
+  pendingModifications: [],
+  originalXml: '',
+  snapshots: [],
+  undoStack: [],
+  redoStack: [],
+  isLoading: false,
+  error: null,
+  preAppliedContent: '',
+  fileEntries: new Map(),
+  activeFileId: null,
+  activeSnapshotId: null,
+};
 
 /**
  * RightPanel 右栏文件区
@@ -42,12 +62,11 @@ const logger = getLogger('RightPanel');
 export function RightPanel() {
   const { t } = useI18n();
   const toggleRightPanel = useUIStore((state) => state.toggleRightPanel);
+  const isRightPanelVisible = useUIStore((state) => state.isRightPanelVisible);
 
   // 获取当前 Agent 和 Hub ID
   const currentAgentId = useAgentStore((state) => state.currentAgentId);
   const currentHubId = useHubStore((state) => state.currentHubId);
-  const agents = useAgentStore((state) => state.agents);
-  const hubs = useHubStore((state) => state.hubs);
 
   // 获取当前活动视图（Hub 或 Agent）
   // 通过 useUIStore 或检测 URL/路由来判断，这里简化处理：优先使用 Agent，其次 Hub
@@ -55,13 +74,11 @@ export function RightPanel() {
   const contextId = currentAgentId ?? currentHubId ?? '';
 
   // 获取当前 Agent 和 Hub 信息（用于交付物目录）
-  const currentAgent = useMemo(
-    () => agents.find((a) => a.id === currentAgentId),
-    [agents, currentAgentId]
+  const currentAgent = useAgentStore((state) =>
+    state.agents.find((agent) => agent.id === currentAgentId)
   );
-  const currentHub = useMemo(
-    () => hubs.find((h) => h.id === currentAgent?.hubId),
-    [hubs, currentAgent?.hubId]
+  const currentHub = useHubStore((state) =>
+    state.hubs.find((hub) => hub.id === currentAgent?.hubId)
   );
   const hubName = currentHub?.name ?? 'default';
   const agentName = currentAgent?.name ?? 'unknown';
@@ -88,51 +105,13 @@ export function RightPanel() {
     }
   }, [contextId, loadPersistedDiffs]);
 
-  // Diff Store 状态（按 contextId 隔离）
-  const diffByContext = useDiffStore((state) => state.diffByContext);
+  // Diff Store 状态（仅订阅当前 context，避免其他 Agent 更新触发右栏重渲染）
+  const currentDiffState = useDiffStore((state) =>
+    contextId ? state.diffByContext.get(contextId) : undefined
+  );
   const isSnapshotPanelOpen = useDiffStore((state) => state.isSnapshotPanelOpen);
 
-  // 获取当前上下文的 Diff 状态
-  const diffState = useMemo(() => {
-    if (!contextId) {
-      // 无上下文时返回空状态
-      return {
-        mode: 'normal' as const,
-        documentId: null,
-        content: '',
-        originalContent: '',
-        fileName: '',
-        pendingModifications: [],
-        originalXml: '',
-        snapshots: [],
-        undoStack: [],
-        redoStack: [],
-        isLoading: false,
-        error: null,
-        fileEntries: new Map(),
-        activeFileId: null,
-      };
-    }
-    return (
-      diffByContext.get(contextId) ?? {
-        mode: 'normal' as const,
-        documentId: null,
-        content: '',
-        originalContent: '',
-        fileName: '',
-        pendingModifications: [],
-        originalXml: '',
-        snapshots: [],
-        undoStack: [],
-        redoStack: [],
-        isLoading: false,
-        error: null,
-        fileEntries: new Map(),
-        activeFileId: null,
-        activeSnapshotId: null,
-      }
-    );
-  }, [contextId, diffByContext]);
+  const diffState = currentDiffState ?? EMPTY_CONTEXT_DIFF_STATE;
 
   const mode = diffState.mode;
   const fileName = diffState.fileName;
@@ -318,31 +297,29 @@ export function RightPanel() {
   );
 
   // ==================== 附件文档预览 ====================
-  const {
-    previewDocument,
-    clearDocumentPreview,
-    attachmentsByContext,
-    previewByContext,
-    setDocumentPreview,
-    clearContextAttachments,
-    clearPreviewSignal,
-  } = useAttachmentViewerStore();
-
-  // 获取当前上下文的附件列表
-  const currentAttachments = useMemo(
-    () => (contextId ? (attachmentsByContext[contextId] ?? []) : []),
-    [attachmentsByContext, contextId]
+  const previewDocument = useAttachmentViewerStore((state) => state.previewDocument);
+  const clearDocumentPreview = useAttachmentViewerStore((state) => state.clearDocumentPreview);
+  const setDocumentPreview = useAttachmentViewerStore((state) => state.setDocumentPreview);
+  const clearContextAttachments = useAttachmentViewerStore(
+    (state) => state.clearContextAttachments
+  );
+  const clearPreviewSignal = useAttachmentViewerStore((state) => state.clearPreviewSignal);
+  const currentAttachments = useAttachmentViewerStore((state) =>
+    contextId ? (state.attachmentsByContext[contextId] ?? EMPTY_ATTACHMENTS) : EMPTY_ATTACHMENTS
+  );
+  const savedPreviewId = useAttachmentViewerStore((state) =>
+    contextId ? state.previewByContext[contextId] : undefined
   );
 
   // 追踪上一次的上下文 ID，用于切换时保存预览状态
   const prevContextIdRef = useRef<string | null>(null);
   const selectedFileRef = useRef(selectedFile);
-  const attachmentsByContextRef = useRef(attachmentsByContext);
-  const previewByContextRef = useRef(previewByContext);
+  const currentAttachmentsRef = useRef(currentAttachments);
+  const savedPreviewIdRef = useRef(savedPreviewId);
   const setDocumentPreviewRef = useRef(setDocumentPreview);
   selectedFileRef.current = selectedFile;
-  attachmentsByContextRef.current = attachmentsByContext;
-  previewByContextRef.current = previewByContext;
+  currentAttachmentsRef.current = currentAttachments;
+  savedPreviewIdRef.current = savedPreviewId;
   setDocumentPreviewRef.current = setDocumentPreview;
 
   // 切换 Agent 时：保存当前预览状态，恢复目标 Agent 的预览状态
@@ -361,10 +338,9 @@ export function RightPanel() {
 
     // 恢复目标上下文的预览状态
     if (contextId) {
-      const savedPreviewId = previewByContextRef.current[contextId];
-      const attachments = attachmentsByContextRef.current[contextId] ?? [];
-      const savedAttachment = savedPreviewId
-        ? attachments.find((a) => a.id === savedPreviewId)
+      const targetPreviewId = savedPreviewIdRef.current;
+      const savedAttachment = targetPreviewId
+        ? currentAttachmentsRef.current.find((attachment) => attachment.id === targetPreviewId)
         : null;
 
       if (savedAttachment) {
@@ -387,7 +363,7 @@ export function RightPanel() {
     }
 
     prevContextIdRef.current = contextId;
-  }, [contextId]); // 注意：不依赖 attachmentsByContext 和 previewByContext，避免循环
+  }, [contextId]); // 注意：目标上下文数据通过 ref 读取，避免附件更新造成切换逻辑循环
 
   // 监听清空预览信号：当撤销消息等操作时清空本地预览状态
   useEffect(() => {
@@ -820,6 +796,28 @@ export function RightPanel() {
     });
   }, [diffState.activeFileId]);
 
+  const handleAcceptModification = useCallback(
+    async (id: string) => {
+      if (contextId) await acceptModification(contextId, id);
+    },
+    [acceptModification, contextId]
+  );
+
+  const handleRejectModification = useCallback(
+    async (id: string) => {
+      if (contextId) await rejectModification(contextId, id);
+    },
+    [contextId, rejectModification]
+  );
+
+  const handleAcceptAll = useCallback(async () => {
+    if (contextId) await acceptAll(contextId);
+  }, [acceptAll, contextId]);
+
+  const handleRejectAll = useCallback(async () => {
+    if (contextId) await rejectAll(contextId);
+  }, [contextId, rejectAll]);
+
   // 渲染 Diff 模式（Cursor 风格全文档滚动视图）
   const renderDiffMode = () => (
     <div className={styles.diffContainer}>
@@ -893,25 +891,19 @@ export function RightPanel() {
       )}
 
       {/* 全文 Diff 查看器（带上下文折叠） */}
-      <FullFileDiffViewer
-        originalContent={originalContent}
-        modifications={pendingModifications}
-        fileName={fileName}
-        documentId={diffState.documentId ?? undefined}
-        onAccept={async (id) => {
-          if (contextId) await acceptModification(contextId, id);
-        }}
-        onReject={async (id) => {
-          if (contextId) await rejectModification(contextId, id);
-        }}
-        onAcceptAll={async () => {
-          if (contextId) await acceptAll(contextId);
-        }}
-        onRejectAll={async () => {
-          if (contextId) await rejectAll(contextId);
-        }}
-        isLoading={isLoading}
-      />
+      {isRightPanelVisible && (
+        <FullFileDiffViewer
+          originalContent={originalContent}
+          modifications={pendingModifications}
+          fileName={fileName}
+          documentId={diffState.documentId ?? undefined}
+          onAccept={handleAcceptModification}
+          onReject={handleRejectModification}
+          onAcceptAll={handleAcceptAll}
+          onRejectAll={handleRejectAll}
+          isLoading={isLoading}
+        />
+      )}
     </div>
   );
 

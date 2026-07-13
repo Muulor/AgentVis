@@ -19,6 +19,7 @@ type TauriInvoke = (command: string, args?: Record<string, unknown>) => Promise<
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
 const MAIN_THREAD_STALL_WARN_MS = 3_000;
+const BROWSER_LONG_TASK_WARN_MS = 200;
 const SLOW_WORK_WARN_MS = 1_000;
 const SLOW_WORK_ERROR_MS = 3_000;
 
@@ -29,6 +30,7 @@ let sequence = 0;
 let currentStage: RendererStage | null = null;
 let maxObservedDriftMs = 0;
 let invokeLoader: Promise<TauriInvoke | null> | null = null;
+let longTaskObserver: PerformanceObserver | null = null;
 
 function isTauriEnvironment(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
@@ -189,9 +191,39 @@ export async function measureRendererWorkAsync<T>(
   }
 }
 
+function registerLongTaskObserver(): void {
+  if (
+    typeof PerformanceObserver === 'undefined' ||
+    !PerformanceObserver.supportedEntryTypes.includes('longtask')
+  ) {
+    return;
+  }
+
+  try {
+    longTaskObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.duration < BROWSER_LONG_TASK_WARN_MS) continue;
+
+        maxObservedDriftMs = Math.max(maxObservedDriftMs, entry.duration);
+        logger.warn('[RendererHealth] browser long task detected', {
+          durationMs: Math.round(entry.duration),
+          startTimeMs: Math.round(entry.startTime),
+          currentStage,
+          memory: getMemorySnapshot(),
+        });
+      }
+    });
+    longTaskObserver.observe({ type: 'longtask', buffered: true });
+  } catch {
+    longTaskObserver?.disconnect();
+    longTaskObserver = null;
+  }
+}
+
 export function registerRendererHealthMonitor(): void {
   if (registered || typeof window === 'undefined') return;
   registered = true;
+  registerLongTaskObserver();
 
   let lastTick = performance.now();
 

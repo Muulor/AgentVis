@@ -6,12 +6,17 @@ import {
 } from '@services/diagnostics/rendererHealth';
 import {
   WORKSPACE_IMPORT_CHUNK_BYTES,
+  WORKSPACE_IMPORT_COLLECTION_CONCURRENCY,
+  WORKSPACE_IMPORT_SYNC_ENTRY_BATCH_SIZE,
   WorkspaceImportCancelledError,
   WorkspaceImportCommitError,
+  collectFileSystemEntries,
+  createAbortSignalGuardedCallback,
   createWorkspaceImportProgressReporter,
   getWorkspaceImportProgressPercent,
   getWorkspaceImportTotals,
   importWorkspaceItems,
+  registerAbortableDisposable,
   type WorkspaceImportCommitResult,
   type WorkspaceImportProgress,
   type WorkspaceImportSourceItem,
@@ -47,6 +52,45 @@ function directorySource(relativePath: string): WorkspaceImportSourceItem {
   return { relativePath, file: null, isDirectory: true };
 }
 
+function activeSignal(): AbortSignal {
+  return new AbortController().signal;
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function fileSystemFileEntry(
+  name: string,
+  readFile: () => Promise<File>,
+  onRead: () => void = () => undefined
+): FileSystemFileEntry {
+  return {
+    name,
+    fullPath: `/${name}`,
+    filesystem: {} as FileSystem,
+    isFile: true,
+    isDirectory: false,
+    file(successCallback: (file: File) => void, errorCallback?: ErrorCallback) {
+      onRead();
+      void readFile().then(successCallback, (error: unknown) => {
+        errorCallback?.(error as DOMException);
+      });
+    },
+    getParent: vi.fn(),
+  } as unknown as FileSystemFileEntry;
+}
+
 function committedResult(
   importedFiles: number,
   importedEntries: number,
@@ -71,6 +115,173 @@ describe('WorkspaceImportService', () => {
     reportRendererHealthSnapshotMock.mockReset();
     setRendererHealthStageMock.mockReset();
     setRendererHealthStageMock.mockImplementation(() => vi.fn());
+  });
+
+  it('disposes a listener that finishes registering after its owner is unmounted', async () => {
+    const controller = new AbortController();
+    const registration = deferred<() => void>();
+    const dispose = vi.fn();
+    const registered = registerAbortableDisposable(controller.signal, () => registration.promise);
+
+    controller.abort();
+    registration.resolve(dispose);
+    const cleanup = await registered;
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    cleanup();
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps listener handlers and already queued effects inert after abort', () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const effect = vi.fn();
+      const guardedEffect = createAbortSignalGuardedCallback(controller.signal, effect);
+      const scheduleEffect = vi.fn(() => globalThis.setTimeout(guardedEffect, 0));
+      const guardedHandler = createAbortSignalGuardedCallback(controller.signal, scheduleEffect);
+
+      guardedHandler();
+      expect(scheduleEffect).toHaveBeenCalledTimes(1);
+      controller.abort();
+      guardedHandler();
+      vi.runAllTimers();
+
+      expect(scheduleEffect).toHaveBeenCalledTimes(1);
+      expect(effect).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for started sibling reads after cancellation and does not start the next batch', async () => {
+    const controller = new AbortController();
+    const firstRead = deferred<File>();
+    const secondRead = deferred<File>();
+    const thirdRead = deferred<File>();
+    const onFirstRead = vi.fn();
+    const onSecondRead = vi.fn();
+    const onThirdRead = vi.fn();
+    const collection = collectFileSystemEntries(
+      [
+        fileSystemFileEntry('first.txt', () => firstRead.promise, onFirstRead),
+        fileSystemFileEntry('second.txt', () => secondRead.promise, onSecondRead),
+        fileSystemFileEntry('third.txt', () => thirdRead.promise, onThirdRead),
+      ],
+      controller.signal,
+      2
+    );
+    let collectionSettled = false;
+    void collection.then(
+      () => {
+        collectionSettled = true;
+      },
+      () => {
+        collectionSettled = true;
+      }
+    );
+
+    expect(onFirstRead).toHaveBeenCalledTimes(1);
+    expect(onSecondRead).toHaveBeenCalledTimes(1);
+    expect(onThirdRead).not.toHaveBeenCalled();
+
+    controller.abort();
+    firstRead.resolve(fakeFile(new Uint8Array([1])));
+    await Promise.resolve();
+    expect(collectionSettled).toBe(false);
+    expect(onThirdRead).not.toHaveBeenCalled();
+
+    secondRead.resolve(fakeFile(new Uint8Array([2])));
+    await expect(collection).rejects.toBeInstanceOf(WorkspaceImportCancelledError);
+    expect(onThirdRead).not.toHaveBeenCalled();
+  });
+
+  it('returns a read error after a bounded drain when a started sibling never settles', async () => {
+    const readError = new DOMException('read denied', 'NotReadableError');
+    const hungRead = deferred<File>();
+    const onThirdRead = vi.fn();
+    const collection = collectFileSystemEntries(
+      [
+        fileSystemFileEntry('failed.txt', () => Promise.reject(readError)),
+        fileSystemFileEntry('hung.txt', () => hungRead.promise),
+        fileSystemFileEntry('third.txt', async () => fakeFile(new Uint8Array([3])), onThirdRead),
+      ],
+      activeSignal(),
+      2,
+      0
+    );
+
+    await expect(collection).rejects.toBe(readError);
+    expect(onThirdRead).not.toHaveBeenCalled();
+
+    hungRead.resolve(fakeFile(new Uint8Array([2])));
+    await Promise.resolve();
+    expect(onThirdRead).not.toHaveBeenCalled();
+  });
+
+  it('returns cancellation after a bounded drain when a started sibling never settles', async () => {
+    const controller = new AbortController();
+    const hungRead = deferred<File>();
+    const onFirstRead = vi.fn();
+    const onSecondRead = vi.fn();
+    const onThirdRead = vi.fn();
+    const collection = collectFileSystemEntries(
+      [
+        fileSystemFileEntry('first.txt', () => hungRead.promise, onFirstRead),
+        fileSystemFileEntry('second.txt', () => hungRead.promise, onSecondRead),
+        fileSystemFileEntry('third.txt', async () => fakeFile(new Uint8Array([3])), onThirdRead),
+      ],
+      controller.signal,
+      2,
+      0
+    );
+
+    expect(onFirstRead).toHaveBeenCalledTimes(1);
+    expect(onSecondRead).toHaveBeenCalledTimes(1);
+    controller.abort();
+
+    await expect(collection).rejects.toBeInstanceOf(WorkspaceImportCancelledError);
+    expect(onThirdRead).not.toHaveBeenCalled();
+
+    hungRead.resolve(fakeFile(new Uint8Array([1])));
+    await Promise.resolve();
+    expect(onThirdRead).not.toHaveBeenCalled();
+  });
+
+  it('caps native callbacks that remain pending after a bounded drain', async () => {
+    const controller = new AbortController();
+    const hungRead = deferred<File>();
+    const onRead = vi.fn();
+    const pendingEntries = Array.from(
+      { length: WORKSPACE_IMPORT_COLLECTION_CONCURRENCY },
+      (_, index) => fileSystemFileEntry(`hung-${index}.txt`, () => hungRead.promise, onRead)
+    );
+    const collection = collectFileSystemEntries(
+      pendingEntries,
+      controller.signal,
+      WORKSPACE_IMPORT_COLLECTION_CONCURRENCY,
+      0
+    );
+
+    try {
+      expect(onRead).toHaveBeenCalledTimes(WORKSPACE_IMPORT_COLLECTION_CONCURRENCY);
+      controller.abort();
+      await expect(collection).rejects.toBeInstanceOf(WorkspaceImportCancelledError);
+
+      const nextRead = vi.fn();
+      await expect(
+        collectFileSystemEntries(
+          [fileSystemFileEntry('next.txt', async () => fakeFile(new Uint8Array([1])), nextRead)],
+          activeSignal(),
+          1,
+          0
+        )
+      ).rejects.toThrow('too many pending browser callbacks');
+      expect(nextRead).not.toHaveBeenCalled();
+    } finally {
+      hungRead.resolve(fakeFile(new Uint8Array([1])));
+      await Promise.resolve();
+    }
   });
 
   it('coalesces chunk progress while preserving forced and flushed updates', () => {
@@ -146,7 +357,7 @@ describe('WorkspaceImportService', () => {
     const result = await importWorkspaceItems(
       [source('large.bin', bytes)],
       { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
-      { onProgress: () => undefined, shouldCancel: () => false }
+      { onProgress: () => undefined, signal: activeSignal() }
     );
 
     expect(result.importedFiles).toBe(1);
@@ -176,7 +387,7 @@ describe('WorkspaceImportService', () => {
       importWorkspaceItems(
         [source('folder/file.txt', new Uint8Array([1, 2, 3]))],
         { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
-        { onProgress: () => undefined, shouldCancel: () => false }
+        { onProgress: () => undefined, signal: activeSignal() }
       )
     ).rejects.toThrow('disk full');
     expect(invokeMock).toHaveBeenCalledWith('workspace_import_cancel', {
@@ -190,7 +401,7 @@ describe('WorkspaceImportService', () => {
   });
 
   it('cancels between chunks without committing partial content', async () => {
-    let cancelRequested = false;
+    const controller = new AbortController();
     const progressUpdates: WorkspaceImportProgress[] = [];
     invokeMock.mockImplementation(async (command) => {
       if (command === 'workspace_import_begin') {
@@ -202,7 +413,7 @@ describe('WorkspaceImportService', () => {
         };
       }
       if (command === 'workspace_import_append_chunk') {
-        cancelRequested = true;
+        controller.abort();
         return {
           fileBytesReceived: WORKSPACE_IMPORT_CHUNK_BYTES,
           bytesReceived: WORKSPACE_IMPORT_CHUNK_BYTES,
@@ -219,7 +430,7 @@ describe('WorkspaceImportService', () => {
         { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
         {
           onProgress: (progress) => progressUpdates.push(progress),
-          shouldCancel: () => cancelRequested,
+          signal: controller.signal,
         }
       )
     ).rejects.toBeInstanceOf(WorkspaceImportCancelledError);
@@ -241,9 +452,14 @@ describe('WorkspaceImportService', () => {
 
   it('emits every file completion even inside the throttle window', async () => {
     const progressUpdates: WorkspaceImportProgress[] = [];
+    let receivedBytes = 0;
     invokeMock.mockImplementation(async (command) => {
       if (command === 'workspace_import_begin') {
-        return { sessionId: 'session-files', totalBytes: 0, totalFiles: 2, totalEntries: 2 };
+        return { sessionId: 'session-files', totalBytes: 2, totalFiles: 2, totalEntries: 2 };
+      }
+      if (command === 'workspace_import_append_chunk') {
+        receivedBytes += 1;
+        return { fileBytesReceived: 1, bytesReceived: receivedBytes, totalBytes: 2 };
       }
       if (command === 'workspace_import_commit') {
         return committedResult(2, 2, 0, ['a.txt', 'b.txt']);
@@ -252,15 +468,73 @@ describe('WorkspaceImportService', () => {
     });
 
     await importWorkspaceItems(
-      [source('a.txt', new Uint8Array()), source('b.txt', new Uint8Array())],
+      [source('a.txt', new Uint8Array([1])), source('b.txt', new Uint8Array([2]))],
       { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
-      { onProgress: (progress) => progressUpdates.push(progress), shouldCancel: () => false }
+      { onProgress: (progress) => progressUpdates.push(progress), signal: activeSignal() }
     );
 
     const completedFiles = progressUpdates
       .filter((progress) => progress.phase === 'uploading')
       .map((progress) => progress.doneFiles);
     expect(completedFiles).toEqual(expect.arrayContaining([0, 1, 2]));
+  });
+
+  it('yields and coalesces progress for large batches of empty entries', async () => {
+    const controller = new AbortController();
+    const entryCount = WORKSPACE_IMPORT_SYNC_ENTRY_BATCH_SIZE * 3;
+    const items = Array.from({ length: entryCount }, (_, index) =>
+      index % 2 === 0
+        ? directorySource(`folder-${index}`)
+        : source(`empty-${index}.txt`, new Uint8Array())
+    );
+    const totalFiles = items.filter((item) => item.file !== null).length;
+    const progressUpdates: WorkspaceImportProgress[] = [];
+    let cancellationScheduled = false;
+
+    invokeMock.mockImplementation(async (command) => {
+      if (command === 'workspace_import_begin') {
+        return {
+          sessionId: 'session-empty-batch',
+          totalBytes: 0,
+          totalFiles,
+          totalEntries: entryCount,
+        };
+      }
+      if (command === 'workspace_import_cancel') return { cancelled: true };
+      throw new Error(`Unexpected command: ${command}`);
+    });
+
+    await expect(
+      importWorkspaceItems(
+        items,
+        { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
+        {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            progressUpdates.push(progress);
+            if (
+              !cancellationScheduled &&
+              progress.phase === 'uploading' &&
+              progress.doneEntries === WORKSPACE_IMPORT_SYNC_ENTRY_BATCH_SIZE
+            ) {
+              cancellationScheduled = true;
+              globalThis.setTimeout(() => controller.abort(), 0);
+            }
+          },
+        }
+      )
+    ).rejects.toBeInstanceOf(WorkspaceImportCancelledError);
+
+    const uploadingUpdates = progressUpdates.filter((progress) => progress.phase === 'uploading');
+    expect(cancellationScheduled).toBe(true);
+    expect(uploadingUpdates.length).toBeLessThan(entryCount);
+    expect(Math.max(...uploadingUpdates.map((progress) => progress.doneEntries))).toBe(
+      WORKSPACE_IMPORT_SYNC_ENTRY_BATCH_SIZE
+    );
+    expect(invokeMock).toHaveBeenCalledWith('workspace_import_cancel', {
+      sessionId: 'session-empty-batch',
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('workspace_import_commit', expect.anything());
   });
 
   it('counts an empty folder as one entry and advances zero-byte progress by entries', async () => {
@@ -285,7 +559,7 @@ describe('WorkspaceImportService', () => {
     const result = await importWorkspaceItems(
       [item],
       { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
-      { onProgress: (progress) => progressUpdates.push(progress), shouldCancel: () => false }
+      { onProgress: (progress) => progressUpdates.push(progress), signal: activeSignal() }
     );
 
     expect(result.importedEntries).toBe(1);
@@ -302,7 +576,7 @@ describe('WorkspaceImportService', () => {
   });
 
   it('does not cancel after the commit point of no return', async () => {
-    let cancelRequested = false;
+    const controller = new AbortController();
     invokeMock.mockImplementation(async (command) => {
       if (command === 'workspace_import_begin') {
         return { sessionId: 'session-5', totalBytes: 0, totalFiles: 1, totalEntries: 1 };
@@ -319,9 +593,9 @@ describe('WorkspaceImportService', () => {
       { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
       {
         onProgress: (progress) => {
-          if (progress.phase === 'committing') cancelRequested = true;
+          if (progress.phase === 'committing') controller.abort();
         },
-        shouldCancel: () => cancelRequested,
+        signal: controller.signal,
       }
     );
 
@@ -332,7 +606,7 @@ describe('WorkspaceImportService', () => {
   });
 
   it('still cancels after upload completion when commit has not started', async () => {
-    let cancelRequested = false;
+    const controller = new AbortController();
     invokeMock.mockImplementation(async (command) => {
       if (command === 'workspace_import_begin') {
         return { sessionId: 'session-6', totalBytes: 0, totalFiles: 1, totalEntries: 1 };
@@ -348,10 +622,10 @@ describe('WorkspaceImportService', () => {
         {
           onProgress: (progress) => {
             if (progress.phase === 'uploading' && progress.doneEntries === 1) {
-              cancelRequested = true;
+              controller.abort();
             }
           },
-          shouldCancel: () => cancelRequested,
+          signal: controller.signal,
         }
       )
     ).rejects.toBeInstanceOf(WorkspaceImportCancelledError);
@@ -387,7 +661,7 @@ describe('WorkspaceImportService', () => {
       const error = await importWorkspaceItems(
         [source('empty.txt', new Uint8Array())],
         { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
-        { onProgress: () => undefined, shouldCancel: () => false }
+        { onProgress: () => undefined, signal: activeSignal() }
       ).catch((caught: unknown) => caught);
 
       expect(error).toBeInstanceOf(WorkspaceImportCommitError);
@@ -409,7 +683,7 @@ describe('WorkspaceImportService', () => {
     const error = await importWorkspaceItems(
       [source('empty.txt', new Uint8Array())],
       { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
-      { onProgress: () => undefined, shouldCancel: () => false }
+      { onProgress: () => undefined, signal: activeSignal() }
     ).catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(WorkspaceImportCommitError);

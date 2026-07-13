@@ -48,9 +48,42 @@
 
 .lineContent {
   flex: 1;
+  min-width: 0;
   padding: 0 8px;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.longLineOmission {
+  display: inline;
+  margin: 0 6px;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-bg-tertiary) 82%, transparent);
+  color: var(--color-text-tertiary);
+  white-space: normal;
+  word-break: normal;
+}
+
+.longLineToggle {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 8px 2px 0;
+  padding: 1px 6px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-button);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.longLineToggle:hover {
+  border-color: var(--color-text-tertiary);
+  color: var(--color-text-primary);
 }
 
 /* ==================== 语法高亮 ==================== */
