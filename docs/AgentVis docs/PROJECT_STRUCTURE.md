@@ -128,9 +128,9 @@ chat/
 ├── ChatSearchBar.module.css      # 搜索栏样式
 ├── ImageLightbox.tsx             # 图片灯箱（大图预览）
 ├── ImageLightbox.module.css      # 灯箱样式
-├── InlineGeneratedImages.tsx     # 内联生成图片展示组件
-├── InlineGeneratedImages.module.css # 内联生成图片样式
-├── inlineGeneratedImageVisibility.ts # 生成图片失败项的可见性过滤
+├── InlineGeneratedImages.tsx     # 内联生成图片单图画廊、翻页及 Lightbox 导航
+├── InlineGeneratedImages.module.css # 生成图片画廊预览与导航样式
+├── inlineGeneratedImageVisibility.ts # 生成图片失败过滤与画廊选中项辅助逻辑
 ├── inputContextTokens.ts         # 输入上下文 token 结构
 ├── fileMentionUtils.ts           # 文件提及工具
 ├── skillSlashUtils.ts            # 技能 / 聊天命令 工具

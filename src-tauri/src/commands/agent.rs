@@ -35,12 +35,16 @@ fn build_latest_message_preview(message: &Message) -> Option<String> {
         return None;
     }
 
-    Some(
-        normalized
-            .chars()
-            .take(AGENT_LATEST_MESSAGE_PREVIEW_MAX_CHARS)
-            .collect(),
-    )
+    let mut chars = normalized.chars();
+    let mut preview: String = chars
+        .by_ref()
+        .take(AGENT_LATEST_MESSAGE_PREVIEW_MAX_CHARS)
+        .collect();
+    if chars.next().is_some() {
+        preview.push('…');
+    }
+
+    Some(preview)
 }
 
 /// Agent 列表响应项
@@ -467,6 +471,24 @@ mod tests {
         assert_eq!(
             build_latest_message_preview(&user).as_deref(),
             Some("User request")
+        );
+    }
+
+    #[test]
+    fn latest_message_preview_marks_only_truncated_unicode_content() {
+        let exact_content = "界".repeat(AGENT_LATEST_MESSAGE_PREVIEW_MAX_CHARS);
+        let exact_message = message("assistant", &exact_content, None);
+        let long_content = format!("{}尾", exact_content);
+        let long_message = message("assistant", &long_content, None);
+        let expected_truncated = format!("{}…", exact_content);
+
+        assert_eq!(
+            build_latest_message_preview(&exact_message).as_deref(),
+            Some(exact_content.as_str())
+        );
+        assert_eq!(
+            build_latest_message_preview(&long_message).as_deref(),
+            Some(expected_truncated.as_str())
         );
     }
 }

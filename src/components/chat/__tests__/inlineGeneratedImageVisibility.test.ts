@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   addUnavailableImagePath,
+  getAdjacentImagePath,
   getDisplayableImagePaths,
+  getImageGalleryNavigationState,
+  resolveActiveImagePath,
 } from '../inlineGeneratedImageVisibility';
 
 describe('inline generated image visibility', () => {
@@ -30,5 +33,41 @@ describe('inline generated image visibility', () => {
     expect(getDisplayableImagePaths(['D:\\project\\new.png'], repeated)).toEqual([
       'D:\\project\\new.png',
     ]);
+  });
+
+  it('preserves the selected image or falls back after that image becomes unavailable', () => {
+    const paths = ['first.png', 'second.png', 'third.png'];
+
+    expect(resolveActiveImagePath(paths, 'second.png')).toBe('second.png');
+    expect(resolveActiveImagePath(['first.png', 'third.png'], 'second.png')).toBe('first.png');
+    expect(resolveActiveImagePath([], 'second.png')).toBeNull();
+  });
+
+  it('moves between adjacent images without crossing the gallery boundaries', () => {
+    const paths = ['first.png', 'second.png', 'third.png'];
+
+    expect(getAdjacentImagePath(paths, 'second.png', -1)).toBe('first.png');
+    expect(getAdjacentImagePath(paths, 'second.png', 1)).toBe('third.png');
+    expect(getAdjacentImagePath(paths, 'first.png', -1)).toBe('first.png');
+    expect(getAdjacentImagePath(paths, 'third.png', 1)).toBe('third.png');
+  });
+
+  it('hides navigation for one image and reports the correct multi-image position', () => {
+    expect(getImageGalleryNavigationState(['only.png'], 'only.png')).toEqual({
+      activePath: 'only.png',
+      currentIndex: 0,
+      totalCount: 1,
+      hasPrevious: false,
+      hasNext: false,
+    });
+    expect(
+      getImageGalleryNavigationState(['first.png', 'second.png', 'third.png'], 'second.png')
+    ).toEqual({
+      activePath: 'second.png',
+      currentIndex: 1,
+      totalCount: 3,
+      hasPrevious: true,
+      hasNext: true,
+    });
   });
 });

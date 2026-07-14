@@ -1,16 +1,15 @@
 /**
  * InlineGeneratedImages 样式
  *
- * 消息气泡内的 SA 生成图片缩略图网格
- * 设计风格：与现有 MessageBubble 的视觉语言一致（圆角、阴影、半透明遮罩）
+ * 消息气泡内的紧凑单图画廊：固定高度、完整图片 contain 展示、悬浮导航与计数。
  */
 
 .container {
-  --inline-image-placeholder-bg: var(--color-bg-secondary);
-  --inline-image-placeholder-border: var(--color-border-primary);
-  --inline-image-placeholder-text: var(--color-text-tertiary);
-  --inline-image-thumbnail-bg: var(--color-bg-tertiary);
-  --inline-image-thumbnail-border: var(--color-border-primary);
+  --inline-image-bg: var(--color-bg-tertiary);
+  --inline-image-border: var(--color-border-primary);
+  --inline-image-control-bg: rgba(18, 18, 20, 0.78);
+  --inline-image-control-border: rgba(255, 255, 255, 0.16);
+  --inline-image-control-color: #ffffff;
 
   margin-top: 8px;
   padding-top: 8px;
@@ -18,81 +17,190 @@
 }
 
 :global([data-theme='dark']) .container {
-  --inline-image-placeholder-bg: rgba(255, 255, 255, 0.03);
-  --inline-image-placeholder-border: rgba(255, 255, 255, 0.12);
-  --inline-image-placeholder-text: rgba(255, 255, 255, 0.3);
-  --inline-image-thumbnail-bg: rgba(255, 255, 255, 0.03);
-  --inline-image-thumbnail-border: rgba(255, 255, 255, 0.08);
+  --inline-image-bg: rgba(255, 255, 255, 0.025);
+  --inline-image-border: rgba(255, 255, 255, 0.1);
 }
 
-/* 缩略图网格布局：固定尺寸，不随窗口拉伸 */
-.grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* 单张缩略图卡片：尺寸由 JS 根据图片宽高比动态设置 */
-.thumbnailCard {
+.gallery {
   position: relative;
-  border-radius: 8px;
+  width: 100%;
+  height: clamp(260px, 36vw, 440px);
   overflow: hidden;
-  cursor: pointer;
-  /* 实际尺寸由 inline style 动态控制（最短边 250px） */
-  flex-shrink: 0;
-  background: var(--inline-image-thumbnail-bg);
-  border: 1px solid var(--inline-image-thumbnail-border);
-  transition:
-    border-color 0.2s ease,
-    transform 0.15s ease;
+  border: 1px solid var(--inline-image-border);
+  border-radius: 12px;
+  background: var(--inline-image-bg);
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.thumbnailCard:hover {
-  border-color: rgba(99, 102, 241, 0.4);
-  transform: translateY(-1px);
+.gallery:focus-visible,
+.gallery:focus-within {
+  border-color: var(--color-action-primary);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-action-primary) 24%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-/* 缩略图图片 */
-.thumbnailImage {
+.previewButton {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  display: block;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
 }
 
-/* 悬停遮罩层 */
-.thumbnailOverlay {
+.previewImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  animation: gallery-image-in 140ms ease-out;
+}
+
+.previewOverlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.22);
   opacity: 0;
-  transition: opacity 0.2s ease;
-  color: white;
   pointer-events: none;
+  transition: opacity 0.16s ease;
 }
 
-.thumbnailCard:hover .thumbnailOverlay {
+.previewButton:hover .previewOverlay,
+.previewButton:focus-visible .previewOverlay {
   opacity: 1;
 }
 
-/* 加载中占位符 */
-.thumbnailLoading {
+.previewButton:focus-visible {
+  outline: none;
+}
+
+.navButton {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 250px;
-  height: 250px;
-  border-radius: 8px;
-  background: var(--inline-image-placeholder-bg);
-  border: 1px solid var(--inline-image-placeholder-border);
-  color: var(--inline-image-placeholder-text);
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--inline-image-control-border);
+  border-radius: 999px;
+  color: var(--inline-image-control-color);
+  background: var(--inline-image-control-bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.navButton:hover:not(:disabled) {
+  background: rgba(18, 18, 20, 0.92);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.navButton:focus-visible {
+  outline: 2px solid var(--color-action-primary);
+  outline-offset: 2px;
+}
+
+.navButton:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.navPrevious {
+  left: 14px;
+}
+
+.navNext {
+  right: 14px;
+}
+
+.counter {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  min-width: 48px;
+  padding: 5px 9px;
+  border: 1px solid var(--inline-image-control-border);
+  border-radius: 999px;
+  color: var(--inline-image-control-color);
+  background: var(--inline-image-control-bg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  text-align: center;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--color-text-tertiary);
 }
 
 .spinner {
   animation: spin 1s linear infinite;
+}
+
+@media (max-width: 720px) {
+  .gallery {
+    height: clamp(240px, 62vw, 360px);
+  }
+
+  .navButton {
+    width: 38px;
+    height: 38px;
+  }
+
+  .navPrevious {
+    left: 10px;
+  }
+
+  .navNext {
+    right: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .previewImage,
+  .previewOverlay,
+  .navButton {
+    animation: none;
+    transition: none;
+  }
+}
+
+@keyframes gallery-image-in {
+  from {
+    opacity: 0.72;
+    transform: scale(0.995);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes spin {

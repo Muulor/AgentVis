@@ -63,8 +63,22 @@ function getAvatarLetter(name: string): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
+const MESSAGE_PREVIEW_MAX_CHARS = 200;
+
 function getMessagePreview(content: string): string {
-  return content.replace(/\s+/g, ' ').trim();
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  let preview = '';
+  let charCount = 0;
+
+  for (const char of normalized) {
+    if (charCount >= MESSAGE_PREVIEW_MAX_CHARS) {
+      return `${preview}…`;
+    }
+    preview += char;
+    charCount += 1;
+  }
+
+  return preview;
 }
 
 /**
@@ -163,26 +177,26 @@ export function AgentNavItem({
 
   return (
     <>
-      <Tooltip content={name}>
-        <div
-          className={styles.navItem}
-          data-active={isActive}
-          data-collapsed={isCollapsed}
-          data-dragging={isDragging}
-          data-drag-over={isDragOver}
-          draggable={draggable}
-          onClick={handleClick}
-          onContextMenu={handleContextMenu}
-          onDragStart={onDragStart}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onDragEnd={onDragEnd}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && handleClick()}
-        >
-          {/* 头像容器（相对定位，供角标绝对定位） */}
+      <div
+        className={styles.navItem}
+        data-active={isActive}
+        data-collapsed={isCollapsed}
+        data-dragging={isDragging}
+        data-drag-over={isDragOver}
+        draggable={draggable}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onDragEnd={onDragEnd}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+      >
+        {/* 头像容器（相对定位，供角标绝对定位） */}
+        <Tooltip content={name} side={isCollapsed ? 'right' : 'top'}>
           <div className={styles.avatarWrapper}>
             <div
               className={styles.avatar}
@@ -212,18 +226,20 @@ export function AgentNavItem({
               </span>
             )}
           </div>
-          {!isCollapsed && (
-            <div className={styles.content}>
+        </Tooltip>
+        {!isCollapsed && (
+          <div className={styles.content}>
+            <Tooltip content={name}>
               <span className={styles.name}>{name}</span>
-              {latestMessagePreview && (
-                <span className={styles.preview} title={latestMessagePreview}>
-                  {latestMessagePreview}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </Tooltip>
+            </Tooltip>
+            {latestMessagePreview && (
+              <Tooltip content={latestMessagePreview} side="right" align="start" multiline>
+                <span className={styles.preview}>{latestMessagePreview}</span>
+              </Tooltip>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 右键菜单 */}
       {contextMenu && (

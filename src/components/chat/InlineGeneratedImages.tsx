@@ -1,48 +1,59 @@
 /**
- * InlineGeneratedImages - 内联生成图片展示组件
+ * InlineGeneratedImages - 内联生成图片画廊组件
  *
- * 在 Planning 模式的消息气泡中展示 SA 通过 generate_image 工具生成的图片缩略图。
- * 通过 Rust `file_read_as_base64` 命令读取本地图片文件并构建 data URL 渲染。
+ * 在 Planning 模式的消息气泡中展示 SA 通过 generate_image 工具生成的图片。
+ * 通过 Rust `file_read_as_base64` 命令读取本地文件，并将所有可用图片收敛到
+ * 一个固定高度的主预览区中，支持左右翻页与 Lightbox 大图查看。
  *
  * 设计说明：
  * - 不使用 convertFileSrc()，因为 Tauri 未配置 asset 协议 scope
- * - 采用与 FilePreview.ImagePreview 相同的方式读取图片
- *
- * 功能：
- * - 缩略图网格布局（最多 3 列）
- * - 悬停显示放大提示
- * - 点击触发 Lightbox 大图预览
- * - 图片读取或解码失败时从消息布局中移除
+ * - 所有图片仍会并行读取和解码，失败项会从画廊、计数及 Lightbox 导航中移除
+ * - 消息内只渲染一张主预览，避免生成图片较多时线性撑高聊天记录
  */
 
-import { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ZoomIn, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, ZoomIn } from 'lucide-react';
+import { Tooltip } from '@components/ui/Tooltip';
+import { useI18n } from '@/i18n';
+import { getLogger } from '@services/logger';
+import { cx } from '@utils/classNames';
 import { ImageLightbox } from './ImageLightbox';
 import {
   addUnavailableImagePath,
+  getAdjacentImagePath,
   getDisplayableImagePaths,
+  getImageGalleryNavigationState,
+  resolveActiveImagePath,
 } from './inlineGeneratedImageVisibility';
-import { useI18n } from '@/i18n';
 import styles from './InlineGeneratedImages.module.css';
-import { getLogger } from '@services/logger';
 
 const logger = getLogger('InlineGeneratedImages');
-
-// ==================== 类型定义 ====================
 
 interface InlineGeneratedImagesProps {
   /** SA 生成的图片本地文件路径列表 */
   imagePaths: string[];
 }
 
-// ==================== MIME 类型推断 ====================
+interface LoadedImage {
+  filePath: string;
+  fileName: string;
+  src: string;
+}
 
-/**
- * 根据文件扩展名推断 MIME 类型
- *
- * 与 FilePreview.ImagePreview 使用相同的映射表
- */
+interface ImageResourceLoaderProps {
+  filePath: string;
+  onLoaded: (image: LoadedImage) => void;
+  onUnavailable: (filePath: string) => void;
+}
+
 const MIME_MAP: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -59,83 +70,41 @@ function getMimeType(filePath: string): string {
   return MIME_MAP[ext] ?? 'image/png';
 }
 
-/** 缩略图最短边固定尺寸（px） */
-const THUMB_MIN_SIDE = 250;
-/** 缩略图最大宽度限制（避免极端横图撑破布局） */
-const THUMB_MAX_WIDTH = 400;
-
-/** 单张缩略图卡片：通过 Rust 命令读取图片为 base64，根据宽高比智能调整尺寸 */
-const ThumbnailCard = memo(function ThumbnailCard({
+/**
+ * 仅负责读取和解码图片资源，不产生可见 DOM。
+ * 保持所有路径并行验证，确保失效图片能在用户翻页前被移出画廊。
+ */
+const ImageResourceLoader = memo(function ImageResourceLoader({
   filePath,
-  onImageClick,
+  onLoaded,
   onUnavailable,
-}: {
-  filePath: string;
-  onImageClick: (src: string, name: string) => void;
-  onUnavailable: (filePath: string) => void;
-}) {
+}: ImageResourceLoaderProps) {
   const { t } = useI18n();
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  // 动态计算的容器尺寸（根据图片原始宽高比）
-  const [cardSize, setCardSize] = useState<{ width: number; height: number }>({
-    width: THUMB_MIN_SIDE,
-    height: THUMB_MIN_SIDE,
-  });
-
-  // 从文件路径中提取文件名
   const fileName = useMemo(
     () => filePath.split(/[\\/]/).pop() ?? t('chat.imageGenerated'),
     [filePath, t]
   );
 
-  // 通过 Rust 命令读取图片文件为 base64 data URL，并检测原始宽高比
   useEffect(() => {
     let cancelled = false;
     let imageProbe: HTMLImageElement | null = null;
-
-    setImageSrc(null);
-    setCardSize({ width: THUMB_MIN_SIDE, height: THUMB_MIN_SIDE });
-
-    const mimeType = getMimeType(filePath);
 
     void invoke<string>('file_read_as_base64', { path: filePath })
       .then((base64) => {
         if (cancelled) return;
 
-        const dataUrl = `data:${mimeType};base64,${base64}`;
-        // 使用 Image 对象检测原始宽高比，动态计算缩略图尺寸
-        const img = new Image();
-        imageProbe = img;
-        img.onload = () => {
-          if (cancelled) return;
-
-          const { naturalWidth, naturalHeight } = img;
-          const aspectRatio = naturalWidth / naturalHeight;
-
-          let width: number;
-          let height: number;
-
-          if (aspectRatio > 1) {
-            // 横图：高度固定，宽度按比例
-            height = THUMB_MIN_SIDE;
-            width = Math.min(Math.round(height * aspectRatio), THUMB_MAX_WIDTH);
-          } else if (aspectRatio < 1) {
-            // 竖图：宽度固定，高度按比例
-            width = THUMB_MIN_SIDE;
-            height = Math.round(width / aspectRatio);
-          } else {
-            // 正方形
-            width = THUMB_MIN_SIDE;
-            height = THUMB_MIN_SIDE;
+        const src = `data:${getMimeType(filePath)};base64,${base64}`;
+        const probe = new Image();
+        imageProbe = probe;
+        probe.onload = () => {
+          if (!cancelled) {
+            onLoaded({ filePath, fileName, src });
           }
-
-          setCardSize({ width, height });
-          setImageSrc(dataUrl);
         };
-        img.onerror = () => {
+        probe.onerror = () => {
           if (!cancelled) onUnavailable(filePath);
         };
-        img.src = dataUrl;
+        probe.src = src;
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -151,87 +120,201 @@ const ThumbnailCard = memo(function ThumbnailCard({
         imageProbe.onerror = null;
       }
     };
-  }, [filePath, onUnavailable]);
+  }, [fileName, filePath, onLoaded, onUnavailable]);
 
-  // 加载中
-  if (!imageSrc) {
-    return (
-      <div className={styles.thumbnailLoading}>
-        <Loader2 size={18} className={styles.spinner} />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={styles.thumbnailCard}
-      style={{ width: cardSize.width, height: cardSize.height }}
-      onClick={() => onImageClick(imageSrc, fileName)}
-      title={t('chat.openImageLarge')}
-    >
-      <img
-        src={imageSrc}
-        alt={fileName}
-        className={styles.thumbnailImage}
-        loading="lazy"
-        onError={() => onUnavailable(filePath)}
-      />
-      <div className={styles.thumbnailOverlay}>
-        <ZoomIn size={16} />
-      </div>
-    </div>
-  );
+  return null;
 });
-
-// ==================== 主组件 ====================
 
 export const InlineGeneratedImages = memo(function InlineGeneratedImages({
   imagePaths,
 }: InlineGeneratedImagesProps) {
   const { t } = useI18n();
   const [unavailablePaths, setUnavailablePaths] = useState<ReadonlySet<string>>(() => new Set());
-  // Lightbox 状态
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [lightboxName, setLightboxName] = useState(t('chat.imageGenerated'));
+  const [loadedImages, setLoadedImages] = useState<ReadonlyMap<string, LoadedImage>>(
+    () => new Map()
+  );
+  const [activePath, setActivePath] = useState<string | null>(null);
+  const [lightboxPath, setLightboxPath] = useState<string | null>(null);
 
-  const handleImageClick = useCallback((src: string, name: string) => {
-    setLightboxSrc(src);
-    setLightboxName(name);
-  }, []);
+  const handleImageLoaded = useCallback((image: LoadedImage) => {
+    setLoadedImages((current) => {
+      const existing = current.get(image.filePath);
+      if (existing?.src === image.src) return current;
 
-  const closeLightbox = useCallback(() => {
-    setLightboxSrc(null);
+      const next = new Map(current);
+      next.set(image.filePath, image);
+      return next;
+    });
   }, []);
 
   const handleImageUnavailable = useCallback((filePath: string) => {
     setUnavailablePaths((current) => addUnavailableImagePath(current, filePath));
+    setLoadedImages((current) => {
+      if (!current.has(filePath)) return current;
+
+      const next = new Map(current);
+      next.delete(filePath);
+      return next;
+    });
   }, []);
 
   const displayableImagePaths = useMemo(
     () => getDisplayableImagePaths(imagePaths, unavailablePaths),
     [imagePaths, unavailablePaths]
   );
+  const loadedImagePaths = useMemo(
+    () => displayableImagePaths.filter((filePath) => loadedImages.has(filePath)),
+    [displayableImagePaths, loadedImages]
+  );
+  const navigation = getImageGalleryNavigationState(loadedImagePaths, activePath);
+  const resolvedActivePath = navigation.activePath;
+  const activeIndex = navigation.currentIndex;
+  const activeImage = resolvedActivePath ? loadedImages.get(resolvedActivePath) : undefined;
+  const hasPrev = navigation.hasPrevious;
+  const hasNext = navigation.hasNext;
+
+  useEffect(() => {
+    setActivePath((current) => resolveActiveImagePath(loadedImagePaths, current));
+  }, [loadedImagePaths]);
+
+  useEffect(() => {
+    if (lightboxPath && !loadedImages.has(lightboxPath)) {
+      setLightboxPath(null);
+    }
+  }, [lightboxPath, loadedImages]);
+
+  const showPrevious = useCallback(() => {
+    const previousPath = getAdjacentImagePath(loadedImagePaths, resolvedActivePath, -1);
+    if (previousPath) setActivePath(previousPath);
+  }, [loadedImagePaths, resolvedActivePath]);
+
+  const showNext = useCallback(() => {
+    const nextPath = getAdjacentImagePath(loadedImagePaths, resolvedActivePath, 1);
+    if (nextPath) setActivePath(nextPath);
+  }, [loadedImagePaths, resolvedActivePath]);
+
+  const handleGalleryKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'ArrowLeft' && hasPrev) {
+        event.preventDefault();
+        showPrevious();
+      } else if (event.key === 'ArrowRight' && hasNext) {
+        event.preventDefault();
+        showNext();
+      }
+    },
+    [hasNext, hasPrev, showNext, showPrevious]
+  );
+
+  const lightboxIndex = lightboxPath ? loadedImagePaths.indexOf(lightboxPath) : -1;
+  const lightboxImage = lightboxPath ? loadedImages.get(lightboxPath) : undefined;
+  const showPreviousInLightbox = useCallback(() => {
+    const previousPath = getAdjacentImagePath(loadedImagePaths, lightboxPath, -1);
+    if (previousPath) {
+      setLightboxPath(previousPath);
+      setActivePath(previousPath);
+    }
+  }, [lightboxPath, loadedImagePaths]);
+  const showNextInLightbox = useCallback(() => {
+    const nextPath = getAdjacentImagePath(loadedImagePaths, lightboxPath, 1);
+    if (nextPath) {
+      setLightboxPath(nextPath);
+      setActivePath(nextPath);
+    }
+  }, [lightboxPath, loadedImagePaths]);
 
   if (displayableImagePaths.length === 0) return null;
 
   return (
     <>
+      {displayableImagePaths.map((filePath) => (
+        <ImageResourceLoader
+          key={filePath}
+          filePath={filePath}
+          onLoaded={handleImageLoaded}
+          onUnavailable={handleImageUnavailable}
+        />
+      ))}
+
       <div className={styles.container}>
-        <div className={styles.grid}>
-          {displayableImagePaths.map((path) => (
-            <ThumbnailCard
-              key={path}
-              filePath={path}
-              onImageClick={handleImageClick}
-              onUnavailable={handleImageUnavailable}
-            />
-          ))}
+        <div
+          className={styles.gallery}
+          role="region"
+          aria-label={t('chat.imageGenerated')}
+          tabIndex={0}
+          onKeyDown={handleGalleryKeyDown}
+        >
+          {activeImage ? (
+            <Tooltip content={t('chat.openImageLarge')}>
+              <button
+                type="button"
+                className={styles.previewButton}
+                onClick={() => setLightboxPath(activeImage.filePath)}
+                aria-label={t('chat.openImageLarge')}
+              >
+                <img
+                  key={activeImage.filePath}
+                  src={activeImage.src}
+                  alt={activeImage.fileName}
+                  className={styles.previewImage}
+                  draggable={false}
+                  onError={() => handleImageUnavailable(activeImage.filePath)}
+                />
+                <span className={styles.previewOverlay} aria-hidden="true">
+                  <ZoomIn size={20} />
+                </span>
+              </button>
+            </Tooltip>
+          ) : (
+            <div className={styles.loading} role="status" aria-label={t('common.loading')}>
+              <Loader2 size={22} className={styles.spinner} />
+            </div>
+          )}
+
+          {loadedImagePaths.length > 1 && (
+            <>
+              <Tooltip content={t('chat.imagePrev')} side="right">
+                <button
+                  type="button"
+                  className={cx(styles.navButton, styles.navPrevious)}
+                  onClick={showPrevious}
+                  disabled={!hasPrev}
+                  aria-label={t('chat.imagePrev')}
+                >
+                  <ChevronLeft size={26} />
+                </button>
+              </Tooltip>
+              <Tooltip content={t('chat.imageNext')} side="left">
+                <button
+                  type="button"
+                  className={cx(styles.navButton, styles.navNext)}
+                  onClick={showNext}
+                  disabled={!hasNext}
+                  aria-label={t('chat.imageNext')}
+                >
+                  <ChevronRight size={26} />
+                </button>
+              </Tooltip>
+              <span className={styles.counter} aria-live="polite">
+                {activeIndex + 1} / {loadedImagePaths.length}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Lightbox 全屏预览 */}
-      {lightboxSrc && (
-        <ImageLightbox src={lightboxSrc} fileName={lightboxName} onClose={closeLightbox} />
+      {lightboxImage && (
+        <ImageLightbox
+          src={lightboxImage.src}
+          fileName={lightboxImage.fileName}
+          onClose={() => setLightboxPath(null)}
+          hasPrev={lightboxIndex > 0}
+          hasNext={lightboxIndex >= 0 && lightboxIndex < loadedImagePaths.length - 1}
+          onPrev={showPreviousInLightbox}
+          onNext={showNextInLightbox}
+          currentIndex={lightboxIndex}
+          totalCount={loadedImagePaths.length}
+        />
       )}
     </>
   );
