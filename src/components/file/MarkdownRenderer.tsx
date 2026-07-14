@@ -16,6 +16,7 @@ import {
   memo,
   lazy,
   Suspense,
+  type ComponentType,
   type MouseEvent,
 } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -32,22 +33,72 @@ import {
 import { parseWithFallback } from '@services/memory/utils/JsonParser';
 import { isHttpUrl, openExternalUrl } from '@services/navigation/externalUrl';
 import { ImageLightbox } from '../chat/ImageLightbox';
+import { RecoveryErrorBoundary } from '../errors/RendererErrorBoundary';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './MarkdownRenderer.module.css';
 
-const LazyMermaidBlock = lazy(async () => {
-  const { MermaidBlock } = await import('./MermaidBlock');
-  return { default: MermaidBlock };
-});
+interface DiagramBlockProps {
+  code: string;
+}
 
-const LazyEChartsBlock = lazy(async () => {
-  const { EChartsBlock } = await import('./EChartsBlock');
-  return { default: EChartsBlock };
-});
+type DiagramKind = 'mermaid' | 'echarts';
+
+const diagramLoaders: Record<
+  DiagramKind,
+  () => Promise<{ default: ComponentType<DiagramBlockProps> }>
+> = {
+  mermaid: async () => {
+    const { MermaidBlock } = await import('./MermaidBlock');
+    return { default: MermaidBlock };
+  },
+  echarts: async () => {
+    const { EChartsBlock } = await import('./EChartsBlock');
+    return { default: EChartsBlock };
+  },
+};
 
 function DiagramBlockFallback() {
   return <div className={styles.diagramBlockFallback} aria-hidden="true" />;
+}
+
+function DiagramBlockError({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <div className={styles.diagramBlockError} role="status">
+      <div>
+        <strong>{t('rendererRecovery.diagramTitle')}</strong>
+        <p>{t('rendererRecovery.diagramDescription')}</p>
+      </div>
+      <button type="button" onClick={onRetry}>
+        {t('common.retry')}
+      </button>
+    </div>
+  );
+}
+
+function RetryableDiagramBlock({ kind, code }: { kind: DiagramKind; code: string }) {
+  const [attempt, setAttempt] = useState(0);
+  const LazyDiagramBlock = useMemo(() => {
+    // `attempt` is an intentional invalidation token: each retry needs a fresh
+    // React.lazy wrapper because a rejected lazy promise is cached by component type.
+    void attempt;
+    return lazy(diagramLoaders[kind]);
+  }, [attempt, kind]);
+  const retry = useCallback(() => setAttempt((current) => current + 1), []);
+
+  return (
+    <RecoveryErrorBoundary
+      context={`markdown-${kind}`}
+      resetKeys={[kind, code, attempt]}
+      renderFallback={() => <DiagramBlockError onRetry={retry} />}
+    >
+      <Suspense fallback={<DiagramBlockFallback />}>
+        <LazyDiagramBlock code={code} />
+      </Suspense>
+    </RecoveryErrorBoundary>
+  );
 }
 
 interface MarkdownRendererProps {
@@ -540,20 +591,12 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 
           // 拦截 mermaid 代码块，渲染为 SVG 图表
           if (language === 'mermaid') {
-            return (
-              <Suspense fallback={<DiagramBlockFallback />}>
-                <LazyMermaidBlock code={codeString} />
-              </Suspense>
-            );
+            return <RetryableDiagramBlock kind="mermaid" code={codeString} />;
           }
 
           // 拦截 echarts 代码块，渲染为数据图表
           if (language === 'echarts') {
-            return (
-              <Suspense fallback={<DiagramBlockFallback />}>
-                <LazyEChartsBlock code={codeString} />
-              </Suspense>
-            );
+            return <RetryableDiagramBlock kind="echarts" code={codeString} />;
           }
 
           return (

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { initializeLogger } from '@services/logger';
 import { registerRendererCrashReporter } from '@services/logger/crashReporter';
 import { registerRendererHealthMonitor } from '@services/diagnostics/rendererHealth';
+import { RendererErrorBoundary } from '@components/errors/RendererErrorBoundary';
 import { I18nProvider } from '@/i18n';
 import App from './App';
 import '@styles/globals.css';
@@ -20,8 +21,10 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <I18nProvider>
-      <App />
-    </I18nProvider>
+    <RendererErrorBoundary>
+      <I18nProvider>
+        <App />
+      </I18nProvider>
+    </RendererErrorBoundary>
   </React.StrictMode>
 );

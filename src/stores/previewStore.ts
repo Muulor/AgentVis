@@ -13,8 +13,33 @@ import { create } from 'zustand';
 import { getLogger } from '@services/logger';
 import { isManagedPreviewUrl } from '@services/preview/previewUrlPolicy';
 import type { ViteServerStatus, TemplateId } from '@services/preview/types';
+import { translate } from '@/i18n';
 
 const logger = getLogger('previewStore');
+
+/**
+ * Stop the managed project preview without making store actions asynchronous.
+ *
+ * VitePreviewService synchronizes its state back into this store, so importing it
+ * statically would create a module cycle. The deferred import also keeps HTML-only
+ * preview paths from eagerly loading the project-preview runtime.
+ */
+function stopProjectPreviewInBackground(projectRequestId: number): void {
+  void import('@services/preview/VitePreviewService')
+    .then(({ vitePreviewService }) => vitePreviewService.stopProject(projectRequestId))
+    .catch((error: unknown) => {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Unknown error';
+      logger.warn(
+        '[previewStore] Failed to stop the managed project preview:',
+        detail.slice(0, 600)
+      );
+    });
+}
 
 /** 预览模式：单文件 HTML 或 Vite 项目 */
 export type PreviewMode = 'html' | 'project';
@@ -39,6 +64,10 @@ interface PreviewState {
   projectUrl: string | null;
   /** 项目预览状态 */
   projectStatus: ViteServerStatus;
+  /** 单调递增的 UI 请求代次，用于使关闭/切换后的异步启动结果失效。 */
+  projectRequestId: number;
+  /** Whether retrying the current request is safe after it reached the preview service. */
+  projectCanRetry: boolean;
   /** 使用的模板 ID */
   projectTemplate: TemplateId | null;
   /** 错误信息 */
@@ -53,17 +82,25 @@ interface PreviewActions {
   // --- Project 模式 ---
   /** 设置项目预览状态（由 VitePreviewService 回调驱动） */
   setProjectStatus: (status: ViteServerStatus, error?: string) => void;
+  /** 在同一 UI 请求内更新源扫描推断出的模板。 */
+  setProjectTemplate: (template: TemplateId) => void;
   /** 设置项目预览 URL（running 状态时调用） */
   setProjectUrl: (url: string, template: TemplateId) => void;
   /** 开始项目预览流程（激活面板 + 设置模式） */
-  startProjectPreview: (template: TemplateId) => void;
+  startProjectPreview: (template: TemplateId) => number;
+  /** 判断异步启动流程是否仍对应当前可见的项目预览。 */
+  isProjectRequestCurrent: (requestId: number) => boolean;
+  /** Mark the current request as eligible for service-backed retry. */
+  markProjectRequestSubmitted: (requestId: number) => boolean;
+  /** 仅使当前异步项目请求失效；窗口关闭会在等待 service cleanup 前同步调用。 */
+  invalidateProjectRequest: () => void;
 
   // --- 通用 ---
   /** 关闭预览（回到普通/Diff 模式） */
   closePreview: () => void;
 }
 
-export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
+export const usePreviewStore = create<PreviewState & PreviewActions>((set, get) => ({
   // --- 初始状态 ---
   isPreviewActive: false,
   previewMode: 'html',
@@ -72,33 +109,55 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
   previewBaseDir: null,
   projectUrl: null,
   projectStatus: 'idle',
+  projectRequestId: 0,
+  projectCanRetry: false,
   projectTemplate: null,
   projectError: null,
 
   // --- HTML 模式 Actions ---
-  openPreview: (code, title = 'HTML Preview', baseDir) => {
+  openPreview: (code, title, baseDir) => {
+    const resolvedTitle = title ?? translate('file.livePreview');
+
+    // Switching directly from a project preview to an HTML preview must release
+    // the managed server even though the preview panel itself stays mounted.
+    if (get().previewMode === 'project') {
+      get().closePreview();
+    }
+
     set({
       previewCode: code,
-      previewTitle: title,
+      previewTitle: resolvedTitle,
       previewBaseDir: baseDir ?? null,
       previewMode: 'html',
       isPreviewActive: true,
       // 清理 project 状态，避免混淆
       projectUrl: null,
       projectStatus: 'idle',
+      projectCanRetry: false,
       projectTemplate: null,
       projectError: null,
     });
-    logger.trace('[previewStore] 打开 HTML 预览:', title, baseDir ? `baseDir=${baseDir}` : '');
+    logger.trace(
+      '[previewStore] 打开 HTML 预览:',
+      resolvedTitle,
+      baseDir ? `baseDir=${baseDir}` : ''
+    );
   },
 
   // --- Project 模式 Actions ---
   startProjectPreview: (template) => {
+    const currentState = get();
+    if (currentState.previewMode === 'project' && currentState.isPreviewActive) {
+      stopProjectPreviewInBackground(currentState.projectRequestId);
+    }
+    const projectRequestId = currentState.projectRequestId + 1;
     set({
       previewMode: 'project',
       isPreviewActive: true,
       projectTemplate: template,
       projectStatus: 'idle',
+      projectRequestId,
+      projectCanRetry: false,
       projectUrl: null,
       projectError: null,
       // 清理 HTML 状态
@@ -107,6 +166,25 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
       previewBaseDir: null,
     });
     logger.trace('[previewStore] 开始项目预览, 模板:', template);
+    return projectRequestId;
+  },
+
+  isProjectRequestCurrent: (requestId) => {
+    const state = get();
+    return (
+      state.isPreviewActive &&
+      state.previewMode === 'project' &&
+      state.projectRequestId === requestId
+    );
+  },
+
+  markProjectRequestSubmitted: (requestId) => {
+    if (!get().isProjectRequestCurrent(requestId)) {
+      return false;
+    }
+
+    set({ projectCanRetry: true });
+    return true;
   },
 
   setProjectStatus: (status, error) => {
@@ -115,6 +193,22 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
       projectError: error ?? null,
     });
     logger.trace('[previewStore] 项目状态更新:', status, error ?? '');
+  },
+
+  invalidateProjectRequest: () => {
+    const currentState = get();
+    set({
+      projectRequestId: currentState.projectRequestId + 1,
+      projectUrl: null,
+      projectStatus: 'idle',
+      projectCanRetry: false,
+      projectError: null,
+    });
+  },
+
+  setProjectTemplate: (template) => {
+    set({ projectTemplate: template });
+    logger.trace('[previewStore] 项目模板更新:', template);
   },
 
   setProjectUrl: (url, template) => {
@@ -138,10 +232,14 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
   },
 
   // --- 通用 Actions ---
-  // 纯状态重置，不负责停止 Vite 进程。
-  // 停止进程的职责统一在 LivePreviewPanel.handleClose 中，
-  // 避免与 UI 层的 stopProject 调用产生重复清理。
+  // 状态重置与服务停止统一从这里触发，确保按钮关闭、切换 Agent、切换
+  // HTML 预览等所有调用路径都不会遗留 Vite 进程。
   closePreview: () => {
+    const currentState = get();
+    if (currentState.previewMode === 'project') {
+      stopProjectPreviewInBackground(currentState.projectRequestId);
+    }
+
     set({
       previewCode: null,
       previewTitle: null,
@@ -150,6 +248,8 @@ export const usePreviewStore = create<PreviewState & PreviewActions>((set) => ({
       isPreviewActive: false,
       projectUrl: null,
       projectStatus: 'idle',
+      projectRequestId: currentState.projectRequestId + 1,
+      projectCanRetry: false,
       projectTemplate: null,
       projectError: null,
     });

@@ -136,6 +136,17 @@ networkDirectTargets?: NetworkDirectTarget[];
 - 离线隔离模式必须在 spawn 前阻断桌面控制，避免命令退出码为 0 但实际操作被系统隔离或生命周期吞掉。
 - 受控联网默认仍阻断通用桌面能力；`agent-browser` 不是通用桌面放行，而是通过专用 Chrome CDP runtime、broker proxy 和命令分类窄口提供浏览器自动化能力。
 
+### 7.1 Project Preview 后台进程所有权
+
+Project Preview 使用 `backgroundManaged` 生命周期，但不通过“某端口上有进程”推断所有权：
+
+- `shell_execute(background=true)` 启动成功后，后台 registry 保留确切 PID 和 Job Object guard。Preview 只对它自己本次运行的 PID 调用 `shell_kill`。
+- stdout/stderr 由异步 drain task 持续排空，每路仅保留最后 1 MiB，并单独记录已丢弃的前缀字节数，避免长跑服务因 pipe 填满卡住或无界占用内存。
+- `shell_background_status(pid)` 返回 `running` / `exited`、退出码、两路输出 tail 和 truncation 计数。进程退出后保留 5 分钟 tombstone，之后或在 tombstone 数量超过上限时清理；未知 PID 返回显式 not-found。
+- Preview 在启动阶段和运行阶段均轮询状态。旧请求被取消、预览关闭、Agent/项目切换或用户点击重试时，依赖安装、后台 PID、端口与 staging 工作区在同一串行化清理路径中回收。
+- staging 回收由 Rust 原生命令执行：正常清理除校验 workspace 的 `runId`/`ownerToken` 外，还必须证明并释放本进程 registry 持有的 owner lease，不能凭另一个实例的 marker/token 清理其 workspace。通过后原子重命名到受控 trash 并进行 no-follow 删除；`node_modules` junction 只删除链接本身。Windows 只对刚终止进程可能造成的错误码 5/32/33 做约 1.6 秒有界重试，且每次都重新验证 owner/receipt；失败项进入有容量和单轮预算的公平 cleanup backlog，并重新登记 stale recovery。
+- 旧的 `3100-3110` 端口扫描/杀进程逻辑已停用。端口只是路由资源，不是进程身份或所有权依据。
+
 ## 八、文件系统边界
 
 ### 8.1 本机审计模式
@@ -166,6 +177,20 @@ networkDirectTargets?: NetworkDirectTarget[];
 - Script Skill 若显式声明 `network=false` 或进入 `brokerOnly` 这类 `restricted + blocked` 路径，仍可能使用 AppContainer deny-all 后端。此时可通过 `execution.permissions.filesystem` 从 string 参数生成 per-run 文件系统 grant，只暴露本次调用需要的文件或目录。
 - 允许复用真实 Home、CLI 配置、Skill token cache、浏览器或云服务凭据文件。
 - 风险收口转移到 broker 出口策略、日志脱敏、observation 脱敏、上传限制和 direct-audit 授权上。
+
+### 8.4 Project Preview staging 边界
+
+Project Preview 的文件边界不依赖 Agent 交付目录作为可执行工作区。每次启动均由 Rust 在 `{appCacheDir}/project-preview/project-preview-{UUIDv4}/` 创建全新 staging，且将 Agent 文件视为不可信输入：
+
+- `ProjectFile.path` 先标准化为 slash-separated 相对路径；拒绝空路径、NUL、绝对/UNC 路径、盘符、URL scheme 和任何显式 `..` segment。保留的 `.agentvis`、`.git`、`Agent-Log`、`node_modules` 和构建输出不作为 Agent 源文件写入。完整项目仅额外允许 Vite/PostCSS/Tailwind/tsconfig/jsconfig 工具链文件，其他根构建/测试/lint 配置继续过滤。
+- 源文件预算为最多 500 个、单文件 4 MiB、合计 32 MiB。`preview_list_source_tree` 在 Rust 迭代器中边枚举边执行 entry/depth/file/byte 硬预算，不会先向 renderer 物化无界目录；`preview_read_text_file` 在同一 no-follow handle 上 `fstat` 并读取，且按剩余总预算缩小单次上限。根 `package.json`/lock 会在源枚举预算前跳过，其中 manifest 另走独立有界读取；完整项目的 tsconfig/jsconfig 可进入源 staging。`.env` / `.env.*` 只计数，不读取或写入 staging；若启动失败，UI 在保留主错误的同时提示环境文件被省略。静态资产由 `preview_copy_assets` 在持有本进程 workspace owner lease 时复制，仅允许扩展名 allow-list，最多 1,000 个、单文件 64 MiB、合计 256 MiB；扫描最深 24 层、最多 10,000 个 entry。源/目标 handle 的最终解析路径必须仍位于受控根目录；源码与文本读取拒绝多硬链接。Windows 静态资产仅在枚举出的全部 NTFS hardlink 名称都位于同一 Agent 工作间且身份复验一致时只读复制，跨工作间、根外或不稳定链接继续拒绝；其他平台仍拒绝多硬链接资产。symlink、junction、Windows reparse point 和隐藏资产始终拒绝。
+- `package.json` 以 UTF-8 字节计最多 256 KiB，`dependencies + devDependencies` 合计最多 128 项，单个包名最长 214 字符，版本 specifier 最长 256 字符。它只接受合法 npm registry 包名与受限版本/range，拒绝 `file:`、`link:`、`workspace:`、Git/HTTP URL、GitHub shorthand、npm alias 和本地路径。依赖安装固定使用 `--ignore-scripts --no-audit --no-fund --package-lock=false`，不执行包 lifecycle scripts。
+- 片段模式不执行 Agent 根构建配置，只使用 AgentVis 模板和 Tailwind 字面量静态提取。完整项目模式由 AgentVis `.agentvis/vite.config.mjs` 包装并加载 staging 中的 Vite 配置，以恢复插件、alias、PostCSS/Tailwind、package type、依赖版本和 staging 内的 root/env/public 语义；包装层覆盖 host/port、CORS、`server.fs.strict`、cache 位置和 health/diagnostics，且不加载 ESLint/Webpack/Rollup/Esbuild 等无关根配置。项目 Vite/PostCSS/Tailwind 配置仍是可执行 Node 代码；当前 `preview=inherit`/Local Audit 不是 OS 级虚拟机，不能阻止该代码以当前用户权限主动访问 staging 之外的本机文件或网络，因此完整项目兼容模式只适用于用户自己或可信 Agent 生成的项目。
+- 不含 `package.json` 且有效根入口（`index.html` 或唯一根 HTML）含 Import Map 的 Vanilla 项目先进入静态候选；只有所有 Import Map 均可解析、裸导入均被顶层 `imports` 或按 referrer 最长前缀命中的 `scopes` 映射覆盖，且项目不包含 `.jsx/.ts/.tsx/.vue` 源文件、这些扩展或 `.css` 的 module entry/import specifier 时，才走自有静态服务器。malformed map、未映射 bare specifier 和任何需要 Vite transform 的 TS/TSX/JSX/Vue/CSS 模块均 fail closed，不回退到 Vite。普通 `<link rel="stylesheet">` CSS 仍可作为静态资源。
+- `preview_create_workspace` 只在真实 app-cache 根目录下创建直接子目录，返回 `workspace`、`runId` 和随机 `ownerToken`，写入与该身份精确匹配且包含活动时间的 `.agentvis/active` marker，并持有跨实例文件 lease。活跃 run 最多每 60 秒刷新 marker。
+- `preview_cleanup_workspace` 必须匹配期望的 `runId`/`ownerToken`；正常清理还必须从本进程 registry 证明并释放对应 owner lease，marker/token 本身不构成跨实例删除授权。随后重新验证 app-cache 直接子目录、UUIDv4 名称、marker、symlink/reparse 状态与 canonical containment。通过后先在受控 cache 根目录内原子重命名到隔离 trash，再以 no-follow walker 删除；Windows 对 access denied / sharing violation / lock violation（5/32/33）的退避严格有界，每次重试前重新验证 workspace、owner、receipt 与空闲目标，耗尽后删除临时 receipt、恢复 lease 并 fail closed。目录只在 canonical path 仍位于 trash 内时递归，`node_modules` junction 或其他链接/reparse point 只删除链接本身。
+- 该边界覆盖不可信交付物内容、交付目录中的链接/重命名竞态以及跨实例误清理，并假设 AgentVis 私有 app-cache 根目录仍由应用拥有；同一操作系统账户下的恶意进程若刻意在受信任写入与进程启动之间重命名或替换该 cache，不属于 Project Preview 的威胁模型。
+- `preview_cleanup_stale_workspaces` 以原生有界分页清理陈旧目录。候选必须至少 24 小时未活动、通过同一组身份/路径验证并成功取得文件 lease；活跃、身份不符或验证失败的 workspace 均保留。quarantine 前写入与 `.trash-{UUIDv4}` 精确配对的根目录 `.trash-{UUIDv4}.owner.json` receipt；如果部分删除丢失 workspace marker 而无法恢复原名，stale sweep 只有在 trash/receipt 严格命名并相互匹配、均为受控根目录真实直接子项且 receipt 超过 24 小时时，才 no-follow 自回收残留。配对 trash 不存在时，只有严格命名、内容自洽、真实普通文件且超过 24 小时的孤立 receipt 可删除。前端 backlog 容量与单轮重试有界，失败项移到队尾；新的失败、quarantine 或溢出会重新登记 stale recovery，已完成的 sweep 不会屏蔽同会话后来产生的残留。
 
 ## 九、网络机制
 
@@ -269,6 +294,12 @@ WFP 不是默认三档能力，只能通过显式高级开关进入：
 - `wfpCanary` 只做诊断增强，记录 `wfp_canary_direct_egress_observed`、`wfp_canary_no_direct_egress`、`wfp_canary_unavailable`，不等于默认硬禁网。
 - hard guard 只对高置信、白名单管理型可执行命令生效，具体命令集合以 Rust `wfp_managed_egress_command_name()` 为准。
 - 不递归承诺覆盖被管理 exe 再 spawn 的所有子 exe，也不默认覆盖 detached GUI / 长生命周期外部进程。
+
+### 9.5 Project Preview 网络边界
+
+`preview` 仍是内部 technical profile，其默认网络策略为 `inherit`，以支持 npm registry 依赖安装和预览页面资源加载。它的独立 staging、依赖/路径 allow-list 和受信任服务器配置是文件/执行面收口，不应被描述为网络沙箱。
+
+两种运行路由都只绑定 `127.0.0.1`。宿主通过 `/.agentvis/health` 的 per-run 随机 token 确认端口归属，再在 iframe 显示前请求根 HTML 与入口/源路径检查 4xx/5xx。health token 是本地服务身份与竞态防护，不是用户身份认证。iframe diagnostics bridge 同时校验当前 frame source 与精确 preview origin；可信宿主 ping 前只允许无正文 lifecycle 用于握手，错误诊断正文先缓存，随后仅向 allow-list 中的精确宿主 origin 重放。Import Map 中的 CDN URL 或页面内其他远程请求仍由嵌入页面按浏览器语义发起，不受 Project Preview 本身的网络 DLP 保证。
 
 ## 十、非 HTTP(S) direct-audit 授权
 
@@ -511,11 +542,16 @@ type SandboxAuditEvent = {
 - `src/stores/networkUploadAuthorizationStore.ts`、`src/components/security/NetworkUploadAuthorizationDialog.tsx`：高置信上传 / 敏感外传 / 远端破坏确认 UI。
 - `src/components/settings/SandboxAuditSettings.tsx`：审计日志 UI。
 - `src/types/sandboxAudit.ts`、`src/types/networkDirectAuthorization.ts`：前端结构化类型。
+- `src/services/preview/VitePreviewService.ts`：Project Preview staging 编排、Import Map native-JS-only 预检、依赖预算、health/heartbeat、owned-PID 生命周期与有界原生回收重试。
+- `src/services/preview/projectPathPolicy.ts`、`previewDependencyPolicy.ts`、`previewSourcePolicy.ts`、`previewAssetCopier.ts`：Preview 路径、npm 依赖、源文件和静态资产边界。
+- `src/services/preview/importMapAnalysis.ts`、`trustedPreviewRuntime.ts`：Import Map 静态路由、受信任 Vite/静态运行时和 iframe diagnostics bridge。
+- `src/components/file/LivePreviewPanel.tsx`、`src/stores/previewStore.ts`：Preview 分阶段 UI、受控 `postMessage` 诊断与关闭/切换/重试生命周期。
 
 后端：
 - `scripts/collect-enterprise-network-env.ps1` AgentVis 企业级网络兼容只读采集器, 收集当前网络、代理服务器、VPN、防火墙以及 EDR 相关的信号，并生成报告，无需修改系统设置。
 - `src-tauri/Run-MatrixTest.ps1` AgentVis WFP 矩阵测试工具。
-- `src-tauri/src/commands/shell.rs`：`shell_execute` 主链路、broker session env、WFP 实验入口、direct-audit 匹配、DNS 风险解析与上传 / 敏感外传 / 远端破坏确认参数。
+- `src-tauri/src/commands/shell.rs`：`shell_execute` 主链路、后台 PID registry / `shell_background_status` / 有界输出 tombstone，以及 Preview workspace 原生创建、本进程 owner-lease registry、身份与路径验证、带 receipt 的原子隔离/no-follow 删除和陈旧 workspace/quarantine 有界分页清理。
+- `src-tauri/src/lib.rs`：注册 `preview_create_workspace`、`preview_cleanup_workspace` 与 `preview_cleanup_stale_workspaces` 等 Tauri 命令。
 - `src-tauri/src/commands/process_sandbox.rs`：沙箱 facade，继续 re-export 子模块类型和能力，保持外部调用路径稳定。
 - `src-tauri/src/commands/process_sandbox/policy.rs`：`ShellSandboxPolicy` 主策略链路，负责档位 / 模式 / 生命周期 / 网络范围 / subject 解析、策略环境变量、审计事件和 direct-audit allowance 匹配。
 - `src-tauri/src/commands/process_sandbox/platform.rs`：进程沙箱平台后端 facade，隔离 Windows 与非 Windows 实现并保持上层导出稳定。
@@ -557,6 +593,16 @@ type SandboxAuditEvent = {
 - `src/services/planning/skills/external/__tests__/ExternalToolProvider.test.ts`
 - `src/services/planning/skills/external/__tests__/ContractValidator.test.ts`
 - `src/utils/__tests__/networkDirectRisk.test.ts`
+- `src/services/preview/projectPathPolicy.test.ts`
+- `src/services/preview/importMapAnalysis.test.ts`
+- `src/services/preview/previewDependencyPolicy.test.ts`
+- `src/services/preview/previewSourcePolicy.test.ts`
+- `src/services/preview/trustedPreviewRuntime.test.ts`
+- `src/services/preview/VitePreviewService.test.ts`
+- `src/services/preview/VitePreviewServiceCleanup.test.ts`
+- `src/services/preview/TemplateManager.test.ts`
+- `cargo test background_registry`（后台输出 tail、退出 tombstone 和 kill 幂等性）
+- `cargo test --manifest-path src-tauri/Cargo.toml preview_`（workspace 身份、路径/链接验证、owner lease、stale 分页与 no-follow 回收）
 
 手动验收建议：
 
@@ -577,6 +623,12 @@ type SandboxAuditEvent = {
 - 自动化场景回归至少覆盖 `network_risk_checkpoint_matrix_covers_daily_and_high_risk_cases`，通过 `id/group/expectation` 矩阵同时验证“正常日常不误拦”和“明确上传 / 外传 / 删库跑路可命中”。其中 Windows 常见 `curl.exe -X DELETE` 与数据库 `DROP DATABASE` 应保持远端破坏优先级，不被普通 `curl` intent 或 `proxy_bypass_signal_blocked` 抢先归类。
 - 无 host / port 的 raw socket 不弹授权，直接阻断。
 - Script `brokerOnly` 缺少 helper 或 broker session 时 fail closed，不回退直连。
+- Project Preview 对绝对路径、UNC/盘符、URL、NUL 和 `..` 越界输入应在创建 iframe 前失败，且不应在交付目录写入 staging 或 `node_modules`。
+- 原生 source staging 回归必须覆盖：超过 entry/depth/file/byte 上限时流式枚举立即停止；最终 symlink/reparse 与祖先目录瞬时替换为 junction/symlink 时，opened-handle containment 均拒绝根外文件；文本大小在同一 handle 上校验；Windows 工作间内静态资产 hardlink 允许只读复制而工作间外 hardlink 拒绝；资产复制要求本进程 owner lease，跳过隐藏文件、package/lock/tsconfig/jsconfig，并且不覆盖既有 staging 文件。
+- 完整项目应通过 `.agentvis` 包装配置加载 staging 中的 Vite/PostCSS/Tailwind，保留插件/alias/CSS 配置、package type、项目依赖版本和 staging 内的 root/env/public，同时覆盖 host/port/CORS/fs/cache 与 health/diagnostics；片段不得加载这些项目配置。`file:`/Git/HTTP/workspace/alias 依赖、超过 256 KiB 的 manifest、超过 128 个依赖或超长包名/spec 应在 npm 前拒绝，合法项目依赖的 npm lifecycle script 不应执行。
+- Import Map Vanilla 项目只有在有效入口的 map（含 `imports`/`scopes`）合法、裸导入已映射且模块 native-JS-only 时才走静态路由；唯一命名根 HTML 应与真实 `index.html` 使用同一模式判定，malformed/unmapped 以及 TS/TSX/JSX/Vue/模块 CSS transform 依赖应在启动前失败。多根 HTML、嵌套项目、缺少入口、非 Registry 依赖和已知非 Vite 构建契约应分开诊断。Vite 项目的缺失裸依赖、入口 4xx/5xx、运行时 exception、unhandled rejection 和资源失败应进入可操作错误 UI；`.env` 只能计数提示，不能读取。
+- 连续启动、关闭、切换 Agent/项目和重试后，只有最新 run 可保持运行；旧 PID、端口、安装执行和 staging 必须回收。在 3100-3110 上预先启动的无关进程不得被 Preview 终止。
+- staging 回收应验证直接子目录、UUIDv4、精确 marker/token、链接/reparse 与 canonical containment；正常清理还必须证明并释放本进程 registry lease，不能借 marker/token 清理其他实例。原子隔离后 no-follow 删除，junction 只删链接；Windows 回归须用不共享 delete 的真实文件句柄覆盖“短暂锁在有界退避内恢复”和“持续锁超时后恢复 lease、释放后可再次清理”。部分删除遗留的 `.trash-{UUIDv4}` 仅能凭严格配对且至少 24 小时的 root receipt 被 stale sweep 自回收；孤立 receipt 也只能在严格命名、内容自洽、普通文件、配对 trash 不存在且至少 24 小时时清理，错配 receipt 必须保留。stale workspace 分页只处理至少 24 小时且成功取得 lease 的候选；前端 backlog 应验证单轮有界、公平轮转、定时器收尾，以及新失败/溢出后 stale sweep 可重新调度。
 
 ControlledNetwork 回归矩阵手工验证结论：
 

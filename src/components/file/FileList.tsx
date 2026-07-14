@@ -33,8 +33,13 @@ import { usePreviewStore } from '@stores/previewStore';
 import styles from './FileList.module.css';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
-import { isPreviewableFile, inferTemplateFromFileNames } from '@services/preview';
-import type { ProjectFile } from '@services/preview/types';
+import { inferTemplateFromFileNames, isPreviewableFile } from '@services/preview';
+import { isPreviewCancellation, PreviewServiceError } from '@services/preview/previewErrors';
+import {
+  listPreviewSourceTree,
+  readPreviewPackageJson,
+  readPreviewSourceFiles,
+} from '@services/preview/previewSourceStaging';
 import { useI18n } from '@/i18n';
 import { getMissingDirectoryRecoveryPath } from './FileListPathRecovery';
 import {
@@ -160,8 +165,24 @@ export function FileList({
     return () => window.clearInterval(timer);
   }, [isImporting]);
   const { t } = useI18n();
-  const { startProjectPreview, setProjectStatus, setProjectUrl } = usePreviewStore();
+  const {
+    startProjectPreview,
+    markProjectRequestSubmitted,
+    projectRequestId: currentProjectRequestId,
+    setProjectStatus,
+    setProjectTemplate,
+    setProjectUrl,
+  } = usePreviewStore();
   const [isStartingPreview, setIsStartingPreview] = useState(false);
+  const startingPreviewRequestIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const startingRequestId = startingPreviewRequestIdRef.current;
+    if (startingRequestId !== null && startingRequestId !== currentProjectRequestId) {
+      startingPreviewRequestIdRef.current = null;
+      setIsStartingPreview(false);
+    }
+  }, [currentProjectRequestId]);
 
   // ==================== 文件夹导航状态 ====================
   /** 当前相对路径（空字符串 = 根目录） */
@@ -699,48 +720,16 @@ export function FileList({
    * 读取内容后交给 VitePreviewService 启动预览。
    */
   const handleRunPreview = useCallback(async () => {
-    // 递归收集当前目录及子目录下所有可预览文件
-    // 保留相对路径结构（如 src/components/Sidebar.vue → src/components/Sidebar.vue）
-    async function collectPreviewableFiles(
-      dirPath: string,
-      relativeTo: string
-    ): Promise<{ filePath: string; relativePath: string; fileName: string }[]> {
-      const { readDir } = await import('@tauri-apps/plugin-fs');
-      const { join } = await import('@tauri-apps/api/path');
-      const dirEntries = await readDir(dirPath);
-
-      const files: { filePath: string; relativePath: string; fileName: string }[] = [];
-
-      // 需要跳过的目录：避免收集构建产物和预览目录
-      const SKIP_DIRS = new Set(['vite_preview', 'node_modules', '.git', 'dist', 'build']);
-
-      for (const entry of dirEntries) {
-        if (entry.isDirectory && SKIP_DIRS.has(entry.name)) continue;
-
-        const entryPath = await join(dirPath, entry.name);
-
-        if (entry.isDirectory) {
-          const subFiles = await collectPreviewableFiles(entryPath, `${relativeTo}${entry.name}/`);
-          files.push(...subFiles);
-        } else if (isPreviewableFile(entry.name)) {
-          files.push({
-            filePath: entryPath,
-            relativePath: `${relativeTo}${entry.name}`,
-            fileName: entry.name,
-          });
-        }
-      }
-
-      return files;
-    }
-
+    const initialTemplate = inferTemplateFromFileNames(entries.map((entry) => entry.fileName));
+    const activeProjectRequestId = startProjectPreview(initialTemplate);
+    const projectRequestId = activeProjectRequestId;
+    startingPreviewRequestIdRef.current = projectRequestId;
+    setProjectStatus('installing');
     setIsStartingPreview(true);
 
     try {
-      // 将相对路径 currentPath（如 "src"）转为绝对路径
       // 交付物根目录: {appDataDir}/deliverables/{hubName}/{agentName}/
-      const { appDataDir } = await import('@tauri-apps/api/path');
-      const { join } = await import('@tauri-apps/api/path');
+      const { appDataDir, join } = await import('@tauri-apps/api/path');
       const dataDir = await appDataDir();
       const deliverableRoot = await join(
         dataDir,
@@ -748,115 +737,111 @@ export function FileList({
         sanitizedHubName,
         sanitizedAgentName
       );
-      const absoluteCurrentDir = currentPath
-        ? await join(deliverableRoot, currentPath)
-        : deliverableRoot;
 
-      // 检测项目根目录：从当前目录向上查找 package.json
-      // 当用户从 src/ 子目录触发时，需要回到项目根以正确收集所有文件
-      const { exists } = await import('@tauri-apps/plugin-fs');
-      let projectRoot = absoluteCurrentDir;
-      let searchDir = absoluteCurrentDir;
-      let foundPackageJson = false;
-      while (searchDir.length >= deliverableRoot.length) {
-        const pkgPath = await join(searchDir, 'package.json');
-        if (await exists(pkgPath)) {
-          projectRoot = searchDir;
-          foundPackageJson = true;
-          break;
-        }
-        // 已到达 deliverable 根目录，停止向上查找
-        if (searchDir === deliverableRoot) break;
-        const { dirname } = await import('@tauri-apps/api/path');
-        searchDir = await dirname(searchDir);
-      }
-
-      if (projectRoot !== absoluteCurrentDir) {
+      // Native 负责 root containment、no-follow 遍历和 list-time 硬预算；
+      // 返回路径仍在 renderer 边界规范化后才进入 preview service。
+      const sourceTree = await listPreviewSourceTree(deliverableRoot, currentPath);
+      if (!usePreviewStore.getState().isProjectRequestCurrent(activeProjectRequestId)) return;
+      if (sourceTree.sourcePrefix) {
         logger.debug(
-          `[FileList] 检测到项目根目录: ${projectRoot}（当前浏览: ${absoluteCurrentDir}）`
+          `[FileList] 检测到 src/ 子目录预览模式，补全路径前缀: "${sourceTree.sourcePrefix}"`
         );
       }
 
-      // 计算文件收集时的路径前缀
-      // 当未找到 package.json 且 projectRoot 的末段名称恰好是 "src" 时，
-      // 补全 "src/" 前缀，使文件被写到正确路径（vite_preview/src/App.vue）。
-      // 对于 website/、pages/ 等独立网站子目录，projectRoot 本身就是 vite 项目根，
-      // 文件应写在 vite_preview/ 根目录下，无需任何前缀。
-      // 只有 src/ 这一约定俗成的组件子目录需要补全，以匹配模板的 src/main.js import 路径。
-      const lastPathSegment = projectRoot.split(/[\\/]/).pop() ?? '';
-      const sourcePrefix =
-        !foundPackageJson && projectRoot !== deliverableRoot && lastPathSegment === 'src'
-          ? 'src/'
-          : '';
-
-      if (sourcePrefix) {
-        logger.debug(`[FileList] 检测到 src/ 子目录预览模式，补全路径前缀: "${sourcePrefix}"`);
+      if (sourceTree.entries.length === 0) {
+        throw new PreviewServiceError(
+          'entry-not-found',
+          undefined,
+          undefined,
+          sourceTree.omittedEnvironmentFiles > 0
+            ? [
+                {
+                  code: 'environment-files-omitted',
+                  count: sourceTree.omittedEnvironmentFiles,
+                },
+              ]
+            : []
+        );
       }
 
-      // 从项目根目录开始递归收集
-      const allPreviewableFiles = await collectPreviewableFiles(projectRoot, sourcePrefix);
+      const templateId = inferTemplateFromFileNames(sourceTree.entries.map((entry) => entry.path));
+      setProjectTemplate(templateId);
 
-      if (allPreviewableFiles.length === 0) {
-        logger.warn('[FileList] 未找到可预览文件');
-        return;
-      }
-
-      const templateId = inferTemplateFromFileNames(allPreviewableFiles.map((f) => f.fileName));
-      startProjectPreview(templateId);
-      setProjectStatus('installing');
-
-      // 并行读取所有文件内容，保留原始相对路径
-      // 项目结构已包含 src/ 前缀（如 src/App.tsx），无需再添加
-      const fileContents = await Promise.all(
-        allPreviewableFiles.map(async (file): Promise<ProjectFile> => {
-          const content = await invoke<string>('file_read_content', {
-            filePath: file.filePath,
-          });
-          return {
-            path: file.relativePath,
-            content,
-          };
-        })
+      // 每次 native read 都拿到剩余总预算作为 maxBytes；实际 UTF-8 字节数再次累计。
+      const fileContents = await readPreviewSourceFiles(
+        sourceTree.projectRoot,
+        sourceTree.entries,
+        {
+          assertActive: () => {
+            if (!usePreviewStore.getState().isProjectRequestCurrent(activeProjectRequestId)) {
+              throw new PreviewServiceError('cancelled');
+            }
+          },
+        }
       );
 
       // 尝试读取项目根目录的 package.json，用于合并第三方依赖
       let projectPackageJson: string | undefined;
-      try {
-        const pkgPath = await join(projectRoot, 'package.json');
-        const { readTextFile } = await import('@tauri-apps/plugin-fs');
-        if (await exists(pkgPath)) {
-          projectPackageJson = await readTextFile(pkgPath);
-          logger.debug('[FileList] 已读取项目 package.json');
+      if (sourceTree.hasPackageJson) {
+        try {
+          projectPackageJson = await readPreviewPackageJson(sourceTree.projectRoot);
+          if (projectPackageJson !== undefined) {
+            logger.debug('[FileList] 已通过安全边界读取项目 package.json');
+          }
+        } catch (readError) {
+          if (
+            readError instanceof PreviewServiceError &&
+            readError.code !== 'server-start-failed'
+          ) {
+            throw readError;
+          }
+          // 普通 IO 失败不阻塞预览启动，仅使用模板基础依赖；安全/预算拒绝必须保留。
+          logger.warn('[FileList] 读取 package.json 失败:', readError);
         }
-      } catch (readError) {
-        // 读取失败不阻塞预览启动，仅使用模板基础依赖
-        logger.warn('[FileList] 读取 package.json 失败:', readError);
       }
 
       const { vitePreviewService } = await import('@services/preview');
-      const url = await vitePreviewService.startProject(
-        projectRoot,
+      if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
+      const startPromise = vitePreviewService.startProject(
+        sourceTree.projectRoot,
         'vite_preview',
         templateId,
         fileContents,
-        projectPackageJson
+        projectPackageJson,
+        sourceTree.sourcePrefix,
+        projectRequestId,
+        true,
+        sourceTree.omittedEnvironmentFiles
       );
+      markProjectRequestSubmitted(projectRequestId);
+      const url = await startPromise;
 
+      if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
       setProjectUrl(url, templateId);
       logger.debug('[FileList] Project preview started:', url);
     } catch (error) {
+      if (isPreviewCancellation(error)) return;
+      if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) {
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('[FileList] Project preview failed:', errorMessage);
       setProjectStatus('error', errorMessage);
     } finally {
-      setIsStartingPreview(false);
+      if (startingPreviewRequestIdRef.current === projectRequestId) {
+        startingPreviewRequestIdRef.current = null;
+        setIsStartingPreview(false);
+      }
     }
   }, [
     currentPath,
+    entries,
     sanitizedHubName,
     sanitizedAgentName,
     startProjectPreview,
+    markProjectRequestSubmitted,
     setProjectStatus,
+    setProjectTemplate,
     setProjectUrl,
   ]);
 

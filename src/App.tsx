@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { Shell } from '@components/layout/Shell';
 import { ToastProvider } from '@components/ui/Toast';
 import { TooltipProvider } from '@components/ui/Tooltip';
@@ -16,10 +16,11 @@ import {
 } from '@stores/attachmentViewerStore';
 import { useChatStore } from '@stores/chatStore';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { startScheduler, stopScheduler } from '@services/cron';
 import { getLogger } from '@services/logger';
+import { closeWindowWithPreviewCleanup } from '@services/preview/windowCloseLifecycle';
+import { usePreviewStore } from '@stores/previewStore';
 import { useUpdateStore } from '@stores/updateStore';
 import { useI18n } from '@/i18n';
 import type { AttachmentInfo } from '@/types/message';
@@ -255,12 +256,36 @@ function App() {
   const { closeImageLightbox, goToPrevImage, goToNextImage } = useAttachmentViewerStore();
 
   // ==================== 窗口关闭确认 ====================
-  // Rust 端拦截 CloseRequested 后 emit close-requested 事件，
-  // 前端检测是否有 Agent 正在处理任务来决定直接关闭还是弹出确认弹窗
+  // 仅在 renderer listener 存活时阻止默认关闭，再由前端检测是否有 Agent 任务。
+  // 若 React 根树崩溃并卸载 listener，Tauri 会恢复原生默认关闭，避免窗口锁死。
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const closeInProgressRef = useRef(false);
+
+  const destroyWindowAfterPreviewCleanup = useCallback(async () => {
+    await closeWindowWithPreviewCleanup({
+      guard: closeInProgressRef,
+      invalidatePreviewRequest: () => usePreviewStore.getState().invalidateProjectRequest(),
+      cleanupPreview: () =>
+        import('@services/preview').then(({ vitePreviewService }) =>
+          vitePreviewService.stopProject()
+        ),
+      destroyWindow: () => getCurrentWindow().destroy(),
+      onCleanupTimeout: () => {
+        logger.warn('[App] Project Preview cleanup timed out during window close');
+      },
+      onCleanupError: (error) => {
+        logger.warn('[App] Project Preview cleanup failed during window close:', error);
+      },
+      onDestroyError: (error) => {
+        logger.warn('[App] Window destruction failed; close can be retried:', error);
+      },
+    });
+  }, []);
 
   useEffect(() => {
-    const unlisten = listen('close-requested', () => {
+    const unlisten = getCurrentWindow().onCloseRequested((event) => {
+      event.preventDefault();
+
       // 检测是否有 Agent 任务正在执行（Chat 和 Planning 模式共用 sendingContexts）
       const { sendingContexts } = useChatStore.getState();
       const hasActiveTask = sendingContexts.size > 0;
@@ -270,7 +295,7 @@ function App() {
         setShowCloseConfirm(true);
       } else {
         // 无任务，直接销毁窗口（destroy 绕过 CloseRequested 拦截，避免死循环）
-        void getCurrentWindow().destroy();
+        void destroyWindowAfterPreviewCleanup();
       }
     });
 
@@ -281,13 +306,13 @@ function App() {
           logger.warn('[App] close-requested listener cleanup failed:', err);
         });
     };
-  }, []);
+  }, [destroyWindowAfterPreviewCleanup]);
 
   /** 用户确认退出：销毁窗口（绕过 CloseRequested 拦截） */
   const handleConfirmClose = useCallback(() => {
     setShowCloseConfirm(false);
-    void getCurrentWindow().destroy();
-  }, []);
+    void destroyWindowAfterPreviewCleanup();
+  }, [destroyWindowAfterPreviewCleanup]);
 
   /** 用户取消退出：关闭弹窗，继续等待任务完成 */
   const handleCancelClose = useCallback(() => {

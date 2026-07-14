@@ -2,14 +2,15 @@
  * TemplateManager - 预览模板缓存管理器
  *
  * 管理 {appData}/preview-templates/ 目录下的模板缓存。
- * 每个模板包含 package.json 和关联的配置文件，node_modules 在首次使用时
- * 通过 npm install 安装一次，后续所有 Agent 项目通过 junction 共享。
+ * 每个模板只缓存 AgentVis 受控的 package.json 与 node_modules。运行时配置
+ * 由 VitePreviewService 写入隔离 staging，避免执行 Agent 提供的构建配置。
  *
  * 职责：
  * 1. 持有各模板的配置定义（P0: vanilla，P1: react-tailwind）
  * 2. 检查模板 node_modules 是否已安装
- * 3. 首次使用时写入配置文件并执行 npm install
- * 4. 提供模板路径和配置查询接口
+ * 3. 首次使用或依赖漂移时写入受控 package.json 并执行 npm install
+ * 4. 以 single-flight owner/joiner 语义共享并管理模板准备
+ * 5. 提供模板路径和配置查询接口
  */
 
 import { invoke } from '@tauri-apps/api/core';
@@ -17,6 +18,26 @@ import { getLogger } from '@services/logger';
 import type { TemplateId, TemplateConfig, TemplateStatus } from './types';
 
 const logger = getLogger('TemplateManager');
+const INSTALL_MARKER_FILE = '.agentvis-install-complete';
+
+/** A cancellable shell execution owned by the caller that started an actual template install. */
+export interface TemplateInstallExecution {
+  executionId: string;
+  release: () => void;
+}
+
+/** Atomic single-flight result used by Preview to distinguish owners from joiners. */
+export interface TemplatePreparation {
+  readiness: Promise<string>;
+  joinedExistingPreparation: boolean;
+}
+
+type AcquireTemplateInstallExecution = () => TemplateInstallExecution;
+
+interface ActiveTemplatePreparation {
+  readiness: Promise<string>;
+  ownerKey: symbol;
+}
 
 // ==================== 模板定义 ====================
 
@@ -34,20 +55,7 @@ function getVanillaTemplate(): TemplateConfig {
     devDependencies: {
       vite: '^6.2.0',
     },
-    configFiles: {
-      'vite.config.js': [
-        'import { defineConfig } from "vite";',
-        '',
-        'export default defineConfig({',
-        '  server: {',
-        '    hmr: true,',
-        '    // Agent-generated CSS may reference parent-directory assets via url("../image.jpg").',
-        '    // Disable Vite fs strict mode so files outside the project root can be served.',
-        '    fs: { strict: false },',
-        '  },',
-        '});',
-      ].join('\n'),
-    },
+    configFiles: {},
     entryFiles: {
       'index.html': [
         '<!DOCTYPE html>',
@@ -90,43 +98,7 @@ function getReactTailwindTemplate(): TemplateConfig {
       'postcss-import': '^16.1.0',
       autoprefixer: '^10.4.21',
     },
-    configFiles: {
-      'vite.config.js': [
-        'import { defineConfig } from "vite";',
-        'import react from "@vitejs/plugin-react";',
-        '',
-        'export default defineConfig({',
-        '  plugins: [react()],',
-        '  server: {',
-        '    hmr: true,',
-        '    fs: { strict: false },',
-        '  },',
-        '});',
-      ].join('\n'),
-      'tailwind.config.js': [
-        '/** @type {import("tailwindcss").Config} */',
-        'export default {',
-        '  content: [',
-        '    "./index.html",',
-        '    "./src/**/*.{js,ts,jsx,tsx}",',
-        '  ],',
-        '  theme: {',
-        '    extend: {},',
-        '  },',
-        '  plugins: [],',
-        '};',
-      ].join('\n'),
-      'postcss.config.js': [
-        '// postcss-import must run before tailwindcss, otherwise @tailwind directives may be parsed as CSS imports',
-        'export default {',
-        '  plugins: {',
-        '    "postcss-import": {},',
-        '    tailwindcss: {},',
-        '    autoprefixer: {},',
-        '  },',
-        '};',
-      ].join('\n'),
-    },
+    configFiles: {},
     entryFiles: {
       'index.html': [
         '<!DOCTYPE html>',
@@ -191,43 +163,7 @@ function getVueTailwindTemplate(): TemplateConfig {
       'postcss-import': '^16.1.0',
       autoprefixer: '^10.4.21',
     },
-    configFiles: {
-      'vite.config.js': [
-        'import { defineConfig } from "vite";',
-        'import vue from "@vitejs/plugin-vue";',
-        '',
-        'export default defineConfig({',
-        '  plugins: [vue()],',
-        '  server: {',
-        '    hmr: true,',
-        '    fs: { strict: false },',
-        '  },',
-        '});',
-      ].join('\n'),
-      'tailwind.config.js': [
-        '/** @type {import("tailwindcss").Config} */',
-        'export default {',
-        '  content: [',
-        '    "./index.html",',
-        '    "./src/**/*.{vue,js,ts,jsx,tsx}",',
-        '  ],',
-        '  theme: {',
-        '    extend: {},',
-        '  },',
-        '  plugins: [],',
-        '};',
-      ].join('\n'),
-      'postcss.config.js': [
-        '// postcss-import must run before tailwindcss, otherwise @tailwind directives may be parsed as CSS imports',
-        'export default {',
-        '  plugins: {',
-        '    "postcss-import": {},',
-        '    tailwindcss: {},',
-        '    autoprefixer: {},',
-        '  },',
-        '};',
-      ].join('\n'),
-    },
+    configFiles: {},
     entryFiles: {
       'index.html': [
         '<!DOCTYPE html>',
@@ -282,6 +218,9 @@ class TemplateManager {
   /** 模板缓存根目录（延迟初始化） */
   private templatesRoot: string | null = null;
 
+  /** 同一模板只允许一个安装/修复流程，避免并发 npm 写入同一缓存目录。 */
+  private readonly readinessPromises = new Map<TemplateId, ActiveTemplatePreparation>();
+
   /**
    * 获取模板缓存根目录
    *
@@ -323,6 +262,11 @@ class TemplateManager {
     return factory();
   }
 
+  /** Whether another caller currently owns this template's install/repair flow. */
+  isTemplatePreparationInFlight(templateId: TemplateId): boolean {
+    return this.readinessPromises.has(templateId);
+  }
+
   /**
    * 检查模板是否已就绪（node_modules 已安装）
    */
@@ -332,7 +276,8 @@ class TemplateManager {
     const { exists } = await import('@tauri-apps/plugin-fs');
 
     const nodeModulesPath = await join(templatePath, 'node_modules');
-    const isInstalled = await exists(nodeModulesPath);
+    const markerPath = await join(templatePath, INSTALL_MARKER_FILE);
+    const isInstalled = (await exists(nodeModulesPath)) && (await exists(markerPath));
 
     return {
       id: templateId,
@@ -349,20 +294,117 @@ class TemplateManager {
    *
    * @param templateId 模板 ID
    * @param onProgress 进度回调（用于 UI 反馈）
+   * @param acquireInstallExecution 仅由实际 install owner 延迟获取的可取消 execution
    * @returns 模板目录路径
    */
   async ensureTemplateReady(
     templateId: TemplateId,
-    onProgress?: (message: string) => void
+    onProgress?: (message: string) => void,
+    acquireInstallExecution?: AcquireTemplateInstallExecution
+  ): Promise<string> {
+    return this.beginTemplatePreparation(templateId, onProgress, acquireInstallExecution).readiness;
+  }
+
+  /**
+   * Atomically join an existing preparation or become its owner.
+   *
+   * The install-execution factory belongs only to the owner and is invoked lazily, immediately
+   * before npm starts. Joiners can therefore wait for a Shell warmup or another Preview without
+   * registering or cancelling that shared owner's execution.
+   */
+  beginTemplatePreparation(
+    templateId: TemplateId,
+    onProgress?: (message: string) => void,
+    acquireInstallExecution?: AcquireTemplateInstallExecution
+  ): TemplatePreparation {
+    const inFlight = this.readinessPromises.get(templateId);
+    if (inFlight) {
+      onProgress?.(`Waiting for the existing ${templateId} template installation...`);
+      return { readiness: inFlight.readiness, joinedExistingPreparation: true };
+    }
+
+    const ownerKey = Symbol(templateId);
+    const readiness = this.runOwnedTemplatePreparation(
+      templateId,
+      ownerKey,
+      onProgress,
+      acquireInstallExecution
+    );
+    this.readinessPromises.set(templateId, { readiness, ownerKey });
+    return { readiness, joinedExistingPreparation: false };
+  }
+
+  private async runOwnedTemplatePreparation(
+    templateId: TemplateId,
+    ownerKey: symbol,
+    onProgress?: (message: string) => void,
+    acquireInstallExecution?: AcquireTemplateInstallExecution
+  ): Promise<string> {
+    try {
+      return await this.ensureTemplateReadyInternal(
+        templateId,
+        onProgress,
+        acquireInstallExecution
+      );
+    } finally {
+      if (this.readinessPromises.get(templateId)?.ownerKey === ownerKey) {
+        this.readinessPromises.delete(templateId);
+      }
+    }
+  }
+
+  private async ensureTemplateReadyInternal(
+    templateId: TemplateId,
+    onProgress?: (message: string) => void,
+    acquireInstallExecution?: AcquireTemplateInstallExecution
+  ): Promise<string> {
+    const leaseToken = await invoke<string>('preview_acquire_template_lock', { templateId });
+    let preparation: { value: string } | { error: unknown };
+    try {
+      preparation = {
+        value: await this.ensureTemplateReadyWhileLocked(
+          templateId,
+          onProgress,
+          acquireInstallExecution
+        ),
+      };
+    } catch (error) {
+      preparation = { error };
+    }
+
+    let releaseFailure: { error: unknown } | null = null;
+    try {
+      await invoke('preview_release_template_lock', { leaseToken });
+    } catch (error) {
+      releaseFailure = { error };
+    }
+
+    if ('error' in preparation) {
+      if (releaseFailure) {
+        logger.warn(
+          '[TemplateManager] Failed to release template lease after preparation error:',
+          releaseFailure.error
+        );
+      }
+      throw preparation.error;
+    }
+    if (releaseFailure) throw releaseFailure.error;
+    return preparation.value;
+  }
+
+  private async ensureTemplateReadyWhileLocked(
+    templateId: TemplateId,
+    onProgress?: (message: string) => void,
+    acquireInstallExecution?: AcquireTemplateInstallExecution
   ): Promise<string> {
     const status = await this.checkTemplateStatus(templateId);
     const config = this.getTemplateConfig(templateId);
     const templatePath = status.path;
 
     if (status.isInstalled) {
-      // 检测 package.json 是否与当前模板定义一致
-      // 不一致时（如 Tailwind v4→v3 升级）自动覆写并重新安装
-      const driftDetected = await this.hasPackageJsonDrift(templatePath, config);
+      // package.json 和完成标记都必须与当前模板定义一致。标记内容同时充当
+      // 最后一次成功提交的版本记录，避免崩溃窗口误认旧 node_modules。
+      const driftDetected = await this.hasTemplateCacheDrift(templatePath, config);
       if (!driftDetected) {
         logger.debug(`[TemplateManager] 模板 ${templateId} 已就绪`);
         return templatePath;
@@ -378,20 +420,29 @@ class TemplateManager {
     // 1. 创建模板目录
     await this.ensureDir(templatePath);
 
-    // 2. 写入 package.json（始终覆写，确保最新依赖定义）
+    // 2. 在任何 manifest 变更前先失效完成标记。即使进程在下一步崩溃，
+    // 下次也不会把旧 node_modules 与新 package.json 误判为同一提交。
+    const { join } = await import('@tauri-apps/api/path');
+    const { exists, remove } = await import('@tauri-apps/plugin-fs');
+    const markerPath = await join(templatePath, INSTALL_MARKER_FILE);
+    if (await exists(markerPath)) {
+      await remove(markerPath);
+    }
+
+    // 3. 写入 package.json（始终覆写，确保最新依赖定义）
     const packageJson = this.buildPackageJson(config);
     await this.writeFile(templatePath, 'package.json', packageJson);
     logger.debug('[TemplateManager] 已写入 package.json');
 
-    // 3. 写入配置文件（始终覆写，确保配置一致性）
-    for (const [fileName, content] of Object.entries(config.configFiles)) {
-      await this.writeFile(templatePath, fileName, content);
-      logger.debug(`[TemplateManager] 已写入配置文件: ${fileName}`);
-    }
-
-    // 4. 执行 npm install
+    // 4. 执行 npm install（禁用依赖 lifecycle scripts）
     onProgress?.('Installing dependencies (npm install)...');
-    await this.runNpmInstall(templatePath);
+    const installExecution = acquireInstallExecution?.();
+    try {
+      await this.runNpmInstall(templatePath, installExecution?.executionId);
+    } finally {
+      installExecution?.release();
+    }
+    await this.writeFile(templatePath, INSTALL_MARKER_FILE, packageJson);
     logger.debug(`[TemplateManager] 模板 ${templateId} 依赖安装完成`);
 
     return templatePath;
@@ -400,12 +451,12 @@ class TemplateManager {
   // ==================== 私有方法 ====================
 
   /**
-   * 检测 package.json 是否与当前模板定义漂移
+   * 检测 package.json 和完成标记是否与当前模板定义漂移。
    *
-   * 比较磁盘上已安装模板的 package.json 与内存中的模板配置。
-   * 用于处理模板版本升级（如 Tailwind v4→v3）时自动重新安装。
+   * 两个文件必须同时匹配确定性的受控 manifest；任一缺失或不一致都说明
+   * node_modules 没有对应到一个完整提交，需要重新安装。
    */
-  private async hasPackageJsonDrift(
+  private async hasTemplateCacheDrift(
     templatePath: string,
     config: TemplateConfig
   ): Promise<boolean> {
@@ -414,11 +465,18 @@ class TemplateManager {
       const { readTextFile } = await import('@tauri-apps/plugin-fs');
 
       const pkgPath = await join(templatePath, 'package.json');
-      const existingContent = await readTextFile(pkgPath);
+      const markerPath = await join(templatePath, INSTALL_MARKER_FILE);
+      const [existingContent, committedContent] = await Promise.all([
+        readTextFile(pkgPath),
+        readTextFile(markerPath),
+      ]);
       const expectedContent = this.buildPackageJson(config);
 
       // 简单字符串比较即可：buildPackageJson 输出是确定性的
-      return existingContent.trim() !== expectedContent.trim();
+      return (
+        existingContent.trim() !== expectedContent.trim() ||
+        committedContent.trim() !== expectedContent.trim()
+      );
     } catch {
       // 读取失败（文件不存在等）视为需要重新安装
       return true;
@@ -469,7 +527,7 @@ class TemplateManager {
    * 使用 shell_execute 同步执行，等待安装完成。
    * 超时设置为 120 秒，覆盖首次安装的网络延迟。
    */
-  private async runNpmInstall(templatePath: string): Promise<void> {
+  private async runNpmInstall(templatePath: string, executionId?: string): Promise<void> {
     // 首次安装全量依赖（Vite + React + Tailwind 等）在慢速网络下可能超过 2 分钟，
     // 设置 300 秒宽限期避免误超时
     const NPM_INSTALL_TIMEOUT_SECS = 300;
@@ -479,7 +537,7 @@ class TemplateManager {
       stdout: string;
       stderr: string;
     }>('shell_execute', {
-      command: 'npm install',
+      command: 'npm install --ignore-scripts --no-audit --no-fund --package-lock=false',
       workdir: templatePath,
       timeoutSecs: NPM_INSTALL_TIMEOUT_SECS,
       background: false,
@@ -487,6 +545,7 @@ class TemplateManager {
       sandboxLevel: 'installer',
       subjectType: 'installer',
       subjectId: 'preview-template-install',
+      executionId,
     });
 
     if (result.exitCode !== 0) {

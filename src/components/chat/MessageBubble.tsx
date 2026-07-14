@@ -40,6 +40,7 @@ import { visualEnhancementJobManager } from '@services/planning/visual-enhancer/
 import type { UIMessage } from '@/types/message';
 import type { ProjectFile } from '@services/preview/types';
 import { inferTemplateFromLanguage, inferTemplateFromLanguages } from '@services/preview';
+import { isPreviewCancellation } from '@services/preview/previewErrors';
 import styles from './MessageBubble.module.css';
 
 const logger = getLogger('MessageBubble');
@@ -462,7 +463,13 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   // 代码预览回调（点击代码块 ▶ 按钮后在右栏打开 Live Preview）
-  const { openPreview, startProjectPreview, setProjectStatus, setProjectUrl } = usePreviewStore();
+  const {
+    openPreview,
+    startProjectPreview,
+    markProjectRequestSubmitted,
+    setProjectStatus,
+    setProjectUrl,
+  } = usePreviewStore();
   const handleCodePreview = useCallback(
     (code: string, language: string) => {
       // SVG 需要包一层 HTML 外壳才能在 iframe 中正确渲染
@@ -474,10 +481,11 @@ export const MessageBubble = memo(function MessageBubble({
 
   const handleProjectPreview = useCallback(
     async (code: string, language: string) => {
+      let projectRequestId: number | null = null;
       try {
         const filePath = inferFilePath(code, language);
         const templateId = inferTemplateFromLanguage(language);
-        startProjectPreview(templateId);
+        projectRequestId = startProjectPreview(templateId);
         setProjectStatus('installing');
 
         const { appDataDir, join } = await import('@tauri-apps/api/path');
@@ -485,23 +493,37 @@ export const MessageBubble = memo(function MessageBubble({
         const deliverableDir = await join(appData, 'deliverables', 'preview');
 
         const { vitePreviewService } = await import('@services/preview');
-        const url = await vitePreviewService.startProject(
+        if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
+        const startPromise = vitePreviewService.startProject(
           deliverableDir,
           // 使用固定项目名，复用同一目录
           'vite_preview',
           templateId,
-          [{ path: filePath, content: code }]
+          [{ path: filePath, content: code }],
+          undefined,
+          '',
+          projectRequestId
         );
+        markProjectRequestSubmitted(projectRequestId);
+        const url = await startPromise;
 
+        if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
         setProjectUrl(url, templateId);
         logger.debug('[MessageBubble] Project preview started:', url);
       } catch (error) {
+        if (isPreviewCancellation(error)) return;
+        if (
+          projectRequestId !== null &&
+          !usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)
+        ) {
+          return;
+        }
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error('[MessageBubble] Project preview failed:', errorMessage);
         setProjectStatus('error', errorMessage);
       }
     },
-    [startProjectPreview, setProjectStatus, setProjectUrl]
+    [startProjectPreview, markProjectRequestSubmitted, setProjectStatus, setProjectUrl]
   );
 
   // 多文件项目预览：从消息中收集所有可预览代码块
@@ -560,9 +582,10 @@ export const MessageBubble = memo(function MessageBubble({
   const handleMultiFilePreview = useCallback(async () => {
     if (previewableBlocks.length === 0) return;
 
+    let projectRequestId: number | null = null;
     try {
       const templateId = inferTemplateFromLanguages(previewableBlocks.map((b) => b.language));
-      startProjectPreview(templateId);
+      projectRequestId = startProjectPreview(templateId);
       setProjectStatus('installing');
 
       const filePaths = inferFilePathsForBlocks(previewableBlocks);
@@ -576,14 +599,21 @@ export const MessageBubble = memo(function MessageBubble({
       const deliverableDir = await join(appData, 'deliverables', 'preview');
 
       const { vitePreviewService } = await import('@services/preview');
-      const url = await vitePreviewService.startProject(
+      if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
+      const startPromise = vitePreviewService.startProject(
         deliverableDir,
         // 使用固定项目名，复用同一目录
         'vite_preview',
         templateId,
-        files
+        files,
+        undefined,
+        '',
+        projectRequestId
       );
+      markProjectRequestSubmitted(projectRequestId);
+      const url = await startPromise;
 
+      if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
       setProjectUrl(url, templateId);
       logger.debug(
         '[MessageBubble] Multi-file preview started:',
@@ -592,11 +622,24 @@ export const MessageBubble = memo(function MessageBubble({
         files.map((f) => f.path)
       );
     } catch (error) {
+      if (isPreviewCancellation(error)) return;
+      if (
+        projectRequestId !== null &&
+        !usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)
+      ) {
+        return;
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('[MessageBubble] Multi-file preview failed:', errorMessage);
       setProjectStatus('error', errorMessage);
     }
-  }, [previewableBlocks, startProjectPreview, setProjectStatus, setProjectUrl]);
+  }, [
+    previewableBlocks,
+    startProjectPreview,
+    markProjectRequestSubmitted,
+    setProjectStatus,
+    setProjectUrl,
+  ]);
 
   // 鼠标进入 - 立即显示操作栏
   const handleMouseEnter = useCallback(() => {

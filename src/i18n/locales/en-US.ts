@@ -10,6 +10,19 @@ export const enUS = {
       cancel: 'Keep Waiting',
     },
   },
+  rendererRecovery: {
+    title: 'AgentVis needs to recover its interface',
+    description:
+      'The interface encountered an unhandled error and switched to a safe recovery screen. You can reload or close the app.',
+    dynamicModuleDescription:
+      'An interface module could not be loaded. The development server may have stopped or cached files may be stale. Restore the server and reload, or close the app.',
+    reload: 'Reload AgentVis',
+    closeApp: 'Close AgentVis',
+    errorDetails: 'Error details',
+    diagramTitle: 'This diagram is temporarily unavailable',
+    diagramDescription:
+      'The diagram module failed to load. The rest of the message is still available; retry after restoring the service.',
+  },
   notifications: {
     taskCompletedTitle: '{agentName} finished a task',
     taskCompletedPrivateBody: 'The reply is ready in AgentVis.',
@@ -1748,6 +1761,8 @@ export const enUS = {
     previewFailed: 'Failed to start',
     viteRunning: 'Vite running',
     viewSource: 'View source',
+    previewCodeLabel: 'Code',
+    previewLabel: 'Preview',
     refreshPreview: 'Refresh preview',
     closePreview: 'Close preview',
     loadingResources: 'Loading resources...',
@@ -1756,6 +1771,63 @@ export const enUS = {
     startingVite: 'Starting Vite Dev Server...',
     waitingUrl: 'Waiting for URL...',
     previewStartFailed: 'Preview failed to start',
+    loadingProjectPreview: 'Loading project preview...',
+    checkingPreviewRuntime: 'Checking preview runtime...',
+    previewRuntimeError: 'The preview reported a runtime error',
+    previewUnhandledRejection: 'The preview reported an unhandled asynchronous error',
+    previewResourceError: 'A preview resource failed to load',
+    previewBrowserCapabilityError: 'The embedded browser does not provide a required capability',
+    previewCrossOriginError: 'A cross-origin or content-security policy blocked the resource',
+    previewExternalResourceError: 'An external resource failed to load. Check the network and URL.',
+    previewRuntimeErrorUnknown: 'The preview did not provide additional error details.',
+    previewDiagnosticsUnavailable: 'Preview diagnostics are limited',
+    previewDiagnosticsUnavailableDetail:
+      'The page loaded, but the app did not confirm initialization. You can still inspect it or retry to reconnect diagnostics.',
+    previewRetrying: 'Retrying...',
+    previewRetryFailed: 'Preview retry failed',
+    previewRestartFromFileList: 'Restart the preview from the file list.',
+    previewErrorMissingDependencies:
+      'Project dependencies could not be resolved. Update package.json and retry.',
+    previewErrorInvalidPackage: 'The project package.json is invalid. Fix it and retry.',
+    previewErrorAmbiguousEntry:
+      'Multiple HTML entries were found, so Project Preview cannot safely choose a home page.',
+    previewErrorEntryNotFound:
+      'No runnable project entry was found. Open the project directory or use Live Preview for a file.',
+    previewErrorNestedProject:
+      'This directory contains a nested project. Open that project directory and retry.',
+    previewErrorUnsupportedProject:
+      'This project uses a build or dependency contract that Project Preview does not support.',
+    previewErrorUnsafePath: 'Preview was blocked because the project contains an unsafe path.',
+    previewErrorUnsafeLinkDetail:
+      'A symbolic link, directory junction, or out-of-workspace hard link was detected. Preview stopped to avoid reading outside the workspace.',
+    previewErrorNodeMissing: 'A compatible Node.js runtime was not found.',
+    previewErrorInstallFailed:
+      'Project dependency installation failed. Preview disables lifecycle scripts, so packages requiring native setup or install-time generation may not run.',
+    previewErrorInstallAuthFailed:
+      'Dependency authentication failed. Check the private registry and npm credentials.',
+    previewErrorInstallNetworkFailed:
+      'Dependency installation failed because of the network, proxy, certificate, or registry.',
+    previewErrorServerStartFailed: 'The preview server failed to start.',
+    previewErrorCompileFailed: 'The project entry module failed to compile.',
+    previewErrorProcessExited: 'The preview server process exited unexpectedly.',
+    previewErrorRetryUnavailable:
+      'There is no project preview to retry. Start it again from the file list.',
+    previewErrorAssetBudgetExceeded: 'Project assets exceed the safe preview limit.',
+    previewErrorDetectedEntries:
+      'Detected entries: {entries}. Keep an index.html file or use Live Preview for the target HTML file.',
+    previewErrorDetectedProjectRoots: 'Possible project directories: {roots}',
+    previewErrorNonRegistryDependency:
+      '{dependency} uses a local, workspace, Git, URL, or alias source. Isolated preview installs registry versions only.',
+    previewErrorSourceFileCountDetail: 'Preview reads at most {count} source files.',
+    previewErrorScannedEntryCountDetail: 'Preview scans at most {count} directory entries.',
+    previewErrorDirectoryDepthDetail: 'Preview traverses at most {count} directory levels.',
+    previewErrorSourceFileSizeDetail: 'A preview source file cannot exceed {size} MB.',
+    previewErrorSourceTotalSizeDetail: 'Preview source files cannot exceed {size} MB in total.',
+    previewErrorAssetFileCountDetail: 'Preview copies at most {count} asset files.',
+    previewErrorAssetFileSizeDetail: 'A preview asset cannot exceed {size} MB.',
+    previewErrorAssetTotalSizeDetail: 'Preview assets cannot exceed {size} MB in total.',
+    previewErrorEnvironmentFilesOmitted:
+      '{count} .env file(s) were detected. Isolated preview does not read them, so missing environment values may contribute to this failure.',
   },
   networkDirectAuth: {
     title: 'Allow this non-HTTP direct connection?',

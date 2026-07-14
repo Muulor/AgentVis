@@ -103,6 +103,10 @@ class PortAllocator {
 
       const response = await fetch(`http://127.0.0.1:${port}`, {
         signal: controller.signal,
+        // Occupancy probing only needs to know whether an HTTP listener answered.
+        // Opaque no-cors responses still resolve and cannot be misclassified as
+        // "free" merely because an unrelated local server omits CORS headers.
+        mode: 'no-cors',
       });
 
       clearTimeout(timeoutId);

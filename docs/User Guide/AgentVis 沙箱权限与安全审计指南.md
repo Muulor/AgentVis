@@ -313,6 +313,25 @@ Script 技能可以在技能定义中声明更明确的执行要求，例如：
 
 本机审计不是“关闭沙箱”。它仍会保留命令防护、路径保护、脚本扫描、Trash Bin 和审计，只是文件和网络边界更贴近日常本机助手体验。
 
+### 10.5 内置 Project Preview 有独立的安全边界
+
+在文件面板中点击 Project Preview 时，AgentVis 不会直接在 Agent 交付目录中执行项目。预览服务会：
+
+- 将通过路径校验的源文件放入应用缓存的临时 staging，拒绝绝对路径、URL、NUL 和 `..` 越界。
+- 由原生层边枚举边限制目录深度、entry 数量、文件数量和字节总量；文本读取与资产复制在同一个已验证 handle 上完成大小校验和实际 I/O，并复核最终解析路径仍位于交付物根目录内。源码/文本的多硬链接仍拒绝；Windows 静态资产仅在全部 NTFS hardlink 都能枚举并验证位于同一 Agent 工作间时只读复制，跨工作间、指向 deliverables 外或无法稳定复验时仍拒绝，其他平台仍拒绝多硬链接资产。
+- 仅复制 allow-list 中的静态资产，跳过符号链接/junction、Windows reparse point、隐藏资产、`Agent-Log`、包缓存和构建产物。`package.json` 通过独立有界读取解析，锁文件不进入 staging；完整项目所需的 Vite/PostCSS/Tailwind/tsconfig/jsconfig 作为受控源文件进入 staging，ESLint/Prettier 等无关根配置继续过滤。
+- 只接受 npm registry 形式的包名和版本范围；拒绝本地路径、Git、HTTP URL、workspace/link 和 npm alias 依赖。`package.json` 最多 256 KiB，依赖和开发依赖合计最多 128 项，包名/版本规格也有长度上限；安装时禁用 npm lifecycle scripts。
+- 共享模板缓存按模板持有 Rust/OS 跨进程排他 lease；完成 marker 必须与受控 `package.json` 内容相同，且在 manifest 更新前先失效。并行实例和安装中崩溃都不会把不一致的 `node_modules` 当作已完成缓存。
+- 代码片段仅执行 AgentVis 模板 Vite/静态配置，并把 Tailwind 配置按有界语法树静态提取。完整项目则由 `.agentvis/vite.config.mjs` 包装并加载 staging 中的项目 Vite 配置，保留插件、alias、PostCSS/Tailwind、包版本和 staging 内的 root/env/public 语义，同时覆盖监听地址、端口、CORS、文件服务范围、cache 位置和 health/diagnostics；ESLint、Webpack、Rollup、Esbuild 等无关根配置不会加载。
+- Import Map 静态预览只支持浏览器可直接执行的原生 JavaScript；malformed Import Map、未映射裸导入、TS/TSX/JSX/Vue 文件或模块式 CSS 导入会在启动前显示错误，不会带着不完整画面继续运行。
+- 只终止自己记录的后台 PID；关闭预览、切换 Agent/项目和重试都会回收旧进程与 staging。端口被占用不会导致 AgentVis 扫描并终止未知进程。
+- staging 由原生层创建并分配 `runId`/`ownerToken`；`.agentvis/active` 精确记录该身份，跨实例文件 lease 防止另一个 AgentVis 实例清理仍在使用的 workspace。正常清理还必须证明并释放当前实例 registry 中的 lease，不能仅凭复制到的 marker/token 删除其他实例的 workspace。
+- 清理前会验证 workspace 是 app-cache 的直接子目录、名称是 UUIDv4、marker/token 匹配、没有可穿越的链接/reparse point，且 canonical path 始终在受控范围内。通过后先原子移动到受控 trash，再由显式栈 no-follow 删除器回收；`node_modules` junction 只删除链接本身。单轮最多处理 100,000 个 entry、128 层和 2 秒，避免递归栈或超大依赖树阻塞关闭。Windows 若在进程刚结束后短暂返回“另一个程序正在使用此文件”，会在约 1.6 秒内有界重试并逐次复验所有权；持续占用仍会安全保留 workspace，供后续回收，而不是绕过校验强删。
+- 这些控制将交付物内容视为不可信输入，但假设 AgentVis 私有 app-cache 仍由应用拥有；同一操作系统账户下的其他恶意进程若刻意并发替换该 cache，不属于 Project Preview 的威胁模型。
+- 陈旧 workspace 只在至少 24 小时未活动且原生层成功取得 lease 时，才按有界分页清理。若原子隔离后的部分删除已经移除原 marker，根目录中与 `.trash-{UUIDv4}` 严格配对的 receipt 会保留所有权证据；该 trash/receipt 也必须至少 24 小时且通过真实直接子项检查，才会 no-follow 自回收。超大 quarantine 每轮会先删除预算内条目，保留 receipt 后由下一轮从剩余目录继续；整个 stale IPC 最多执行 5 秒。配对 trash 已不存在时，孤立 receipt 也必须严格命名、内容自洽、是普通文件且超过 24 小时才会删除。暂时失败的回收进入有容量、单轮预算和公平轮转的队列，并重新登记后续原生 stale recovery。
+
+这些边界用于保护交付目录和预览服务生命周期，但不等于虚拟机或浏览器网络 DLP。尤其是完整项目的 Vite/PostCSS/Tailwind 配置属于可执行 Node 代码；`preview=inherit`/本机审计不能阻止它以当前用户权限主动读取其他本机文件或联网。只应对自己或可信 Agent 生成的项目启用完整项目预览；如果来源不可信，不要把预览页面或构建配置执行当作强隔离沙箱。
+
 ---
 
 ## 11. 常见使用建议
@@ -321,7 +340,7 @@ Script 技能可以在技能定义中声明更明确的执行要求，例如：
 | --- | --- |
 | 日常办公，调研分析 | 本机审计/受控联网 |
 | 修改本地项目代码、运行测试 | 本机审计 |
-| 生成网页、启动本地预览服务 | 本机审计 |
+| Agent 通过命令手动启动自定义本地预览服务 | 本机审计 |
 | 运行新安装的未知技能 | 离线隔离或受控联网 |
 | 处理不可信脚本、处理工作区文件任务 | 离线隔离 |
 | 使用浏览器自动化访问网页 | 本机审计，或受控联网下的专用浏览器能力 |

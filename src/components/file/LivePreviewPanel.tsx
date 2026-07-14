@@ -6,8 +6,8 @@
  * 1. HTML 模式：通过 sandbox iframe srcdoc 渲染单文件 HTML
  *    安全策略：sandbox="allow-scripts allow-modals"（不加 allow-same-origin）
  *
- *    srcdoc iframe 的 origin 继承自父页面（tauri://localhost），与主应用完全同源。
- *    若加上 allow-scripts，预览页 JS 就能通过 window.parent 控制主应用（如触发刷新）。
+ *    不含 allow-same-origin 的 sandbox 会把 srcdoc iframe 放入 opaque origin，
+ *    避免预览页 JS 以主应用 origin 访问 window.parent 或应用存储。
  *    CDN 资源通过绝对 HTTPS URL 加载，不依赖同源策略；
  *    本地相对路径资源由 htmlResourceInliner 内联为 base64 data URL；
  *    hash 锚点跳转由注入的兼容脚本修复。
@@ -22,7 +22,9 @@
  *    沙箱逃逸风险可控。
  */
 
-import { useState, useCallback, useEffect, useRef, type RefObject } from 'react';
+/* eslint-disable react-refresh/only-export-components -- exported protocol guards are covered by unit tests */
+
+import { useState, useCallback, useEffect, useRef, type RefCallback } from 'react';
 import {
   Code2,
   Play,
@@ -41,16 +43,326 @@ import {
   inlineHtmlResources,
   injectSrcdocHashNavFix,
   isManagedPreviewUrl,
+  MAX_PREVIEW_ASSET_BYTES,
+  MAX_PREVIEW_ASSET_FILES,
+  MAX_PREVIEW_SINGLE_ASSET_BYTES,
+  MAX_PREVIEW_SOURCE_FILE_BYTES,
+  MAX_PREVIEW_SOURCE_FILES,
+  MAX_PREVIEW_SOURCE_SCAN_ENTRIES,
+  MAX_PREVIEW_SOURCE_TOTAL_BYTES,
+  MAX_PREVIEW_SOURCE_DIRECTORY_DEPTH,
 } from '@services/preview';
 import type { ViteServerStatus } from '@services/preview/types';
+import { parsePreviewError, type PreviewErrorCode } from '@services/preview/previewErrors';
 import { getLogger } from '@services/logger';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './LivePreviewPanel.module.css';
 
 const logger = getLogger('LivePreviewPanel');
+const PROJECT_PREVIEW_MESSAGE_NAMESPACE = 'agentvis:preview';
+const PROJECT_PREVIEW_READY_TIMEOUT_MS = 8_000;
+const PROJECT_PREVIEW_MESSAGE_LIMIT = 2_000;
+const PROJECT_PREVIEW_ERROR_DETAIL_LIMIT = 600;
 
 type PreviewViewMode = 'code' | 'preview';
+type ProjectFrameLoadState = 'loading' | 'awaiting-ready' | 'ready';
+export type ProjectPreviewMessageType =
+  | 'booting'
+  | 'ready'
+  | 'runtime-error'
+  | 'unhandled-rejection'
+  | 'resource-error';
+type ProjectPreviewDiagnosticKind =
+  | 'runtime-error'
+  | 'unhandled-rejection'
+  | 'resource-error'
+  | 'handshake-timeout'
+  | 'retry-error';
+
+export interface ProjectPreviewMessage {
+  type: ProjectPreviewMessageType;
+  message: string | null;
+}
+
+/**
+ * Replace the current handshake deadline. Starting the deadline does not depend
+ * on the iframe load event, so an iframe that never loads cannot leave the
+ * loading mask visible forever.
+ */
+export function armProjectPreviewReadyTimeout(
+  currentTimeout: ReturnType<typeof setTimeout> | null,
+  isBridgeConnected: () => boolean,
+  onTimeout: () => void,
+  timeoutMs = PROJECT_PREVIEW_READY_TIMEOUT_MS
+): ReturnType<typeof setTimeout> {
+  if (currentTimeout !== null) {
+    clearTimeout(currentTimeout);
+  }
+
+  return setTimeout(() => {
+    if (!isBridgeConnected()) {
+      onTimeout();
+    }
+  }, timeoutMs);
+}
+
+interface ProjectPreviewMessageEvent {
+  source: MessageEventSource | null;
+  origin: string;
+  data: unknown;
+}
+
+interface ProjectPreviewPingTarget {
+  postMessage: (message: unknown, targetOrigin: string) => void;
+  readonly location?: {
+    readonly href: string;
+  };
+}
+
+export interface ProjectPreviewDiagnostic {
+  kind: ProjectPreviewDiagnosticKind;
+  message: string | null;
+}
+
+/** A late trusted lifecycle signal recovers only a prior handshake warning. */
+export function clearProjectPreviewHandshakeTimeout(
+  diagnostic: ProjectPreviewDiagnostic | null
+): ProjectPreviewDiagnostic | null {
+  return diagnostic?.kind === 'handshake-timeout' ? null : diagnostic;
+}
+
+interface PreviewErrorPresentation {
+  summary: string | null;
+  detail: string | null;
+  cancelled: boolean;
+}
+
+function normalizePreviewMessage(
+  value: unknown,
+  limit = PROJECT_PREVIEW_MESSAGE_LIMIT
+): string | null {
+  if (typeof value !== 'string') return null;
+  const boundedInput = value.slice(0, limit + 1);
+  const message = boundedInput.trim();
+  if (!message) return null;
+  return value.length > limit || message.length > limit
+    ? `${message.slice(0, Math.max(0, limit - 1))}…`
+    : message;
+}
+
+function getPreviewErrorSummary(
+  code: Exclude<PreviewErrorCode, 'cancelled'>,
+  t: ReturnType<typeof useI18n>['t']
+): string {
+  switch (code) {
+    case 'missing-dependencies':
+      return t('file.previewErrorMissingDependencies');
+    case 'invalid-package':
+      return t('file.previewErrorInvalidPackage');
+    case 'ambiguous-entry':
+      return t('file.previewErrorAmbiguousEntry');
+    case 'entry-not-found':
+      return t('file.previewErrorEntryNotFound');
+    case 'nested-project':
+      return t('file.previewErrorNestedProject');
+    case 'unsupported-project':
+      return t('file.previewErrorUnsupportedProject');
+    case 'unsafe-path':
+      return t('file.previewErrorUnsafePath');
+    case 'node-missing':
+      return t('file.previewErrorNodeMissing');
+    case 'install-failed':
+      return t('file.previewErrorInstallFailed');
+    case 'install-auth-failed':
+      return t('file.previewErrorInstallAuthFailed');
+    case 'install-network-failed':
+      return t('file.previewErrorInstallNetworkFailed');
+    case 'server-start-failed':
+      return t('file.previewErrorServerStartFailed');
+    case 'compile-failed':
+      return t('file.previewErrorCompileFailed');
+    case 'process-exited':
+      return t('file.previewErrorProcessExited');
+    case 'retry-unavailable':
+      return t('file.previewErrorRetryUnavailable');
+    case 'asset-budget-exceeded':
+      return t('file.previewErrorAssetBudgetExceeded');
+    default:
+      return t('file.previewStartFailed');
+  }
+}
+
+function getPreviewErrorDetail(
+  code: Exclude<PreviewErrorCode, 'cancelled'>,
+  detail: string | undefined,
+  t: ReturnType<typeof useI18n>['t']
+): string | null {
+  if (!detail) return null;
+
+  if (code === 'unsafe-path' && /(?:hard-link|reparse|link|junction|symlink)/iu.test(detail)) {
+    return t('file.previewErrorUnsafeLinkDetail');
+  }
+  if (code === 'asset-budget-exceeded') {
+    if (/(?:copiedFiles|asset-file-count)/iu.test(detail)) {
+      return t('file.previewErrorAssetFileCountDetail', { count: MAX_PREVIEW_ASSET_FILES });
+    }
+    if (/(?:copiedBytes|asset-total)/iu.test(detail)) {
+      return t('file.previewErrorAssetTotalSizeDetail', {
+        size: MAX_PREVIEW_ASSET_BYTES / (1024 * 1024),
+      });
+    }
+    if (/(?:asset-file|file-bytes)/iu.test(detail)) {
+      return t('file.previewErrorAssetFileSizeDetail', {
+        size: MAX_PREVIEW_SINGLE_ASSET_BYTES / (1024 * 1024),
+      });
+    }
+    if (/(?:file-count|max-files)/iu.test(detail)) {
+      return t('file.previewErrorSourceFileCountDetail', { count: MAX_PREVIEW_SOURCE_FILES });
+    }
+    if (/(?:scanned-entry|max-entries)/iu.test(detail)) {
+      return t('file.previewErrorScannedEntryCountDetail', {
+        count: MAX_PREVIEW_SOURCE_SCAN_ENTRIES,
+      });
+    }
+    if (/(?:directory-depth|max-depth)/iu.test(detail)) {
+      return t('file.previewErrorDirectoryDepthDetail', {
+        count: MAX_PREVIEW_SOURCE_DIRECTORY_DEPTH,
+      });
+    }
+    if (/(?:source-file|file-bytes|max-file-bytes)/iu.test(detail)) {
+      return t('file.previewErrorSourceFileSizeDetail', {
+        size: MAX_PREVIEW_SOURCE_FILE_BYTES / (1024 * 1024),
+      });
+    }
+    if (/(?:source-total|max-total-bytes)/iu.test(detail)) {
+      return t('file.previewErrorSourceTotalSizeDetail', {
+        size: MAX_PREVIEW_SOURCE_TOTAL_BYTES / (1024 * 1024),
+      });
+    }
+  }
+  if (code === 'ambiguous-entry') {
+    return t('file.previewErrorDetectedEntries', { entries: detail });
+  }
+  if (code === 'nested-project') {
+    return t('file.previewErrorDetectedProjectRoots', { roots: detail });
+  }
+  if (code === 'unsupported-project' && detail.startsWith('non-registry-dependency:')) {
+    return t('file.previewErrorNonRegistryDependency', {
+      dependency: detail.slice('non-registry-dependency:'.length).trim(),
+    });
+  }
+
+  return normalizePreviewMessage(detail, PROJECT_PREVIEW_ERROR_DETAIL_LIMIT);
+}
+
+export function getPreviewErrorPresentation(
+  error: string | null | undefined,
+  t: ReturnType<typeof useI18n>['t']
+): PreviewErrorPresentation {
+  const structuredError = parsePreviewError(error);
+  if (!structuredError) {
+    return {
+      summary: null,
+      detail: normalizePreviewMessage(error, PROJECT_PREVIEW_ERROR_DETAIL_LIMIT),
+      cancelled: false,
+    };
+  }
+
+  if (structuredError.code === 'cancelled') {
+    return { summary: null, detail: null, cancelled: true };
+  }
+
+  const detail = getPreviewErrorDetail(structuredError.code, structuredError.detail, t);
+  const environmentHint = structuredError.hints?.[0];
+  const hint = environmentHint
+    ? t('file.previewErrorEnvironmentFilesOmitted', { count: environmentHint.count })
+    : null;
+
+  return {
+    summary: getPreviewErrorSummary(structuredError.code, t),
+    detail: [detail, hint].filter((value): value is string => value !== null).join(' ') || null,
+    cancelled: false,
+  };
+}
+
+/** Parse the deliberately small host/preview bridge protocol. */
+export function parseProjectPreviewMessage(data: unknown): ProjectPreviewMessage | null {
+  if (!data || typeof data !== 'object') return null;
+
+  const payload = data as Record<string, unknown>;
+  if (payload.namespace !== PROJECT_PREVIEW_MESSAGE_NAMESPACE) return null;
+
+  const type = payload.type;
+  if (
+    type !== 'booting' &&
+    type !== 'ready' &&
+    type !== 'runtime-error' &&
+    type !== 'unhandled-rejection' &&
+    type !== 'resource-error'
+  ) {
+    return null;
+  }
+
+  return {
+    type,
+    message:
+      normalizePreviewMessage(payload.message) ??
+      normalizePreviewMessage(payload.detail) ??
+      normalizePreviewMessage(payload.error),
+  };
+}
+
+/**
+ * Accept messages only from the currently rendered iframe and the exact origin
+ * represented by the managed preview URL. Other localhost frames cannot spoof
+ * a preview error or ready signal.
+ */
+export function getTrustedProjectPreviewMessage(
+  event: ProjectPreviewMessageEvent,
+  iframeWindow: MessageEventSource | null,
+  projectUrl: string | null
+): ProjectPreviewMessage | null {
+  if (!iframeWindow || event.source !== iframeWindow || !isManagedPreviewUrl(projectUrl)) {
+    return null;
+  }
+
+  try {
+    if (event.origin !== new URL(projectUrl).origin) return null;
+  } catch {
+    return null;
+  }
+
+  return parseProjectPreviewMessage(event.data);
+}
+
+/** Ask the trusted iframe bridge to replay state without broadening its origin boundary. */
+export function sendProjectPreviewPing(
+  target: ProjectPreviewPingTarget | null,
+  projectUrl: string | null
+): boolean {
+  if (!target || !isManagedPreviewUrl(projectUrl)) return false;
+
+  // A newly mounted iframe initially inherits the host origin through its
+  // about:blank document. Posting to the future preview origin at that point
+  // is guaranteed to fail and produces a misleading DOMWindow warning.
+  try {
+    if (target.location?.href === 'about:blank') return false;
+  } catch {
+    // Cross-origin location access means navigation has committed. The exact
+    // target origin below remains the security boundary for the ping itself.
+  }
+
+  try {
+    target.postMessage(
+      { namespace: PROJECT_PREVIEW_MESSAGE_NAMESPACE, type: 'ping' },
+      new URL(projectUrl).origin
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function LivePreviewPanel() {
   const { t } = useI18n();
@@ -62,23 +374,85 @@ export function LivePreviewPanel() {
     projectUrl,
     projectStatus,
     projectError,
+    projectRequestId,
+    projectCanRetry,
     closePreview,
   } = usePreviewStore();
 
+  const isHtmlMode = previewMode === 'html';
+  const isProjectMode = previewMode === 'project';
   const [viewMode, setViewMode] = useState<PreviewViewMode>('preview');
   // 通过变化的 key 强制 iframe 重新加载
   const [refreshKey, setRefreshKey] = useState(0);
   // 全屏状态
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [projectFrameLoadState, setProjectFrameLoadState] =
+    useState<ProjectFrameLoadState>('loading');
+  const [projectDiagnostic, setProjectDiagnostic] = useState<ProjectPreviewDiagnostic | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
   // iframe DOM 引用，用于卸载前主动终止其 JS 上下文
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const lastIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const hasPreviewBridgeSignalRef = useRef(false);
+  const previewReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 拖拽面板时禁用 iframe 指针事件，避免 WebGL 重绘造成卡顿
   const isResizing = useUIStore((state) => state.isResizing);
 
+  const clearPreviewReadyTimeout = useCallback(() => {
+    if (previewReadyTimeoutRef.current !== null) {
+      clearTimeout(previewReadyTimeoutRef.current);
+      previewReadyTimeoutRef.current = null;
+    }
+  }, []);
+
+  const resetProjectFrameState = useCallback(() => {
+    clearPreviewReadyTimeout();
+    hasPreviewBridgeSignalRef.current = false;
+    setProjectFrameLoadState('loading');
+    setProjectDiagnostic(null);
+    setRetryError(null);
+  }, [clearPreviewReadyTimeout]);
+
+  const armPreviewReadyTimeout = useCallback(() => {
+    previewReadyTimeoutRef.current = armProjectPreviewReadyTimeout(
+      previewReadyTimeoutRef.current,
+      () => hasPreviewBridgeSignalRef.current,
+      () => {
+        previewReadyTimeoutRef.current = null;
+        setProjectFrameLoadState('ready');
+        setProjectDiagnostic((current) => current ?? { kind: 'handshake-timeout', message: null });
+      }
+    );
+  }, []);
+
+  const beginProjectFrameHandshake = useCallback(() => {
+    resetProjectFrameState();
+    armPreviewReadyTimeout();
+  }, [armPreviewReadyTimeout, resetProjectFrameState]);
+
+  useEffect(() => {
+    setIsRetrying(false);
+    resetProjectFrameState();
+  }, [projectRequestId, resetProjectFrameState]);
+
   // 刷新预览（强制重新加载 iframe）
   const handleRefresh = useCallback(() => {
+    if (isProjectMode) {
+      if (projectStatus === 'running' && projectUrl) {
+        beginProjectFrameHandshake();
+      } else {
+        resetProjectFrameState();
+      }
+    }
     setRefreshKey((prev) => prev + 1);
-  }, []);
+  }, [
+    beginProjectFrameHandshake,
+    isProjectMode,
+    projectStatus,
+    projectUrl,
+    resetProjectFrameState,
+  ]);
 
   // 切换视图模式
   const handleToggleView = useCallback((mode: PreviewViewMode) => {
@@ -102,6 +476,20 @@ export function LivePreviewPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullscreen]);
 
+  // React 会在 passive effect cleanup 前清空 object ref。使用 callback ref 保留并
+  // 主动释放前一个 iframe，确保刷新 key 或卸载面板时都能立即终止其 JS/WebGL 上下文。
+  const setIframeElement = useCallback<RefCallback<HTMLIFrameElement>>((iframe) => {
+    const previousIframe = iframeRef.current;
+    if (previousIframe && previousIframe !== iframe) {
+      previousIframe.src = 'about:blank';
+    }
+
+    iframeRef.current = iframe;
+    if (iframe) {
+      lastIframeRef.current = iframe;
+    }
+  }, []);
+
   // 组件卸载时强制将 iframe 导航到 about:blank，立即终止其内部的 JS 执行上下文。
   // 原因：Chromium/Webview2 对含有 rAF 死循环或 WebGL 上下文的 iframe，
   // 在 DOM 移除后不会立即同步回收，会进入异步 GC 队列（数秒后才释放显存）。
@@ -109,38 +497,137 @@ export function LivePreviewPanel() {
   // 在显存较小的笔记本上叠加 Agent 任务内存压力后引发 Webview2 进程 OOM 崩溃。
   // 设置 src = 'about:blank' 会触发 iframe 内部的页面卸载流程，
   // 立即中断脚本执行并释放 WebGL 上下文，无需等待 GC。
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    return () => {
+  useEffect(
+    () => () => {
+      clearPreviewReadyTimeout();
+      const iframe = iframeRef.current ?? lastIframeRef.current;
       if (iframe) {
         iframe.src = 'about:blank';
       }
-    };
-  }, []);
+      iframeRef.current = null;
+      lastIframeRef.current = null;
+    },
+    [clearPreviewReadyTimeout]
+  );
 
-  // 关闭预览（同时停止 Vite 进程）
-  const handleClose = useCallback(async () => {
-    if (previewMode === 'project') {
-      try {
-        await vitePreviewService.stopProject();
-      } catch (error) {
-        console.error('[LivePreviewPanel] 停止 Vite 时出错:', error);
-      }
-    }
+  // 关闭预览；store 会统一以 fire-and-forget 方式停止项目服务。
+  const handleClose = useCallback(() => {
     closePreview();
-  }, [previewMode, closePreview]);
+  }, [closePreview]);
 
   // 重试（Project 模式 error 状态时使用）
   const handleRetry = useCallback(async () => {
-    // 重试通过重新启动实现，需要外部重新调用 startProject
-    // 这里先停止再由用户重新触发
+    if (isRetrying || !projectCanRetry) return;
+
+    const retryRequestId = projectRequestId;
+    setIsRetrying(true);
+    resetProjectFrameState();
     try {
-      await vitePreviewService.stopProject();
-    } catch {
-      // 忽略停止错误
+      await vitePreviewService.retryLastProject(retryRequestId);
+      if (!usePreviewStore.getState().isProjectRequestCurrent(retryRequestId)) return;
+      beginProjectFrameHandshake();
+      setRefreshKey((current) => current + 1);
+    } catch (error: unknown) {
+      if (!usePreviewStore.getState().isProjectRequestCurrent(retryRequestId)) return;
+      const presentation = getPreviewErrorPresentation(
+        error instanceof Error
+          ? error.message
+          : normalizePreviewMessage(error, PROJECT_PREVIEW_ERROR_DETAIL_LIMIT),
+        t
+      );
+      if (presentation.cancelled) return;
+
+      const message =
+        [presentation.summary, presentation.detail].filter(Boolean).join('\n') ||
+        t('file.previewRetryFailed');
+      setRetryError(message);
+      setProjectDiagnostic({ kind: 'retry-error', message });
+      logger.warn('[LivePreviewPanel] Project preview retry failed:', message);
+    } finally {
+      if (usePreviewStore.getState().isProjectRequestCurrent(retryRequestId)) {
+        setIsRetrying(false);
+      }
     }
-    closePreview();
-  }, [closePreview]);
+  }, [
+    beginProjectFrameHandshake,
+    isRetrying,
+    projectCanRetry,
+    projectRequestId,
+    resetProjectFrameState,
+    t,
+  ]);
+
+  const handleProjectFrameLoad = useCallback(() => {
+    sendProjectPreviewPing(iframeRef.current?.contentWindow ?? null, projectUrl);
+
+    if (hasPreviewBridgeSignalRef.current) {
+      setProjectFrameLoadState('ready');
+      return;
+    }
+
+    setProjectFrameLoadState('awaiting-ready');
+  }, [projectUrl]);
+
+  useEffect(() => {
+    if (!isProjectMode || projectStatus !== 'running' || !projectUrl) {
+      clearPreviewReadyTimeout();
+      return;
+    }
+
+    beginProjectFrameHandshake();
+    return clearPreviewReadyTimeout;
+  }, [
+    beginProjectFrameHandshake,
+    clearPreviewReadyTimeout,
+    isProjectMode,
+    projectStatus,
+    projectUrl,
+  ]);
+
+  useEffect(() => {
+    if (!isProjectMode || projectStatus !== 'running' || !projectUrl) return;
+
+    const handlePreviewMessage = (event: MessageEvent<unknown>) => {
+      const message = getTrustedProjectPreviewMessage(
+        event,
+        iframeRef.current?.contentWindow ?? null,
+        projectUrl
+      );
+      if (!message) return;
+
+      // Any trusted bridge message proves that diagnostics are connected.
+      // In particular, `booting` must not restart a deadline that measures a
+      // later window.load event, because slow assets can legitimately delay it.
+      hasPreviewBridgeSignalRef.current = true;
+      clearPreviewReadyTimeout();
+      setProjectFrameLoadState('ready');
+
+      if (message.type === 'booting' || message.type === 'ready') {
+        setProjectDiagnostic(clearProjectPreviewHandshakeTimeout);
+        return;
+      }
+
+      setProjectDiagnostic({ kind: message.type, message: message.message });
+      logger.warn(
+        `[LivePreviewPanel] Project preview reported ${message.type}:`,
+        message.message?.slice(0, PROJECT_PREVIEW_ERROR_DETAIL_LIMIT) ?? ''
+      );
+    };
+
+    window.addEventListener('message', handlePreviewMessage);
+    sendProjectPreviewPing(iframeRef.current?.contentWindow ?? null, projectUrl);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, [clearPreviewReadyTimeout, isProjectMode, projectStatus, projectUrl]);
+
+  useEffect(() => {
+    if (
+      isProjectMode &&
+      projectStatus === 'error' &&
+      parsePreviewError(projectError)?.code === 'cancelled'
+    ) {
+      closePreview();
+    }
+  }, [closePreview, isProjectMode, projectError, projectStatus]);
 
   // HTML 模式的 srcdoc：当有 baseDir 时，按需内嵌相对路径资源
   const [processedHtml, setProcessedHtml] = useState<string>('');
@@ -216,11 +703,12 @@ export function LivePreviewPanel() {
     };
   }, [previewCode, previewBaseDir]);
 
-  // 空状态检查
-  const isHtmlMode = previewMode === 'html';
-  const isProjectMode = previewMode === 'project';
-
   if (isHtmlMode && !previewCode) {
+    return null;
+  }
+
+  const projectErrorPresentation = getPreviewErrorPresentation(projectError ?? retryError, t);
+  if (isProjectMode && projectErrorPresentation.cancelled) {
     return null;
   }
 
@@ -234,10 +722,14 @@ export function LivePreviewPanel() {
         running: projectUrl ?? t('file.previewRunning'),
         error: t('file.previewFailed'),
       };
-      return statusLabel[projectStatus] ?? 'Project Preview';
+      return statusLabel[projectStatus] ?? t('file.projectPreview');
     }
-    return previewTitle ?? 'Preview';
+    return previewTitle ?? t('file.livePreview');
   };
+
+  const visibleProjectDiagnostic =
+    projectDiagnostic ??
+    (retryError ? { kind: 'retry-error' as const, message: retryError } : null);
 
   return (
     <div className={cx(styles.panel, isFullscreen && styles.fullscreen)}>
@@ -245,13 +737,21 @@ export function LivePreviewPanel() {
       <div className={styles.toolbar}>
         <div className={styles.titleArea}>
           {/* Project 模式状态指示器 */}
-          {isProjectMode && projectStatus === 'running' && (
-            <span className={styles.statusDot} title={t('file.viteRunning')} />
-          )}
-          {isProjectMode && (projectStatus === 'installing' || projectStatus === 'starting') && (
-            <Loader2 size={12} className={styles.statusSpinner} />
-          )}
-          {isProjectMode && projectStatus === 'error' && (
+          {isProjectMode &&
+            projectStatus === 'running' &&
+            projectFrameLoadState === 'ready' &&
+            !visibleProjectDiagnostic && (
+              <span className={styles.statusDot} title={t('file.viteRunning')} />
+            )}
+          {isProjectMode &&
+            (projectStatus === 'installing' ||
+              projectStatus === 'starting' ||
+              (projectStatus === 'running' &&
+                projectFrameLoadState !== 'ready' &&
+                !visibleProjectDiagnostic)) && (
+              <Loader2 size={12} className={styles.statusSpinner} />
+            )}
+          {isProjectMode && (projectStatus === 'error' || visibleProjectDiagnostic) && (
             <AlertTriangle size={12} className={styles.statusError} />
           )}
           <span className={styles.title} title={renderTitle()}>
@@ -271,7 +771,7 @@ export function LivePreviewPanel() {
                   title={t('file.viewSource')}
                 >
                   <Code2 size={14} />
-                  <span>Code</span>
+                  <span>{t('file.previewCodeLabel')}</span>
                 </button>
               )}
               <button
@@ -283,7 +783,7 @@ export function LivePreviewPanel() {
                 title={t('file.livePreview')}
               >
                 <Play size={14} />
-                <span>Preview</span>
+                <span>{t('file.previewLabel')}</span>
               </button>
             </div>
           )}
@@ -333,30 +833,35 @@ export function LivePreviewPanel() {
             </div>
           ) : (
             <iframe
-              ref={iframeRef}
+              ref={setIframeElement}
               key={refreshKey}
               className={styles.previewFrame}
               sandbox="allow-scripts allow-modals"
               srcDoc={processedHtml}
               referrerPolicy="no-referrer"
-              title="Live Preview"
+              title={t('file.livePreview')}
               style={isResizing ? { pointerEvents: 'none' } : undefined}
             />
           )
         ) : (
           // ========== Project 模式 ==========
-          renderProjectContent(
-            projectStatus,
-            projectUrl,
-            projectError,
+          renderProjectContent({
+            status: projectStatus,
+            url: projectUrl,
+            error: projectErrorPresentation,
             refreshKey,
             isResizing,
-            () => {
+            frameLoadState: projectFrameLoadState,
+            diagnostic: visibleProjectDiagnostic,
+            isRetrying,
+            canRetry: projectCanRetry,
+            onLoad: handleProjectFrameLoad,
+            onRetry: () => {
               void handleRetry();
             },
             t,
-            iframeRef
-          )
+            iframeRef: setIframeElement,
+          })
         )}
       </div>
     </div>
@@ -371,16 +876,89 @@ export function LivePreviewPanel() {
  * - running: iframe src 指向 Vite
  * - error: 错误信息 + 重试按钮
  */
-function renderProjectContent(
-  status: ViteServerStatus,
-  url: string | null,
-  error: string | null,
-  refreshKey: number,
-  isResizing: boolean,
-  onRetry: () => void,
-  t: ReturnType<typeof useI18n>['t'],
-  iframeRef?: RefObject<HTMLIFrameElement>
-): React.ReactElement {
+interface ProjectContentOptions {
+  status: ViteServerStatus;
+  url: string | null;
+  error: PreviewErrorPresentation;
+  refreshKey: number;
+  isResizing: boolean;
+  frameLoadState: ProjectFrameLoadState;
+  diagnostic: ProjectPreviewDiagnostic | null;
+  isRetrying: boolean;
+  canRetry: boolean;
+  onLoad: () => void;
+  onRetry: () => void;
+  t: ReturnType<typeof useI18n>['t'];
+  iframeRef: RefCallback<HTMLIFrameElement>;
+}
+
+export type ProjectPreviewDiagnosticCategory =
+  | 'browser-capability'
+  | 'cross-origin'
+  | 'external-resource'
+  | null;
+
+export function classifyProjectPreviewDiagnostic(
+  kind: ProjectPreviewDiagnosticKind,
+  message: string | null
+): ProjectPreviewDiagnosticCategory {
+  if (
+    message &&
+    /(?:\bWebGL\b|\bWebGPU\b|SharedArrayBuffer|crossOriginIsolated|OffscreenCanvas)/iu.test(message)
+  ) {
+    return 'browser-capability';
+  }
+  if (
+    message &&
+    /(?:\bCORS\b|cross[ -]origin|mixed content|content security policy)/iu.test(message)
+  ) {
+    return 'cross-origin';
+  }
+  if (kind === 'resource-error' && message && /https?:\/\//iu.test(message)) {
+    return 'external-resource';
+  }
+  return null;
+}
+
+function getProjectDiagnosticTitle(
+  kind: ProjectPreviewDiagnosticKind,
+  message: string | null,
+  t: ReturnType<typeof useI18n>['t']
+): string {
+  const category = classifyProjectPreviewDiagnostic(kind, message);
+  if (category === 'browser-capability') return t('file.previewBrowserCapabilityError');
+  if (category === 'cross-origin') return t('file.previewCrossOriginError');
+  if (category === 'external-resource') return t('file.previewExternalResourceError');
+
+  switch (kind) {
+    case 'runtime-error':
+      return t('file.previewRuntimeError');
+    case 'unhandled-rejection':
+      return t('file.previewUnhandledRejection');
+    case 'resource-error':
+      return t('file.previewResourceError');
+    case 'handshake-timeout':
+      return t('file.previewDiagnosticsUnavailable');
+    case 'retry-error':
+      return t('file.previewRetryFailed');
+  }
+}
+
+export function renderProjectContent({
+  status,
+  url,
+  error,
+  refreshKey,
+  isResizing,
+  frameLoadState,
+  diagnostic,
+  isRetrying,
+  canRetry,
+  onLoad,
+  onRetry,
+  t,
+  iframeRef,
+}: ProjectContentOptions): React.ReactElement {
   switch (status) {
     case 'installing':
       return (
@@ -408,36 +986,102 @@ function renderProjectContent(
           <div className={styles.projectError}>
             <AlertTriangle size={32} className={styles.projectErrorIcon} />
             <span className={styles.projectErrorText}>{t('file.previewStartFailed')}</span>
-            <button className={styles.retryBtn} onClick={onRetry}>
-              <RefreshCw size={14} />
-              <span>{t('common.retry')}</span>
-            </button>
+            {canRetry ? (
+              <button className={styles.retryBtn} onClick={onRetry} disabled={isRetrying}>
+                <RefreshCw size={14} className={isRetrying ? styles.retrySpinner : undefined} />
+                <span>{isRetrying ? t('file.previewRetrying') : t('common.retry')}</span>
+              </button>
+            ) : (
+              <span className={styles.projectRestartHint}>
+                {t('file.previewRestartFromFileList')}
+              </span>
+            )}
           </div>
         );
       }
       return (
-        <iframe
-          ref={iframeRef}
-          key={refreshKey}
-          className={styles.previewFrame}
-          sandbox="allow-scripts allow-modals allow-same-origin"
-          src={url}
-          referrerPolicy="no-referrer"
-          title="Project Preview"
-          style={isResizing ? { pointerEvents: 'none' } : undefined}
-        />
+        <div className={styles.projectFrameContainer}>
+          <iframe
+            ref={iframeRef}
+            key={refreshKey}
+            className={styles.previewFrame}
+            sandbox="allow-scripts allow-modals allow-same-origin"
+            src={url}
+            referrerPolicy="no-referrer"
+            title={t('file.projectPreview')}
+            onLoad={onLoad}
+            style={isResizing ? { pointerEvents: 'none' } : undefined}
+          />
+
+          {frameLoadState !== 'ready' && !diagnostic && (
+            <div className={styles.frameLoadingOverlay} role="status" aria-live="polite">
+              <Loader2 size={28} className={styles.projectSpinner} />
+              <span className={styles.projectLoadingText}>
+                {frameLoadState === 'loading'
+                  ? t('file.loadingProjectPreview')
+                  : t('file.checkingPreviewRuntime')}
+              </span>
+            </div>
+          )}
+
+          {diagnostic && (
+            <div
+              className={cx(
+                styles.projectDiagnostic,
+                diagnostic.kind === 'handshake-timeout' && styles.projectDiagnosticWarning
+              )}
+              role={diagnostic.kind === 'handshake-timeout' ? 'status' : 'alert'}
+            >
+              <AlertTriangle size={18} className={styles.projectDiagnosticIcon} />
+              <div className={styles.projectDiagnosticContent}>
+                <span className={styles.projectDiagnosticTitle}>
+                  {getProjectDiagnosticTitle(diagnostic.kind, diagnostic.message, t)}
+                </span>
+                <span className={styles.projectDiagnosticDetail}>
+                  {diagnostic.message ??
+                    (diagnostic.kind === 'handshake-timeout'
+                      ? t('file.previewDiagnosticsUnavailableDetail')
+                      : t('file.previewRuntimeErrorUnknown'))}
+                </span>
+              </div>
+              {canRetry ? (
+                <button
+                  className={styles.diagnosticRetryBtn}
+                  onClick={onRetry}
+                  disabled={isRetrying}
+                >
+                  <RefreshCw size={14} className={isRetrying ? styles.retrySpinner : undefined} />
+                  <span>{isRetrying ? t('file.previewRetrying') : t('common.retry')}</span>
+                </button>
+              ) : (
+                <span className={styles.projectRestartHint}>
+                  {t('file.previewRestartFromFileList')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       );
 
     case 'error':
+      if (error.cancelled) return <div />;
       return (
         <div className={styles.projectError}>
           <AlertTriangle size={32} className={styles.projectErrorIcon} />
-          <span className={styles.projectErrorText}>{t('file.previewStartFailed')}</span>
-          {error && <span className={styles.projectErrorDetail}>{error}</span>}
-          <button className={styles.retryBtn} onClick={onRetry}>
-            <RefreshCw size={14} />
-            <span>{t('common.retry')}</span>
-          </button>
+          <span className={styles.projectErrorText}>
+            {error.summary ?? t('file.previewStartFailed')}
+          </span>
+          {error.detail && <span className={styles.projectErrorDetail}>{error.detail}</span>}
+          {canRetry ? (
+            <button className={styles.retryBtn} onClick={onRetry} disabled={isRetrying}>
+              <RefreshCw size={14} className={isRetrying ? styles.retrySpinner : undefined} />
+              <span>{isRetrying ? t('file.previewRetrying') : t('common.retry')}</span>
+            </button>
+          ) : (
+            <span className={styles.projectRestartHint}>
+              {t('file.previewRestartFromFileList')}
+            </span>
+          )}
         </div>
       );
 

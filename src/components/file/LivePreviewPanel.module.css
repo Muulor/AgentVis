@@ -153,10 +153,32 @@
 
 /* Preview iframe（HTML srcdoc 和 Project src 共用） */
 .previewFrame {
+  display: block;
   width: 100%;
   height: 100%;
   border: none;
   background: #fff;
+}
+
+.projectFrameContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.frameLoadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-primary);
+  pointer-events: none;
 }
 
 /* ==================== Project 模式 — 加载状态 ==================== */
@@ -212,9 +234,25 @@
   font-size: 12px;
   color: var(--color-text-tertiary);
   max-width: 400px;
+  max-height: 180px;
+  overflow: auto;
   text-align: center;
+  white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
+}
+
+.projectRestartHint {
+  max-width: 220px;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.projectDiagnostic > .projectRestartHint {
+  justify-self: end;
+  text-align: right;
 }
 
 .retryBtn {
@@ -235,6 +273,105 @@
 
 .retryBtn:hover {
   background: rgba(128, 128, 128, 0.15);
+}
+
+.retryBtn:disabled,
+.diagnosticRetryBtn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.retrySpinner {
+  animation: spin 1s linear infinite;
+}
+
+.projectDiagnostic {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  padding: 12px 14px;
+  margin: 0 auto;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid rgba(255, 85, 85, 0.5);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+}
+
+.projectDiagnosticWarning {
+  border-color: rgba(241, 196, 15, 0.5);
+}
+
+.projectDiagnosticIcon {
+  color: #ff7777;
+  flex-shrink: 0;
+}
+
+.projectDiagnosticWarning .projectDiagnosticIcon {
+  color: #f1c40f;
+}
+
+.projectDiagnosticContent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+
+.projectDiagnosticTitle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.projectDiagnosticDetail {
+  max-height: 96px;
+  overflow: auto;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.diagnosticRetryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-button);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.diagnosticRetryBtn:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.15);
+}
+
+@media (max-width: 560px) {
+  .projectDiagnostic {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .diagnosticRetryBtn {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .projectDiagnostic .projectRestartHint {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }
 
 /* ==================== 通用动画 ==================== */

@@ -52,20 +52,21 @@ scripts/
 ```
 src/
 ├── App.tsx                       # 应用根组件
-├── main.tsx                      # 应用入口文件
+├── main.tsx                      # 应用入口文件（挂载 Renderer 根级错误边界）
 ├── vite-env.d.ts                 # Vite 环境类型声明
 │
 ├── 📁 components/                # UI 组件目录
 │   ├── 📁 agent/                 # Agent（智能体）相关组件
 │   ├── 📁 chat/                  # 聊天功能组件
 │   ├── 📁 diff/                  # 代码差异对比组件
+│   ├── 📁 errors/                # Renderer 错误隔离与恢复组件
 │   ├── 📁 file/                  # 文件管理组件
 │   ├── 📁 hub/                   # Hub（知识中心）组件
 │   ├── 📁 layout/                # 布局组件
 │   ├── 📁 memory/                # 记忆系统组件
 │   ├── 📁 onboarding/            # 首次启动引导组件
 │   ├── 📁 settings/              # 设置面板组件
-│   ├── 📁 security/ 
+│   ├── 📁 security/
 │   ├── 📁 ui/                    # 通用 UI 基础组件
 │   └── 📁 widgets/               # 生成式 UI 交互组件（Chat 模式 Widget）
 │
@@ -83,6 +84,7 @@ src/
 ## 📁 src/components/ - UI 组件详情
 
 ### 📁 agent/ - 智能体相关组件
+
 ```
 agent/
 ├── AgentChatView.tsx             # 智能体对话视图（主聊天界面）
@@ -107,6 +109,7 @@ agent/
 ```
 
 ### 📁 chat/ - 聊天功能组件
+
 ```
 chat/
 ├── AttachmentButton.tsx          # 附件上传按钮
@@ -157,7 +160,7 @@ chat/
 ├── ThinkingChainDisplay.module.css # 思维链展示样式
 ├── index.ts                      # 模块导出索引
 │
-└── 📁 fsm-visualization/         # FSM 可视化组件 
+└── 📁 fsm-visualization/         # FSM 可视化组件
     ├── index.ts                  # 模块导出索引
     ├── FSMVisualizationPanel.tsx # FSM 可视化主面板
     ├── FSMVisualizationPanel.module.css # 主面板样式
@@ -183,6 +186,7 @@ chat/
 ```
 
 ### 📁 diff/ - 代码差异对比组件
+
 ```
 diff/
 ├── CollapsedLines.tsx            # 折叠行指示器
@@ -206,7 +210,18 @@ diff/
 └── index.ts                      # 模块导出索引
 ```
 
+### 📁 errors/ - Renderer 错误隔离与恢复组件
+
+```
+errors/
+├── RendererErrorBoundary.tsx        # 根级/子树错误边界、动态模块识别与 Reload/Close 恢复界面
+├── RendererErrorBoundary.module.css # Renderer 安全恢复页面样式
+├── RendererErrorBoundary.test.tsx   # 动态模块错误识别与独立恢复 UI 回归
+└── rendererRecovery.ts              # 动态 import/chunk 错误识别辅助逻辑
+```
+
 ### 📁 file/ - 文件管理组件
+
 ```
 file/
 ├── CodeHighlight.tsx             # 代码语法高亮组件（含 Vite 项目预览触发）
@@ -226,10 +241,10 @@ file/
 ├── FilePreview.tsx               # 文件预览组件
 ├── FilePreview.module.css        # 文件预览样式
 ├── PreviewStore.ts               # 实时代码预览状态管理（已迁移至 stores/previewStore.ts）
-├── LivePreviewPanel.tsx          # 实时代码预览面板（HTML + Vite 项目双模式）
+├── LivePreviewPanel.tsx          # 实时代码预览面板（HTML/Project 双模式 + bridge 连通握手/运行时诊断）
 ├── LivePreviewPanel.module.css   # 实时代码预览面板样式
 ├── LargeTextPreview.tsx          # 大型文本/Markdown 有界分页安全预览组件
-├── MarkdownRenderer.tsx          # Markdown 渲染器（支持 Widget/Mermaid/ECharts 代码块拦截）
+├── MarkdownRenderer.tsx          # Markdown 渲染器（Widget/Mermaid/ECharts 拦截 + 图表 lazy-load 局部隔离/重试）
 ├── MarkdownRenderer.module.css   # Markdown 样式
 ├── MermaidBlock.tsx              # Mermaid 图表渲染组件（防抖+流式静默错误+SVG 输出）
 ├── MermaidFlowchartSanitizer.ts
@@ -243,6 +258,7 @@ file/
 ```
 
 ### 📁 hub/ - Hub 知识中心组件
+
 ```
 hub/
 ├── HubChatView.tsx               # Hub 聊天视图
@@ -259,6 +275,7 @@ hub/
 ```
 
 ### 📁 layout/ - 布局组件
+
 ```
 layout/
 ├── CenterPanel.tsx               # 中央面板容器
@@ -277,6 +294,7 @@ layout/
 ```
 
 ### 📁 memory/ - 记忆系统组件
+
 ```
 memory/
 ├── FactCard.tsx                  # 事实卡片组件
@@ -298,8 +316,8 @@ memory/
 └── index.ts                      # 模块导出索引
 ```
 
-
 ### 📁 onboarding/ - 首次启动引导组件
+
 ```
 onboarding/
 ├── onboardingEvents.ts          # 首次启动引导事件
@@ -309,7 +327,8 @@ onboarding/
 └── RuntimeOnboardingBanner.module.css # 引导横幅样式
 ```
 
-### 📁 security/ 
+### 📁 security/
+
 ```
 security/
 ├── NetworkDirectAuthorizationDialog.tsx  # 网络直连授权弹窗
@@ -318,6 +337,7 @@ security/
 ```
 
 ### 📁 settings/ - 设置面板组件
+
 ```
 settings/
 ├── ApiKeySettings.tsx            # API 密钥设置
@@ -348,6 +368,7 @@ settings/
 ```
 
 ### 📁 ui/ - 通用 UI 基础组件
+
 ```
 ui/
 ├── Button.tsx                    # 按钮组件
@@ -376,6 +397,7 @@ ui/
 ```
 
 ### 📁 widgets/ - 生成式 UI 交互组件
+
 ```
 widgets/
 ├── WidgetRenderer.tsx            # Widget 分发器（Registry 模式，类型→组件映射）
@@ -398,15 +420,15 @@ widgets/
 ---
 
 hooks/
-├── useAttachmentManager.ts       # 附件管理 Hook
-├── useMessageActions.ts          # 消息操作逻辑 Hook
-├── chatAttachmentContext.ts      # Chat 模式附件上下文辅助函数
-├── useChatSender.ts              # Chat 模式消息发送 Hook
-├── useChatSenderPrompt.ts        # Chat 模式Prompt Hook
+├── useAttachmentManager.ts # 附件管理 Hook
+├── useMessageActions.ts # 消息操作逻辑 Hook
+├── chatAttachmentContext.ts # Chat 模式附件上下文辅助函数
+├── useChatSender.ts # Chat 模式消息发送 Hook
+├── useChatSenderPrompt.ts # Chat 模式Prompt Hook
 ├── useChatSenderContext.ts
-├── usePlanningMode.ts            # Task 模式消息发送 Hook（内部 planning）
-├── useDataLoader.ts              # 数据加载 Hook（Hub/Agent 初始化）
-└── useTheme.ts                   # 主题切换 Hook
+├── usePlanningMode.ts # Task 模式消息发送 Hook（内部 planning）
+├── useDataLoader.ts # 数据加载 Hook（Hub/Agent 初始化）
+└── useTheme.ts # 主题切换 Hook
 
 ## 📁 src/stores/ - Zustand 状态管理
 
@@ -422,7 +444,8 @@ stores/
 ├── memoryStore.ts                # 记忆系统状态管理
 ├── fsmVisualizationStore.ts      # FSM 可视化状态（思维链/决策/Sub-Agent）
 ├── hitlStore.ts                  # Human-in-the-Loop 状态管理
-├── previewStore.ts               # 实时预览状态管理（HTML/Vite 项目双模式，关闭时自动停止进程）
+├── previewStore.ts               # 实时预览状态管理（HTML/Project 双模式，请求代次、关闭、切换与重试资格）
+├── previewStore.test.ts          # Project Preview 请求代次、延迟 stop 与重试资格回归
 ├── cronStore.ts                  # 定时任务状态管理（CRUD + 调度器生命周期）
 ├── widgetStore.ts                # 生成式 UI Widget 交互通信（事件派发/消费 + 选中态持久化 + 重选撤回）
 ├── widgetSubmissionRecovery.ts   # 从持久化消息恢复气泡级 Widget 回复状态
@@ -436,12 +459,14 @@ stores/
 ```
 
 ## 📁 src/update/ - 版本更新
+
 ```
 update/
-├── index.ts 
+├── index.ts
 ├── type.ts
-└── UpdateService.ts     
+└── UpdateService.ts
 ```
+
 ---
 
 ## 📁 src/config/ - 应用配置
@@ -483,6 +508,7 @@ styles/
 ```
 
 ## 📁 src/i18n
+
 ```
 i18n/
 ├── locales/
@@ -534,7 +560,7 @@ services/
 ├── 📁 memory/                    # 记忆系统服务
 ├── 📁 navigation/                # 外部链接与导航边界服务
 ├── 📁 planning/                  # 规划执行服务（Agent Loop）
-├── 📁 preview/                   # Vite 实时预览服务（多文件项目预览）
+├── 📁 preview/                   # Project Preview（独立 staging + Vite/Import Map 双路由）
 ├── 📁 cron/                      # 定时任务服务（调度/执行/表达式解析）
 ├── 📁 im-channel/                # IM 通信通道服务（多 Bot 工厂模式，飞书/Slack 集成）
 ├── 📁 rag/                       # RAG 检索增强服务
@@ -543,6 +569,7 @@ services/
 ```
 
 ### 📁 services/attachment/ - 附件处理服务
+
 ```
 attachment/
 ├── index.ts                      # 模块导出索引
@@ -562,6 +589,7 @@ attachment/
 ```
 
 ### 📁 services/file-types/ - 文件类型能力注册表
+
 ```
 file-types/
 ├── index.ts                      # 模块导出索引
@@ -571,18 +599,21 @@ file-types/
 ```
 
 ### 📁 services/data/ - 数据管理服务
+
 ```
 data/
 └── dataManagementService.ts      # 数据导入导出服务
 ```
 
-### 📁 services/diagnostics/ 
+### 📁 services/diagnostics/
+
 ```
 diagnostics/
 └── rendererHealth.ts  # WebView renderer 健康诊断
 ```
 
 ### 📁 services/fast-apply/ - Fast-Apply 引擎
+
 ```
 fast-apply/
 ├── index.ts                      # 模块导出索引
@@ -600,6 +631,7 @@ fast-apply/
 ```
 
 ### 📁 services/llm/ - LLM 调用服务
+
 ```
 llm/
 ├── index.ts                      # 模块导出索引
@@ -613,12 +645,14 @@ llm/
 ```
 
 ### 📁 services/language/
+
 ```
 language/
 └── OutputLanguagePolicy.ts      # 输出目标、显式排除、拉丁语系/简繁检测、来源语言保真与 Prompt 合约
 ```
 
-### 📁 services/logger/ - 
+### 📁 services/logger/ -
+
 ```
 logger/
 ├── crashReporter.ts              # 渲染进程崩溃诊断
@@ -627,6 +661,7 @@ logger/
 ```
 
 ### 📁 services/memory/ - 记忆系统服务
+
 ```
 memory/
 ├── index.ts                      # 模块导出索引
@@ -655,12 +690,14 @@ memory/
 ```
 
 ### 📁 services/navigation/ - 外部链接与导航边界服务
+
 ```
 navigation/
 └── externalUrl.ts                # 外部 HTTP(S) 链接统一打开入口（Tauri 内走系统浏览器，避免主 WebView 任意导航）
 ```
 
 ### 📁 services/planning/ - 规划执行服务
+
 ```
 planning/
 ├── index.ts                      # 模块导出索引
@@ -681,7 +718,7 @@ planning/
 │   ├── AgentSession.ts           # Agent 会话管理
 │   ├── AgentLoopFSMIntegration.ts # Agent Loop FSM 集成（瘦编排器）
 │   ├── ExperienceExtractor.ts    # SA 执行经验提取器
-│   ├── LoopGovernor.ts           # 循环治理器-预算管理、进度追踪、工具震荡检测、风险阈值评估 
+│   ├── LoopGovernor.ts           # 循环治理器-预算管理、进度追踪、工具震荡检测、风险阈值评估
 │   │
 │   ├── 📁 builders/              # 构建器模块
 │   │   ├── index.ts              # 模块导出
@@ -696,8 +733,8 @@ planning/
 │   │   ├── index.ts              # 模块导出
 │   │   ├── SubAgentLLMCaller.ts  # SubAgent LLM 调用器（32K→24K 参数拒绝降级、finish reason 透传）
 │   │   │                         # - call()：单次调用（向后兼容）
-│   │   │                         # - callWithContext()：多轮会话调用 
-│   │   │                         # - buildMessagesWithContext()：消息历史构建 
+│   │   │                         # - callWithContext()：多轮会话调用
+│   │   │                         # - buildMessagesWithContext()：消息历史构建
 │   │   └── 📁 __tests__/         # 调用器测试
 │   │       ├── SubAgentLLMCaller.loop.test.ts # Loop 会话测试
 │   │       └── SubAgentLLMCaller.tokenPolicy.test.ts # 输出预算、降级与视觉保留测试
@@ -721,7 +758,7 @@ planning/
 │       └── 📁 builders/          # 构建器测试
 │           └── MasterBrainInputBuilder.test.ts # 输入构建器测试
 │
-├── 📁 fsm/                       # 有限状态机（FSM）引擎 
+├── 📁 fsm/                       # 有限状态机（FSM）引擎
 │   ├── index.ts                  # 模块导出
 │   ├── types.ts                  # FSM 类型定义（状态/事件/上下文）
 │   ├── FSMEngine.ts              # 核心状态机引擎
@@ -747,7 +784,7 @@ planning/
 │       ├── actions.test.ts       # Action 测试
 │       └── FSMDefinitions.test.ts # 定义解析测试
 │
-├── 📁 brain/                     # Master Brain 决策系统 
+├── 📁 brain/                     # Master Brain 决策系统
 │   ├── index.ts                  # 模块导出
 │   ├── types.ts                  # 决策类型定义
 │   │                             # - Input/Decision/Risk（基础类型）
@@ -779,7 +816,7 @@ planning/
 │   │                             # - Output/TaskContext（基础类型）
 │   │                             # - SubAgentLoopConfig（Loop 配置）
 │   │                             # - ProgressReport（进度报告
-│   │                             # - AccumulatedMessage/LoopState（Loop 状态）     
+│   │                             # - AccumulatedMessage/LoopState（Loop 状态）
 │   ├── SubAgentFactory.ts        # 实例创建工厂（spec 验证 + venv 路径解析）
 │   ├── SubAgentRunner.ts         # 执行器（LLM 调用、策略验证、截断工具调用安全拦截）
 │   ├── SubAgentSafetyFooter.ts   # Safety Footer 默认提示词
@@ -915,6 +952,7 @@ planning/
 ```
 
 ### 📁 services/rag/ - RAG 检索增强服务
+
 ```
 rag/
 ├── index.ts                      # 模块导出索引
@@ -941,20 +979,48 @@ rag/
     └── VectorStore.test.ts       # 向量存储封装测试
 ```
 
-### 📁 services/preview/ - Vite 实时预览服务
+### 📁 services/preview/ - Project Preview 隔离预览服务
+
 ```
 preview/
 ├── index.ts                      # 模块导出索引
 ├── types.ts                      # 类型定义（ProjectFile/TemplateConfig/ViteServerState）
-├── VitePreviewService.ts         # Vite Dev Server 生命周期管理（启动/停止/Node.js检测/首次预览懒清理孤儿进程）
-├── TemplateManager.ts            # 模板管理器（vanilla/react-tailwind/vue-tailwind + 依赖漂移检测）
+├── VitePreviewService.ts         # 隔离 staging、静态预检、health/owned PID 与公平 cleanup/stale recovery 调度
+├── TemplateManager.ts            # 受控模板缓存（禁用 npm lifecycle scripts + 完成 marker）
+├── TemplateManager.test.ts       # 模板 warmup/Preview 并发安装去重与 npm 命令策略回归
 ├── templateInference.ts          # 模板推断逻辑
-├── htmlResourceInliner.ts          # HTML 相对路径资源内嵌工具
+├── htmlResourceInliner.ts        # HTML 相对路径资源内嵌工具
+├── projectPathPolicy.ts          # Agent 项目相对路径标准化与越界拒绝
+├── projectPathPolicy.test.ts     # 绝对路径/盘符/UNC/URL/NUL/.. 路径策略回归
+├── importMapAnalysis.ts          # Import Map 合法性/精确+前缀映射和 module specifier 分析
+├── importMapAnalysis.test.ts     # malformed map、映射、inline/module 入口、重导出/动态导入回归
+├── previewDependencyPolicy.ts    # npm allow-list、256 KiB manifest/128 依赖等预算与受控 package.json
+├── previewDependencyPolicy.test.ts # 本地/Git/HTTP/alias 拒绝及 manifest/依赖/名称/spec 边界回归
+├── previewProjectPlan.ts         # 完整项目/片段入口图隔离、同 stem 遮蔽防护与项目工具链探测
+├── previewProjectPlan.test.ts    # 模板入口污染、缺失 HTML 生成和 Vite/PostCSS 配置保留回归
+├── previewSourcePolicy.ts        # UI 收集与服务边界共享的源文件数量/单文件/总字节/扫描预算
+├── previewSourcePolicy.test.ts   # UTF-8 字节、文件数量、总量预算与根级工具配置过滤回归
+├── tailwindThemePolicy.ts        # 片段回退路径的 Tailwind 字面量 theme 静态提取与预算策略
+├── tailwindThemePolicy.test.ts   # ESM/CJS/TS 字面量兼容、动态表达式拒绝与原型污染回归
+├── previewSourceStaging.ts       # root-relative 原生源文件枚举/读取、路径复验与 remaining-byte 预算
+├── previewSourceStaging.test.ts  # native 命令参数、路径规范化、预算/拒绝映射及无旧 fs 读取回归
+├── previewAssetCopier.ts         # owned workspace 原生资产复制、非可执行 allow-list 与容量预算
+├── previewAssetCopier.test.ts    # asset copy owner token、destinationPrefix、skipFiles、预算及无 renderer fs 复制回归
+├── trustedPreviewRuntime.ts      # AgentVis Vite 包装/静态服务器与可重放 lifecycle diagnostics bridge
+├── trustedPreviewRuntime.test.ts # 包装边界、项目 alias/React TSX 编译及 fs/CORS/token/bridge 回归
+├── windowCloseLifecycle.ts       # 窗口关闭前同步失效请求、限时 cleanup 与 destroy 失败恢复
+├── windowCloseLifecycle.test.ts  # 关闭时序、cleanup timeout 与 destroy 重试回归
+├── VitePreviewService.test.ts    # 路径/依赖预检、Import Map native-JS-only 拒绝与真实重试回归
+├── VitePreviewServiceCleanup.test.ts # 原生 create/cleanup/stale、lease 门槛、公平 backlog 与 sweep 重调度回归
+├── VitePreviewServiceCancellation.test.ts # source/package 写入、依赖链接与 shell execution 取消竞态回归
+├── VitePreviewServiceTemplateInstall.test.ts # 模板 install owner/joiner 取消与失败重试回归
+├── previewErrors.ts              # 结构化 Preview 错误码、序列化与取消识别
 ├── previewUrlPolicy.ts           # Project Preview URL allow-list（仅允许受控 localhost 预览端口）
 └── PortAllocator.ts              # 端口分配器（async fetch 探测防冲突，范围 3100-3199）
 ```
 
 ### 📁 services/cron/ - 定时任务服务
+
 ```
 cron/
 ├── index.ts                      # 模块导出索引
@@ -965,6 +1031,7 @@ cron/
 ```
 
 ### 📁 services/im-channel/ - IM 通信通道服务
+
 ```
 im-channel/
 ├── index.ts                      # 模块导出索引
@@ -981,7 +1048,8 @@ im-channel/
     └── slackBlockBuilder.ts      # Slack Block Kit 构建器
 ```
 
-### 📁 services/desktop-notification/  -任务完成通知服务  
+### 📁 services/desktop-notification/ -任务完成通知服务
+
 ```
 desktop-notification/
 ├── index.ts                      # 模块导出索引
@@ -1014,7 +1082,7 @@ src-tauri/
 │
 └── 📁 src/                       # Rust 源代码
     ├── main.rs                   # 应用入口
-    ├── lib.rs                    # 库入口（命令注册）
+    ├── lib.rs                    # 库入口（含 Preview workspace 原生 create/cleanup/stale 命令注册）
     ├── error.rs                  # 错误类型定义
     ├── text_utils.rs             # UTF-8 文本处理工具
     ├── webview_diagnostics.rs    # WebView2 进程级诊断
@@ -1029,6 +1097,7 @@ src-tauri/
 ```
 
 ### 📁 src-tauri/src/commands/ - Tauri 命令
+
 ```
 commands/
 ├── mod.rs                        # 模块入口
@@ -1038,6 +1107,7 @@ commands/
 ├── file.rs                       # 文件管理命令
 ├── text_preview.rs               # 大型文本有界读取与 Markdown 复杂度分析命令
 ├── workspace_import.rs           # 工作区导入 session、staging、分块写入与整批提交/回滚
+├── preview_staging.rs            # Project Preview root-relative 有界 no-follow 源读取与 owned workspace 资产复制
 ├── trash_bin.rs                  # 回收站管理命令
 ├── command_validator.rs          # 命令安全校验器
 ├── memory.rs                     # 记忆系统命令
@@ -1052,7 +1122,7 @@ commands/
 ├── document_parser.rs            # 文档解析命令
 ├── cloud_embedding.rs            # 云端嵌入服务命令
 ├── security_settings.rs          # 安全设置相关
-├── shell.rs                      # Shell 命令执行编排
+├── shell.rs                      # Shell 执行编排 + Preview 本进程 lease、receipt 原子隔离与 no-follow workspace/trash 回收
 ├── network_broker.rs             # 主进程网络 Broker 核心
 ├── process_sandbox.rs            # 进程沙箱能力 facade
 ├── process_sandbox/              # 进程沙箱策略、审计、网络扫描与平台后端
@@ -1082,6 +1152,7 @@ commands/
 ```
 
 ### 📁 src-tauri/native-scripts/ - 原生命令脚本资源
+
 ```
 native-scripts/
 └── 📁 web-search/
@@ -1089,6 +1160,7 @@ native-scripts/
 ```
 
 ### 📁 src-tauri/src/bin/
+
 ```
 bin/
 ├── agentvis_wfp_helper.rs            # AgentVis WFP 网络隔离 Spike helper
@@ -1097,12 +1169,14 @@ bin/
 ```
 
 ### 📁 src-tauri/tests/ - 测试模块
+
 ```
 tests/
 └── wfp_network_isolation.rs      # AgentVis WFP 网络隔离集成验证
 ```
 
 ### 📁 src-tauri/ - 手工验证脚本
+
 ```
 src-tauri/
 ├── Run-MatrixTest.ps1            # 执行 WFP TCP/UDP/非目标网络与 cleanup 检查
@@ -1110,6 +1184,7 @@ src-tauri/
 ```
 
 ### 📁 src-tauri/src/db/ - 数据库层
+
 ```
 db/
 ├── mod.rs                        # 模块入口与连接管理
@@ -1128,6 +1203,7 @@ db/
 ```
 
 ### 📁 src-tauri/src/llm/ - LLM 提供商集成
+
 ```
 llm/
 ├── mod.rs                        # 模块入口
@@ -1141,6 +1217,7 @@ llm/
 ```
 
 ### 📁 src-tauri/src/crypto/ - 加密模块
+
 ```
 crypto/
 ├── mod.rs                        # 模块入口
@@ -1151,16 +1228,15 @@ crypto/
 
 ## 🏗️ 核心模块说明
 
-| 模块 | 说明 |
-|------|------|
-| **Planning（Task 模式内部实现）** | Agent 规划执行系统，基于 FSM + Master Brain + Sub-Agent 实现自主任务完成 |
-| **Memory** | 三层记忆系统：短期记忆、摘要记忆、事实记忆 |
-| **RAG** | 混合检索增强生成，结合向量相似度与 BM25 关键词搜索 |
-| **Fast-Apply** | 代码快速应用引擎，支持 XML 协议解析与差异预览 |
-| **Attachment** | 多格式文档处理（PDF/DOCX/XLSX/PPTX/TXT/MD） |
-| **Preview** | Vite 实时多文件项目预览（React+Tailwind / Vue+Tailwind / Vanilla） |
-| **Cron** | Agent 定时任务系统，支持频率驱动调度 UI + 高级 Cron 表达式，以 Task 模式触发执行 |
-| **IM Channel** | IM 通信通道（多 Bot 工厂模式），支持飞书/Slack 长连接，手机端下发任务并实时查看思维链与执行结果 |
+| 模块                              | 说明                                                                                            |
+| --------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Planning（Task 模式内部实现）** | Agent 规划执行系统，基于 FSM + Master Brain + Sub-Agent 实现自主任务完成                        |
+| **Memory**                        | 三层记忆系统：短期记忆、摘要记忆、事实记忆                                                      |
+| **RAG**                           | 混合检索增强生成，结合向量相似度与 BM25 关键词搜索                                              |
+| **Fast-Apply**                    | 代码快速应用引擎，支持 XML 协议解析与差异预览                                                   |
+| **Attachment**                    | 多格式文档处理（PDF/DOCX/XLSX/PPTX/TXT/MD）                                                     |
+| **Preview**                       | Vite 实时多文件项目预览（React+Tailwind / Vue+Tailwind / Vanilla）                              |
+| **Cron**                          | Agent 定时任务系统，支持频率驱动调度 UI + 高级 Cron 表达式，以 Task 模式触发执行                |
+| **IM Channel**                    | IM 通信通道（多 Bot 工厂模式），支持飞书/Slack 长连接，手机端下发任务并实时查看思维链与执行结果 |
 
 ---
- 

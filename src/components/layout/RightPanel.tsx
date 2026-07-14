@@ -89,11 +89,10 @@ export function RightPanel() {
 
   // 切换 Agent 时自动关闭 Live Preview（预览内容属于前一个 Agent 上下文）
   useEffect(() => {
-    if (isPreviewActive) {
+    if (usePreviewStore.getState().isPreviewActive) {
       closePreview();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在 contextId 变化时触发，不依赖 isPreviewActive
-  }, [contextId]);
+  }, [contextId, closePreview]);
 
   // Diff Store 操作
   const loadPersistedDiffs = useDiffStore((state) => state.loadPersistedDiffs);

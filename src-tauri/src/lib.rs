@@ -11,100 +11,258 @@ pub(crate) mod text_utils;
 #[cfg(windows)]
 mod webview_diagnostics;
 
-use std::sync::Arc;
 use std::path::Path;
+use std::sync::Arc;
+use tauri::Manager;
 use tokio::sync::Mutex;
-use tauri::{Manager, Emitter};
 
+use commands::shell::BackgroundProcessRegistry;
 use commands::{
-    greet, get_app_info,
-    // Hub commands
-    hub_create, hub_list, hub_get, hub_update, hub_reorder, hub_delete,
     // Agent commands
-    agent_create, agent_list_by_hub, agent_get, agent_update, agent_reorder, agent_delete,
-    // Settings commands
-    settings_get_api_key_status, settings_set_api_key, settings_delete_api_key, settings_test_api_key,
-    set_image_generation_api_key, get_image_generation_api_key_status,
-    set_github_token, get_github_token_status, test_github_token,
-    set_context7_api_key, get_context7_api_key_status, test_context7_api_key,
-    // IM Channel commands
-    im_save_credentials, im_get_credentials,
-    im_save_bot_credentials, im_get_bot_credentials, im_delete_bot_credentials,
-    // Feishu API proxy commands
-    feishu_get_token, feishu_send_message, feishu_update_message, feishu_delete_message, feishu_http_proxy,
-    feishu_upload_image, feishu_upload_file, feishu_download_resource, feishu_save_attachment,
-    feishu_write_app_data_file,
-    feishu_delete_app_data_file,
-    // Slack API proxy and generic IM file commands
-    slack_open_socket_connection, slack_auth_test, slack_post_message, slack_update_message,
-    slack_delete_message, slack_delete_file,
-    slack_upload_file_external, slack_download_file, im_save_attachment, im_write_app_data_file,
-    im_delete_app_data_file,
-    // LLM commands
-    llm_chat, llm_chat_stream, llm_cancel_stream, llm_list_providers, llm_list_models, llm_chat_with_tools,
-    gpt_image_generate, minimax_image_generate, zhipu_image_generate,
-    // Cloud Embedding commands
-    cloud_embedding_encode, cloud_embedding_list_providers, cloud_embedding_list_models,
-    cloud_rerank_documents,
-    set_siliconflow_api_key, get_siliconflow_api_key_status,
-    set_giteeai_api_key, get_giteeai_api_key_status,
-    // RAG commands
-    rag_index_chunk, rag_search, rag_delete_by_agent, rag_delete_by_document, rag_get_status, rag_list_document_ids,
-    rag_list_chunks,
-    // Memory commands
-    memory_create, memory_list_by_layer, memory_list_facts, memory_update, memory_delete, memory_get_stats,
-    memory_delete_by_source_ids, memory_get_context, memory_delete_summary_with_vector, memory_delete_fact_with_vector, memory_clear_short_term,
-    // Memory Candidate commands
-    memory_candidate_create, memory_candidate_list, memory_candidate_update, memory_candidate_delete, memory_candidate_delete_batch,
-    // Snapshot commands
-    snapshot_create, snapshot_get, snapshot_list, snapshot_get_latest, snapshot_rollback, snapshot_delete, snapshot_cleanup, snapshot_count,
-    // Message commands
-    message_create, message_update, message_list_by_agent, message_search_agent_history, message_timeline_agent_history, message_get_agent_history_messages, message_list_by_hub, message_get_recent, message_get_batch, message_get_after, message_get_before, message_count_by_agent, message_get_recent_hub, message_get_before_hub, message_count_by_hub, message_delete, message_retract_from, message_clear_by_agent,
-    // File commands
-    file_write_deliverable, file_read_content, file_read_text_window, file_analyze_text_preview, file_list_deliverables, file_delete, save_clipboard_image, save_dropped_file,
-    file_write_to_path, file_write_staged_tool_arg_to_path, file_create_backup, file_read_as_base64, file_read_image_downscaled_as_base64, file_copy_to_attachments, file_get_size, file_open_system,
-    file_reveal_in_explorer, file_list_directory, file_list_project_directory, file_import_to_workspace,
-    workspace_import_begin, workspace_import_append_chunk, workspace_import_commit, workspace_import_cancel,
+    agent_create,
+    agent_delete,
+    agent_get,
+    agent_list_by_hub,
+    agent_reorder,
+    agent_update,
+    backup_clean,
     // Backup Management commands
-    backup_get_stats, backup_clean,
-    // Web Search commands
-    web_search, set_tavily_api_key, get_tavily_api_key_status,
-    network_broker_http_request,
-    // Document Parser commands
-    parse_docx, parse_xlsx, parse_pdf, parse_txt, parse_md, parse_pptx,
-    // Diff Record commands (持久化 Diff 记录)
-    diff_record_create, diff_record_get_by_message, diff_record_get_pending,
-    diff_record_update_status, diff_record_revert_by_message, diff_record_update_active_snapshot,
-    diff_record_update_message_id, diff_record_update_modification_statuses,
-    // Memory Trigger commands (混合触发模型)
-    memory_trigger_get, memory_trigger_get_or_create, memory_trigger_update,
-    memory_trigger_increment_turn, memory_trigger_accumulate_score, memory_trigger_reset,
-    memory_trigger_update_last_message,
-    // Data Management commands (数据管理)
-    data_get_stats, data_clear_vectors, data_reset_all, data_export, data_import,
-    // Shell commands
-    shell_execute, shell_cancel, shell_kill, sandbox_audit_events, sandbox_network_direct_targets,
-    sandbox_network_direct_target_risks, check_elevated_privileges, startup_trash_cleanup,
-    // Skill Install commands
-    skill_install_from_github,
+    backup_get_stats,
     // Skills Bootstrap commands
     bootstrap_skills_if_needed,
-    // Embedded Python commands
-    prepare_embedded_runtime, prepare_prebuilt_python_runtime,
+    check_elevated_privileges,
+    // Cloud Embedding commands
+    cloud_embedding_encode,
+    cloud_embedding_list_models,
+    cloud_embedding_list_providers,
+    cloud_rerank_documents,
+    code_find,
+    // Code Search commands (代码搜索)
+    code_grep,
+    code_outline,
+    code_symbol,
+    // Cron commands (定时任务)
+    cron_create,
+    cron_delete,
+    cron_list_all_enabled,
+    cron_list_by_agent,
+    cron_update,
+    data_clear_vectors,
+    data_export,
+    // Data Management commands (数据管理)
+    data_get_stats,
+    data_import,
+    data_reset_all,
+    // Diff Record commands (持久化 Diff 记录)
+    diff_record_create,
+    diff_record_get_by_message,
+    diff_record_get_pending,
+    diff_record_revert_by_message,
+    diff_record_update_active_snapshot,
+    diff_record_update_message_id,
+    diff_record_update_modification_statuses,
+    diff_record_update_status,
+    feishu_delete_app_data_file,
+    feishu_delete_message,
+    feishu_download_resource,
+    // Feishu API proxy commands
+    feishu_get_token,
+    feishu_http_proxy,
+    feishu_save_attachment,
+    feishu_send_message,
+    feishu_update_message,
+    feishu_upload_file,
+    feishu_upload_image,
+    feishu_write_app_data_file,
+    file_analyze_text_preview,
+    file_copy_to_attachments,
+    file_create_backup,
+    file_delete,
+    file_get_size,
+    file_import_to_workspace,
+    file_list_deliverables,
+    file_list_directory,
+    file_list_project_directory,
+    file_open_system,
+    file_read_as_base64,
+    file_read_content,
+    file_read_image_downscaled_as_base64,
+    file_read_text_window,
+    file_reveal_in_explorer,
+    // File commands
+    file_write_deliverable,
+    file_write_staged_tool_arg_to_path,
+    file_write_to_path,
+    get_app_info,
+    get_context7_api_key_status,
+    get_giteeai_api_key_status,
+    get_github_token_status,
+    get_image_generation_api_key_status,
+    get_protected_paths,
+    get_siliconflow_api_key_status,
+    get_tavily_api_key_status,
+    // Security Settings commands
+    get_trash_bin_path,
+    gpt_image_generate,
+    greet,
+    // Hub commands
+    hub_create,
+    hub_delete,
+    hub_get,
+    hub_list,
+    hub_reorder,
+    hub_update,
+    im_delete_app_data_file,
+    im_delete_bot_credentials,
+    im_get_bot_credentials,
+    im_get_credentials,
+    im_save_attachment,
+    im_save_bot_credentials,
+    // IM Channel commands
+    im_save_credentials,
+    im_write_app_data_file,
+    llm_cancel_stream,
+    // LLM commands
+    llm_chat,
+    llm_chat_stream,
+    llm_chat_with_tools,
+    llm_list_models,
+    llm_list_providers,
+    // Memory Candidate commands
+    memory_candidate_create,
+    memory_candidate_delete,
+    memory_candidate_delete_batch,
+    memory_candidate_list,
+    memory_candidate_update,
+    memory_clear_short_term,
+    // Memory commands
+    memory_create,
+    memory_delete,
+    memory_delete_by_source_ids,
+    memory_delete_fact_with_vector,
+    memory_delete_summary_with_vector,
+    memory_get_context,
+    memory_get_stats,
+    memory_list_by_layer,
+    memory_list_facts,
+    memory_trigger_accumulate_score,
+    // Memory Trigger commands (混合触发模型)
+    memory_trigger_get,
+    memory_trigger_get_or_create,
+    memory_trigger_increment_turn,
+    memory_trigger_reset,
+    memory_trigger_update,
+    memory_trigger_update_last_message,
+    memory_update,
+    message_clear_by_agent,
+    message_count_by_agent,
+    message_count_by_hub,
+    // Message commands
+    message_create,
+    message_delete,
+    message_get_after,
+    message_get_agent_history_messages,
+    message_get_batch,
+    message_get_before,
+    message_get_before_hub,
+    message_get_recent,
+    message_get_recent_hub,
+    message_list_by_agent,
+    message_list_by_hub,
+    message_retract_from,
+    message_search_agent_history,
+    message_timeline_agent_history,
+    message_update,
+    minimax_image_generate,
+    network_broker_http_request,
+    // Document Parser commands
+    parse_docx,
+    parse_md,
+    parse_pdf,
+    parse_pptx,
+    parse_txt,
+    parse_xlsx,
     // Embedded Node.js commands
     prepare_embedded_node,
+    // Embedded Python commands
+    prepare_embedded_runtime,
+    prepare_prebuilt_python_runtime,
+    preview_acquire_template_lock,
+    preview_cleanup_stale_workspaces,
+    preview_cleanup_workspace,
+    preview_copy_assets,
+    preview_create_workspace,
+    preview_list_source_tree,
+    preview_read_text_file,
+    preview_release_template_lock,
+    rag_delete_by_agent,
+    rag_delete_by_document,
+    rag_get_status,
+    // RAG commands
+    rag_index_chunk,
+    rag_list_chunks,
+    rag_list_document_ids,
+    rag_search,
     // Renderer health diagnostics
     renderer_health_heartbeat,
-    // Security Settings commands
-    get_trash_bin_path, get_protected_paths, set_protected_paths,
-    trash_bin_list_entries, trash_bin_restore_entries, trash_bin_restore_batch,
-    trash_bin_delete_entries, trash_bin_delete_batch,
-    // Cron commands (定时任务)
-    cron_create, cron_list_by_agent, cron_list_all_enabled, cron_update, cron_delete,
-    // Code Search commands (代码搜索)
-    code_grep, code_find, code_outline, code_symbol,
+    sandbox_audit_events,
+    sandbox_network_direct_target_risks,
+    sandbox_network_direct_targets,
+    save_clipboard_image,
+    save_dropped_file,
+    set_context7_api_key,
+    set_giteeai_api_key,
+    set_github_token,
+    set_image_generation_api_key,
+    set_protected_paths,
+    set_siliconflow_api_key,
+    set_tavily_api_key,
+    settings_delete_api_key,
+    // Settings commands
+    settings_get_api_key_status,
+    settings_set_api_key,
+    settings_test_api_key,
+    shell_background_status,
+    shell_cancel,
+    // Shell commands
+    shell_execute,
+    shell_kill,
+    // Skill Install commands
+    skill_install_from_github,
+    slack_auth_test,
+    slack_delete_file,
+    slack_delete_message,
+    slack_download_file,
+    // Slack API proxy and generic IM file commands
+    slack_open_socket_connection,
+    slack_post_message,
+    slack_update_message,
+    slack_upload_file_external,
+    snapshot_cleanup,
+    snapshot_count,
+    // Snapshot commands
+    snapshot_create,
+    snapshot_delete,
+    snapshot_get,
+    snapshot_get_latest,
+    snapshot_list,
+    snapshot_rollback,
+    startup_trash_cleanup,
+    test_context7_api_key,
+    test_github_token,
+    trash_bin_delete_batch,
+    trash_bin_delete_entries,
+    trash_bin_list_entries,
+    trash_bin_restore_batch,
+    trash_bin_restore_entries,
+    // Web Search commands
+    web_search,
+    workspace_import_append_chunk,
+    workspace_import_begin,
+    workspace_import_cancel,
+    workspace_import_commit,
+    zhipu_image_generate,
 };
-use commands::shell::BackgroundProcessRegistry;
 use db::Database;
 
 const TARGET_WINDOW_WIDTH: f64 = 1600.0;
@@ -132,6 +290,13 @@ struct WindowBounds {
 }
 
 #[cfg(any(windows, test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct WindowSize {
+    width: u32,
+    height: u32,
+}
+
+#[cfg(any(windows, test))]
 #[derive(Debug)]
 struct WindowRestoreTracker {
     last_normal_bounds: WindowBounds,
@@ -151,7 +316,7 @@ impl WindowRestoreTracker {
         generation: u64,
         is_maximized: bool,
         current_bounds: WindowBounds,
-    ) -> Option<WindowBounds> {
+    ) -> Option<WindowSize> {
         if generation != self.observation_generation {
             return None;
         }
@@ -163,7 +328,22 @@ impl WindowRestoreTracker {
 
         if self.was_maximized {
             self.was_maximized = false;
-            return (current_bounds != self.last_normal_bounds).then_some(self.last_normal_bounds);
+            let restore_size = (current_bounds.width != self.last_normal_bounds.width
+                || current_bounds.height != self.last_normal_bounds.height)
+                .then_some(WindowSize {
+                    width: self.last_normal_bounds.width,
+                    height: self.last_normal_bounds.height,
+                });
+
+            // Windows chooses the restored position while the user drags a maximized window.
+            // Preserve that native x/y and only retain the previously tracked normal size.
+            self.last_normal_bounds = WindowBounds {
+                x: current_bounds.x,
+                y: current_bounds.y,
+                width: self.last_normal_bounds.width,
+                height: self.last_normal_bounds.height,
+            };
+            return restore_size;
         }
 
         self.last_normal_bounds = current_bounds;
@@ -211,8 +391,7 @@ fn install_window_restore_tracking(
             return;
         }
     };
-    let initially_maximized =
-        window.is_maximized().unwrap_or(false) || should_maximize_on_startup;
+    let initially_maximized = window.is_maximized().unwrap_or(false) || should_maximize_on_startup;
     let tracker = Arc::new(std::sync::Mutex::new(WindowRestoreTracker {
         last_normal_bounds: initial_bounds,
         was_maximized: initially_maximized,
@@ -266,18 +445,11 @@ fn install_window_restore_tracking(
                 tracker.observe_stable(generation, is_maximized, current_bounds)
             };
 
-            if let Some(bounds) = restore_bounds {
-                if let Err(error) = observation_window.set_size(tauri::PhysicalSize::new(
-                    bounds.width,
-                    bounds.height,
-                )) {
-                    log::warn!("恢复最大化前窗口尺寸失败: {}", error);
-                    return;
-                }
-                if let Err(error) = observation_window
-                    .set_position(tauri::PhysicalPosition::new(bounds.x, bounds.y))
+            if let Some(size) = restore_bounds {
+                if let Err(error) =
+                    observation_window.set_size(tauri::PhysicalSize::new(size.width, size.height))
                 {
-                    log::warn!("恢复最大化前窗口位置失败: {}", error);
+                    log::warn!("恢复最大化前窗口尺寸失败: {}", error);
                 }
             }
         });
@@ -321,7 +493,14 @@ fn install_panic_hook() {
     std::panic::set_hook(Box::new(move |panic_info| {
         let location = panic_info
             .location()
-            .map(|location| format!("{}:{}:{}", location.file(), location.line(), location.column()))
+            .map(|location| {
+                format!(
+                    "{}:{}:{}",
+                    location.file(),
+                    location.line(),
+                    location.column()
+                )
+            })
             .unwrap_or_else(|| "unknown location".to_string());
         let payload = panic_info
             .payload()
@@ -471,21 +650,6 @@ pub fn run() {
                 }
             }
 
-            // 拦截窗口关闭事件：阻止默认行为，交由前端判断是否有 Agent 任务进行中
-            // 前端收到 close-requested 后检测 chatStore.sendingContexts，
-            // 无任务则直接调用 window.close()，有任务则弹出确认弹窗让用户决定
-            if let Some(window) = app.get_webview_window("main") {
-                let win = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        if let Err(e) = win.emit("close-requested", ()) {
-                            log::error!("发送 close-requested 事件失败: {}", e);
-                        }
-                    }
-                });
-            }
-            
             // 异步预热 HTTP 连接（不阻塞启动）
             tauri::async_runtime::spawn(async {
                 llm::http_client::warmup_connections().await;
@@ -664,6 +828,15 @@ pub fn run() {
             shell_execute,
             shell_cancel,
             shell_kill,
+            shell_background_status,
+            preview_create_workspace,
+            preview_acquire_template_lock,
+            preview_release_template_lock,
+            preview_cleanup_workspace,
+            preview_cleanup_stale_workspaces,
+            preview_list_source_tree,
+            preview_read_text_file,
+            preview_copy_assets,
             sandbox_audit_events,
             sandbox_network_direct_targets,
             sandbox_network_direct_target_risks,
@@ -812,8 +985,88 @@ mod startup_window_tests {
         let restored_generation = tracker.schedule_observation();
         assert_eq!(
             tracker.observe_stable(restored_generation, false, startup_bounds),
-            Some(vertically_resized_bounds)
+            Some(WindowSize {
+                width: vertically_resized_bounds.width,
+                height: vertically_resized_bounds.height,
+            })
         );
+    }
+
+    #[test]
+    fn preserves_windows_drag_restore_position_while_restoring_size() {
+        let normal_bounds = WindowBounds {
+            x: 420,
+            y: 36,
+            width: 1280,
+            height: 720,
+        };
+        let maximized_bounds = WindowBounds {
+            x: 0,
+            y: 0,
+            width: 2048,
+            height: 1112,
+        };
+        let dragged_restore_bounds = WindowBounds {
+            x: 880,
+            y: 72,
+            width: 1600,
+            height: 900,
+        };
+        let mut tracker = WindowRestoreTracker {
+            last_normal_bounds: normal_bounds,
+            was_maximized: false,
+            observation_generation: 0,
+        };
+
+        let maximized_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(maximized_generation, true, maximized_bounds),
+            None
+        );
+        let restored_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(restored_generation, false, dragged_restore_bounds),
+            Some(WindowSize {
+                width: normal_bounds.width,
+                height: normal_bounds.height,
+            })
+        );
+        assert_eq!(
+            tracker.last_normal_bounds,
+            WindowBounds {
+                x: dragged_restore_bounds.x,
+                y: dragged_restore_bounds.y,
+                width: normal_bounds.width,
+                height: normal_bounds.height,
+            }
+        );
+    }
+
+    #[test]
+    fn accepts_windows_drag_restore_when_only_the_position_changed() {
+        let normal_bounds = WindowBounds {
+            x: 420,
+            y: 36,
+            width: 1280,
+            height: 720,
+        };
+        let dragged_restore_bounds = WindowBounds {
+            x: 880,
+            y: 72,
+            ..normal_bounds
+        };
+        let mut tracker = WindowRestoreTracker {
+            last_normal_bounds: normal_bounds,
+            was_maximized: true,
+            observation_generation: 0,
+        };
+
+        let restored_generation = tracker.schedule_observation();
+        assert_eq!(
+            tracker.observe_stable(restored_generation, false, dragged_restore_bounds),
+            None
+        );
+        assert_eq!(tracker.last_normal_bounds, dragged_restore_bounds);
     }
 
     #[test]

@@ -1,8 +1,5 @@
 # AgentVis Agent 行为安全防护机制
 
-> 更新时间：2026-06-01
-> 适用版本：AgentVis 发布版
-
 ---
 
 ## 概述
@@ -300,8 +297,12 @@ if file_str.starts_with(&protected_normalized) {
 | `standard` | 普通 `exec` | `inherit` | 不改变普通 shell 的联网行为 |
 | `externalSkill` | 外部 Script Skill | `audit` | 默认不直接阻断，但扫描命中会写入审计事件 |
 | `installer` | Skill 安装 / 依赖安装 | `inherit` | 安装阶段允许下载依赖 |
-| `preview` | 本地预览服务 | `inherit` | 避免破坏前端预览工作流 |
+| `preview` | 内置 Project Preview | `inherit` | 网络保持可用；文件/执行面另由独立 staging、输入 allow-list 和 owned PID 收口 |
 | `restricted` | 高风险 / 强隔离执行 | `blocked` | 启用更严格的进程与网络约束 |
+
+`preview=inherit` 不代表直接信任 Agent 项目。内置 Project Preview 不在交付目录执行、不执行 npm lifecycle scripts，也不以端口扫描推断进程所有权；片段模式只执行 AgentVis 模板配置，完整项目模式则会在 staging 中执行项目 Vite/PostCSS/Tailwind 配置以保留插件、alias 和 CSS 工具链语义。它通过 app-cache staging、路径/依赖/资产预算（包括 256 KiB manifest 与 128 依赖上限）、Import Map native-JS-only fail-closed 预检、AgentVis 包装服务器配置、per-run health token 和 registry PID 生命周期提供专用边界。staging 由 Rust 原生命令创建并返回 `runId`/`ownerToken`，`.agentvis/active` 精确绑定该身份，跨实例文件 lease 保护活跃 workspace。正常清理还必须证明并释放本进程 registry lease，不能仅凭另一个实例的 marker/token 删除其 workspace；通过 app-cache 直接子目录、UUIDv4、链接/reparse 与 canonical containment 校验后，才原子隔离并 no-follow 删除，junction 只删链接。陈旧清理要求至少 24 小时且成功取得 lease，并以原生有界分页执行；部分删除遗留的 `.trash-{UUIDv4}` 仅凭严格配对且至少 24 小时的 root receipt 自回收。前端 backlog 有上限且每次只重试固定数量。完整项目配置是当前用户权限下的可执行 Node 代码，Local Audit 不构成 OS 级 VM；该边界不应被表述为任意不可信构建配置的强隔离、浏览器网络 DLP 或完整虚拟机隔离。
+
+共享 Preview 模板还使用按模板划分的 OS 跨进程排他 lease，并把完成 marker 作为受控 `package.json` 的提交记录；更新 manifest 前先失效 marker。staging 删除器使用显式栈且限制单轮 100,000 个 entry、128 层和 2 秒，stale IPC 总计最多 5 秒；预算耗尽的部分 quarantine 保留 root receipt，后续 sweep 从剩余目录继续。窗口关闭会先同步使 renderer request ID 失效，再等待 service cleanup，避免 pre-service 扫描在关闭期间重新启动 Preview。
 
 三档用户权限与后端机制的关系：
 
@@ -608,4 +609,3 @@ OS 执行命令
 
 ### Trash Bin fail-closed 策略
 对于“看起来有删除/清理意图，但解析器无法安全确定目标”的复杂格式（如嵌套多级管道、未解析变量、脚本片段里的 `.Delete()`、`git clean` / `robocopy /purge` 等），Trash Bin 选择 fail closed 阻断，而不是回退到 OS 执行。返回提示会要求 Agent 改用受支持的显式删除方式，使后续重试更容易被软删除拦截。只有完全不呈现删除意图的命令才继续正常执行。
-

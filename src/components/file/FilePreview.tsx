@@ -35,6 +35,7 @@ import { TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
 import { usePreviewStore } from '@stores/previewStore';
 import { getLogger } from '@services/logger';
 import { isPreviewableFile, inferTemplateFromFileName } from '@services/preview';
+import { isPreviewCancellation } from '@services/preview/previewErrors';
 import { useI18n } from '@/i18n';
 import {
   getAudioMimeType,
@@ -635,7 +636,13 @@ export function FilePreview({
     openSelectionMenu,
     handleMenuAction,
   } = useTextContextMenu();
-  const { openPreview, startProjectPreview, setProjectStatus, setProjectUrl } = usePreviewStore();
+  const {
+    openPreview,
+    startProjectPreview,
+    markProjectRequestSubmitted,
+    setProjectStatus,
+    setProjectUrl,
+  } = usePreviewStore();
 
   // HTML 文件预览回调
   // 提取文件所在目录作为 baseDir，用于解析 HTML 中的相对路径资源（图片等）
@@ -669,9 +676,10 @@ export function FilePreview({
   const handleProjectPreview = useCallback(
     async (code: string, _language: string) => {
       if (!fileName || !filePath) return;
+      let projectRequestId: number | null = null;
       try {
         const templateId = inferTemplateFromFileName(fileName);
-        startProjectPreview(templateId);
+        projectRequestId = startProjectPreview(templateId);
         setProjectStatus('installing');
 
         // 从 filePath 推断 deliverableDir：文件的父目录即为 Agent 工作目录
@@ -682,23 +690,44 @@ export function FilePreview({
         const srcPath = `src/${fileName}`;
 
         const { vitePreviewService } = await import('@services/preview');
-        const url = await vitePreviewService.startProject(
+        if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
+        const startPromise = vitePreviewService.startProject(
           deliverableDir,
           // 使用固定项目名，复用同一目录
           'vite_preview',
           templateId,
-          [{ path: srcPath, content: code }]
+          [{ path: srcPath, content: code }],
+          undefined,
+          '',
+          projectRequestId
         );
+        markProjectRequestSubmitted(projectRequestId);
+        const url = await startPromise;
 
+        if (!usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)) return;
         setProjectUrl(url, templateId);
         logger.debug('[FilePreview] Project preview started:', url);
       } catch (error) {
+        if (isPreviewCancellation(error)) return;
+        if (
+          projectRequestId !== null &&
+          !usePreviewStore.getState().isProjectRequestCurrent(projectRequestId)
+        ) {
+          return;
+        }
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.error('[FilePreview] Project preview failed:', errorMessage);
         setProjectStatus('error', errorMessage);
       }
     },
-    [fileName, filePath, startProjectPreview, setProjectStatus, setProjectUrl]
+    [
+      fileName,
+      filePath,
+      startProjectPreview,
+      markProjectRequestSubmitted,
+      setProjectStatus,
+      setProjectUrl,
+    ]
   );
   const handleProjectPreviewAction = useCallback(
     (code: string, language: string) => {

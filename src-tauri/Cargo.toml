@@ -112,6 +112,9 @@ windows = { version = "0.61.3", features = [
     "Win32_System_WinRT",
 ] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [profile.release]
 panic = "abort"
 codegen-units = 1

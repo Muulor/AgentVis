@@ -1,8 +1,5 @@
 # AgentVis Agent Behavior Safety Guardrails
 
-> Last updated: 2026-06-01
-> Applicable version: AgentVis release build
-
 ---
 
 ## Overview
@@ -303,8 +300,12 @@ Runtime sandbox policy is added to the Rust shell execution chain. Its role is t
 | `standard` | Normal `exec` | `inherit` | Does not change normal shell networking behavior |
 | `externalSkill` | External Script Skill | `audit` | Does not block by default, but scan hits write audit events |
 | `installer` | Skill installation / dependency installation | `inherit` | Allows dependency downloads during installation |
-| `preview` | Local preview service | `inherit` | Avoids breaking frontend preview workflows |
+| `preview` | Built-in Project Preview | `inherit` | Keeps networking available; isolated staging, input allow-lists, and owned PIDs separately constrain files and execution |
 | `restricted` | High-risk / strongly isolated execution | `blocked` | Enables stricter process and network constraints |
+
+`preview=inherit` does not mean that an Agent project is trusted directly. Built-in Project Preview does not execute in the deliverable directory, never executes npm lifecycle scripts, and does not infer process ownership by scanning ports. Snippet mode executes only AgentVis template configuration; complete-project mode executes staged project Vite/PostCSS/Tailwind configuration to preserve plugins, aliases, and CSS toolchain semantics. It uses app-cache staging, path/dependency/asset budgets (including a 256 KiB manifest and 128-dependency limit), fail-closed native-JS-only Import Map preflight, an AgentVis server wrapper, a per-run health token, and registry-owned PID lifecycle as its dedicated boundary. Rust native commands create staging and return a `runId`/`ownerToken`; `.agentvis/active` binds that exact identity and a cross-instance file lease protects an active workspace. Normal cleanup must also prove and release this process's registry lease, so another instance's marker/token alone cannot authorize removal. Only after app-cache direct-child, UUIDv4, link/reparse, and canonical-containment checks does it atomically quarantine and delete without following links; junctions have only the link removed. Stale cleanup requires at least 24 hours of inactivity and successful lease acquisition and runs in bounded native pages; a partially deleted `.trash-{UUIDv4}` is self-reclaimed only through a strictly paired root receipt that is at least 24 hours old. The frontend backlog is bounded with a fixed retry count per start. Complete-project configuration is executable Node code under the current user and Local Audit is not an OS-level VM; this boundary must not be described as strong isolation for arbitrary untrusted build configuration, browser-network DLP, or full virtual-machine isolation.
+
+The shared Preview templates also use a per-template OS-backed cross-process exclusive lease and treat the completion marker as a commit record for the controlled `package.json`; that marker is invalidated before any manifest update. The staging deleter uses an explicit stack and caps each pass at 100,000 entries, 128 levels, and two seconds, while the entire stale IPC is capped at five seconds. A partial quarantine keeps its root receipt so a later sweep continues from the remaining tree. Window close invalidates the renderer request ID synchronously before awaiting service cleanup, preventing a pre-service scan from starting Preview again during shutdown.
 
 Relationship between the three user permission modes and backend mechanisms:
 
