@@ -132,12 +132,7 @@ const ACL_MODIFY_KEYWORDS: &[&str] = &[
 ///
 /// wmic 本身有不少只读查询场景（如 wmic os get caption），
 /// 完全禁止过于激进。仅当 wmic 与写入性子命令组合时阻断。
-const WMIC_WRITE_KEYWORDS: &[&str] = &[
-    "delete",
-    "create",
-    " set ",
-    "call ",
-];
+const WMIC_WRITE_KEYWORDS: &[&str] = &["delete", "create", " set ", "call "];
 
 // ==================== 写入重定向关键字 ====================
 
@@ -202,7 +197,9 @@ static CUSTOM_PROTECTED_PATHS: RwLock<Option<Vec<String>>> = RwLock::new(None);
 fn load_custom_protected_paths(app_data_dir: &Path) -> Vec<String> {
     // 快速读取路径：如果缓存已存在，直接返回克隆
     {
-        let guard = CUSTOM_PROTECTED_PATHS.read().unwrap_or_else(|e| e.into_inner());
+        let guard = CUSTOM_PROTECTED_PATHS
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(ref paths) = *guard {
             return paths.clone();
         }
@@ -211,7 +208,9 @@ fn load_custom_protected_paths(app_data_dir: &Path) -> Vec<String> {
     // 缓存未初始化，从磁盘加载并写入缓存
     let paths = read_protected_paths_from_disk(app_data_dir);
     {
-        let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = CUSTOM_PROTECTED_PATHS
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *guard = Some(paths.clone());
     }
     paths
@@ -222,26 +221,18 @@ pub fn read_protected_paths_from_disk(app_data_dir: &Path) -> Vec<String> {
     let config_path = app_data_dir.join("protected_paths.json");
 
     match std::fs::read_to_string(&config_path) {
-        Ok(content) => {
-            match serde_json::from_str::<Vec<String>>(&content) {
-                Ok(paths) => {
-                    if !paths.is_empty() {
-                        log::debug!(
-                            "[CommandValidator] 加载了 {} 个自定义保护路径",
-                            paths.len()
-                        );
-                    }
-                    paths
+        Ok(content) => match serde_json::from_str::<Vec<String>>(&content) {
+            Ok(paths) => {
+                if !paths.is_empty() {
+                    log::debug!("[CommandValidator] 加载了 {} 个自定义保护路径", paths.len());
                 }
-                Err(e) => {
-                    log::warn!(
-                        "[CommandValidator] ⚠️ protected_paths.json 解析失败: {}",
-                        e
-                    );
-                    Vec::new()
-                }
+                paths
             }
-        }
+            Err(e) => {
+                log::warn!("[CommandValidator] ⚠️ protected_paths.json 解析失败: {}", e);
+                Vec::new()
+            }
+        },
         // 文件不存在是正常情况，静默忽略
         Err(_) => Vec::new(),
     }
@@ -253,7 +244,9 @@ pub fn read_protected_paths_from_disk(app_data_dir: &Path) -> Vec<String> {
 /// 使后续 `validate_command_safety` 立即使用最新路径列表。
 pub fn reload_custom_protected_paths(app_data_dir: &Path) {
     let paths = read_protected_paths_from_disk(app_data_dir);
-    let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+    let mut guard = CUSTOM_PROTECTED_PATHS
+        .write()
+        .unwrap_or_else(|e| e.into_inner());
     *guard = Some(paths);
     log::debug!("[CommandValidator] 自定义保护路径缓存已刷新");
 }
@@ -461,7 +454,11 @@ fn collect_after_powershell_command(tokens: &[String], command_names: &[&str]) -
 fn split_comma_separated_paths(token: &str) -> Vec<String> {
     token
         .split(',')
-        .map(|part| part.trim().trim_matches(|c| c == '\'' || c == '"').to_string())
+        .map(|part| {
+            part.trim()
+                .trim_matches(|c| c == '\'' || c == '"')
+                .to_string()
+        })
         .filter(|part| !part.is_empty())
         .collect()
 }
@@ -589,10 +586,7 @@ fn write_target_tokens(command: &str) -> Vec<String> {
 /// 3. wmic + 写入子命令 — 组合阻断（只读查询放行）
 /// 4. icacls + 修改参数 + 核心目录 — 组合阻断
 /// 5. 破坏性动词 + 核心/自定义保护目录 — 组合阻断
-pub fn validate_command_safety(
-    command: &str,
-    app_data_dir: &Path,
-) -> Result<(), AppError> {
+pub fn validate_command_safety(command: &str, app_data_dir: &Path) -> Result<(), AppError> {
     validate_command_safety_with_workdir(command, app_data_dir, None)
 }
 
@@ -632,12 +626,9 @@ pub fn validate_command_safety_with_workdir(
     // 3. wmic + 写入子命令 — 组合阻断
     // wmic 只读查询（如 wmic os get caption）放行，写入操作阻断
     if lower.contains("wmic") {
-        let has_write_keyword = WMIC_WRITE_KEYWORDS
-            .iter()
-            .any(|kw| lower.contains(kw));
+        let has_write_keyword = WMIC_WRITE_KEYWORDS.iter().any(|kw| lower.contains(kw));
         if has_write_keyword {
-            let reason =
-                "Safety block: wmic write/modify operations are blocked.".to_string();
+            let reason = "Safety block: wmic write/modify operations are blocked.".to_string();
             log::warn!("[CommandValidator] {}", reason);
             return Err(AppError::Forbidden(reason));
         }
@@ -647,15 +638,13 @@ pub fn validate_command_safety_with_workdir(
     // cacls 是 icacls 的前身，功能类似但参数略有不同，需同等对待
     let is_acl_command = lower.contains("icacls") || lower.contains("cacls");
     if is_acl_command {
-        let has_modify_param = ACL_MODIFY_KEYWORDS
-            .iter()
-            .any(|kw| lower.contains(kw));
+        let has_modify_param = ACL_MODIFY_KEYWORDS.iter().any(|kw| lower.contains(kw));
         // cacls 使用 /G（grant）、/R（revoke）、/P（replace）、/D（deny）等参数
-        let has_cacls_modify = lower.contains("/g ") || lower.contains("/r ")
-            || lower.contains("/p ") || lower.contains("/d ");
-        let targets_protected = PROTECTED_PATHS
-            .iter()
-            .any(|path| lower.contains(path));
+        let has_cacls_modify = lower.contains("/g ")
+            || lower.contains("/r ")
+            || lower.contains("/p ")
+            || lower.contains("/d ");
+        let targets_protected = PROTECTED_PATHS.iter().any(|path| lower.contains(path));
 
         if (has_modify_param || has_cacls_modify) && targets_protected {
             let reason =
@@ -668,9 +657,7 @@ pub fn validate_command_safety_with_workdir(
     // 4.5 Set-Acl + 核心目录 — PowerShell ACL 修改阻断
     // Set-Acl 是 PowerShell 原生的 ACL 修改 cmdlet，与 icacls 功能等价
     if lower.contains("set-acl") {
-        let targets_protected = PROTECTED_PATHS
-            .iter()
-            .any(|path| lower.contains(path));
+        let targets_protected = PROTECTED_PATHS.iter().any(|path| lower.contains(path));
         if targets_protected {
             let reason =
                 "Safety block: changing file permissions on system-protected directories is blocked (Set-Acl).".to_string();
@@ -680,19 +667,16 @@ pub fn validate_command_safety_with_workdir(
     }
 
     // 5. 破坏性动词 + 保护目录 — 组合阻断
-    let has_destructive_verb = DESTRUCTIVE_VERBS
-        .iter()
-        .any(|verb| lower.contains(verb));
+    let has_destructive_verb = DESTRUCTIVE_VERBS.iter().any(|verb| lower.contains(verb));
 
     if has_destructive_verb {
         // 检查核心保护目录
-        let targets_core_protected = PROTECTED_PATHS
-            .iter()
-            .any(|path| lower.contains(path));
+        let targets_core_protected = PROTECTED_PATHS.iter().any(|path| lower.contains(path));
 
         if targets_core_protected {
             let reason =
-                "Safety block: destructive operations on system core directories are blocked.".to_string();
+                "Safety block: destructive operations on system core directories are blocked."
+                    .to_string();
             log::warn!("[CommandValidator] {}", reason);
             return Err(AppError::Forbidden(reason));
         }
@@ -711,7 +695,8 @@ pub fn validate_command_safety_with_workdir(
 
         for target in destructive_target_tokens(command) {
             let resolved = resolve_target_path(&target, workdir);
-            if let Some(custom_path) = find_matching_custom_protected_path(&resolved, &custom_paths) {
+            if let Some(custom_path) = find_matching_custom_protected_path(&resolved, &custom_paths)
+            {
                 let reason = format!(
                     "Safety block: destructive operations on custom protected directory '{}' are blocked.",
                     custom_path
@@ -743,7 +728,8 @@ pub fn validate_command_safety_with_workdir(
 
         for target in write_target_tokens(command) {
             let resolved = resolve_target_path(&target, workdir);
-            if let Some(custom_path) = find_matching_custom_protected_path(&resolved, &custom_paths) {
+            if let Some(custom_path) = find_matching_custom_protected_path(&resolved, &custom_paths)
+            {
                 let reason = format!(
                     "Safety block: writing content to custom protected directory '{}' is blocked.",
                     custom_path
@@ -768,10 +754,7 @@ pub fn validate_command_safety_with_workdir(
 /// # Arguments
 /// * `file_path` - 要写入的目标文件路径
 /// * `app_data_dir` - 应用数据目录（用于加载 protected_paths.json）
-pub fn validate_path_write_safety(
-    file_path: &Path,
-    app_data_dir: &Path,
-) -> Result<(), AppError> {
+pub fn validate_path_write_safety(file_path: &Path, app_data_dir: &Path) -> Result<(), AppError> {
     let custom_paths = load_custom_protected_paths(app_data_dir);
     if custom_paths.is_empty() {
         return Ok(());
@@ -784,9 +767,7 @@ pub fn validate_path_write_safety(
         .replace('/', "\\");
 
     for protected in &custom_paths {
-        let protected_normalized = protected
-            .to_lowercase()
-            .replace('/', "\\");
+        let protected_normalized = protected.to_lowercase().replace('/', "\\");
 
         // 路径前缀匹配：文件路径必须以保护目录开头
         // 额外检查分隔符边界，避免 "D:\\important" 误匹配 "D:\\important_other"
@@ -810,9 +791,7 @@ pub fn validate_path_write_safety(
 // ==================== 脚本内容扫描 ====================
 
 /// 可扫描的脚本文件扩展名
-const SCANNABLE_EXTENSIONS: &[&str] = &[
-    ".ps1", ".bat", ".cmd", ".py", ".cs", ".vbs",
-];
+const SCANNABLE_EXTENSIONS: &[&str] = &[".ps1", ".bat", ".cmd", ".py", ".cs", ".vbs"];
 
 /// 脚本内容专用黑名单关键字
 ///
@@ -897,9 +876,7 @@ fn extract_script_path(command: &str) -> Option<String> {
     }
 
     // 模式4: 直接执行脚本文件
-    let first = tokens[0]
-        .trim_start_matches("./")
-        .trim_start_matches(".\\");
+    let first = tokens[0].trim_start_matches("./").trim_start_matches(".\\");
     if is_script_extension(first, SCANNABLE_EXTENSIONS) {
         return Some(first.to_string());
     }
@@ -917,10 +894,7 @@ fn extract_script_path(command: &str) -> Option<String> {
 ///   避免 `-enc`、`setx /m` 等命令行专用关键字在脚本源码中误报
 /// - 文件读取失败时静默放行（文件可能尚未创建或路径无效）
 /// - 仅扫描文本格式的脚本文件，二进制文件无法扫描
-pub fn validate_script_content(
-    command: &str,
-    workdir: Option<&str>,
-) -> Result<(), AppError> {
+pub fn validate_script_content(command: &str, workdir: Option<&str>) -> Result<(), AppError> {
     // 从命令中提取脚本路径
     let script_path = match extract_script_path(command) {
         Some(p) => p,
@@ -993,10 +967,7 @@ pub fn validate_script_content(
         }
     }
 
-    log::debug!(
-        "[CommandValidator] 脚本内容扫描通过: {}",
-        script_path
-    );
+    log::debug!("[CommandValidator] 脚本内容扫描通过: {}", script_path);
     Ok(())
 }
 
@@ -1020,7 +991,9 @@ mod tests {
     }
 
     fn reset_custom_protected_paths() {
-        let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = CUSTOM_PROTECTED_PATHS
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
 
@@ -1053,19 +1026,13 @@ mod tests {
     #[test]
     fn test_forbidden_encoded_command() {
         let dir = test_app_dir();
-        assert!(validate_command_safety(
-            "powershell -EncodedCommand dABlAHMAdA==",
-            &dir
-        ).is_err());
+        assert!(validate_command_safety("powershell -EncodedCommand dABlAHMAdA==", &dir).is_err());
     }
 
     #[test]
     fn test_forbidden_enc_short_form() {
         let dir = test_app_dir();
-        assert!(validate_command_safety(
-            "powershell -enc dABlAHMAdA==",
-            &dir
-        ).is_err());
+        assert!(validate_command_safety("powershell -enc dABlAHMAdA==", &dir).is_err());
     }
 
     #[test]
@@ -1080,7 +1047,8 @@ mod tests {
         assert!(validate_command_safety(
             "reg add HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
             &dir
-        ).is_err());
+        )
+        .is_err());
     }
 
     #[test]
@@ -1117,15 +1085,15 @@ mod tests {
     fn test_env_read_operations_pass() {
         let dir = test_app_dir();
         // 只读环境变量查询应放行
-        assert!(validate_command_safety(
-            r#"powershell -Command "$env:PATH -split ';'""#,
-            &dir
-        ).is_ok());
+        assert!(
+            validate_command_safety(r#"powershell -Command "$env:PATH -split ';'""#, &dir).is_ok()
+        );
         // GetEnvironmentVariable 只读查询应放行
         assert!(validate_command_safety(
             r#"powershell -Command "[Environment]::GetEnvironmentVariable('PATH','Machine')""#,
             &dir
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     #[test]
@@ -1197,7 +1165,8 @@ mod tests {
         assert!(validate_command_safety(
             "powershell -Command \"Remove-Item C:\\Windows\\System32\\file.dll\"",
             &dir
-        ).is_err());
+        )
+        .is_err());
     }
 
     #[test]
@@ -1267,10 +1236,10 @@ mod tests {
     #[test]
     fn test_icacls_modify_system_dir_blocked() {
         let dir = test_app_dir();
-        assert!(validate_command_safety(
-            "icacls C:\\Windows\\System32 /grant Everyone:F",
-            &dir
-        ).is_err());
+        assert!(
+            validate_command_safety("icacls C:\\Windows\\System32 /grant Everyone:F", &dir)
+                .is_err()
+        );
     }
 
     #[test]
@@ -1284,30 +1253,25 @@ mod tests {
     fn test_icacls_modify_user_dir_pass() {
         // icacls 修改非核心目录应放行
         let dir = test_app_dir();
-        assert!(validate_command_safety(
-            "icacls F:\\project\\output /grant User:F",
-            &dir
-        ).is_ok());
+        assert!(validate_command_safety("icacls F:\\project\\output /grant User:F", &dir).is_ok());
     }
 
     #[test]
     fn test_cacls_modify_system_dir_blocked() {
         // cacls（icacls 前身）+ 系统目录应被阻断
         let dir = test_app_dir();
-        assert!(validate_command_safety(
-            "cacls C:\\Windows\\System32 /G Everyone:F",
-            &dir
-        ).is_err());
+        assert!(
+            validate_command_safety("cacls C:\\Windows\\System32 /G Everyone:F", &dir).is_err()
+        );
     }
 
     #[test]
     fn test_icacls_inheritance_remove_blocked() {
         // 移除系统目录权限继承应被阻断
         let dir = test_app_dir();
-        assert!(validate_command_safety(
-            "icacls C:\\Windows\\System32 /inheritance:r",
-            &dir
-        ).is_err());
+        assert!(
+            validate_command_safety("icacls C:\\Windows\\System32 /inheritance:r", &dir).is_err()
+        );
     }
 
     #[test]
@@ -1327,7 +1291,8 @@ mod tests {
         assert!(validate_command_safety(
             r#"powershell -Command "Set-Acl -Path 'F:\project\output' -AclObject $acl""#,
             &dir
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     #[test]
@@ -1337,7 +1302,8 @@ mod tests {
         assert!(validate_command_safety(
             r#"powershell -Command "Get-Acl 'C:\Windows\System32'""#,
             &dir
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     // ── 自定义保护目录 ──
@@ -1349,8 +1315,11 @@ mod tests {
         let dir = std::env::temp_dir().join("agentvis_custom_path_test");
         let _ = std::fs::create_dir_all(&dir);
         let config = dir.join("protected_paths.json");
-        std::fs::write(&config, r#"["D:\\important_backup", "E:\\project_archive"]"#)
-            .unwrap();
+        std::fs::write(
+            &config,
+            r#"["D:\\important_backup", "E:\\project_archive"]"#,
+        )
+        .unwrap();
 
         // 刷新 RwLock 缓存，使测试数据生效
         reload_custom_protected_paths(&dir);
@@ -1365,7 +1334,9 @@ mod tests {
         // 清理文件系统 + 重置缓存（避免影响其他测试）
         let _ = std::fs::remove_dir_all(&dir);
         {
-            let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+            let mut guard = CUSTOM_PROTECTED_PATHS
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
             *guard = None;
         }
     }
@@ -1393,12 +1364,10 @@ mod tests {
             Some(&protected_dir),
         )
         .is_err());
-        assert!(validate_command_safety_with_workdir(
-            "rmdir old",
-            &app_dir,
-            Some(&protected_dir),
-        )
-        .is_err());
+        assert!(
+            validate_command_safety_with_workdir("rmdir old", &app_dir, Some(&protected_dir),)
+                .is_err()
+        );
         assert!(validate_command_safety_with_workdir(
             r#"powershell -Command "Remove-Item secrets.txt -Force""#,
             &app_dir,
@@ -1505,11 +1474,15 @@ mod tests {
     #[test]
     fn test_extract_csc_source() {
         assert_eq!(
-            extract_script_path(r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe TestEnvVar.cs"),
+            extract_script_path(
+                r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe TestEnvVar.cs"
+            ),
             Some("TestEnvVar.cs".to_string())
         );
         assert_eq!(
-            extract_script_path(r#"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe "C:\src with spaces\TestEnvVar.cs""#),
+            extract_script_path(
+                r#"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe "C:\src with spaces\TestEnvVar.cs""#
+            ),
             Some("C:\\src with spaces\\TestEnvVar.cs".to_string())
         );
     }
@@ -1545,15 +1518,17 @@ mod tests {
         let dir = std::env::temp_dir().join("agentvis_script_scan_test");
         let _ = std::fs::create_dir_all(&dir);
         let script = dir.join("evil.ps1");
-        std::fs::write(&script, r#"
+        std::fs::write(
+            &script,
+            r#"
             $path = [Environment]::GetEnvironmentVariable('PATH', 'Machine')
             [Environment]::SetEnvironmentVariable('PATH', $path + ';D:\ollama', 'Machine')
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
-        let result = validate_script_content(
-            &format!("powershell -File {}", script.display()),
-            None,
-        );
+        let result =
+            validate_script_content(&format!("powershell -File {}", script.display()), None);
         assert!(result.is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1592,7 +1567,10 @@ mod tests {
         "#).unwrap();
 
         let result = validate_script_content(
-            &format!(r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe {}", script.display()),
+            &format!(
+                r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe {}",
+                script.display()
+            ),
             None,
         );
         assert!(result.is_err());
@@ -1606,15 +1584,17 @@ mod tests {
         let dir = std::env::temp_dir().join("agentvis_script_scan_safe_test");
         let _ = std::fs::create_dir_all(&dir);
         let script = dir.join("safe.ps1");
-        std::fs::write(&script, r#"
+        std::fs::write(
+            &script,
+            r#"
             Write-Host "Hello World"
             Get-Process | Select-Object Name, CPU
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
-        let result = validate_script_content(
-            &format!("powershell -File {}", script.display()),
-            None,
-        );
+        let result =
+            validate_script_content(&format!("powershell -File {}", script.display()), None);
         assert!(result.is_ok());
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1628,10 +1608,7 @@ mod tests {
         let script = dir.join("danger.bat");
         std::fs::write(&script, "diskpart /s clean_disk.txt\n").unwrap();
 
-        let result = validate_script_content(
-            "danger.bat",
-            Some(dir.to_str().unwrap()),
-        );
+        let result = validate_script_content("danger.bat", Some(dir.to_str().unwrap()));
         assert!(result.is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -1640,10 +1617,7 @@ mod tests {
     #[test]
     fn test_script_content_nonexistent_file_pass() {
         // 脚本文件不存在时应静默放行
-        let result = validate_script_content(
-            "powershell -File nonexistent_script.ps1",
-            None,
-        );
+        let result = validate_script_content("powershell -File nonexistent_script.ps1", None);
         assert!(result.is_ok());
     }
 
@@ -1667,32 +1641,36 @@ mod tests {
         reload_custom_protected_paths(&dir);
 
         // > 重定向
-        assert!(validate_command_safety(
-            r#"echo "hack" > D:\important_data\config.txt"#, &dir
-        ).is_err());
+        assert!(
+            validate_command_safety(r#"echo "hack" > D:\important_data\config.txt"#, &dir).is_err()
+        );
 
         // >> 追加重定向
-        assert!(validate_command_safety(
-            r#"echo "append" >> D:\important_data\log.txt"#, &dir
-        ).is_err());
+        assert!(
+            validate_command_safety(r#"echo "append" >> D:\important_data\log.txt"#, &dir).is_err()
+        );
 
         // PowerShell Out-File
         assert!(validate_command_safety(
-            r#"powershell -Command "Get-Process | Out-File D:\important_data\procs.txt""#, &dir
-        ).is_err());
+            r#"powershell -Command "Get-Process | Out-File D:\important_data\procs.txt""#,
+            &dir
+        )
+        .is_err());
 
         // PowerShell Set-Content
         assert!(validate_command_safety(
-            r#"powershell -Command "Set-Content -Path D:\important_data\file.txt -Value 'test'""#, &dir
-        ).is_err());
+            r#"powershell -Command "Set-Content -Path D:\important_data\file.txt -Value 'test'""#,
+            &dir
+        )
+        .is_err());
 
         // 非保护目录应放行
-        assert!(validate_command_safety(
-            r#"echo "ok" > F:\temp\output.txt"#, &dir
-        ).is_ok());
+        assert!(validate_command_safety(r#"echo "ok" > F:\temp\output.txt"#, &dir).is_ok());
 
         let _ = std::fs::remove_dir_all(&dir);
-        let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = CUSTOM_PROTECTED_PATHS
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
 
@@ -1757,7 +1735,9 @@ mod tests {
         assert!(validate_path_write_safety(path, &dir).is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
-        let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = CUSTOM_PROTECTED_PATHS
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
 
@@ -1780,7 +1760,9 @@ mod tests {
         assert!(validate_path_write_safety(path, &dir).is_ok());
 
         let _ = std::fs::remove_dir_all(&dir);
-        let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = CUSTOM_PROTECTED_PATHS
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
         *guard = None;
     }
 
@@ -1792,7 +1774,9 @@ mod tests {
         let _ = std::fs::create_dir_all(&dir);
         // 不创建 protected_paths.json，缓存也清空
         {
-            let mut guard = CUSTOM_PROTECTED_PATHS.write().unwrap_or_else(|e| e.into_inner());
+            let mut guard = CUSTOM_PROTECTED_PATHS
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
             *guard = None;
         }
 

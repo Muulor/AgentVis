@@ -33,7 +33,8 @@ pub fn repair_tool_call_json(raw: &str) -> Option<serde_json::Value> {
     let input = if raw.len() > MAX_REPAIR_LENGTH {
         log::warn!(
             "[JsonRepair] ⚠️ JSON 超过最大修复长度 ({} > {}), 截断处理",
-            raw.len(), MAX_REPAIR_LENGTH
+            raw.len(),
+            MAX_REPAIR_LENGTH
         );
         safe_truncate(raw, MAX_REPAIR_LENGTH)
     } else {
@@ -69,7 +70,9 @@ pub fn repair_tool_call_json(raw: &str) -> Option<serde_json::Value> {
     let quote_fixed = fix_nested_quotes(&line_fixed);
     if quote_fixed != line_fixed {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&quote_fixed) {
-            log::trace!("[JsonRepair] 修复成功 (策略: sanitize + fix_escapes + normalize + fix_quotes)");
+            log::trace!(
+                "[JsonRepair] 修复成功 (策略: sanitize + fix_escapes + normalize + fix_quotes)"
+            );
             return Some(v);
         }
     }
@@ -381,8 +384,14 @@ fn fix_nested_quotes(json: &str) -> String {
                             let after_colon = find_next_non_space_char(&chars, ci + 1);
                             let is_json_value_start = matches!(
                                 after_colon,
-                                Some('"') | Some('{') | Some('[') | Some('t') | Some('f') | Some('n')
-                            ) || after_colon.map_or(false, |c| c.is_ascii_digit() || c == '-');
+                                Some('"')
+                                    | Some('{')
+                                    | Some('[')
+                                    | Some('t')
+                                    | Some('f')
+                                    | Some('n')
+                            ) || after_colon
+                                .map_or(false, |c| c.is_ascii_digit() || c == '-');
 
                             if is_json_value_start {
                                 in_string = false; // 确认是 JSON 键结束
@@ -912,9 +921,20 @@ fn extract_json_value(chars: &[char], start: usize) -> Option<(String, usize)> {
             if chars[i] == '-' {
                 i += 1;
             }
-            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.' || chars[i] == 'e' || chars[i] == 'E' || chars[i] == '+' || chars[i] == '-') {
+            while i < chars.len()
+                && (chars[i].is_ascii_digit()
+                    || chars[i] == '.'
+                    || chars[i] == 'e'
+                    || chars[i] == 'E'
+                    || chars[i] == '+'
+                    || chars[i] == '-')
+            {
                 // 防止连续多个点/e
-                if i > start + 1 && (chars[i] == '-' || chars[i] == '+') && chars[i - 1] != 'e' && chars[i - 1] != 'E' {
+                if i > start + 1
+                    && (chars[i] == '-' || chars[i] == '+')
+                    && chars[i - 1] != 'e'
+                    && chars[i - 1] != 'E'
+                {
                     break;
                 }
                 i += 1;
@@ -1152,7 +1172,8 @@ mod tests {
     #[test]
     fn test_partial_extraction_truncated_no_closing() {
         // content 被截断，无闭合引号和大括号
-        let raw = r#"{"path": "app.py", "mode": "overwrite", "content": "def main():\n    print("hello"#;
+        let raw =
+            r#"{"path": "app.py", "mode": "overwrite", "content": "def main():\n    print("hello"#;
         let result = extract_partial_fields(raw);
         assert!(result.is_some());
         let val = result.unwrap();
@@ -1272,11 +1293,13 @@ pub fn sanitize_sse_data(data: &str) -> std::borrow::Cow<'_, str> {
                     let hex_start = i + 2;
                     let hex_end = hex_start + 4;
                     let has_valid_hex = hex_end <= chars.len()
-                        && chars[hex_start..hex_end].iter().all(|c| c.is_ascii_hexdigit());
+                        && chars[hex_start..hex_end]
+                            .iter()
+                            .all(|c| c.is_ascii_hexdigit());
 
                     if has_valid_hex {
                         // 合法 \uXXXX：原样保留含后4位，跳过6个字符
-                        result.push(ch);   // \
+                        result.push(ch); // \
                         result.push(next); // u
                         for k in hex_start..hex_end {
                             result.push(chars[k]);

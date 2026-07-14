@@ -3,9 +3,9 @@
 //! 提供 Trash Bin 路径查询和用户自定义保护路径管理命令。
 //! 保护路径用于 `command_validator` 中的破坏性命令组合阻断。
 
-use tauri::Manager;
-use crate::error::CommandResult;
 use crate::commands::command_validator;
+use crate::error::CommandResult;
+use tauri::Manager;
 
 /// Trash Bin 目录名（与 trash_bin.rs 保持一致）
 const TRASH_BIN_DIR: &str = "Agent_Trash_Bin";
@@ -63,23 +63,18 @@ pub async fn set_protected_paths(
     let config_path = app_data_dir.join("protected_paths.json");
 
     // 序列化并写入文件
-    let content = serde_json::to_string_pretty(&paths)
-        .map_err(|e| crate::error::AppError::Generic(
-            format!("Failed to serialize protected paths: {}", e)
-        ))?;
+    let content = serde_json::to_string_pretty(&paths).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to serialize protected paths: {}", e))
+    })?;
 
-    std::fs::write(&config_path, content)
-        .map_err(|e| crate::error::AppError::FileSystem(
-            format!("Failed to write protected paths: {}", e)
-        ))?;
+    std::fs::write(&config_path, content).map_err(|e| {
+        crate::error::AppError::FileSystem(format!("Failed to write protected paths: {}", e))
+    })?;
 
     // 刷新内存缓存，使 validate_command_safety 即时生效
     command_validator::reload_custom_protected_paths(&app_data_dir);
 
-    log::info!(
-        "[SecuritySettings] 保护路径已更新: {} 条",
-        paths.len()
-    );
+    log::info!("[SecuritySettings] 保护路径已更新: {} 条", paths.len());
 
     Ok(())
 }

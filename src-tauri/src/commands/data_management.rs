@@ -118,7 +118,15 @@ enum AgentBackupRow {
 }
 
 /// Message 元组类型
-type MessageTuple = (String, String, String, String, Option<String>, i64, Option<i64>);
+type MessageTuple = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    i64,
+    Option<i64>,
+);
 
 /// Memory 元组类型
 type MemoryTuple = (
@@ -138,7 +146,16 @@ type MemoryTuple = (
 type CandidateTuple = (String, String, String, String, i64, i64, i64, i64, i64);
 
 /// File 元组类型
-type FileTuple = (String, String, String, String, String, Option<i64>, i64, i64);
+type FileTuple = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<i64>,
+    i64,
+    i64,
+);
 
 /// Chunk Embedding 元组类型 (embedding 作为 Base64 字符串存储)
 type ChunkEmbeddingTuple = (
@@ -291,7 +308,10 @@ pub async fn data_reset_all(
     confirm_phrase: String,
 ) -> Result<(), String> {
     // 验证确认短语
-    const EXPECTED_PHRASES: [&str; 2] = ["DELETE ALL DATA", "\u{5220}\u{9664}\u{6240}\u{6709}\u{6570}\u{636e}"];
+    const EXPECTED_PHRASES: [&str; 2] = [
+        "DELETE ALL DATA",
+        "\u{5220}\u{9664}\u{6240}\u{6709}\u{6570}\u{636e}",
+    ];
     if !EXPECTED_PHRASES.contains(&confirm_phrase.as_str()) {
         return Err(format!(
             "Confirmation phrase is incorrect. Enter \"{}\" to confirm this operation.",
@@ -381,8 +401,7 @@ pub async fn data_export(
     .fetch_all(db.pool())
     .await
     .map_err(|e| format!("Failed to query Agents: {}", e))?;
-    let agents: Vec<AgentBackupRow> =
-        agent_rows.into_iter().map(AgentBackupRow::V2).collect();
+    let agents: Vec<AgentBackupRow> = agent_rows.into_iter().map(AgentBackupRow::V2).collect();
 
     let messages: Vec<MessageTuple> = sqlx::query_as(
         "SELECT id, agent_id, role, content, metadata, created_at, deleted_at FROM messages",
@@ -436,11 +455,19 @@ pub async fn data_export(
     let chunk_embeddings: Vec<ChunkEmbeddingTuple> = chunk_embeddings_raw
         .into_iter()
         .map(|row| {
-            let embedding_base64 = row.5.map(|bytes| {
-                base64::engine::general_purpose::STANDARD.encode(&bytes)
-            });
+            let embedding_base64 = row
+                .5
+                .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes));
             (
-                row.0, row.1, row.2, row.3, row.4, embedding_base64, row.6, row.7, row.8,
+                row.0,
+                row.1,
+                row.2,
+                row.3,
+                row.4,
+                embedding_base64,
+                row.6,
+                row.7,
+                row.8,
             )
         })
         .collect();
@@ -488,7 +515,12 @@ pub async fn data_export(
     write_json_to_zip(&mut zip, "memories.json", &memories, options)?;
     write_json_to_zip(&mut zip, "memory_candidates.json", &candidates, options)?;
     write_json_to_zip(&mut zip, "files.json", &files, options)?;
-    write_json_to_zip(&mut zip, "chunk_embeddings.json", &chunk_embeddings, options)?;
+    write_json_to_zip(
+        &mut zip,
+        "chunk_embeddings.json",
+        &chunk_embeddings,
+        options,
+    )?;
     write_json_to_zip(&mut zip, "vector_metadata.json", &vector_metadata, options)?;
     write_json_to_zip(&mut zip, "snapshots.json", &snapshots, options)?;
     write_json_to_zip(&mut zip, "diff_records.json", &diff_records, options)?;
@@ -550,7 +582,8 @@ fn read_import_data(import_path: &str) -> Result<ImportData, String> {
         manifest_file
             .read_to_string(&mut content)
             .map_err(|e| format!("Failed to read manifest.json: {}", e))?;
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse manifest.json: {}", e))?
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse manifest.json: {}", e))?
     };
 
     // 验证版本兼容性（支持 1.0、1.1 和 1.2）
@@ -707,22 +740,8 @@ pub async fn data_import(
                 deleted_at,
             ) = match agent {
                 AgentBackupRow::V2(row) => (
-                    &row.0,
-                    &row.1,
-                    &row.2,
-                    &row.3,
-                    &row.4,
-                    &row.5,
-                    &row.6,
-                    &row.7,
-                    &row.8,
-                    &row.9,
-                    &row.10,
-                    &row.11,
-                    &row.12,
-                    row.13,
-                    row.14,
-                    row.15,
+                    &row.0, &row.1, &row.2, &row.3, &row.4, &row.5, &row.6, &row.7, &row.8, &row.9,
+                    &row.10, &row.11, &row.12, row.13, row.14, row.15,
                 ),
                 AgentBackupRow::V1(row) => (
                     &row.0,
@@ -878,9 +897,10 @@ pub async fn data_import(
     if let Some(embeddings) = import_data.chunk_embeddings {
         for (idx, emb) in embeddings.iter().enumerate() {
             // 将 Base64 字符串转换回 BLOB
-            let embedding_blob: Option<Vec<u8>> = emb.5.as_ref().and_then(|b64| {
-                base64::engine::general_purpose::STANDARD.decode(b64).ok()
-            });
+            let embedding_blob: Option<Vec<u8>> = emb
+                .5
+                .as_ref()
+                .and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok());
 
             let result = sqlx::query(
                 "INSERT OR IGNORE INTO chunk_embeddings (id, agent_id, document_id, chunk_index, content, embedding, metadata_json, source_file_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",

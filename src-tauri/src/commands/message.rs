@@ -17,7 +17,7 @@ pub struct MessageItem {
     pub agent_id: String,
     pub role: String,
     pub content: String,
-    pub metadata: Option<String>,  // JSON 字符串存储元数据
+    pub metadata: Option<String>, // JSON 字符串存储元数据
     pub created_at: i64,
 }
 
@@ -64,7 +64,7 @@ pub struct CreateMessageRequest {
     pub agent_id: String,
     pub role: String,
     pub content: String,
-    pub metadata: Option<String>,  // JSON 字符串
+    pub metadata: Option<String>, // JSON 字符串
 }
 
 /// 更新消息请求
@@ -73,7 +73,7 @@ pub struct CreateMessageRequest {
 pub struct UpdateMessageRequest {
     pub id: String,
     pub content: String,
-    pub metadata: Option<String>,  // JSON 字符串
+    pub metadata: Option<String>, // JSON 字符串
     pub created_at: Option<i64>,
 }
 
@@ -148,14 +148,17 @@ fn messages_page_response(
         messages.truncate(limit as usize);
     }
 
-    let messages = messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect();
+    let messages = messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect();
 
     MessageSearchResponse {
         messages,
@@ -171,13 +174,11 @@ pub async fn message_create(
 ) -> CommandResult<MessageItem> {
     let db = state.db.lock().await;
     let role = parse_role(&request.role);
-    let message = db.message_repo().create(
-        &request.agent_id, 
-        role, 
-        &request.content,
-        request.metadata,
-    ).await?;
-    
+    let message = db
+        .message_repo()
+        .create(&request.agent_id, role, &request.content, request.metadata)
+        .await?;
+
     Ok(MessageItem {
         id: message.id,
         agent_id: message.agent_id,
@@ -226,16 +227,22 @@ pub async fn message_list_by_agent(
     let db = state.db.lock().await;
     let limit = limit.unwrap_or(100);
     let offset = offset.unwrap_or(0);
-    let messages = db.message_repo().list_by_agent(&agent_id, limit, offset).await?;
-    
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    let messages = db
+        .message_repo()
+        .list_by_agent(&agent_id, limit, offset)
+        .await?;
+
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// Search one Agent's persisted conversation history.
@@ -331,14 +338,17 @@ pub async fn message_get_agent_history_messages(
         .get_by_ids_for_agent(&agent_id, &ids)
         .await?;
 
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -349,15 +359,18 @@ pub async fn message_get_recent(
 ) -> CommandResult<Vec<MessageItem>> {
     let db = state.db.lock().await;
     let messages = db.message_repo().get_recent(&agent_id, count).await?;
-    
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 根据 ID 列表批量获取消息（用于摘要展开原文功能）
@@ -368,15 +381,18 @@ pub async fn message_get_batch(
 ) -> CommandResult<Vec<MessageItem>> {
     let db = state.db.lock().await;
     let messages = db.message_repo().get_by_ids(&ids).await?;
-    
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 获取指定消息 ID 之后的消息（增量加载，用于事实提取优化）
@@ -388,17 +404,23 @@ pub async fn message_get_after(
     limit: Option<i64>,
 ) -> CommandResult<Vec<MessageItem>> {
     let db = state.db.lock().await;
-    let limit = limit.unwrap_or(20);  // 默认最多 20 条
-    let messages = db.message_repo().get_after(&agent_id, &after_message_id, limit).await?;
-    
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    let limit = limit.unwrap_or(20); // 默认最多 20 条
+    let messages = db
+        .message_repo()
+        .get_after(&agent_id, &after_message_id, limit)
+        .await?;
+
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 获取指定消息 ID 之前的消息（向前分页，用于"加载更多"）
@@ -411,16 +433,22 @@ pub async fn message_get_before(
 ) -> CommandResult<Vec<MessageItem>> {
     let db = state.db.lock().await;
     let count = count.unwrap_or(100);
-    let messages = db.message_repo().get_before(&agent_id, &before_message_id, count).await?;
+    let messages = db
+        .message_repo()
+        .get_before(&agent_id, &before_message_id, count)
+        .await?;
 
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 获取指定 Agent 的消息总数（用于判断是否有更多历史可加载）
@@ -505,14 +533,17 @@ pub async fn message_list_by_hub(
     let limit = limit.unwrap_or(200);
     let messages = db.message_repo().list_by_hub_id(&hub_id, limit).await?;
 
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 获取指定 Hub 最近 N 条消息（初始加载用）
@@ -523,16 +554,22 @@ pub async fn message_get_recent_hub(
     count: i64,
 ) -> CommandResult<Vec<MessageItem>> {
     let db = state.db.lock().await;
-    let messages = db.message_repo().get_recent_by_hub_id(&hub_id, count).await?;
+    let messages = db
+        .message_repo()
+        .get_recent_by_hub_id(&hub_id, count)
+        .await?;
 
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 获取指定 Hub 中某消息之前的消息（向前分页，"加载更多"用）
@@ -545,16 +582,22 @@ pub async fn message_get_before_hub(
 ) -> CommandResult<Vec<MessageItem>> {
     let db = state.db.lock().await;
     let count = count.unwrap_or(100);
-    let messages = db.message_repo().get_before_by_hub_id(&hub_id, &before_message_id, count).await?;
+    let messages = db
+        .message_repo()
+        .get_before_by_hub_id(&hub_id, &before_message_id, count)
+        .await?;
 
-    Ok(messages.into_iter().map(|m| MessageItem {
-        id: m.id,
-        agent_id: m.agent_id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-        created_at: m.created_at,
-    }).collect())
+    Ok(messages
+        .into_iter()
+        .map(|m| MessageItem {
+            id: m.id,
+            agent_id: m.agent_id,
+            role: m.role,
+            content: m.content,
+            metadata: m.metadata,
+            created_at: m.created_at,
+        })
+        .collect())
 }
 
 /// 获取指定 Hub 的消息总数

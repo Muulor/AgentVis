@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 
 use crate::error::AppError;
 
@@ -2001,9 +2001,7 @@ fn is_agent_browser_script_boundary(ch: Option<char>) -> bool {
 }
 
 fn next_shell_arg_after_script(tail: &str) -> Option<String> {
-    let trimmed = tail.trim_start_matches(|ch: char| {
-        ch.is_whitespace() || ch == '"' || ch == '\''
-    });
+    let trimmed = tail.trim_start_matches(|ch: char| ch.is_whitespace() || ch == '"' || ch == '\'');
     if trimmed.is_empty() {
         return None;
     }
@@ -2280,7 +2278,10 @@ mod tests {
                 let signal = upload.unwrap_or_else(|| {
                     panic!("expected upload checkpoint for {label}: {}", case.command)
                 });
-                assert_eq!(signal.kind, expected_kind, "unexpected upload kind for {label}");
+                assert_eq!(
+                    signal.kind, expected_kind,
+                    "unexpected upload kind for {label}"
+                );
                 assert!(
                     sensitive.is_none(),
                     "upload case should not also trigger sensitive egress for {label}"
@@ -2934,11 +2935,8 @@ mod tests {
             Some("remote_destructive")
         );
         assert_eq!(
-            detect_network_intent(
-                r#"psql -h db.example.com -c "DROP DATABASE prod""#,
-                None
-            )
-            .as_deref(),
+            detect_network_intent(r#"psql -h db.example.com -c "DROP DATABASE prod""#, None)
+                .as_deref(),
             Some("remote_destructive")
         );
         assert!(detect_network_remote_destructive_signal("kubectl get pods", None).is_none());
@@ -2947,9 +2945,7 @@ mod tests {
 
     #[test]
     fn network_risk_checkpoint_matrix_covers_daily_and_high_risk_cases() {
-        use NetworkRiskCheckpointExpectation::{
-            None, RemoteDestructive, SensitiveEgress, Upload,
-        };
+        use NetworkRiskCheckpointExpectation::{None, RemoteDestructive, SensitiveEgress, Upload};
 
         let cases = [
             NetworkRiskCheckpointCase {

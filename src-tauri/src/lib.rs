@@ -555,26 +555,26 @@ pub fn run() {
             // 获取应用数据目录
             let app_data_dir = app.path().app_data_dir()
                 .expect("Failed to resolve application data directory");
-            
+
             // 确保目录存在
             std::fs::create_dir_all(&app_data_dir).ok();
-            
+
             let db_path = app_data_dir.join("agentvis.db");
             let db_path_str = db_path.to_string_lossy().to_string();
-            
+
             // 初始化应用状态
             let runtime = tokio::runtime::Runtime::new()
                 .expect("Failed to create Tokio runtime");
-            
+
             let state = runtime.block_on(async {
                 AppState::new(&db_path).await
                     .expect("Failed to initialize database")
             });
-            
+
             app.manage(state);
             app.manage(BackgroundProcessRegistry::new());
             commands::renderer_health::start_renderer_health_watchdog();
-            
+
             log::info!("AgentVis 应用已初始化");
             log::trace!("数据库路径: {}", db_path_str);
 
@@ -654,7 +654,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async {
                 llm::http_client::warmup_connections().await;
             });
-            
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

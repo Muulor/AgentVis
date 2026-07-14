@@ -1,4 +1,4 @@
-﻿//! CronJob 数据访问层
+//! CronJob 数据访问层
 //!
 //! 提供定时任务实体的 CRUD 操作
 
@@ -51,20 +51,18 @@ impl CronJobRepository {
         .await
         .map_err(|e| AppError::Database(format!("Failed to create cron job: {}", e)))?;
 
-        self.get(&id).await?.ok_or_else(|| {
-            AppError::Database("Unable to read cron job after creation".to_string())
-        })
+        self.get(&id)
+            .await?
+            .ok_or_else(|| AppError::Database("Unable to read cron job after creation".to_string()))
     }
 
     /// 根据 ID 获取定时任务
     pub async fn get(&self, id: &str) -> AppResult<Option<CronJob>> {
-        let job = sqlx::query_as::<_, CronJob>(
-            "SELECT * FROM cron_jobs WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| AppError::Database(format!("Failed to query cron job: {}", e)))?;
+        let job = sqlx::query_as::<_, CronJob>("SELECT * FROM cron_jobs WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(format!("Failed to query cron job: {}", e)))?;
 
         Ok(job)
     }
@@ -109,9 +107,10 @@ impl CronJobRepository {
         let now = Utc::now().timestamp_millis();
 
         // 先获取当前任务，确认存在
-        let existing = self.get(id).await?.ok_or_else(|| {
-            AppError::NotFound(format!("Cron job does not exist: {}", id))
-        })?;
+        let existing = self
+            .get(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Cron job does not exist: {}", id)))?;
 
         // 合并更新字段
         let name = update.name.unwrap_or(existing.name);
@@ -158,9 +157,9 @@ impl CronJobRepository {
         .await
         .map_err(|e| AppError::Database(format!("Failed to update cron job: {}", e)))?;
 
-        self.get(id).await?.ok_or_else(|| {
-            AppError::Database("Unable to read cron job after update".to_string())
-        })
+        self.get(id)
+            .await?
+            .ok_or_else(|| AppError::Database("Unable to read cron job after update".to_string()))
     }
 
     /// 删除定时任务
@@ -172,7 +171,10 @@ impl CronJobRepository {
             .map_err(|e| AppError::Database(format!("Failed to delete cron job: {}", e)))?;
 
         if result.rows_affected() == 0 {
-            return Err(AppError::NotFound(format!("Cron job does not exist: {}", id)));
+            return Err(AppError::NotFound(format!(
+                "Cron job does not exist: {}",
+                id
+            )));
         }
 
         Ok(())
@@ -193,8 +195,8 @@ impl CronJobRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::hub_repo::HubRepository;
     use crate::db::agent_repo::AgentRepository;
+    use crate::db::hub_repo::HubRepository;
     use crate::db::schema::{create_pool, initialize_schema};
 
     async fn setup_test_db() -> (HubRepository, AgentRepository, CronJobRepository) {
@@ -213,15 +215,18 @@ mod tests {
         let hub = hub_repo.create("测试Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试Agent").await.unwrap();
 
-        let job = cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "每日新闻".to_string(),
-            cron_expression: "0 9 * * *".to_string(),
-            prompt: "帮我搜集AI新闻".to_string(),
-            mode: "planning".to_string(),
-            enabled: Some(true),
-            next_run_at: None,
-        }).await.unwrap();
+        let job = cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "每日新闻".to_string(),
+                cron_expression: "0 9 * * *".to_string(),
+                prompt: "帮我搜集AI新闻".to_string(),
+                mode: "planning".to_string(),
+                enabled: Some(true),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
         assert_eq!(job.name, "每日新闻");
         assert_eq!(job.agent_id, agent.id);
@@ -234,25 +239,31 @@ mod tests {
         let hub = hub_repo.create("测试Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试Agent").await.unwrap();
 
-        cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "任务1".to_string(),
-            cron_expression: "0 9 * * *".to_string(),
-            prompt: "提示词1".to_string(),
-            mode: "planning".to_string(),
-            enabled: Some(true),
-            next_run_at: None,
-        }).await.unwrap();
+        cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "任务1".to_string(),
+                cron_expression: "0 9 * * *".to_string(),
+                prompt: "提示词1".to_string(),
+                mode: "planning".to_string(),
+                enabled: Some(true),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
-        cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "任务2".to_string(),
-            cron_expression: "0 18 * * *".to_string(),
-            prompt: "提示词2".to_string(),
-            mode: "chat".to_string(),
-            enabled: Some(false),
-            next_run_at: None,
-        }).await.unwrap();
+        cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "任务2".to_string(),
+                cron_expression: "0 18 * * *".to_string(),
+                prompt: "提示词2".to_string(),
+                mode: "chat".to_string(),
+                enabled: Some(false),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
         let jobs = cron_repo.list_by_agent(&agent.id).await.unwrap();
         assert_eq!(jobs.len(), 2);
@@ -264,21 +275,30 @@ mod tests {
         let hub = hub_repo.create("测试Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试Agent").await.unwrap();
 
-        let job = cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "原始名称".to_string(),
-            cron_expression: "0 9 * * *".to_string(),
-            prompt: "原始提示词".to_string(),
-            mode: "planning".to_string(),
-            enabled: Some(true),
-            next_run_at: None,
-        }).await.unwrap();
+        let job = cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "原始名称".to_string(),
+                cron_expression: "0 9 * * *".to_string(),
+                prompt: "原始提示词".to_string(),
+                mode: "planning".to_string(),
+                enabled: Some(true),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
-        let updated = cron_repo.update(&job.id, CronJobUpdate {
-            name: Some("新名称".to_string()),
-            enabled: Some(false),
-            ..Default::default()
-        }).await.unwrap();
+        let updated = cron_repo
+            .update(
+                &job.id,
+                CronJobUpdate {
+                    name: Some("新名称".to_string()),
+                    enabled: Some(false),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
 
         assert_eq!(updated.name, "新名称");
         assert!(!updated.enabled);
@@ -292,15 +312,18 @@ mod tests {
         let hub = hub_repo.create("测试Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试Agent").await.unwrap();
 
-        let job = cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "待删除".to_string(),
-            cron_expression: "0 9 * * *".to_string(),
-            prompt: "提示词".to_string(),
-            mode: "planning".to_string(),
-            enabled: Some(true),
-            next_run_at: None,
-        }).await.unwrap();
+        let job = cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "待删除".to_string(),
+                cron_expression: "0 9 * * *".to_string(),
+                prompt: "提示词".to_string(),
+                mode: "planning".to_string(),
+                enabled: Some(true),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
         cron_repo.delete(&job.id).await.unwrap();
         let result = cron_repo.get(&job.id).await.unwrap();
@@ -314,25 +337,31 @@ mod tests {
         let agent = agent_repo.create(&hub.id, "测试Agent").await.unwrap();
 
         // 创建一个启用的和一个禁用的
-        cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "启用任务".to_string(),
-            cron_expression: "0 9 * * *".to_string(),
-            prompt: "提示词".to_string(),
-            mode: "planning".to_string(),
-            enabled: Some(true),
-            next_run_at: None,
-        }).await.unwrap();
+        cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "启用任务".to_string(),
+                cron_expression: "0 9 * * *".to_string(),
+                prompt: "提示词".to_string(),
+                mode: "planning".to_string(),
+                enabled: Some(true),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
-        cron_repo.create(CronJobCreate {
-            agent_id: agent.id.clone(),
-            name: "禁用任务".to_string(),
-            cron_expression: "0 18 * * *".to_string(),
-            prompt: "提示词".to_string(),
-            mode: "chat".to_string(),
-            enabled: Some(false),
-            next_run_at: None,
-        }).await.unwrap();
+        cron_repo
+            .create(CronJobCreate {
+                agent_id: agent.id.clone(),
+                name: "禁用任务".to_string(),
+                cron_expression: "0 18 * * *".to_string(),
+                prompt: "提示词".to_string(),
+                mode: "chat".to_string(),
+                enabled: Some(false),
+                next_run_at: None,
+            })
+            .await
+            .unwrap();
 
         let enabled = cron_repo.list_all_enabled().await.unwrap();
         assert_eq!(enabled.len(), 1);

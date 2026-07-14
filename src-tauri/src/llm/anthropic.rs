@@ -2,20 +2,20 @@
 //!
 //! 实现 Claude Messages API 的调用
 
-use async_trait::async_trait;
-use futures::stream::Stream;
 use super::http_client::{
     format_stream_idle_timeout, get_client, get_streaming_client, stream_idle_timeout,
     stream_start_timeout, StreamIdleDiagnostics,
 };
 use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
+use async_trait::async_trait;
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
 use super::types::{
-    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
-    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
-    ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES, TOOL_CALL_PROGRESS_STEP_BYTES,
+    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, ReasoningTraceCallback,
+    ReasoningTraceProgress, StreamChunk, ToolCallProgressCallback, ToolCallStreamProgress,
+    TOOL_CALL_PROGRESS_MIN_BYTES, TOOL_CALL_PROGRESS_STEP_BYTES,
 };
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
@@ -100,7 +100,10 @@ mod tests {
         let chunk: AnthropicStreamDelta = serde_json::from_str(data).unwrap();
         let payload = chunk.delta.unwrap();
         assert_eq!(payload.delta_type, "thinking_delta");
-        assert_eq!(payload.thinking.as_deref(), Some("Considering the next step"));
+        assert_eq!(
+            payload.thinking.as_deref(),
+            Some("Considering the next step")
+        );
     }
 
     #[test]
@@ -218,7 +221,7 @@ mod tests {
 }
 
 /// Anthropic 适配器
-/// 
+///
 /// 使用全局共享 HTTP Client，复用连接池
 pub struct AnthropicAdapter {
     config: ProviderConfig,
@@ -410,12 +413,10 @@ impl AnthropicAdapter {
                 ToolChatRole::User => {
                     if let Some(ref images) = msg.images {
                         if !images.is_empty() {
-                            let mut content_parts = vec![
-                                serde_json::json!({
-                                    "type": "text",
-                                    "text": msg.content
-                                })
-                            ];
+                            let mut content_parts = vec![serde_json::json!({
+                                "type": "text",
+                                "text": msg.content
+                            })];
                             for img in images {
                                 content_parts.push(serde_json::json!({
                                     "type": "image",
@@ -426,7 +427,10 @@ impl AnthropicAdapter {
                                     }
                                 }));
                             }
-                            log::trace!("[AnthropicAdapter] 📷 chat_with_tools: 添加 {} 张图片", images.len());
+                            log::trace!(
+                                "[AnthropicAdapter] 📷 chat_with_tools: 添加 {} 张图片",
+                                images.len()
+                            );
                             messages.push(serde_json::json!({
                                 "role": "user",
                                 "content": content_parts
@@ -454,7 +458,9 @@ impl AnthropicAdapter {
                             }));
                         }
                         for tc in tool_calls {
-                            let tool_id = tc.id.clone()
+                            let tool_id = tc
+                                .id
+                                .clone()
                                 .unwrap_or_else(|| format!("toolu_{}", tc.name));
                             content_blocks.push(serde_json::json!({
                                 "type": "tool_use",
@@ -475,7 +481,10 @@ impl AnthropicAdapter {
                     }
                 }
                 ToolChatRole::Tool => {
-                    let tool_use_id = msg.tool_call_id.clone().unwrap_or_else(|| "unknown".to_string());
+                    let tool_use_id = msg
+                        .tool_call_id
+                        .clone()
+                        .unwrap_or_else(|| "unknown".to_string());
                     log::trace!("[AnthropicAdapter] 🔧 Tool msg | id: {} | content_len: {} | images: {:?} | native: {}",
                         tool_use_id, msg.content.len(),
                         msg.images.as_ref().map(|imgs| imgs.len()),
@@ -486,12 +495,10 @@ impl AnthropicAdapter {
 
                     if let Some(images) = image_attachments {
                         if is_native_api {
-                            let mut tool_result_content = vec![
-                                serde_json::json!({
-                                    "type": "text",
-                                    "text": msg.content
-                                })
-                            ];
+                            let mut tool_result_content = vec![serde_json::json!({
+                                "type": "text",
+                                "text": msg.content
+                            })];
                             for img in images {
                                 tool_result_content.push(serde_json::json!({
                                     "type": "image",
@@ -541,7 +548,8 @@ impl AnthropicAdapter {
                     }
 
                     // 合并策略：Anthropic 要求同一 assistant 的所有 tool_result 在同一条 user 消息中
-                    let last_role = messages.last()
+                    let last_role = messages
+                        .last()
                         .and_then(|m| m.get("role"))
                         .and_then(|r| r.as_str())
                         .unwrap_or("none");
@@ -551,11 +559,15 @@ impl AnthropicAdapter {
 
                     if should_merge {
                         if let Some(last_msg) = messages.last_mut() {
-                            if let Some(content_arr) = last_msg.get_mut("content").and_then(|c| c.as_array_mut()) {
+                            if let Some(content_arr) =
+                                last_msg.get_mut("content").and_then(|c| c.as_array_mut())
+                            {
                                 content_arr.extend(new_blocks);
                                 // 重排确保 tool_result 在前，image/text 在后
                                 content_arr.sort_by_key(|block| {
-                                    if block.get("type").and_then(|t| t.as_str()) == Some("tool_result") {
+                                    if block.get("type").and_then(|t| t.as_str())
+                                        == Some("tool_result")
+                                    {
                                         0
                                     } else {
                                         1
@@ -577,14 +589,17 @@ impl AnthropicAdapter {
 
         // 构建工具定义（Anthropic 格式）
         let tools: Option<Vec<serde_json::Value>> = request.tools.as_ref().map(|tool_defs| {
-            tool_defs.iter().map(|t| {
-                let input_schema = build_anthropic_tool_input_schema(&t.name, &t.parameters);
-                serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "input_schema": input_schema
+            tool_defs
+                .iter()
+                .map(|t| {
+                    let input_schema = build_anthropic_tool_input_schema(&t.name, &t.parameters);
+                    serde_json::json!({
+                        "name": t.name,
+                        "description": t.description,
+                        "input_schema": input_schema
+                    })
                 })
-            }).collect()
+                .collect()
         });
 
         // 构建Request body（不含 stream 字段，由调用方设置）
@@ -605,8 +620,9 @@ impl AnthropicAdapter {
         }
         let thinking = self.thinking_config_for_model(&model, max_tokens);
         if let Some(thinking_config) = thinking {
-            body["thinking"] = serde_json::to_value(thinking_config)
-                .unwrap_or_else(|_| serde_json::json!({"type": "adaptive", "display": "summarized"}));
+            body["thinking"] = serde_json::to_value(thinking_config).unwrap_or_else(
+                |_| serde_json::json!({"type": "adaptive", "display": "summarized"}),
+            );
             body["output_config"] = serde_json::json!({"effort": "high"});
         } else if let Some(temp) = request.temperature {
             body["temperature"] = serde_json::json!(temp);
@@ -615,8 +631,12 @@ impl AnthropicAdapter {
         // 诊断日志：记录Request body大小
         let body_str = serde_json::to_string(&body).unwrap_or_default();
         let body_size_kb = body_str.len() / 1024;
-        log::trace!("[AnthropicAdapter] 📊 Request body大小: {} KB ({} bytes), messages: {}",
-            body_size_kb, body_str.len(), messages.len());
+        log::trace!(
+            "[AnthropicAdapter] 📊 Request body大小: {} KB ({} bytes), messages: {}",
+            body_size_kb,
+            body_str.len(),
+            messages.len()
+        );
 
         (body, model, body_size_kb)
     }
@@ -634,8 +654,12 @@ impl AnthropicAdapter {
         let url = format!("{}/messages", self.base_url());
         let (body, model, body_size_kb) = self.build_tool_request_body(&request);
 
-        log::trace!("[AnthropicAdapter] 🔧 chat_with_tools | URL: {} | model: {} | body: {} KB",
-            url, model, body_size_kb);
+        log::trace!(
+            "[AnthropicAdapter] 🔧 chat_with_tools | URL: {} | model: {} | body: {} KB",
+            url,
+            model,
+            body_size_kb
+        );
 
         // 发送非流式请求
         let response = get_client()
@@ -647,9 +671,13 @@ impl AnthropicAdapter {
             .send()
             .await
             .map_err(|e| {
-                let error_type = if e.is_timeout() { "timeout" }
-                    else if e.is_connect() { "connection failed" }
-                    else { "network error" };
+                let error_type = if e.is_timeout() {
+                    "timeout"
+                } else if e.is_connect() {
+                    "connection failed"
+                } else {
+                    "network error"
+                };
                 AppError::LlmApi(format!(
                     "Request failed ({}): {} | Request body: {} KB",
                     error_type, e, body_size_kb
@@ -681,8 +709,8 @@ impl AnthropicAdapter {
         // 预处理：修复 MiniMax 等供应商响应 JSON 中的残缺 \uXX Unicode 转义
         let response_text = super::json_repair::sanitize_sse_data(&response_text);
 
-        let api_response: AnthropicToolResponse = serde_json::from_str(&response_text)
-            .map_err(|e| {
+        let api_response: AnthropicToolResponse =
+            serde_json::from_str(&response_text).map_err(|e| {
                 AppError::LlmApi(format!(
                     "Failed to parse response: {} | Raw response: {}",
                     e,
@@ -704,9 +732,9 @@ impl AnthropicAdapter {
         progress_callback: Option<ToolCallProgressCallback>,
         reasoning_callback: Option<ReasoningTraceCallback>,
     ) -> AppResult<super::types::ToolChatResponse> {
+        use super::types::ToolChatResponse;
         use eventsource_stream::Eventsource;
         use futures::StreamExt;
-        use super::types::ToolChatResponse;
 
         let url = format!("{}/messages", self.base_url());
         let (mut body, model, body_size_kb) = self.build_tool_request_body(&request);
@@ -714,39 +742,53 @@ impl AnthropicAdapter {
         // 关键：启用流式模式以保持连接活跃
         body["stream"] = serde_json::json!(true);
 
-        log::trace!("[AnthropicAdapter] 🔧 chat_stream_with_tools | URL: {} | model: {} | body: {} KB",
-            url, model, body_size_kb);
+        log::trace!(
+            "[AnthropicAdapter] 🔧 chat_stream_with_tools | URL: {} | model: {} | body: {} KB",
+            url,
+            model,
+            body_size_kb
+        );
 
         let start_timeout = stream_start_timeout();
-        let response = tokio::time::timeout(start_timeout, get_streaming_client()
-            .post(&url)
-            .header("x-api-key", &self.config.api_key)
-            .header("anthropic-version", API_VERSION)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send())
-            .await
-            .map_err(|_| {
-                AppError::LlmApi(format!(
-                    "Streaming connection timed out (no response headers within {} seconds)",
-                    start_timeout.as_secs()
-                ))
-            })?
-            .map_err(|e| {
-                let error_type = if e.is_timeout() { "timeout" }
-                    else if e.is_connect() { "connection failed" }
-                    else { "network error" };
-                AppError::LlmApi(format!(
-                    "Streaming request failed ({}): {} | Request body: {} KB",
-                    error_type, e, body_size_kb
-                ))
-            })?;
+        let response = tokio::time::timeout(
+            start_timeout,
+            get_streaming_client()
+                .post(&url)
+                .header("x-api-key", &self.config.api_key)
+                .header("anthropic-version", API_VERSION)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send(),
+        )
+        .await
+        .map_err(|_| {
+            AppError::LlmApi(format!(
+                "Streaming connection timed out (no response headers within {} seconds)",
+                start_timeout.as_secs()
+            ))
+        })?
+        .map_err(|e| {
+            let error_type = if e.is_timeout() {
+                "timeout"
+            } else if e.is_connect() {
+                "connection failed"
+            } else {
+                "network error"
+            };
+            AppError::LlmApi(format!(
+                "Streaming request failed ({}): {} | Request body: {} KB",
+                error_type, e, body_size_kb
+            ))
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             let error_msg = format!("API returned an error ({}): {}", status, error_text);
-            log::warn!("[AnthropicAdapter] chat_stream_with_tools 错误: {}", error_msg);
+            log::warn!(
+                "[AnthropicAdapter] chat_stream_with_tools 错误: {}",
+                error_msg
+            );
             return Ok(ToolChatResponse {
                 response_type: "error".to_string(),
                 content: Some(error_msg.clone()),
@@ -820,14 +862,18 @@ impl AnthropicAdapter {
                     match event_type.as_str() {
                         "message_start" => {
                             // 提取 input_tokens
-                            if let Ok(msg) = serde_json::from_str::<AnthropicStreamMessageStart>(&data) {
+                            if let Ok(msg) =
+                                serde_json::from_str::<AnthropicStreamMessageStart>(&data)
+                            {
                                 if let Some(usage) = msg.message.usage {
                                     final_input_tokens = Some(usage.input_tokens as u32);
                                 }
                             }
                         }
                         "content_block_start" => {
-                            if let Ok(block_start) = serde_json::from_str::<AnthropicStreamBlockStart>(&data) {
+                            if let Ok(block_start) =
+                                serde_json::from_str::<AnthropicStreamBlockStart>(&data)
+                            {
                                 let cb = &block_start.content_block;
                                 while block_states.len() <= block_start.index {
                                     block_states.push(ContentBlockState::default());
@@ -843,7 +889,9 @@ impl AnthropicAdapter {
                             }
                         }
                         "content_block_delta" => {
-                            if let Ok(block_delta) = serde_json::from_str::<AnthropicStreamBlockDelta>(&data) {
+                            if let Ok(block_delta) =
+                                serde_json::from_str::<AnthropicStreamBlockDelta>(&data)
+                            {
                                 let idx = block_delta.index;
                                 if idx < block_states.len() {
                                     let state = &mut block_states[idx];
@@ -865,7 +913,9 @@ impl AnthropicAdapter {
                                             if let Some(ref thinking) = block_delta.delta.thinking {
                                                 if !thinking.is_empty() {
                                                     reasoning_buffer.push_str(thinking);
-                                                    if let Some(callback) = reasoning_callback.as_ref() {
+                                                    if let Some(callback) =
+                                                        reasoning_callback.as_ref()
+                                                    {
                                                         callback(ReasoningTraceProgress {
                                                             delta: thinking.clone(),
                                                             done: false,
@@ -881,7 +931,9 @@ impl AnthropicAdapter {
                         }
                         "message_delta" => {
                             // 提取 output_tokens
-                            if let Ok(msg) = serde_json::from_str::<AnthropicStreamMessageDelta>(&data) {
+                            if let Ok(msg) =
+                                serde_json::from_str::<AnthropicStreamMessageDelta>(&data)
+                            {
                                 if let Some(usage) = msg.usage {
                                     final_output_tokens = Some(usage.output_tokens as u32);
                                 }
@@ -903,12 +955,12 @@ impl AnthropicAdapter {
                 }
                 Err(e) => {
                     return Err(AppError::LlmApi(format!(
-                        "Streaming error (received {} events): {}", chunk_count, e
+                        "Streaming error (received {} events): {}",
+                        chunk_count, e
                     )));
                 }
             }
         }
-
 
         // 组装响应：从累积的 block_states 中提取 text 和 tool_use
         if !reasoning_buffer.is_empty() {
@@ -934,7 +986,8 @@ impl AnthropicAdapter {
                     if let Some(ref name) = state.name {
                         // 将累积的 JSON 字符串解析为参数对象，解析失败时尝试修复而非静默回退为空对象
                         // 背景：file_write 的 content 参数含大量代码时，LLM 可能产出格式轻微损坏的 JSON（未转义引号/控制字符/截断），导致所有参数丢失
-                        let args: serde_json::Value = match serde_json::from_str(&state.json_buffer) {
+                        let args: serde_json::Value = match serde_json::from_str(&state.json_buffer)
+                        {
                             Ok(v) => v,
                             Err(e) => {
                                 let preview = safe_truncate(&state.json_buffer, 200);
@@ -945,7 +998,9 @@ impl AnthropicAdapter {
                                 );
                                 super::json_repair::repair_tool_call_json(&state.json_buffer)
                                     .unwrap_or_else(|| {
-                                        log::warn!("[AnthropicAdapter] JSON 修复也失败，回退为空对象");
+                                        log::warn!(
+                                            "[AnthropicAdapter] JSON 修复也失败，回退为空对象"
+                                        );
                                         serde_json::json!({})
                                     })
                             }
@@ -963,16 +1018,25 @@ impl AnthropicAdapter {
             }
         }
 
-        let content = if text_parts.is_empty() { None } else { Some(text_parts.join("")) };
+        let content = if text_parts.is_empty() {
+            None
+        } else {
+            Some(text_parts.join(""))
+        };
 
-        log::trace!("[AnthropicAdapter] 📊 流式接收完成: {} events, content: {} 字符, tool_calls: {}",
+        log::trace!(
+            "[AnthropicAdapter] 📊 流式接收完成: {} events, content: {} 字符, tool_calls: {}",
             chunk_count,
             content.as_ref().map_or(0, |c| c.len()),
-            tool_calls.len());
+            tool_calls.len()
+        );
 
         if !tool_calls.is_empty() {
-            log::trace!("[AnthropicAdapter] 🔧 流式收到 {} 个工具调用, 伴随文字: {} 字符",
-                tool_calls.len(), content.as_ref().map_or(0, |c| c.len()));
+            log::trace!(
+                "[AnthropicAdapter] 🔧 流式收到 {} 个工具调用, 伴随文字: {} 字符",
+                tool_calls.len(),
+                content.as_ref().map_or(0, |c| c.len())
+            );
 
             return Ok(ToolChatResponse {
                 response_type: "tool_use".to_string(),
@@ -989,7 +1053,10 @@ impl AnthropicAdapter {
         // 检查 XML 格式工具调用 fallback
         if let Some(ref text_content) = content {
             if let Some(xml_tool_calls) = Self::try_parse_xml_tool_calls(text_content) {
-                log::trace!("[AnthropicAdapter] 🔄 流式: 从文本中解析到 XML 格式工具调用: {} 个", xml_tool_calls.len());
+                log::trace!(
+                    "[AnthropicAdapter] 🔄 流式: 从文本中解析到 XML 格式工具调用: {} 个",
+                    xml_tool_calls.len()
+                );
                 return Ok(ToolChatResponse {
                     response_type: "tool_use".to_string(),
                     content,
@@ -1003,7 +1070,10 @@ impl AnthropicAdapter {
             }
         }
 
-        log::trace!("[AnthropicAdapter] 📝 流式文本响应: {} 字符", content.as_ref().map_or(0, |c| c.len()));
+        log::trace!(
+            "[AnthropicAdapter] 📝 流式文本响应: {} 字符",
+            content.as_ref().map_or(0, |c| c.len())
+        );
 
         Ok(ToolChatResponse {
             response_type: "text".to_string(),
@@ -1022,7 +1092,7 @@ impl AnthropicAdapter {
         blocks: &[AnthropicToolContentBlock],
         finish_reason: Option<String>,
     ) -> AppResult<super::types::ToolChatResponse> {
-        use super::types::{ToolChatResponse, ToolCall as TypesToolCall};
+        use super::types::{ToolCall as TypesToolCall, ToolChatResponse};
 
         let mut text_parts: Vec<String> = Vec::new();
         let mut tool_calls: Vec<TypesToolCall> = Vec::new();
@@ -1048,12 +1118,18 @@ impl AnthropicAdapter {
             }
         }
 
-        let content = if text_parts.is_empty() { None } else { Some(text_parts.join("")) };
+        let content = if text_parts.is_empty() {
+            None
+        } else {
+            Some(text_parts.join(""))
+        };
 
         if !tool_calls.is_empty() {
-            log::trace!("[AnthropicAdapter] 🔧 收到 {} 个工具调用, 伴随文字: {} 字符",
+            log::trace!(
+                "[AnthropicAdapter] 🔧 收到 {} 个工具调用, 伴随文字: {} 字符",
                 tool_calls.len(),
-                content.as_ref().map_or(0, |c| c.len()));
+                content.as_ref().map_or(0, |c| c.len())
+            );
 
             return Ok(ToolChatResponse {
                 response_type: "tool_use".to_string(),
@@ -1070,7 +1146,10 @@ impl AnthropicAdapter {
         // 检查 XML 格式工具调用 fallback
         if let Some(ref text_content) = content {
             if let Some(xml_tool_calls) = Self::try_parse_xml_tool_calls(text_content) {
-                log::trace!("[AnthropicAdapter] 🔄 从文本中解析到 XML 格式工具调用: {} 个", xml_tool_calls.len());
+                log::trace!(
+                    "[AnthropicAdapter] 🔄 从文本中解析到 XML 格式工具调用: {} 个",
+                    xml_tool_calls.len()
+                );
                 return Ok(ToolChatResponse {
                     response_type: "tool_use".to_string(),
                     content,
@@ -1084,7 +1163,10 @@ impl AnthropicAdapter {
             }
         }
 
-        log::trace!("[AnthropicAdapter] 📝 文本响应: {} 字符", content.as_ref().map_or(0, |c| c.len()));
+        log::trace!(
+            "[AnthropicAdapter] 📝 文本响应: {} 字符",
+            content.as_ref().map_or(0, |c| c.len())
+        );
 
         Ok(ToolChatResponse {
             response_type: "text".to_string(),
@@ -1195,7 +1277,6 @@ impl AnthropicAdapter {
             Some(tool_calls)
         }
     }
-
 }
 
 #[async_trait]
@@ -1267,21 +1348,24 @@ impl LlmProvider for AnthropicAdapter {
         body.stream = true;
 
         let start_timeout = stream_start_timeout();
-        let response = tokio::time::timeout(start_timeout, get_streaming_client()
-            .post(&url)
-            .header("x-api-key", &self.config.api_key)
-            .header("anthropic-version", API_VERSION)
-            .header("Content-Type", "application/json")
-            .json(&body)
-            .send())
-            .await
-            .map_err(|_| {
-                AppError::LlmApi(format!(
-                    "Streaming connection timed out (no response headers within {} seconds)",
-                    start_timeout.as_secs()
-                ))
-            })?
-            .map_err(|e| AppError::LlmApi(format!("Request failed: {}", e)))?;
+        let response = tokio::time::timeout(
+            start_timeout,
+            get_streaming_client()
+                .post(&url)
+                .header("x-api-key", &self.config.api_key)
+                .header("anthropic-version", API_VERSION)
+                .header("Content-Type", "application/json")
+                .json(&body)
+                .send(),
+        )
+        .await
+        .map_err(|_| {
+            AppError::LlmApi(format!(
+                "Streaming connection timed out (no response headers within {} seconds)",
+                start_timeout.as_secs()
+            ))
+        })?
+        .map_err(|e| AppError::LlmApi(format!("Request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1300,7 +1384,8 @@ impl LlmProvider for AnthropicAdapter {
         // 跨 SSE 事件累积 usage 与 stop_reason。
         // Anthropic 将真实结束原因放在 message_delta.delta.stop_reason，
         // message_stop 本身不再携带该字段。
-        let usage_state: Arc<Mutex<(Option<u32>, Option<u32>)>> = Arc::new(Mutex::new((None, None)));
+        let usage_state: Arc<Mutex<(Option<u32>, Option<u32>)>> =
+            Arc::new(Mutex::new((None, None)));
         let usage_clone = usage_state.clone();
         let finish_reason_state: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
         let finish_reason_clone = finish_reason_state.clone();
@@ -1314,7 +1399,9 @@ impl LlmProvider for AnthropicAdapter {
                     match event_type.as_str() {
                         "message_start" => {
                             // 提取 input_tokens
-                            if let Ok(msg) = serde_json::from_str::<AnthropicStreamMessageStart>(&data) {
+                            if let Ok(msg) =
+                                serde_json::from_str::<AnthropicStreamMessageStart>(&data)
+                            {
                                 if let Some(usage) = msg.message.usage {
                                     if let Ok(mut state) = usage_clone.lock() {
                                         state.0 = Some(usage.input_tokens as u32);
@@ -1332,13 +1419,17 @@ impl LlmProvider for AnthropicAdapter {
                         }
                         "message_delta" => {
                             // 提取 output_tokens 与真实 stop_reason
-                            if let Ok(msg) = serde_json::from_str::<AnthropicStreamMessageDelta>(&data) {
+                            if let Ok(msg) =
+                                serde_json::from_str::<AnthropicStreamMessageDelta>(&data)
+                            {
                                 if let Some(usage) = msg.usage {
                                     if let Ok(mut state) = usage_clone.lock() {
                                         state.1 = Some(usage.output_tokens as u32);
                                     }
                                 }
-                                if let Some(stop_reason) = msg.delta.and_then(|delta| delta.stop_reason) {
+                                if let Some(stop_reason) =
+                                    msg.delta.and_then(|delta| delta.stop_reason)
+                                {
                                     if let Ok(mut state) = finish_reason_clone.lock() {
                                         *state = Some(stop_reason);
                                     }
@@ -1374,18 +1465,20 @@ impl LlmProvider for AnthropicAdapter {
                             })
                         }
                         "content_block_delta" => {
-                            let delta: AnthropicStreamDelta = serde_json::from_str(&data)
-                                .map_err(|e| AppError::LlmApi(format!("Failed to parse streaming response: {}", e)))?;
+                            let delta: AnthropicStreamDelta =
+                                serde_json::from_str(&data).map_err(|e| {
+                                    AppError::LlmApi(format!(
+                                        "Failed to parse streaming response: {}",
+                                        e
+                                    ))
+                                })?;
 
                             let (text, reasoning) = match delta.delta {
                                 Some(delta) if delta.delta_type == "thinking_delta" => (
                                     String::new(),
                                     delta.thinking.filter(|thinking| !thinking.is_empty()),
                                 ),
-                                Some(delta) => (
-                                    delta.text.unwrap_or_default(),
-                                    None,
-                                ),
+                                Some(delta) => (delta.text.unwrap_or_default(), None),
                                 None => (String::new(), None),
                             };
 
@@ -1398,16 +1491,14 @@ impl LlmProvider for AnthropicAdapter {
                                 output_tokens: None,
                             })
                         }
-                        _ => {
-                            Ok(StreamChunk {
-                                delta: String::new(),
-                                reasoning: None,
-                                done: false,
-                                finish_reason: None,
-                                input_tokens: None,
-                                output_tokens: None,
-                            })
-                        }
+                        _ => Ok(StreamChunk {
+                            delta: String::new(),
+                            reasoning: None,
+                            done: false,
+                            finish_reason: None,
+                            input_tokens: None,
+                            output_tokens: None,
+                        }),
                     }
                 }
                 Err(e) => Err(AppError::LlmApi(format!("Streaming error: {}", e))),
@@ -1427,7 +1518,9 @@ impl LlmProvider for AnthropicAdapter {
 
         match self.chat(request).await {
             Ok(_) => Ok(true),
-            Err(AppError::LlmApi(msg)) if msg.contains("401") || msg.contains("invalid") => Ok(false),
+            Err(AppError::LlmApi(msg)) if msg.contains("401") || msg.contains("invalid") => {
+                Ok(false)
+            }
             Err(e) => Err(e),
         }
     }
@@ -1486,14 +1579,10 @@ enum AnthropicMessageContent {
 enum AnthropicContentPart {
     /// 文本内容
     #[serde(rename = "text")]
-    Text {
-        text: String,
-    },
+    Text { text: String },
     /// 图片内容
     #[serde(rename = "image")]
-    Image {
-        source: AnthropicImageSource,
-    },
+    Image { source: AnthropicImageSource },
 }
 
 /// Anthropic 图片数据源

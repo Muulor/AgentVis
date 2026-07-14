@@ -17,8 +17,8 @@ use super::network::{
     validate_no_network_command, validate_no_network_script,
 };
 use super::types::{
-    normalize_direct_target_host, AppContainerNetworkCapability, NetworkDirectAllowance,
-    NetworkDirectTarget, ControlledNetworkBackend, ProcessLifecycle, ProcessSandboxProfile,
+    normalize_direct_target_host, AppContainerNetworkCapability, ControlledNetworkBackend,
+    NetworkDirectAllowance, NetworkDirectTarget, ProcessLifecycle, ProcessSandboxProfile,
     RestrictedExecutionBackend, SandboxLevel, SandboxMode, SandboxNetworkAccess,
     SandboxNetworkIsolation, SandboxNetworkScope, SandboxSubjectType,
 };

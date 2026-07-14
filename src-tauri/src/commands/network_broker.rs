@@ -806,19 +806,16 @@ async fn handle_file_session_request(
                     response.bytes_in,
                     response.saved_path.display()
                 );
-                if let Some(event) = broker_saved_success_audit_event(
-                    subject,
-                    sandbox_mode,
-                    method,
-                    &response,
-                )
-                .unwrap_or_else(|error| {
-                    log::debug!(
-                        "[NetworkBroker] failed to create broker save audit event: {}",
-                        error
-                    );
-                    None
-                }) {
+                if let Some(event) =
+                    broker_saved_success_audit_event(subject, sandbox_mode, method, &response)
+                        .unwrap_or_else(|error| {
+                            log::debug!(
+                                "[NetworkBroker] failed to create broker save audit event: {}",
+                                error
+                            );
+                            None
+                        })
+                {
                     record_sandbox_audit_event(app_handle, event);
                 }
                 NetworkBrokerFileResponse {
@@ -1834,7 +1831,10 @@ fn normalize_path_lexically(path: &Path) -> PathBuf {
     normalized
 }
 
-fn resolve_broker_save_path(raw_save_path: &str, writable_roots: &[PathBuf]) -> Result<PathBuf, AppError> {
+fn resolve_broker_save_path(
+    raw_save_path: &str,
+    writable_roots: &[PathBuf],
+) -> Result<PathBuf, AppError> {
     if writable_roots.is_empty() {
         return Err(AppError::Forbidden(
             "Network broker rejected savePath because no writable workdir is available".to_string(),
@@ -2034,7 +2034,9 @@ async fn execute_broker_http_request_to_file(
         let target_scheme = url.scheme().to_string();
         let response_headers = response_headers_to_vec(response.headers());
         let parent = save_path.parent().ok_or_else(|| {
-            AppError::Forbidden("Network broker rejected savePath without a parent directory".to_string())
+            AppError::Forbidden(
+                "Network broker rejected savePath without a parent directory".to_string(),
+            )
         })?;
         tokio::fs::create_dir_all(parent).await.map_err(|error| {
             AppError::FileSystem(format!(
@@ -2063,7 +2065,10 @@ async fn execute_broker_http_request_to_file(
         let mut stream = response.bytes_stream();
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(|error| {
-                AppError::LlmApi(format!("Network broker failed reading response body: {}", error))
+                AppError::LlmApi(format!(
+                    "Network broker failed reading response body: {}",
+                    error
+                ))
             })?;
             file.write_all(&chunk).await.map_err(|error| {
                 AppError::FileSystem(format!(
@@ -2082,14 +2087,16 @@ async fn execute_broker_http_request_to_file(
             ))
         })?;
         drop(file);
-        tokio::fs::rename(&temp_path, save_path).await.map_err(|error| {
-            AppError::FileSystem(format!(
-                "Network broker failed to move savePath temp file {} to {}: {}",
-                temp_path.display(),
-                save_path.display(),
-                error
-            ))
-        })?;
+        tokio::fs::rename(&temp_path, save_path)
+            .await
+            .map_err(|error| {
+                AppError::FileSystem(format!(
+                    "Network broker failed to move savePath temp file {} to {}: {}",
+                    temp_path.display(),
+                    save_path.display(),
+                    error
+                ))
+            })?;
 
         return Ok(BrokerHttpSavedResponse {
             status: status_code,

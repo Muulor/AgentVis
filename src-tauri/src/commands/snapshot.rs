@@ -74,7 +74,10 @@ pub async fn snapshot_create(
 
 /// 获取单个快照
 #[tauri::command]
-pub async fn snapshot_get(state: State<'_, AppState>, id: String) -> AppResult<Option<SnapshotResponse>> {
+pub async fn snapshot_get(
+    state: State<'_, AppState>,
+    id: String,
+) -> AppResult<Option<SnapshotResponse>> {
     let db = state.db.lock().await;
     let snapshot = db.snapshot_repo().get(&id).await?;
     Ok(snapshot.map(SnapshotResponse::from))
@@ -112,11 +115,9 @@ pub async fn snapshot_rollback(
 ) -> AppResult<SnapshotResponse> {
     let db = state.db.lock().await;
     // 获取快照内容
-    let snapshot = db
-        .snapshot_repo()
-        .get(&snapshot_id)
-        .await?
-        .ok_or_else(|| crate::error::AppError::NotFound(format!("Snapshot {} does not exist", snapshot_id)))?;
+    let snapshot = db.snapshot_repo().get(&snapshot_id).await?.ok_or_else(|| {
+        crate::error::AppError::NotFound(format!("Snapshot {} does not exist", snapshot_id))
+    })?;
 
     // 注意：实际文件回滚需要前端配合写入文件
     // 这里只返回快照内容，前端负责将内容写入文件

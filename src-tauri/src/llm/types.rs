@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// serde 默认值辅助：返回 true（用于 supports_vision 等默认启用的布尔字段）
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 /// 流式工具调用参数接收进度（不包含参数正文）
 #[derive(Debug, Clone)]
@@ -48,7 +50,7 @@ impl ChatRole {
     pub fn as_str(&self) -> &'static str {
         match self {
             ChatRole::System => "system",
-            ChatRole::User => "user", 
+            ChatRole::User => "user",
             ChatRole::Assistant => "assistant",
         }
     }
@@ -96,7 +98,11 @@ impl ChatMessage {
         Self {
             role: ChatRole::User,
             content: content.into(),
-            images: if images.is_empty() { None } else { Some(images) },
+            images: if images.is_empty() {
+                None
+            } else {
+                Some(images)
+            },
         }
     }
 

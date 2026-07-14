@@ -12,12 +12,12 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
-use super::types::{
-    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
-    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
-    ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES, TOOL_CALL_PROGRESS_STEP_BYTES,
-};
 use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
+use super::types::{
+    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, ReasoningTraceCallback,
+    ReasoningTraceProgress, StreamChunk, ToolCallProgressCallback, ToolCallStreamProgress,
+    TOOL_CALL_PROGRESS_MIN_BYTES, TOOL_CALL_PROGRESS_STEP_BYTES,
+};
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
 use crate::text_utils::safe_truncate;
@@ -696,7 +696,11 @@ impl OpenAIAdapter {
                         }
 
                         if !msg.content.is_empty() {
-                            input.push(self.responses_message_value("assistant", &msg.content, None));
+                            input.push(self.responses_message_value(
+                                "assistant",
+                                &msg.content,
+                                None,
+                            ));
                         }
 
                         for (i, tc) in valid_tool_calls {
@@ -920,8 +924,14 @@ impl OpenAIAdapter {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            let error_msg = format!("Responses API returned an error ({}): {}", status, error_text);
-            log::warn!("[OpenAIAdapter] Responses chat_stream_with_tools error: {}", error_msg);
+            let error_msg = format!(
+                "Responses API returned an error ({}): {}",
+                status, error_text
+            );
+            log::warn!(
+                "[OpenAIAdapter] Responses chat_stream_with_tools error: {}",
+                error_msg
+            );
             return Ok(ToolChatResponse {
                 response_type: "error".to_string(),
                 content: Some(error_msg.clone()),
@@ -1019,7 +1029,8 @@ impl OpenAIAdapter {
                         Some("response.reasoning_summary_text.done")
                         | Some("response.reasoning_text.done") => {
                             if reasoning_buffer.is_empty() {
-                                let text = responses_event_string(&value, "text").unwrap_or_default();
+                                let text =
+                                    responses_event_string(&value, "text").unwrap_or_default();
                                 if !text.is_empty() {
                                     reasoning_buffer.push_str(text);
                                     if let Some(callback) = reasoning_callback.as_ref() {
@@ -1059,14 +1070,16 @@ impl OpenAIAdapter {
                         Some("response.function_call_arguments.delta") => {
                             let output_index =
                                 responses_event_u32(&value, "output_index").unwrap_or(0) as usize;
-                            let item_id = responses_event_string(&value, "item_id").unwrap_or_default();
+                            let item_id =
+                                responses_event_string(&value, "item_id").unwrap_or_default();
                             let delta = responses_event_string(&value, "delta").unwrap_or_default();
                             tool_acc.accumulate_arguments_delta(output_index, item_id, delta);
                         }
                         Some("response.function_call_arguments.done") => {
                             let output_index =
                                 responses_event_u32(&value, "output_index").unwrap_or(0) as usize;
-                            let item_id = responses_event_string(&value, "item_id").unwrap_or_default();
+                            let item_id =
+                                responses_event_string(&value, "item_id").unwrap_or_default();
                             let name = responses_event_string(&value, "name").unwrap_or_default();
                             let arguments =
                                 responses_event_string(&value, "arguments").unwrap_or_default();
@@ -2262,20 +2275,21 @@ fn map_responses_stream_event(data: &str) -> AppResult<Option<StreamChunk>> {
                 output_tokens: None,
             }))
         }
-        Some("response.reasoning_summary_text.delta")
-        | Some("response.reasoning_text.delta") => Ok(Some(StreamChunk {
-            delta: String::new(),
-            reasoning: Some(
-                responses_event_string(&value, "delta")
-                    .unwrap_or_default()
-                    .to_string(),
-            )
-            .filter(|delta| !delta.is_empty()),
-            done: false,
-            finish_reason: None,
-            input_tokens: None,
-            output_tokens: None,
-        })),
+        Some("response.reasoning_summary_text.delta") | Some("response.reasoning_text.delta") => {
+            Ok(Some(StreamChunk {
+                delta: String::new(),
+                reasoning: Some(
+                    responses_event_string(&value, "delta")
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+                .filter(|delta| !delta.is_empty()),
+                done: false,
+                finish_reason: None,
+                input_tokens: None,
+                output_tokens: None,
+            }))
+        }
         Some("response.completed") => {
             let (input_tokens, output_tokens) = responses_usage_tokens(&value);
             Ok(Some(StreamChunk {
@@ -2739,7 +2753,10 @@ mod tests {
         let chunk = map_responses_stream_event(data).unwrap().unwrap();
 
         assert_eq!(chunk.delta, "");
-        assert_eq!(chunk.reasoning.as_deref(), Some("Thinking through the task"));
+        assert_eq!(
+            chunk.reasoning.as_deref(),
+            Some("Thinking through the task")
+        );
         assert!(!chunk.done);
     }
 

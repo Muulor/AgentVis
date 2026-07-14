@@ -128,10 +128,9 @@ pub async fn slack_open_socket_connection(
         .await
         .map_err(|e| format_reqwest_error("Slack socket open request failed", e))?;
 
-    let result: SlackOpenSocketResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack socket response: {}", e)))?;
+    let result: SlackOpenSocketResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Slack socket response: {}", e))
+    })?;
 
     if !result.ok {
         return Err(crate::error::AppError::Generic(format!(
@@ -140,9 +139,9 @@ pub async fn slack_open_socket_connection(
         )));
     }
 
-    let url = result
-        .url
-        .ok_or_else(|| crate::error::AppError::Generic("Slack socket response is missing url".to_string()))?;
+    let url = result.url.ok_or_else(|| {
+        crate::error::AppError::Generic("Slack socket response is missing url".to_string())
+    })?;
 
     Ok(SlackSocketResult { url })
 }
@@ -161,10 +160,9 @@ pub async fn slack_auth_test(
         .await
         .map_err(|e| format_reqwest_error("Slack auth.test request failed", e))?;
 
-    let result: SlackAuthTestResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack auth.test response: {}", e)))?;
+    let result: SlackAuthTestResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Slack auth.test response: {}", e))
+    })?;
 
     if !result.ok {
         return Err(crate::error::AppError::Generic(format!(
@@ -210,10 +208,9 @@ pub async fn slack_post_message(
         .await
         .map_err(|e| format_reqwest_error("Failed to send Slack message", e))?;
 
-    let result: SlackPostMessageResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack message response: {}", e)))?;
+    let result: SlackPostMessageResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Slack message response: {}", e))
+    })?;
 
     if !result.ok {
         return Err(crate::error::AppError::Generic(format!(
@@ -256,10 +253,9 @@ pub async fn slack_update_message(
         .await
         .map_err(|e| format_reqwest_error("Failed to update Slack message", e))?;
 
-    let result: SlackPostMessageResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack update response: {}", e)))?;
+    let result: SlackPostMessageResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Slack update response: {}", e))
+    })?;
 
     if !result.ok {
         return Err(crate::error::AppError::Generic(format!(
@@ -285,9 +281,9 @@ pub async fn slack_upload_file_external(
     title: Option<String>,
     initial_comment: Option<String>,
 ) -> CommandResult<SlackUploadResult> {
-    let file_bytes = BASE64_ENGINE
-        .decode(&file_base64)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to decode Slack file base64: {}", e)))?;
+    let file_bytes = BASE64_ENGINE.decode(&file_base64).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to decode Slack file base64: {}", e))
+    })?;
     let file_length = file_bytes.len();
 
     let client = reqwest::Client::new();
@@ -303,28 +299,38 @@ pub async fn slack_upload_file_external(
         .await
         .map_err(|e| format_reqwest_error("Slack getUploadURLExternal request failed", e))?;
 
-    let upload_url_result: SlackUploadUrlResponse = upload_url_response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack upload URL response: {}", e)))?;
+    let upload_url_result: SlackUploadUrlResponse =
+        upload_url_response.json().await.map_err(|e| {
+            crate::error::AppError::Generic(format!(
+                "Failed to parse Slack upload URL response: {}",
+                e
+            ))
+        })?;
 
     if !upload_url_result.ok {
         return Err(crate::error::AppError::Generic(format!(
             "Slack getUploadURLExternal failed: {}",
-            upload_url_result.error.unwrap_or_else(|| "unknown_error".to_string())
+            upload_url_result
+                .error
+                .unwrap_or_else(|| "unknown_error".to_string())
         )));
     }
 
-    let upload_url = upload_url_result
-        .upload_url
-        .ok_or_else(|| crate::error::AppError::Generic("Slack upload URL response is missing upload_url".to_string()))?;
-    let file_id = upload_url_result
-        .file_id
-        .ok_or_else(|| crate::error::AppError::Generic("Slack upload URL response is missing file_id".to_string()))?;
+    let upload_url = upload_url_result.upload_url.ok_or_else(|| {
+        crate::error::AppError::Generic(
+            "Slack upload URL response is missing upload_url".to_string(),
+        )
+    })?;
+    let file_id = upload_url_result.file_id.ok_or_else(|| {
+        crate::error::AppError::Generic("Slack upload URL response is missing file_id".to_string())
+    })?;
 
     let upload_response = client
         .post(upload_url)
-        .header("Content-Type", mime_type.as_deref().unwrap_or("application/octet-stream"))
+        .header(
+            "Content-Type",
+            mime_type.as_deref().unwrap_or("application/octet-stream"),
+        )
         .header("Content-Length", file_length.to_string())
         .body(file_bytes)
         .send()
@@ -340,11 +346,9 @@ pub async fn slack_upload_file_external(
     let files_value = serde_json::json!([{
         "id": file_id.clone(),
         "title": title.unwrap_or(file_name),
-    }]).to_string();
-    let mut complete_form = vec![
-        ("files", files_value),
-        ("channel_id", channel.clone()),
-    ];
+    }])
+    .to_string();
+    let mut complete_form = vec![("files", files_value), ("channel_id", channel.clone())];
     if let Some(comment) = initial_comment.filter(|value| !value.trim().is_empty()) {
         complete_form.push(("initial_comment", comment));
     }
@@ -357,22 +361,23 @@ pub async fn slack_upload_file_external(
         .await
         .map_err(|e| format_reqwest_error("Slack completeUploadExternal request failed", e))?;
 
-    let complete_result: SlackGenericResponse = complete_response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack complete upload response: {}", e)))?;
+    let complete_result: SlackGenericResponse = complete_response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!(
+            "Failed to parse Slack complete upload response: {}",
+            e
+        ))
+    })?;
 
     if !complete_result.ok {
         return Err(crate::error::AppError::Generic(format!(
             "Slack completeUploadExternal failed: {}",
-            complete_result.error.unwrap_or_else(|| "unknown_error".to_string())
+            complete_result
+                .error
+                .unwrap_or_else(|| "unknown_error".to_string())
         )));
     }
 
-    Ok(SlackUploadResult {
-        file_id,
-        channel,
-    })
+    Ok(SlackUploadResult { file_id, channel })
 }
 
 #[tauri::command]
@@ -395,10 +400,9 @@ pub async fn slack_delete_message(
         .await
         .map_err(|e| format_reqwest_error("Failed to delete Slack message", e))?;
 
-    let result: SlackDeleteMessageResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack delete response: {}", e)))?;
+    let result: SlackDeleteMessageResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Slack delete response: {}", e))
+    })?;
 
     if !result.ok {
         return Err(crate::error::AppError::Generic(format!(
@@ -428,10 +432,12 @@ pub async fn slack_delete_file(
         .await
         .map_err(|e| format_reqwest_error("Failed to delete Slack file", e))?;
 
-    let result: SlackGenericResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Slack file delete response: {}", e)))?;
+    let result: SlackGenericResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!(
+            "Failed to parse Slack file delete response: {}",
+            e
+        ))
+    })?;
 
     if !result.ok {
         return Err(crate::error::AppError::Generic(format!(
@@ -449,7 +455,8 @@ pub async fn slack_download_file(
     bot_token: String,
     url: String,
 ) -> CommandResult<SlackDownloadResult> {
-    if !url.starts_with("https://files.slack.com/") && !url.starts_with("https://slack-files.com/") {
+    if !url.starts_with("https://files.slack.com/") && !url.starts_with("https://slack-files.com/")
+    {
         return Err(crate::error::AppError::Generic(format!(
             "Slack file download only supports Slack file URLs: {}",
             url
@@ -477,10 +484,9 @@ pub async fn slack_download_file(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/octet-stream")
         .to_string();
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to read Slack downloaded file: {}", e)))?;
+    let bytes = response.bytes().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to read Slack downloaded file: {}", e))
+    })?;
 
     Ok(SlackDownloadResult {
         base64: BASE64_ENGINE.encode(&bytes),
@@ -495,32 +501,38 @@ pub async fn im_save_attachment(
     base64_content: String,
     file_name: String,
 ) -> CommandResult<String> {
-    let bytes = BASE64_ENGINE
-        .decode(&base64_content)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to decode attachment base64: {}", e)))?;
+    let bytes = BASE64_ENGINE.decode(&base64_content).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to decode attachment base64: {}", e))
+    })?;
 
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e))
+    })?;
 
     let attachments_dir = app_data_dir.join("im_attachments");
-    std::fs::create_dir_all(&attachments_dir)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to create attachment directory: {}", e)))?;
+    std::fs::create_dir_all(&attachments_dir).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to create attachment directory: {}", e))
+    })?;
 
     let safe_name = file_name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '.' || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '.' || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>();
     let file_path = attachments_dir.join(&safe_name);
 
-    std::fs::write(&file_path, &bytes)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to save attachment file: {}", e)))?;
+    std::fs::write(&file_path, &bytes).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to save attachment file: {}", e))
+    })?;
 
-    file_path
-        .to_str()
-        .map(str::to_string)
-        .ok_or_else(|| crate::error::AppError::Generic("Attachment path contains non-UTF-8 characters".to_string()))
+    file_path.to_str().map(str::to_string).ok_or_else(|| {
+        crate::error::AppError::Generic("Attachment path contains non-UTF-8 characters".to_string())
+    })
 }
 
 #[tauri::command]
@@ -531,19 +543,17 @@ pub async fn im_write_app_data_file(
     content: String,
 ) -> CommandResult<String> {
     validate_app_data_file_name(&file_name)?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e))
+    })?;
     let file_path = app_data_dir.join(&file_name);
 
     std::fs::write(&file_path, content.as_bytes())
         .map_err(|e| crate::error::AppError::Generic(format!("Failed to write file: {}", e)))?;
 
-    file_path
-        .to_str()
-        .map(str::to_string)
-        .ok_or_else(|| crate::error::AppError::Generic("File path contains non-UTF-8 characters".to_string()))
+    file_path.to_str().map(str::to_string).ok_or_else(|| {
+        crate::error::AppError::Generic("File path contains non-UTF-8 characters".to_string())
+    })
 }
 
 #[tauri::command]
@@ -553,15 +563,15 @@ pub async fn im_delete_app_data_file(
     file_name: String,
 ) -> CommandResult<()> {
     validate_app_data_file_name(&file_name)?;
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e))
+    })?;
     let file_path = app_data_dir.join(&file_name);
 
     if file_path.exists() {
-        std::fs::remove_file(&file_path)
-            .map_err(|e| crate::error::AppError::Generic(format!("Failed to delete file: {}", e)))?;
+        std::fs::remove_file(&file_path).map_err(|e| {
+            crate::error::AppError::Generic(format!("Failed to delete file: {}", e))
+        })?;
     }
 
     Ok(())

@@ -1,4 +1,4 @@
-﻿//! Hub 数据访问层
+//! Hub 数据访问层
 //!
 //! 提供 Hub 实体的 CRUD 操作
 
@@ -31,16 +31,16 @@ impl HubRepository {
     }
 
     /// 创建新的 Hub
-    /// 
+    ///
     /// # Arguments
     /// * `name` - Hub 名称
-    /// 
+    ///
     /// # Returns
     /// 创建成功的 Hub 实体
     pub async fn create(&self, name: &str) -> AppResult<Hub> {
         let mut hub = Hub::new(name);
         hub.sort_order = self.next_sort_order().await?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO hubs (id, name, sort_order, created_at, updated_at, deleted_at)
@@ -61,10 +61,10 @@ impl HubRepository {
     }
 
     /// 根据 ID 获取 Hub
-    /// 
+    ///
     /// # Arguments
     /// * `id` - Hub ID
-    /// 
+    ///
     /// # Returns
     /// Hub 实体，如果不存在或已删除返回 None
     pub async fn get(&self, id: &str) -> AppResult<Option<Hub>> {
@@ -84,7 +84,7 @@ impl HubRepository {
     }
 
     /// 获取所有未删除的 Hub
-    /// 
+    ///
     /// # Returns
     /// Hub 列表，按用户排序排列
     pub async fn list(&self) -> AppResult<Vec<Hub>> {
@@ -104,23 +104,24 @@ impl HubRepository {
     }
 
     /// 更新 Hub
-    /// 
+    ///
     /// # Arguments
     /// * `id` - Hub ID  
     /// * `update` - 更新数据
-    /// 
+    ///
     /// # Returns
     /// 更新后的 Hub 实体
     pub async fn update(&self, id: &str, update: HubUpdate) -> AppResult<Hub> {
         let now = Utc::now().timestamp();
-        
+
         // 先获取现有 Hub
         let existing = self.get(id).await?;
-        let hub = existing.ok_or_else(|| AppError::NotFound(format!("Hub does not exist: {}", id)))?;
-        
+        let hub =
+            existing.ok_or_else(|| AppError::NotFound(format!("Hub does not exist: {}", id)))?;
+
         // 合并更新
         let new_name = update.name.unwrap_or(hub.name);
-        
+
         sqlx::query(
             r#"
             UPDATE hubs 
@@ -136,7 +137,9 @@ impl HubRepository {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         // 返回更新后的 Hub
-        self.get(id).await?.ok_or_else(|| AppError::NotFound(format!("Hub does not exist: {}", id)))
+        self.get(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Hub does not exist: {}", id)))
     }
 
     /// 更新 Hub 的用户排序
@@ -176,13 +179,13 @@ impl HubRepository {
     }
 
     /// 级联删除 Hub 及其所有下属 Agent 和关联数据
-    /// 
+    ///
     /// 使用事务确保原子性：
     /// 1. 查询该 Hub 下所有 Agent（包括已软删除的）
     /// 2. 对每个 Agent 执行级联删除（9 张关联表）
     /// 3. 删除 Hub 自身的 diff_records
     /// 4. 删除 Hub 记录
-    /// 
+    ///
     /// # Arguments
     /// * `id` - Hub ID
     pub async fn cascade_delete(&self, id: &str) -> AppResult<()> {
@@ -200,56 +203,114 @@ impl HubRepository {
         }
 
         // 查询该 Hub 下所有 Agent ID（包括已软删除的，确保彻底清理）
-        let agent_ids: Vec<(String,)> = sqlx::query_as(
-            "SELECT id FROM agents WHERE hub_id = ?"
-        )
-        .bind(id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        let agent_ids: Vec<(String,)> = sqlx::query_as("SELECT id FROM agents WHERE hub_id = ?")
+            .bind(id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
 
         // 使用事务确保原子性
-        let mut tx = self.pool.begin().await
+        let mut tx = self
+            .pool
+            .begin()
+            .await
             .map_err(|e| AppError::Database(format!("Failed to begin transaction: {}", e)))?;
 
         // 对每个 Agent 执行级联删除
         for (agent_id,) in &agent_ids {
             // 按依赖顺序删除 Agent 的所有关联数据
             sqlx::query("DELETE FROM diff_records WHERE context_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) diff_records: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) diff_records: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM chunk_embeddings WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) chunk_embeddings: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) chunk_embeddings: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM vector_metadata WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) vector_metadata: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) vector_metadata: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM memory_candidates WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) memory_candidates: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) memory_candidates: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM memory_trigger_state WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) memory_trigger_state: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) memory_trigger_state: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM memories WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) memories: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) memories: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM messages WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) messages: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!(
+                        "Failed to delete Agent({}) messages: {}",
+                        agent_id, e
+                    ))
+                })?;
 
             sqlx::query("DELETE FROM files WHERE agent_id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}) files: {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!("Failed to delete Agent({}) files: {}", agent_id, e))
+                })?;
 
             sqlx::query("DELETE FROM agents WHERE id = ?")
-                .bind(agent_id).execute(&mut *tx).await
-                .map_err(|e| AppError::Database(format!("Failed to delete Agent({}): {}", agent_id, e)))?;
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!("Failed to delete Agent({}): {}", agent_id, e))
+                })?;
         }
 
         // 删除 Hub 自身的 diff_records（context_id 可能是 hub_id）
@@ -267,7 +328,8 @@ impl HubRepository {
             .map_err(|e| AppError::Database(format!("Failed to delete Hub: {}", e)))?;
 
         // 提交事务
-        tx.commit().await
+        tx.commit()
+            .await
             .map_err(|e| AppError::Database(format!("Failed to commit transaction: {}", e)))?;
 
         Ok(())
@@ -288,9 +350,9 @@ mod tests {
     #[tokio::test]
     async fn test_create_hub() {
         let repo = setup_test_db().await;
-        
+
         let hub = repo.create("测试 Hub").await.unwrap();
-        
+
         assert!(!hub.id.is_empty());
         assert_eq!(hub.name, "测试 Hub");
         assert!(hub.deleted_at.is_none());
@@ -299,10 +361,10 @@ mod tests {
     #[tokio::test]
     async fn test_get_hub() {
         let repo = setup_test_db().await;
-        
+
         let created = repo.create("测试 Hub").await.unwrap();
         let fetched = repo.get(&created.id).await.unwrap();
-        
+
         assert!(fetched.is_some());
         assert_eq!(fetched.unwrap().name, "测试 Hub");
     }
@@ -310,34 +372,40 @@ mod tests {
     #[tokio::test]
     async fn test_list_hubs() {
         let repo = setup_test_db().await;
-        
+
         repo.create("Hub 1").await.unwrap();
         repo.create("Hub 2").await.unwrap();
-        
+
         let hubs = repo.list().await.unwrap();
-        
+
         assert_eq!(hubs.len(), 2);
     }
 
     #[tokio::test]
     async fn test_update_hub() {
         let repo = setup_test_db().await;
-        
+
         let created = repo.create("原名称").await.unwrap();
-        let updated = repo.update(&created.id, HubUpdate {
-            name: Some("新名称".to_string()),
-        }).await.unwrap();
-        
+        let updated = repo
+            .update(
+                &created.id,
+                HubUpdate {
+                    name: Some("新名称".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+
         assert_eq!(updated.name, "新名称");
     }
 
     #[tokio::test]
     async fn test_cascade_delete_hub() {
         let repo = setup_test_db().await;
-        
+
         let created = repo.create("待删除").await.unwrap();
         repo.cascade_delete(&created.id).await.unwrap();
-        
+
         // Hub 应已被彻底删除
         let hubs = repo.list().await.unwrap();
         assert!(hubs.is_empty());
@@ -376,18 +444,26 @@ mod tests {
 
         // 验证 Hub 已删除
         let hub_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM hubs WHERE id = ?")
-            .bind(&hub.id).fetch_one(&pool).await.unwrap();
+            .bind(&hub.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(hub_count.0, 0, "Hub 应已被删除");
 
         // 验证 Agent 已删除
         let agent_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM agents WHERE hub_id = ?")
-            .bind(&hub.id).fetch_one(&pool).await.unwrap();
+            .bind(&hub.id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         assert_eq!(agent_count.0, 0, "所有 Agent 应已被删除");
 
         // 验证消息已删除
-        let msg_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM messages WHERE agent_id IN ('a1', 'a2')"
-        ).fetch_one(&pool).await.unwrap();
+        let msg_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM messages WHERE agent_id IN ('a1', 'a2')")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(msg_count.0, 0, "所有消息应已被删除");
     }
 }

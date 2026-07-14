@@ -25,11 +25,12 @@ pub use self::broker_audit::{
 };
 pub(crate) use self::network::NetworkDirectTargetRiskInfo;
 pub(crate) use self::network::{
-    agent_browser_runtime_script_hint, command_token_name, detect_network_direct_targets, detect_network_intent,
-    detect_network_proxy_bypass_signal, detect_network_remote_destructive_signal,
-    detect_network_sensitive_egress_signal, detect_network_upload_risk_signal,
-    direct_targets_from_allowances_for_protocols, encoded_hostname_target_risk,
-    required_network_direct_protocols, resolve_network_direct_target_risk, split_command_tokens,
+    agent_browser_runtime_script_hint, command_token_name, detect_network_direct_targets,
+    detect_network_intent, detect_network_proxy_bypass_signal,
+    detect_network_remote_destructive_signal, detect_network_sensitive_egress_signal,
+    detect_network_upload_risk_signal, direct_targets_from_allowances_for_protocols,
+    encoded_hostname_target_risk, required_network_direct_protocols,
+    resolve_network_direct_target_risk, split_command_tokens,
 };
 pub use self::policy::ShellSandboxPolicy;
 #[cfg(test)]

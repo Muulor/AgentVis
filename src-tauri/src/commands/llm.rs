@@ -2,21 +2,23 @@
 //!
 //! 提供 LLM 聊天功能命令
 
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
-use once_cell::sync::Lazy;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::oneshot;
 
 use crate::crypto::{Keystore, WindowsKeystore};
-use crate::llm::http_client::{get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout};
-use crate::llm::{ChatMessage, ChatRequest, ChatRole, LlmProvider, ProviderConfig};
-use crate::llm::{OpenAIAdapter, AnthropicAdapter, GeminiAdapter};
 use crate::error::{AppError, AppResult, CommandResult};
+use crate::llm::http_client::{
+    get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout,
+};
+use crate::llm::{AnthropicAdapter, GeminiAdapter, OpenAIAdapter};
+use crate::llm::{ChatMessage, ChatRequest, ChatRole, LlmProvider, ProviderConfig};
 use crate::AppState;
 
 // ==================== 取消信号存储 ====================
@@ -46,13 +48,18 @@ fn lock_cancel_senders() -> MutexGuard<'static, HashMap<String, Vec<CancelRegist
 
 fn stream_no_useful_progress_timeout(provider: &str) -> Option<Duration> {
     if provider == "volcengine" {
-        Some(Duration::from_secs(VOLCENGINE_STREAM_NO_USEFUL_PROGRESS_TIMEOUT_SECS))
+        Some(Duration::from_secs(
+            VOLCENGINE_STREAM_NO_USEFUL_PROGRESS_TIMEOUT_SECS,
+        ))
     } else {
         None
     }
 }
 
-fn apply_model_vision_support(config: ProviderConfig, supports_vision: Option<bool>) -> ProviderConfig {
+fn apply_model_vision_support(
+    config: ProviderConfig,
+    supports_vision: Option<bool>,
+) -> ProviderConfig {
     if matches!(supports_vision, Some(false)) {
         config.without_vision()
     } else {
@@ -221,7 +228,7 @@ pub struct ChatResponseDto {
 /// 将 DTO 消息转换为内部格式
 fn convert_messages(messages: Vec<ChatMessageDto>) -> Vec<ChatMessage> {
     use crate::llm::ImageAttachment;
-    
+
     messages
         .into_iter()
         .map(|m| {
@@ -231,7 +238,7 @@ fn convert_messages(messages: Vec<ChatMessageDto>) -> Vec<ChatMessage> {
                 "assistant" => ChatRole::Assistant,
                 _ => ChatRole::User,
             };
-            
+
             // 转换图片附件
             let images = m.images.map(|imgs| {
                 imgs.into_iter()
@@ -241,7 +248,7 @@ fn convert_messages(messages: Vec<ChatMessageDto>) -> Vec<ChatMessage> {
                     })
                     .collect()
             });
-            
+
             ChatMessage {
                 role,
                 content: m.content,
@@ -518,7 +525,11 @@ pub async fn gpt_image_generate(
     let reference_images = request.reference_images.unwrap_or_default();
     let has_references = !reference_images.is_empty();
     let endpoint = gpt_image_endpoint(&base_url, has_references);
-    let model_id = request.model.as_deref().unwrap_or("gpt-image-2").to_string();
+    let model_id = request
+        .model
+        .as_deref()
+        .unwrap_or("gpt-image-2")
+        .to_string();
     let output_format = request
         .output_format
         .as_deref()
@@ -540,7 +551,7 @@ pub async fn gpt_image_generate(
 
     if background == "transparent" {
         return Err(AppError::LlmApi(
-            "gpt-image-2 does not support transparent backgrounds; use auto or opaque".to_string()
+            "gpt-image-2 does not support transparent backgrounds; use auto or opaque".to_string(),
         ));
     }
 
@@ -564,7 +575,10 @@ pub async fn gpt_image_generate(
         )));
     }
 
-    let size = map_gpt_image_size(request.aspect_ratio.as_deref(), request.image_size.as_deref());
+    let size = map_gpt_image_size(
+        request.aspect_ratio.as_deref(),
+        request.image_size.as_deref(),
+    );
     let use_stream = request.stream.unwrap_or(false);
     let partial_images = request.partial_images.unwrap_or(2).min(3);
 
@@ -605,9 +619,7 @@ pub async fn gpt_image_generate(
     } else {
         get_client()
     };
-    let mut request_builder = http_client
-        .post(&endpoint)
-        .bearer_auth(&api_key);
+    let mut request_builder = http_client.post(&endpoint).bearer_auth(&api_key);
 
     if has_references {
         let mut form = reqwest::multipart::Form::new()
@@ -635,16 +647,24 @@ pub async fn gpt_image_generate(
         }
 
         use base64::Engine as _;
-        let image_field_name = if reference_images.len() == 1 { "image" } else { "image[]" };
+        let image_field_name = if reference_images.len() == 1 {
+            "image"
+        } else {
+            "image[]"
+        };
         for (index, image) in reference_images.iter().enumerate() {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(&image.data)
-                .map_err(|e| AppError::LlmApi(format!("GPT Image reference image decode failed: {}", e)))?;
+                .map_err(|e| {
+                    AppError::LlmApi(format!("GPT Image reference image decode failed: {}", e))
+                })?;
 
             let part = reqwest::multipart::Part::bytes(bytes)
                 .file_name(format!("reference_{}.png", index))
                 .mime_str(&image.mime_type)
-                .map_err(|e| AppError::LlmApi(format!("GPT Image reference image MIME invalid: {}", e)))?;
+                .map_err(|e| {
+                    AppError::LlmApi(format!("GPT Image reference image MIME invalid: {}", e))
+                })?;
 
             form = form.part(image_field_name, part);
         }
@@ -700,10 +720,12 @@ pub async fn gpt_image_generate(
                     start_timeout.as_secs()
                 ))
             })?
-            .map_err(|e| AppError::LlmApi(format!(
-                "GPT Image API request failed: {}",
-                format_reqwest_error(&e)
-            )))
+            .map_err(|e| {
+                AppError::LlmApi(format!(
+                    "GPT Image API request failed: {}",
+                    format_reqwest_error(&e)
+                ))
+            })
     };
 
     let response = match response_result {
@@ -746,13 +768,13 @@ pub async fn gpt_image_generate(
 
         if images_base64.is_empty() {
             return Err(AppError::LlmApi(
-                "GPT Image stream returned no b64_json payload".to_string()
+                "GPT Image stream returned no b64_json payload".to_string(),
             ));
         }
 
-        let final_image = images_base64
-            .pop()
-            .ok_or_else(|| AppError::LlmApi("GPT Image stream returned no final image".to_string()))?;
+        let final_image = images_base64.pop().ok_or_else(|| {
+            AppError::LlmApi("GPT Image stream returned no final image".to_string())
+        })?;
 
         return Ok(GptImageGenerateResponse {
             images_base64: vec![final_image],
@@ -761,13 +783,12 @@ pub async fn gpt_image_generate(
     }
 
     cleanup_optional_cancel_sender(&session_id, cancel_registration_id);
-    let body_text = response
-        .text()
-        .await
-        .map_err(|e| AppError::LlmApi(format!(
+    let body_text = response.text().await.map_err(|e| {
+        AppError::LlmApi(format!(
             "GPT Image API response read failed: {}",
             format_reqwest_error(&e)
-        )))?;
+        ))
+    })?;
 
     log::debug!(
         "[GPT Image] HTTP {}: {}",
@@ -782,16 +803,20 @@ pub async fn gpt_image_generate(
         )));
     }
 
-    let api_resp: OpenAiImagesResponse = serde_json::from_str(&body_text)
-        .map_err(|e| AppError::LlmApi(format!(
+    let api_resp: OpenAiImagesResponse = serde_json::from_str(&body_text).map_err(|e| {
+        AppError::LlmApi(format!(
             "GPT Image API response parse failed: {}\nRaw response: {}",
             e,
             &body_text.chars().take(500).collect::<String>()
-        )))?;
+        ))
+    })?;
 
-    let data = api_resp.data
+    let data = api_resp
+        .data
         .filter(|items| !items.is_empty())
-        .ok_or_else(|| AppError::LlmApi("GPT Image API response did not include image data".to_string()))?;
+        .ok_or_else(|| {
+            AppError::LlmApi("GPT Image API response did not include image data".to_string())
+        })?;
 
     let mut images_base64 = Vec::new();
     for item in data {
@@ -801,22 +826,19 @@ pub async fn gpt_image_generate(
         }
 
         if let Some(url) = item.url {
-            let img_response = http_client
-                .get(&url)
-                .send()
-                .await
-                .map_err(|e| AppError::LlmApi(format!(
+            let img_response = http_client.get(&url).send().await.map_err(|e| {
+                AppError::LlmApi(format!(
                     "GPT Image URL download failed: {}",
                     format_reqwest_error(&e)
-                )))?;
+                ))
+            })?;
 
-            let img_bytes = img_response
-                .bytes()
-                .await
-                .map_err(|e| AppError::LlmApi(format!(
+            let img_bytes = img_response.bytes().await.map_err(|e| {
+                AppError::LlmApi(format!(
                     "GPT Image URL content read failed: {}",
                     format_reqwest_error(&e)
-                )))?;
+                ))
+            })?;
 
             use base64::Engine as _;
             images_base64.push(base64::engine::general_purpose::STANDARD.encode(&img_bytes));
@@ -825,7 +847,7 @@ pub async fn gpt_image_generate(
 
     if images_base64.is_empty() {
         return Err(AppError::LlmApi(
-            "GPT Image API returned no b64_json or downloadable URL".to_string()
+            "GPT Image API returned no b64_json or downloadable URL".to_string(),
         ));
     }
 
@@ -843,7 +865,7 @@ pub async fn llm_chat(
 ) -> CommandResult<ChatResponseDto> {
     let api_key = get_api_key(&request.provider)?;
     let config = apply_model_vision_support(ProviderConfig::new(api_key), request.supports_vision);
-    
+
     let chat_request = ChatRequest {
         messages: convert_messages(request.messages),
         model: request.model,
@@ -851,14 +873,14 @@ pub async fn llm_chat(
         max_tokens: request.max_tokens,
         stream: false,
         response_modalities: request.response_modalities,
-        image_config: request.image_config.map(|c| {
-            crate::llm::types::ImageGenerationConfig {
+        image_config: request
+            .image_config
+            .map(|c| crate::llm::types::ImageGenerationConfig {
                 aspect_ratio: c.aspect_ratio,
                 image_size: c.image_size,
-            }
-        }),
+            }),
     };
-    
+
     let response = match request.provider.as_str() {
         "openai" => {
             let adapter = OpenAIAdapter::new(config);
@@ -913,17 +935,22 @@ pub async fn llm_chat(
         }
         "xiaomi-mimo" => {
             // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
-            let mimo_config =
-                config.with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
+            let mimo_config = config.with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
             let adapter = OpenAIAdapter::new(mimo_config);
             adapter.chat(chat_request).await?
         }
         "local" => {
             // Local Router：根据模型名智能推断协议（与 llm_chat_with_tools 一致）
             let protocol = infer_protocol_from_model(chat_request.model.as_deref());
-            let base_url = request.base_url.as_deref().unwrap_or("http://127.0.0.1:8050");
-            log::debug!("[LLM] local chat: 模型={}, 推断协议={}",
-                chat_request.model.as_deref().unwrap_or("unknown"), protocol);
+            let base_url = request
+                .base_url
+                .as_deref()
+                .unwrap_or("http://127.0.0.1:8050");
+            log::debug!(
+                "[LLM] local chat: 模型={}, 推断协议={}",
+                chat_request.model.as_deref().unwrap_or("unknown"),
+                protocol
+            );
             match protocol {
                 "anthropic" => {
                     let local_config = config.with_base_url(base_url);
@@ -931,7 +958,8 @@ pub async fn llm_chat(
                     adapter.chat(chat_request).await?
                 }
                 "openai" => {
-                    let local_config = config.with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
+                    let local_config =
+                        config.with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
                     let adapter = OpenAIAdapter::new(local_config);
                     adapter.chat(chat_request).await?
                 }
@@ -944,7 +972,8 @@ pub async fn llm_chat(
         }
         "volcengine" => {
             // 火山引擎 Coding Plan 使用 OpenAI 兼容协议
-            let bailian_config = config.with_base_url("https://ark.cn-beijing.volces.com/api/coding/v3");
+            let bailian_config =
+                config.with_base_url("https://ark.cn-beijing.volces.com/api/coding/v3");
             let adapter = OpenAIAdapter::new(bailian_config);
             adapter.chat(chat_request).await?
         }
@@ -963,10 +992,13 @@ pub async fn llm_chat(
             adapter.chat(chat_request).await?
         }
         provider => {
-            return Err(AppError::LlmApi(format!("Unsupported provider: {}", provider)));
+            return Err(AppError::LlmApi(format!(
+                "Unsupported provider: {}",
+                provider
+            )));
         }
     };
-    
+
     Ok(ChatResponseDto {
         content: response.content,
         model: response.model,
@@ -1025,7 +1057,7 @@ pub struct ReasoningProgressEvent {
 }
 
 /// 发送流式聊天请求
-/// 
+///
 /// 通过 Tauri 事件系统发送流式响应 chunk
 /// 前端需要监听 "llm-stream-chunk" 事件
 /// 支持通过 llm_cancel_stream 命令取消
@@ -1038,14 +1070,18 @@ pub async fn llm_chat_stream(
     attempt_id: Option<String>,
 ) -> CommandResult<()> {
     use futures::StreamExt;
-    
+
     let api_key = get_api_key(&request.provider)?;
     let no_useful_progress_timeout = stream_no_useful_progress_timeout(&request.provider);
     // 原生 OpenAI / OpenRouter / DeepSeek 支持 stream_options.include_usage
-    let supports_stream_usage = matches!(request.provider.as_str(), "openai" | "openrouter" | "deepseek");
-    let mut config = apply_model_vision_support(ProviderConfig::new(api_key), request.supports_vision);
+    let supports_stream_usage = matches!(
+        request.provider.as_str(),
+        "openai" | "openrouter" | "deepseek"
+    );
+    let mut config =
+        apply_model_vision_support(ProviderConfig::new(api_key), request.supports_vision);
     config.supports_stream_usage = supports_stream_usage;
-    
+
     let chat_request = ChatRequest {
         messages: convert_messages(request.messages),
         model: request.model,
@@ -1054,21 +1090,21 @@ pub async fn llm_chat_stream(
         stream: true,
         // 图像生成参数透传
         response_modalities: request.response_modalities,
-        image_config: request.image_config.map(|c| {
-            crate::llm::types::ImageGenerationConfig {
+        image_config: request
+            .image_config
+            .map(|c| crate::llm::types::ImageGenerationConfig {
                 aspect_ratio: c.aspect_ratio,
                 image_size: c.image_size,
-            }
-        }),
+            }),
     };
-    
+
     // 在流创建之前注册取消通道，确保模型"思考"期间（chat_stream 尚未返回）
     // 用户点击取消时信号不会丢失。流创建完成后进入 select! 循环会立即捕获已到达的取消信号。
     let (cancel_tx, mut cancel_rx) = oneshot::channel::<()>();
     let cancel_registration_id = register_cancel_sender(&session_id, attempt_id.clone(), cancel_tx);
-    
+
     // 在流创建阶段以及分块读取阶段都要保持取消机制处于激活状态。
-    // 部分提供商在响应头到达之前不会产出流，因此直接 await chat_stream() 
+    // 部分提供商在响应头到达之前不会产出流，因此直接 await chat_stream()
     // 可能导致“停止”操作长时间无响应。
     let stream_future = async {
         match request.provider.as_str() {
@@ -1116,8 +1152,7 @@ pub async fn llm_chat_stream(
             }
             "xiaomi-mimo" => {
                 // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
-                let mimo_config =
-                    config.with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
+                let mimo_config = config.with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
                 let adapter = OpenAIAdapter::new(mimo_config);
                 adapter.chat_stream(chat_request).await
             }
@@ -1133,7 +1168,10 @@ pub async fn llm_chat_stream(
             "local" => {
                 // Local Router：根据模型名智能推断协议（与 llm_chat_with_tools 一致）
                 let protocol = infer_protocol_from_model(chat_request.model.as_deref());
-                let base_url = request.base_url.as_deref().unwrap_or("http://127.0.0.1:8050");
+                let base_url = request
+                    .base_url
+                    .as_deref()
+                    .unwrap_or("http://127.0.0.1:8050");
                 log::debug!(
                     "[LLM] local chat_stream: 模型={}, 推断协议={}",
                     chat_request.model.as_deref().unwrap_or("unknown"),
@@ -1146,8 +1184,8 @@ pub async fn llm_chat_stream(
                         adapter.chat_stream(chat_request).await
                     }
                     "openai" => {
-                        let local_config =
-                            config.with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
+                        let local_config = config
+                            .with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
                         let adapter = OpenAIAdapter::new(local_config);
                         adapter.chat_stream(chat_request).await
                     }
@@ -1181,18 +1219,24 @@ pub async fn llm_chat_stream(
             }
             provider => {
                 // 发送错误事件
-                let _ = app.emit("llm-stream-chunk", StreamChunkEvent {
-                    session_id: session_id.clone(),
-                    attempt_id: attempt_id.clone(),
-                    delta: String::new(),
-                    reasoning: None,
-                    done: true,
-                    finish_reason: None,
-                    error: Some(format!("Unsupported provider: {}", provider)),
-                    input_tokens: None,
-                    output_tokens: None,
-                });
-                return Err(AppError::LlmApi(format!("Unsupported provider: {}", provider)));
+                let _ = app.emit(
+                    "llm-stream-chunk",
+                    StreamChunkEvent {
+                        session_id: session_id.clone(),
+                        attempt_id: attempt_id.clone(),
+                        delta: String::new(),
+                        reasoning: None,
+                        done: true,
+                        finish_reason: None,
+                        error: Some(format!("Unsupported provider: {}", provider)),
+                        input_tokens: None,
+                        output_tokens: None,
+                    },
+                );
+                return Err(AppError::LlmApi(format!(
+                    "Unsupported provider: {}",
+                    provider
+                )));
             }
         }
     };
@@ -1217,11 +1261,11 @@ pub async fn llm_chat_stream(
             return Ok(());
         }
     };
-    
+
     match stream_result {
         Ok(mut stream) => {
             let mut last_useful_progress_at = Instant::now();
-            
+
             // 使用 tokio::select! 在流循环中检测取消信号
             let result = loop {
                 tokio::select! {
@@ -1286,7 +1330,7 @@ pub async fn llm_chat_stream(
                                     input_tokens: chunk.input_tokens,
                                     output_tokens: chunk.output_tokens,
                                 });
-                                
+
                                 // 如果已完成，退出循环
                                 if chunk.done {
                                     break Ok(());
@@ -1334,36 +1378,39 @@ pub async fn llm_chat_stream(
                     }
                 }
             };
-            
+
             // 清理：从全局存储中移除取消通道（如果还存在）
             remove_cancel_sender(&session_id, cancel_registration_id);
-            
+
             result?;
         }
         Err(e) => {
             // 清理取消通道
             remove_cancel_sender(&session_id, cancel_registration_id);
             // 发送错误事件
-            let _ = app.emit("llm-stream-chunk", StreamChunkEvent {
-                session_id: session_id.clone(),
-                attempt_id: attempt_id.clone(),
-                delta: String::new(),
-                reasoning: None,
-                done: true,
-                finish_reason: None,
-                error: Some(e.to_string()),
-                input_tokens: None,
-                output_tokens: None,
-            });
+            let _ = app.emit(
+                "llm-stream-chunk",
+                StreamChunkEvent {
+                    session_id: session_id.clone(),
+                    attempt_id: attempt_id.clone(),
+                    delta: String::new(),
+                    reasoning: None,
+                    done: true,
+                    finish_reason: None,
+                    error: Some(e.to_string()),
+                    input_tokens: None,
+                    output_tokens: None,
+                },
+            );
             return Err(e);
         }
     }
-    
+
     Ok(())
 }
 
 /// 取消流式聊天请求
-/// 
+///
 /// 发送取消信号给指定 session_id 的流式请求。
 /// 提供 attempt_id 时只取消匹配的单次流；省略时保留原有的整会话取消语义。
 #[tauri::command]
@@ -1375,7 +1422,7 @@ pub async fn llm_cancel_stream(
         Some(attempt_id) => cancel_attempt(&session_id, attempt_id),
         None => cancel_session(&session_id),
     };
-    
+
     if cancelled_count > 0 {
         // 发送取消信号（忽略发送失败，可能接收端已关闭）
         log::info!(
@@ -1391,7 +1438,7 @@ pub async fn llm_cancel_stream(
             attempt_id
         );
     }
-    
+
     Ok(())
 }
 
@@ -1429,7 +1476,7 @@ pub async fn llm_list_models(
             "gpt-5.5".to_string(),
             "gpt-5.6-luna".to_string(),
             "gpt-5.6-terra".to_string(),
-            "gpt-5.6-sol".to_string(),                                    
+            "gpt-5.6-sol".to_string(),
         ],
         "anthropic" => vec![
             "claude-sonnet-4-6".to_string(),
@@ -1454,16 +1501,9 @@ pub async fn llm_list_models(
             "deepseek-v4-pro".to_string(),
             "deepseek-v4-flash".to_string(),
         ],
-        "agnes" => vec![
-            "agnes-2.0-flash".to_string(),
-        ],
-        "stepfun" => vec![
-            "step-3.7-flash".to_string(),
-        ],
-        "xiaomi-mimo" => vec![
-            "mimo-v2.5".to_string(),
-            "mimo-v2.5-pro".to_string(),
-        ],
+        "agnes" => vec!["agnes-2.0-flash".to_string()],
+        "stepfun" => vec!["step-3.7-flash".to_string()],
+        "xiaomi-mimo" => vec!["mimo-v2.5".to_string(), "mimo-v2.5-pro".to_string()],
         "zhipu-coding" => vec![
             "GLM-4.7".to_string(),
             "GLM-5-Turbo".to_string(),
@@ -1497,7 +1537,7 @@ pub async fn llm_list_models(
         ],
         _ => vec![],
     };
-    
+
     Ok(models)
 }
 
@@ -1578,7 +1618,10 @@ fn stage_large_file_write_args(
                 ref_id, content_bytes, content_chars
             )),
         );
-        args.insert("contentRef".to_string(), serde_json::Value::String(ref_id.clone()));
+        args.insert(
+            "contentRef".to_string(),
+            serde_json::Value::String(ref_id.clone()),
+        );
         args.insert("contentStaged".to_string(), serde_json::Value::Bool(true));
         args.insert(
             "contentBytes".to_string(),
@@ -1617,11 +1660,7 @@ fn is_output_token_limit_finish_reason(finish_reason: Option<&str>) -> bool {
 
     matches!(
         normalized.as_str(),
-        "length"
-            | "max_tokens"
-            | "max_completion_tokens"
-            | "max_output_tokens"
-            | "incomplete"
+        "length" | "max_tokens" | "max_completion_tokens" | "max_output_tokens" | "incomplete"
     )
 }
 
@@ -1632,7 +1671,10 @@ fn discard_truncated_tool_calls(response: &mut ToolChatResponse) -> usize {
         return 0;
     }
 
-    response.tool_calls.take().map_or(0, |tool_calls| tool_calls.len())
+    response
+        .tool_calls
+        .take()
+        .map_or(0, |tool_calls| tool_calls.len())
 }
 
 fn make_tool_call_progress_callback(
@@ -1702,7 +1744,8 @@ pub async fn llm_chat_with_tools(
     } else {
         (None, None)
     };
-    let tool_call_progress = make_tool_call_progress_callback(app_handle.clone(), session_id.clone());
+    let tool_call_progress =
+        make_tool_call_progress_callback(app_handle.clone(), session_id.clone());
     let reasoning_trace = make_reasoning_trace_callback(app_handle.clone(), session_id.clone());
 
     // 根据 provider 类型分发请求
@@ -1711,46 +1754,119 @@ pub async fn llm_chat_with_tools(
             let api_key = get_api_key("gemini")?;
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision);
             let adapter = GeminiAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "openai" => {
             let api_key = get_api_key("openai")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_stream_usage();
+            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+                .with_stream_usage();
             let adapter = OpenAIAdapter::new(config);
             // 使用流式模式避免大 payload 超时
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "anthropic" => {
             let api_key = get_api_key("anthropic")?;
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision);
             let adapter = AnthropicAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "local" => {
             // Local Router：根据模型名智能推断协议
             let protocol = infer_protocol_from_model(request.model_id.as_deref());
             let api_key = get_api_key("local")?;
-            let base_url = request.base_url.as_deref().unwrap_or("http://127.0.0.1:8050");
+            let base_url = request
+                .base_url
+                .as_deref()
+                .unwrap_or("http://127.0.0.1:8050");
 
-            log::debug!("[LLM] local 提供商: 模型={}, 推断协议={}",
-                request.model_id.as_deref().unwrap_or("unknown"), protocol);
+            log::debug!(
+                "[LLM] local 提供商: 模型={}, 推断协议={}",
+                request.model_id.as_deref().unwrap_or("unknown"),
+                protocol
+            );
 
             match protocol {
                 "anthropic" => {
-                    let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_base_url(base_url);
+                    let config =
+                        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+                            .with_base_url(base_url);
                     let adapter = AnthropicAdapter::new(config);
-                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+                    dispatch_with_cancel(
+                        adapter.chat_stream_with_tools(
+                            request,
+                            tool_call_progress.clone(),
+                            reasoning_trace.clone(),
+                        ),
+                        cancel_rx,
+                        &session_id,
+                        cancel_registration_id,
+                    )
+                    .await
                 }
                 "openai" => {
-                    let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
+                    let config =
+                        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+                            .with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
                     let adapter = OpenAIAdapter::new(config);
-                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+                    dispatch_with_cancel(
+                        adapter.chat_stream_with_tools(
+                            request,
+                            tool_call_progress.clone(),
+                            reasoning_trace.clone(),
+                        ),
+                        cancel_rx,
+                        &session_id,
+                        cancel_registration_id,
+                    )
+                    .await
                 }
                 _ => {
                     // 默认 Gemini 协议
-                    let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision).with_base_url(base_url);
+                    let config =
+                        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+                            .with_base_url(base_url);
                     let adapter = GeminiAdapter::new(config);
-                    dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+                    dispatch_with_cancel(
+                        adapter.chat_stream_with_tools(
+                            request,
+                            tool_call_progress.clone(),
+                            reasoning_trace.clone(),
+                        ),
+                        cancel_rx,
+                        &session_id,
+                        cancel_registration_id,
+                    )
+                    .await
                 }
             }
         }
@@ -1760,7 +1876,17 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://open.bigmodel.cn/api/paas/v4");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "deepseek" => {
             // DeepSeek 使用 OpenAI 兼容协议
@@ -1768,7 +1894,17 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://api.deepseek.com");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "agnes" => {
             // Agnes AI 使用 OpenAI 兼容协议；Agnes-2.0-Flash 是 text/agentic 模型
@@ -1777,7 +1913,17 @@ pub async fn llm_chat_with_tools(
                 .with_base_url("https://apihub.agnes-ai.com/v1")
                 .with_model("agnes-2.0-flash");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "stepfun" => {
             // StepFun Step Plan 使用 OpenAI 兼容协议，专属路径为 /step_plan/v1
@@ -1786,7 +1932,17 @@ pub async fn llm_chat_with_tools(
                 .with_base_url("https://api.stepfun.com/step_plan/v1")
                 .with_model("step-3.7-flash");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "xiaomi-mimo" => {
             // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
@@ -1794,7 +1950,17 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "zhipu-coding" => {
             // ZhipuAI Coding Plan 专属 endpoint，与普通 zhipu 共享 API Key
@@ -1803,7 +1969,17 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://open.bigmodel.cn/api/coding/paas/v4");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "volcengine" => {
             // 火山引擎 Coding Plan 使用 OpenAI 兼容协议（流式模式，解决大 payload 超时）
@@ -1811,7 +1987,17 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://ark.cn-beijing.volces.com/api/coding/v3");
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "minimax" => {
             // Minimax Anthropic 兼容协议
@@ -1819,7 +2005,17 @@ pub async fn llm_chat_with_tools(
             let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
                 .with_base_url("https://api.minimaxi.com/anthropic/v1");
             let adapter = AnthropicAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         "openrouter" => {
             // OpenRouter 使用 OpenAI 兼容协议，支持路由到多个厂商模型
@@ -1828,11 +2024,23 @@ pub async fn llm_chat_with_tools(
                 .with_base_url("https://openrouter.ai/api/v1")
                 .with_stream_usage();
             let adapter = OpenAIAdapter::new(config);
-            dispatch_with_cancel(adapter.chat_stream_with_tools(request, tool_call_progress.clone(), reasoning_trace.clone()), cancel_rx, &session_id, cancel_registration_id).await
+            dispatch_with_cancel(
+                adapter.chat_stream_with_tools(
+                    request,
+                    tool_call_progress.clone(),
+                    reasoning_trace.clone(),
+                ),
+                cancel_rx,
+                &session_id,
+                cancel_registration_id,
+            )
+            .await
         }
         _ => {
             // 清理取消通道
-            if let (Some(sid), Some(registration_id)) = (session_id.as_ref(), cancel_registration_id) {
+            if let (Some(sid), Some(registration_id)) =
+                (session_id.as_ref(), cancel_registration_id)
+            {
                 remove_cancel_sender(sid, registration_id);
             }
             return Ok(ToolChatResponse {
@@ -2008,7 +2216,8 @@ pub async fn minimax_image_generate(
     let api_key = get_api_key("minimax")?;
 
     // 映射宽高比到 MiniMax 支持格式
-    let mapped_ratio = request.aspect_ratio
+    let mapped_ratio = request
+        .aspect_ratio
         .as_deref()
         .and_then(map_aspect_ratio_to_minimax);
 
@@ -2038,15 +2247,20 @@ pub async fn minimax_image_generate(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| AppError::LlmApi(format!("MiniMax image API network request failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::LlmApi(format!("MiniMax image API network request failed: {}", e))
+        })?;
 
     let http_status = response.status();
-    let body_text = response
-        .text()
-        .await
-        .map_err(|e| AppError::LlmApi(format!("Failed to read MiniMax image API response: {}", e)))?;
+    let body_text = response.text().await.map_err(|e| {
+        AppError::LlmApi(format!("Failed to read MiniMax image API response: {}", e))
+    })?;
 
-    log::debug!("[MiniMax] HTTP {}: {}", http_status, &body_text.chars().take(300).collect::<String>());
+    log::debug!(
+        "[MiniMax] HTTP {}: {}",
+        http_status,
+        &body_text.chars().take(300).collect::<String>()
+    );
 
     if !http_status.is_success() {
         return Err(AppError::LlmApi(format!(
@@ -2056,11 +2270,13 @@ pub async fn minimax_image_generate(
     }
 
     // 解析响应 JSON
-    let api_resp: MinimaxApiResponse = serde_json::from_str(&body_text)
-        .map_err(|e| AppError::LlmApi(format!(
+    let api_resp: MinimaxApiResponse = serde_json::from_str(&body_text).map_err(|e| {
+        AppError::LlmApi(format!(
             "Failed to parse MiniMax image API response: {}\nRaw response: {}",
-            e, &body_text.chars().take(500).collect::<String>()
-        )))?;
+            e,
+            &body_text.chars().take(500).collect::<String>()
+        ))
+    })?;
 
     // 检查业务层状态码
     if let Some(ref base_resp) = api_resp.base_resp {
@@ -2163,7 +2379,8 @@ pub async fn zhipu_image_generate(
     let api_key = get_api_key("zhipu")?;
 
     // 映射宽高比到 glm-image size 格式
-    let size = request.aspect_ratio
+    let size = request
+        .aspect_ratio
         .as_deref()
         .and_then(map_aspect_ratio_to_zhipu_size)
         .unwrap_or("1280x1280"); // 默认 1:1
@@ -2198,7 +2415,11 @@ pub async fn zhipu_image_generate(
         .await
         .map_err(|e| AppError::LlmApi(format!("Failed to read Zhipu image API response: {}", e)))?;
 
-    log::debug!("[Zhipu] HTTP {}: {}", http_status, &body_text.chars().take(300).collect::<String>());
+    log::debug!(
+        "[Zhipu] HTTP {}: {}",
+        http_status,
+        &body_text.chars().take(300).collect::<String>()
+    );
 
     if !http_status.is_success() {
         return Err(AppError::LlmApi(format!(
@@ -2208,15 +2429,17 @@ pub async fn zhipu_image_generate(
     }
 
     // 解析响应 JSON
-    let api_resp: ZhipuImageApiResponse = serde_json::from_str(&body_text)
-        .map_err(|e| AppError::LlmApi(format!(
+    let api_resp: ZhipuImageApiResponse = serde_json::from_str(&body_text).map_err(|e| {
+        AppError::LlmApi(format!(
             "Failed to parse Zhipu image API response: {}\nRaw response: {}",
-            e, &body_text.chars().take(500).collect::<String>()
-        )))?;
+            e,
+            &body_text.chars().take(500).collect::<String>()
+        ))
+    })?;
 
     if api_resp.data.is_empty() {
         return Err(AppError::LlmApi(
-            "Zhipu image API response did not include image data (data array is empty)".to_string()
+            "Zhipu image API response did not include image data (data array is empty)".to_string(),
         ));
     }
 
@@ -2226,16 +2449,19 @@ pub async fn zhipu_image_generate(
     let mut mime_type = "image/png".to_string();
 
     for item in &api_resp.data {
-        log::debug!("[Zhipu] 下载图片 URL: {}", &item.url.chars().take(80).collect::<String>());
+        log::debug!(
+            "[Zhipu] 下载图片 URL: {}",
+            &item.url.chars().take(80).collect::<String>()
+        );
 
-        let img_response = http_client
-            .get(&item.url)
-            .send()
-            .await
-            .map_err(|e| AppError::LlmApi(format!("Failed to download Zhipu image URL: {}", e)))?;
+        let img_response =
+            http_client.get(&item.url).send().await.map_err(|e| {
+                AppError::LlmApi(format!("Failed to download Zhipu image URL: {}", e))
+            })?;
 
         // 从响应头推断 MIME 类型
-        if let Some(content_type) = img_response.headers()
+        if let Some(content_type) = img_response
+            .headers()
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
         {
@@ -2260,9 +2486,16 @@ pub async fn zhipu_image_generate(
         images_base64.push(b64);
     }
 
-    log::info!("[Zhipu] 图像生成成功，共 {} 张，MIME: {}", images_base64.len(), mime_type);
+    log::info!(
+        "[Zhipu] 图像生成成功，共 {} 张，MIME: {}",
+        images_base64.len(),
+        mime_type
+    );
 
-    Ok(ZhipuImageGenerateResponse { images_base64, mime_type })
+    Ok(ZhipuImageGenerateResponse {
+        images_base64,
+        mime_type,
+    })
 }
 
 #[cfg(test)]
@@ -2277,16 +2510,8 @@ mod command_tests {
 
         let (first_sender, mut first_receiver) = oneshot::channel();
         let (second_sender, mut second_receiver) = oneshot::channel();
-        register_cancel_sender(
-            session_id,
-            Some("attempt-a".to_string()),
-            first_sender,
-        );
-        register_cancel_sender(
-            session_id,
-            Some("attempt-b".to_string()),
-            second_sender,
-        );
+        register_cancel_sender(session_id, Some("attempt-a".to_string()), first_sender);
+        register_cancel_sender(session_id, Some("attempt-b".to_string()), second_sender);
 
         assert_eq!(cancel_attempt(session_id, "attempt-a"), 1);
         assert_eq!(first_receiver.try_recv(), Ok(()));

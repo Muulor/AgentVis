@@ -229,15 +229,9 @@ impl SandboxMode {
         match value.trim() {
             "" | "LocalAudit" | "localAudit" | "local" => Ok(Self::LocalAudit),
             "OfflineIsolated" | "offlineIsolated" | "isolated" => Ok(Self::OfflineIsolated),
-            "ControlledNetwork"
-            | "controlledNetwork"
-            | "controlled_network"
-            | "controlled-network"
-            | "networkedIsolated"
-            | "networked_isolated"
-            | "networked-isolated" => {
-                Ok(Self::ControlledNetwork)
-            }
+            "ControlledNetwork" | "controlledNetwork" | "controlled_network"
+            | "controlled-network" | "networkedIsolated" | "networked_isolated"
+            | "networked-isolated" => Ok(Self::ControlledNetwork),
             other => Err(AppError::Forbidden(format!(
                 "Unknown sandbox mode '{}'",
                 other
@@ -433,8 +427,14 @@ mod tests {
 
     #[test]
     fn sandbox_mode_parses_legacy_aliases() {
-        assert_eq!(SandboxMode::parse("LocalAudit").unwrap(), SandboxMode::LocalAudit);
-        assert_eq!(SandboxMode::parse("local").unwrap(), SandboxMode::LocalAudit);
+        assert_eq!(
+            SandboxMode::parse("LocalAudit").unwrap(),
+            SandboxMode::LocalAudit
+        );
+        assert_eq!(
+            SandboxMode::parse("local").unwrap(),
+            SandboxMode::LocalAudit
+        );
         assert_eq!(
             SandboxMode::parse("isolated").unwrap(),
             SandboxMode::OfflineIsolated
@@ -447,7 +447,10 @@ mod tests {
             SandboxMode::parse("controlled-network").unwrap(),
             SandboxMode::ControlledNetwork
         );
-        assert_eq!(SandboxMode::ControlledNetwork.as_event_value(), "ControlledNetwork");
+        assert_eq!(
+            SandboxMode::ControlledNetwork.as_event_value(),
+            "ControlledNetwork"
+        );
     }
 
     #[test]

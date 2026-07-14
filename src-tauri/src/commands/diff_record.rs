@@ -17,7 +17,7 @@ pub async fn diff_record_create(
     request: DiffRecordCreateRequest,
 ) -> AppResult<DiffRecord> {
     let db = state.db.lock().await;
-    
+
     let record = if let Some(xml) = &request.xml_modification {
         DiffRecord::with_xml(
             &request.context_id,
@@ -36,7 +36,7 @@ pub async fn diff_record_create(
             &request.modified_content,
         )
     };
-    
+
     diff_record_repo::create(db.pool(), &record).await
 }
 
@@ -72,7 +72,8 @@ pub async fn diff_record_update_status(
     status: String,
 ) -> AppResult<()> {
     let db = state.db.lock().await;
-    let status_enum: DiffRecordStatus = status.parse()
+    let status_enum: DiffRecordStatus = status
+        .parse()
         .map_err(|e: String| crate::error::AppError::Generic(e))?;
     diff_record_repo::update_status(db.pool(), &id, status_enum).await
 }
@@ -113,7 +114,8 @@ pub async fn diff_record_update_message_id(
     new_message_id: String,
 ) -> AppResult<u64> {
     let db = state.db.lock().await;
-    diff_record_repo::update_message_id(db.pool(), &context_id, &old_message_id, &new_message_id).await
+    diff_record_repo::update_message_id(db.pool(), &context_id, &old_message_id, &new_message_id)
+        .await
 }
 
 /// 更新 Diff 记录的每个修改块审批状态
@@ -128,6 +130,11 @@ pub async fn diff_record_update_modification_statuses(
     statuses_json: String,
 ) -> AppResult<()> {
     let db = state.db.lock().await;
-    diff_record_repo::update_modification_statuses(db.pool(), &context_id, &document_id, &statuses_json).await
+    diff_record_repo::update_modification_statuses(
+        db.pool(),
+        &context_id,
+        &document_id,
+        &statuses_json,
+    )
+    .await
 }
-

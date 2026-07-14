@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::db::{VectorSearchResult, IndexStats};
+use crate::db::{IndexStats, VectorSearchResult};
 use crate::error::CommandResult;
 use crate::AppState;
 
@@ -58,16 +58,19 @@ pub async fn rag_index_chunk(
     params: IndexChunkParams,
 ) -> CommandResult<IndexChunkResponse> {
     let db = state.db.lock().await;
-    let chunk = db.vector_repo().insert_chunk(
-        &params.agent_id,
-        &params.document_id,
-        params.chunk_index,
-        &params.content,
-        &params.embedding,
-        params.metadata.as_deref(),
-        params.source_file_id.as_deref(),
-        params.chunk_id.as_deref(),
-    ).await?;
+    let chunk = db
+        .vector_repo()
+        .insert_chunk(
+            &params.agent_id,
+            &params.document_id,
+            params.chunk_index,
+            &params.content,
+            &params.embedding,
+            params.metadata.as_deref(),
+            params.source_file_id.as_deref(),
+            params.chunk_id.as_deref(),
+        )
+        .await?;
 
     Ok(IndexChunkResponse {
         id: chunk.id,
@@ -82,7 +85,10 @@ pub async fn rag_list_chunks(
     agent_id: String,
 ) -> CommandResult<Vec<PersistedChunkResponse>> {
     let db = state.db.lock().await;
-    let chunks = db.vector_repo().list_knowledge_chunks_for_bm25(&agent_id).await?;
+    let chunks = db
+        .vector_repo()
+        .list_knowledge_chunks_for_bm25(&agent_id)
+        .await?;
     Ok(chunks
         .into_iter()
         .map(|chunk| PersistedChunkResponse {
@@ -106,13 +112,16 @@ pub async fn rag_search(
     let threshold = params.threshold.unwrap_or(0.7);
 
     let db = state.db.lock().await;
-    let results = db.vector_repo().search_similar(
-        &params.agent_id,
-        &params.query_embedding,
-        top_k,
-        threshold,
-        params.document_id_prefix.as_deref(),
-    ).await?;
+    let results = db
+        .vector_repo()
+        .search_similar(
+            &params.agent_id,
+            &params.query_embedding,
+            top_k,
+            threshold,
+            params.document_id_prefix.as_deref(),
+        )
+        .await?;
 
     Ok(results)
 }
@@ -136,7 +145,10 @@ pub async fn rag_delete_by_document(
     document_id: String,
 ) -> CommandResult<u64> {
     let db = state.db.lock().await;
-    let count = db.vector_repo().delete_by_document(&agent_id, &document_id).await?;
+    let count = db
+        .vector_repo()
+        .delete_by_document(&agent_id, &document_id)
+        .await?;
     Ok(count)
 }
 

@@ -222,7 +222,10 @@ pub async fn web_search(
                     let mut combined_diagnostics = diagnostics;
                     combined_diagnostics.push(WebSearchDiagnostic {
                         level: "warn".to_string(),
-                        message: format!("DDGS fallback failed after empty Tavily response: {}", error),
+                        message: format!(
+                            "DDGS fallback failed after empty Tavily response: {}",
+                            error
+                        ),
                     });
                     Ok(build_response(
                         TAVILY_PROVIDER,
@@ -430,10 +433,7 @@ async fn run_ddgs_search(
     })?;
     drop(stdin);
 
-    let run_timeout = match (
-        options.search_depth.as_str(),
-        options.include_raw_content,
-    ) {
+    let run_timeout = match (options.search_depth.as_str(), options.include_raw_content) {
         ("advanced", true) => DDGS_TIMEOUT_ADVANCED_WITH_CONTENT_MS,
         ("advanced", false) => DDGS_TIMEOUT_ADVANCED_MS,
         (_, true) => DDGS_TIMEOUT_WITH_CONTENT_MS,
@@ -639,18 +639,18 @@ mod tests {
 
     #[test]
     fn falls_back_for_retryable_tavily_errors() {
-        assert!(should_use_ddgs_fallback_for_tavily_error(&AppError::LlmApi(
-            "Tavily API returned error 429: too many requests".to_string()
-        )));
-        assert!(should_use_ddgs_fallback_for_tavily_error(&AppError::LlmApi(
-            "Failed to parse Tavily response: expected value".to_string()
-        )));
-        assert!(!should_use_ddgs_fallback_for_tavily_error(&AppError::LlmApi(
-            "Tavily API returned error 422: invalid query".to_string()
-        )));
-        assert!(!should_use_ddgs_fallback_for_tavily_error(&AppError::Forbidden(
-            "sandbox blocked".to_string()
-        )));
+        assert!(should_use_ddgs_fallback_for_tavily_error(
+            &AppError::LlmApi("Tavily API returned error 429: too many requests".to_string())
+        ));
+        assert!(should_use_ddgs_fallback_for_tavily_error(
+            &AppError::LlmApi("Failed to parse Tavily response: expected value".to_string())
+        ));
+        assert!(!should_use_ddgs_fallback_for_tavily_error(
+            &AppError::LlmApi("Tavily API returned error 422: invalid query".to_string())
+        ));
+        assert!(!should_use_ddgs_fallback_for_tavily_error(
+            &AppError::Forbidden("sandbox blocked".to_string())
+        ));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-﻿//! 内嵌 Node.js 环境准备命令
+//! 内嵌 Node.js 环境准备命令
 //!
 //! 职责：
 //! - 将安装包内的 node-v20.18.0-win-x64.zip 解压到 {AppDataDir}/runtime/node-v20/
@@ -11,10 +11,10 @@
 //! - shell_execute 在每次调用时检查此目录是否存在并注入 PATH，
 //!   系统 Node.js 已在 PATH 时自动作为 fallback（追加到 PATH 末端）
 
+use crate::error::AppError;
 use std::io::Read;
 use std::path::PathBuf;
 use tauri::Manager;
-use crate::error::AppError;
 
 type CommandResult<T> = Result<T, AppError>;
 
@@ -34,13 +34,15 @@ pub struct EmbeddedNodeInfo {
 /// 调用时机：应用启动时通过 invoke 调用一次。
 /// 若 {AppDataDir}/runtime/node-v20/node.exe 已存在，直接返回路径，不重复解压。
 #[tauri::command]
-pub async fn prepare_embedded_node(
-    app: tauri::AppHandle,
-) -> CommandResult<EmbeddedNodeInfo> {
-    let app_data_dir = app.path().app_data_dir()
+pub async fn prepare_embedded_node(app: tauri::AppHandle) -> CommandResult<EmbeddedNodeInfo> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| AppError::FileSystem(format!("Failed to get AppDataDir: {}", e)))?;
 
-    let resource_dir = app.path().resource_dir()
+    let resource_dir = app
+        .path()
+        .resource_dir()
         .map_err(|e| AppError::FileSystem(format!("Failed to get resource_dir: {}", e)))?;
 
     // 目标目录：{AppDataDir}/runtime/node-v20/
@@ -54,7 +56,10 @@ pub async fn prepare_embedded_node(
     // 导致后续 npm install 命令找不到 npm。两者都存在才视为完整安装。
     let npm_cmd = node_dir.join("npm.cmd");
     if node_exe.exists() && npm_cmd.exists() {
-        log::debug!("[EmbeddedNode] node.exe + npm.cmd 均已存在，跳过解压: {}", node_dir.display());
+        log::debug!(
+            "[EmbeddedNode] node.exe + npm.cmd 均已存在，跳过解压: {}",
+            node_dir.display()
+        );
         return Ok(EmbeddedNodeInfo {
             bin_dir: node_dir.to_string_lossy().to_string(),
             node_exe: node_exe.to_string_lossy().to_string(),
@@ -65,8 +70,12 @@ pub async fn prepare_embedded_node(
     // node.exe 或 npm.cmd 不完整（可能是残留目录），先清理再重新解压
     if node_dir.exists() {
         log::warn!("[EmbeddedNode] node-v20 目录不完整（可能是卸载残留），清理后重新解压");
-        std::fs::remove_dir_all(&node_dir)
-            .map_err(|e| AppError::FileSystem(format!("Failed to clean up leftover node-v20 directory: {}", e)))?;
+        std::fs::remove_dir_all(&node_dir).map_err(|e| {
+            AppError::FileSystem(format!(
+                "Failed to clean up leftover node-v20 directory: {}",
+                e
+            ))
+        })?;
     }
 
     // 获取 zip 资源路径
@@ -86,7 +95,10 @@ pub async fn prepare_embedded_node(
         .map_err(|e| AppError::FileSystem(format!("Failed to create node-v20 directory: {}", e)))?;
 
     // 解压（剥离顶层 node-v20.18.0-win-x64/ 文件夹）
-    log::info!("[EmbeddedNode] 开始解压 Node.js 20.18.0 到 {}", node_dir.display());
+    log::info!(
+        "[EmbeddedNode] 开始解压 Node.js 20.18.0 到 {}",
+        node_dir.display()
+    );
     extract_zip_strip_top(&zip_src, &node_dir)?;
     log::info!("[EmbeddedNode] Node.js 解压完成");
 
@@ -123,7 +135,8 @@ fn extract_zip_strip_top(zip_path: &PathBuf, dest_dir: &PathBuf) -> Result<(), A
         .map_err(|e| AppError::FileSystem(format!("Failed to parse zip: {}", e)))?;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
+        let mut entry = archive
+            .by_index(i)
             .map_err(|e| AppError::FileSystem(format!("Failed to read zip entry {}: {}", i, e)))?;
 
         let raw_name = entry.name().to_string();
@@ -137,23 +150,36 @@ fn extract_zip_strip_top(zip_path: &PathBuf, dest_dir: &PathBuf) -> Result<(), A
         let outpath = dest_dir.join(stripped);
 
         if entry.is_dir() {
-            std::fs::create_dir_all(&outpath)
-                .map_err(|e| AppError::FileSystem(format!("Failed to create directory {}: {}", outpath.display(), e)))?;
+            std::fs::create_dir_all(&outpath).map_err(|e| {
+                AppError::FileSystem(format!(
+                    "Failed to create directory {}: {}",
+                    outpath.display(),
+                    e
+                ))
+            })?;
         } else {
             if let Some(parent) = outpath.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| AppError::FileSystem(format!("Failed to create parent directory: {}", e)))?;
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    AppError::FileSystem(format!("Failed to create parent directory: {}", e))
+                })?;
             }
 
             let mut buf = Vec::new();
-            entry.read_to_end(&mut buf)
-                .map_err(|e| AppError::FileSystem(format!("Failed to read zip entry {}: {}", raw_name, e)))?;
+            entry.read_to_end(&mut buf).map_err(|e| {
+                AppError::FileSystem(format!("Failed to read zip entry {}: {}", raw_name, e))
+            })?;
 
-            let mut outfile = std::fs::File::create(&outpath)
-                .map_err(|e| AppError::FileSystem(format!("Failed to create file {}: {}", outpath.display(), e)))?;
+            let mut outfile = std::fs::File::create(&outpath).map_err(|e| {
+                AppError::FileSystem(format!(
+                    "Failed to create file {}: {}",
+                    outpath.display(),
+                    e
+                ))
+            })?;
 
-            std::io::Write::write_all(&mut outfile, &buf)
-                .map_err(|e| AppError::FileSystem(format!("Failed to write file {}: {}", outpath.display(), e)))?;
+            std::io::Write::write_all(&mut outfile, &buf).map_err(|e| {
+                AppError::FileSystem(format!("Failed to write file {}: {}", outpath.display(), e))
+            })?;
         }
     }
 

@@ -35,13 +35,23 @@ pub(crate) fn rename_directory_robust(old_path: &Path, new_path: &Path) -> bool 
     for attempt in 1..=RENAME_MAX_RETRIES {
         match std::fs::rename(old_path, new_path) {
             Ok(()) => {
-                log::info!("已重命名工作区（第 {} 次尝试）: {} -> {}",
-                    attempt, old_path.display(), new_path.display());
+                log::info!(
+                    "已重命名工作区（第 {} 次尝试）: {} -> {}",
+                    attempt,
+                    old_path.display(),
+                    new_path.display()
+                );
                 return true;
             }
             Err(e) => {
-                log::warn!("重命名工作区失败（第 {}/{} 次）: {} -> {} - {}",
-                    attempt, RENAME_MAX_RETRIES, old_path.display(), new_path.display(), e);
+                log::warn!(
+                    "重命名工作区失败（第 {}/{} 次）: {} -> {} - {}",
+                    attempt,
+                    RENAME_MAX_RETRIES,
+                    old_path.display(),
+                    new_path.display(),
+                    e
+                );
                 if attempt < RENAME_MAX_RETRIES {
                     std::thread::sleep(std::time::Duration::from_millis(RENAME_RETRY_DELAY_MS));
                 }
@@ -54,31 +64,47 @@ pub(crate) fn rename_directory_robust(old_path: &Path, new_path: &Path) -> bool 
     // 注意：必须同时完成 copy 和 delete 才算成功。
     // 如果 copy 成功但 delete 失败（进程仍在占用旧目录），
     // 必须回滚新副本以避免产生两个重复目录导致 DB 路径不一致。
-    log::info!("rename 重试耗尽，尝试 copy + delete fallback: {} -> {}",
-        old_path.display(), new_path.display());
+    log::info!(
+        "rename 重试耗尽，尝试 copy + delete fallback: {} -> {}",
+        old_path.display(),
+        new_path.display()
+    );
 
     match copy_dir_recursive(old_path, new_path) {
         Ok(()) => {
             // 尝试删除旧目录——只有删除成功时整个操作才算完成
             match std::fs::remove_dir_all(old_path) {
                 Ok(()) => {
-                    log::info!("copy + delete 成功: {} -> {}",
-                        old_path.display(), new_path.display());
+                    log::info!(
+                        "copy + delete 成功: {} -> {}",
+                        old_path.display(),
+                        new_path.display()
+                    );
                     true
                 }
                 Err(e) => {
                     // 旧目录删除失败（进程锁），回滚新副本，保持旧路径为唯一有效路径
-                    log::warn!("删除旧目录失败（进程占用），回滚新副本: {} - {}", old_path.display(), e);
+                    log::warn!(
+                        "删除旧目录失败（进程占用），回滚新副本: {} - {}",
+                        old_path.display(),
+                        e
+                    );
                     let _ = std::fs::remove_dir_all(new_path);
-                    log::warn!("重命名被阻止: 请先关闭 Vite 预览或其他占用工作区的进程，然后重试改名");
+                    log::warn!(
+                        "重命名被阻止: 请先关闭 Vite 预览或其他占用工作区的进程，然后重试改名"
+                    );
                     false
                 }
             }
         }
         Err(e) => {
             // copy 失败时清理可能已部分创建的新目录
-            log::warn!("copy fallback 也失败: {} -> {} - {}",
-                old_path.display(), new_path.display(), e);
+            log::warn!(
+                "copy fallback 也失败: {} -> {} - {}",
+                old_path.display(),
+                new_path.display(),
+                e
+            );
             let _ = std::fs::remove_dir_all(new_path);
             false
         }
@@ -133,7 +159,7 @@ pub(crate) async fn sync_document_id_paths(
 
     // 更新 snapshots 中的路径
     match sqlx::query(
-        "UPDATE snapshots SET document_id = REPLACE(document_id, ?1, ?2) WHERE document_id LIKE ?3"
+        "UPDATE snapshots SET document_id = REPLACE(document_id, ?1, ?2) WHERE document_id LIKE ?3",
     )
     .bind(old_prefix)
     .bind(new_prefix)
@@ -234,9 +260,7 @@ pub async fn hub_update(
     // 改名前获取旧名称，用于同步 deliverables 文件夹和关联路径
     let old_hub = db.hub_repo().get(&id).await?;
 
-    let update = HubUpdate {
-        name: request.name,
-    };
+    let update = HubUpdate { name: request.name };
     let hub = db.hub_repo().update(&id, update).await?;
 
     // 同步 deliverables 文件夹名称和关联路径（best-effort）
@@ -283,7 +307,9 @@ pub async fn hub_delete(
 
     // 在删除前查询 Hub 名称（用于拼接 deliverables 路径）
     let hub = db.hub_repo().get(&id).await?;
-    let hub_folder = hub.as_ref().map(|h| super::agent::sanitize_folder_name(&h.name));
+    let hub_folder = hub
+        .as_ref()
+        .map(|h| super::agent::sanitize_folder_name(&h.name));
 
     // 级联删除数据库数据（包括所有下属 Agent）
     db.hub_repo().cascade_delete(&id).await?;

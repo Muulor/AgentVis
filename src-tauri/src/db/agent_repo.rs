@@ -247,7 +247,12 @@ impl AgentRepository {
             None => agent.project_path,
         };
         let new_sandbox_mode = match &update.sandbox_mode {
-            Some(s) if matches!(s.as_str(), "LocalAudit" | "OfflineIsolated" | "ControlledNetwork") => {
+            Some(s)
+                if matches!(
+                    s.as_str(),
+                    "LocalAudit" | "OfflineIsolated" | "ControlledNetwork"
+                ) =>
+            {
                 Some(s.clone())
             }
             Some(_) => agent.sandbox_mode,

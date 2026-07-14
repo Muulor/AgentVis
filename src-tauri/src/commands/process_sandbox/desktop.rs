@@ -99,7 +99,10 @@ fn desktop_entrypoint_signal(command: &str) -> Option<String> {
         let name = command_token_name(&token);
         if matches!(
             name.as_str(),
-            "desktop-control" | "desktop-control.cmd" | "desktop-control.bat" | "desktop_control.py"
+            "desktop-control"
+                | "desktop-control.cmd"
+                | "desktop-control.bat"
+                | "desktop_control.py"
         ) {
             return Some("desktop-control".to_string());
         }

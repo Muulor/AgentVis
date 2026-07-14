@@ -1,4 +1,4 @@
-﻿//! File 数据访问层
+//! File 数据访问层
 //!
 //! 提供文件元数据的 CRUD 操作
 
@@ -20,14 +20,14 @@ impl FileRepository {
     }
 
     /// 创建新的文件记录
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - 所属 Agent ID
     /// * `name` - 文件名
     /// * `path` - 文件路径
     /// * `file_type` - 文件类型
     /// * `size_bytes` - 文件大小（可选）
-    /// 
+    ///
     /// # Returns
     /// 创建成功的 FileInfo 实体
     pub async fn create(
@@ -40,7 +40,7 @@ impl FileRepository {
     ) -> AppResult<FileInfo> {
         let mut file = FileInfo::new(agent_id, name, path, file_type);
         file.size_bytes = size_bytes;
-        
+
         sqlx::query(
             r#"
             INSERT INTO files (id, agent_id, name, path, file_type, size_bytes, created_at, updated_at)
@@ -141,13 +141,14 @@ impl FileRepository {
         size_bytes: Option<i64>,
     ) -> AppResult<FileInfo> {
         let now = Utc::now().timestamp();
-        
+
         let existing = self.get(id).await?;
-        let file = existing.ok_or_else(|| AppError::NotFound(format!("File does not exist: {}", id)))?;
-        
+        let file =
+            existing.ok_or_else(|| AppError::NotFound(format!("File does not exist: {}", id)))?;
+
         let new_name = name.unwrap_or(&file.name);
         let new_size = size_bytes.or(file.size_bytes);
-        
+
         sqlx::query(
             r#"
             UPDATE files 
@@ -163,7 +164,9 @@ impl FileRepository {
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        self.get(id).await?.ok_or_else(|| AppError::NotFound(format!("File does not exist: {}", id)))
+        self.get(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("File does not exist: {}", id)))
     }
 
     /// 删除文件记录
@@ -205,13 +208,12 @@ impl FileRepository {
 
     /// 获取 Agent 文件总大小
     pub async fn get_total_size(&self, agent_id: &str) -> AppResult<i64> {
-        let result: (Option<i64>,) = sqlx::query_as(
-            "SELECT SUM(size_bytes) FROM files WHERE agent_id = ?"
-        )
-        .bind(agent_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        let result: (Option<i64>,) =
+            sqlx::query_as("SELECT SUM(size_bytes) FROM files WHERE agent_id = ?")
+                .bind(agent_id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
 
         Ok(result.0.unwrap_or(0))
     }
@@ -237,18 +239,21 @@ mod tests {
     #[tokio::test]
     async fn test_create_file() {
         let (hub_repo, agent_repo, file_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        let file = file_repo.create(
-            &agent.id,
-            "readme.md",
-            "/path/to/readme.md",
-            "markdown",
-            Some(1024),
-        ).await.unwrap();
-        
+
+        let file = file_repo
+            .create(
+                &agent.id,
+                "readme.md",
+                "/path/to/readme.md",
+                "markdown",
+                Some(1024),
+            )
+            .await
+            .unwrap();
+
         assert!(!file.id.is_empty());
         assert_eq!(file.name, "readme.md");
         assert_eq!(file.size_bytes, Some(1024));
@@ -257,17 +262,26 @@ mod tests {
     #[tokio::test]
     async fn test_list_by_type() {
         let (hub_repo, agent_repo, file_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        file_repo.create(&agent.id, "file1.md", "/p1", "markdown", None).await.unwrap();
-        file_repo.create(&agent.id, "file2.md", "/p2", "markdown", None).await.unwrap();
-        file_repo.create(&agent.id, "code.rs", "/p3", "code", None).await.unwrap();
-        
+
+        file_repo
+            .create(&agent.id, "file1.md", "/p1", "markdown", None)
+            .await
+            .unwrap();
+        file_repo
+            .create(&agent.id, "file2.md", "/p2", "markdown", None)
+            .await
+            .unwrap();
+        file_repo
+            .create(&agent.id, "code.rs", "/p3", "code", None)
+            .await
+            .unwrap();
+
         let md_files = file_repo.list_by_type(&agent.id, "markdown").await.unwrap();
         let code_files = file_repo.list_by_type(&agent.id, "code").await.unwrap();
-        
+
         assert_eq!(md_files.len(), 2);
         assert_eq!(code_files.len(), 1);
     }
@@ -275,16 +289,25 @@ mod tests {
     #[tokio::test]
     async fn test_get_total_size() {
         let (hub_repo, agent_repo, file_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        file_repo.create(&agent.id, "f1", "/p1", "md", Some(100)).await.unwrap();
-        file_repo.create(&agent.id, "f2", "/p2", "md", Some(200)).await.unwrap();
-        file_repo.create(&agent.id, "f3", "/p3", "md", Some(300)).await.unwrap();
-        
+
+        file_repo
+            .create(&agent.id, "f1", "/p1", "md", Some(100))
+            .await
+            .unwrap();
+        file_repo
+            .create(&agent.id, "f2", "/p2", "md", Some(200))
+            .await
+            .unwrap();
+        file_repo
+            .create(&agent.id, "f3", "/p3", "md", Some(300))
+            .await
+            .unwrap();
+
         let total = file_repo.get_total_size(&agent.id).await.unwrap();
-        
+
         assert_eq!(total, 600);
     }
 }

@@ -1,17 +1,17 @@
 //! 全局 HTTP 客户端模块
 //!
 //! 提供共享的 HTTP Client 实例，支持连接池和 HTTP/2。
-//! 
+//!
 //! ## 设计目标
 //! 1. 避免每次请求创建新连接（TCP 握手 + TLS 握手开销）
 //! 2. 复用 HTTP/2 多路复用能力
 //! 3. 统一管理连接池配置
-//! 
+//!
 //! ## 使用方式
 //! ```rust,no_run
 //! # async fn run() -> Result<(), reqwest::Error> {
 //! use agentvis_lib::llm::http_client::get_client;
-//! 
+//!
 //! let client = get_client();
 //! let _response = client.get("https://api.example.com").send().await?;
 //! # Ok(())
@@ -53,20 +53,16 @@ mod config {
 // ==================== 全局 Client ====================
 
 /// 全局共享 HTTP Client（惰性初始化）
-/// 
+///
 /// 使用 `once_cell::sync::Lazy` 确保 Client 只被创建一次，
 /// 且在首次访问时自动初始化。
-static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
-    build_default_client()
-});
+static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| build_default_client());
 
 /// 全局共享流式 HTTP Client（不设置整请求总超时）
 ///
 /// LLM 长文本输出可能持续超过普通请求的 8 分钟总时限。
 /// 流式请求使用该 Client，并由 SSE 消费循环负责空闲超时判断。
-static STREAMING_HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
-    build_streaming_client()
-});
+static STREAMING_HTTP_CLIENT: Lazy<Client> = Lazy::new(|| build_streaming_client());
 
 /// 构建默认配置的 HTTP Client
 fn build_default_client() -> Client {
@@ -96,19 +92,21 @@ fn build_client(request_timeout_secs: Option<u64>) -> Client {
     if let Some(timeout_secs) = request_timeout_secs {
         builder = builder.timeout(Duration::from_secs(timeout_secs));
     }
-    
+
     // HTTP/2 配置（阶段2启用）
     if config::HTTP2_ONLY {
         builder = builder.http2_prior_knowledge();
     }
-    
-    builder.build().expect("Failed to create global HTTP client")
+
+    builder
+        .build()
+        .expect("Failed to create global HTTP client")
 }
 
 /// 获取全局 HTTP Client 引用
-/// 
+///
 /// 返回静态生命周期的 Client 引用，所有模块共享同一实例。
-/// 
+///
 /// # 示例
 /// ```rust,no_run
 /// # async fn run() -> Result<(), reqwest::Error> {
@@ -187,14 +185,14 @@ pub(super) fn format_stream_idle_timeout(
 // ==================== 预热功能（阶段3） ====================
 
 /// 预热常用 API 端点连接
-/// 
+///
 /// 在应用启动时调用，提前建立 TCP/TLS 连接，
 /// 使首次 API 请求无需等待连接建立。
-/// 
+///
 /// 注意：预热使用 HEAD 请求，不消耗 API 配额。
 pub async fn warmup_connections() {
     use futures::future::join_all;
-    
+
     // 常用 API 端点列表（与 llm.rs 中的供应商 base_url 保持同步）
     let endpoints = [
         "https://api.openai.com/",
@@ -208,9 +206,9 @@ pub async fn warmup_connections() {
         "https://openrouter.ai/",
         "https://api.minimax.chat/",
     ];
-    
+
     let client = get_client();
-    
+
     // 并行预热所有端点
     let tasks: Vec<_> = endpoints
         .iter()
@@ -223,9 +221,9 @@ pub async fn warmup_connections() {
                 .await;
         })
         .collect();
-    
+
     join_all(tasks).await;
-    
+
     log::debug!("[INFO] HTTP 连接预热完成");
 }
 

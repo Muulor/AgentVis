@@ -2,9 +2,9 @@
 //!
 //! 提供云端 Embedding API 调用（SiliconFlow / Gitee AI / ZhipuAI）
 
+use crate::llm::http_client::get_client;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use crate::llm::http_client::get_client;
 
 use crate::crypto::{Keystore, WindowsKeystore};
 use crate::error::{AppError, CommandResult};
@@ -120,32 +120,36 @@ pub async fn cloud_embedding_encode(
     request: CloudEmbeddingRequest,
 ) -> CommandResult<CloudEmbeddingResponse> {
     let api_key = get_api_key(&request.provider)?;
-    
+
     match request.provider.as_str() {
         "siliconflow" => {
             encode_with_siliconflow(
                 &api_key,
                 request.model.as_deref().unwrap_or("BAAI/bge-m3"),
                 &request.texts,
-            ).await
+            )
+            .await
         }
         "giteeai" => {
             encode_with_giteeai(
                 &api_key,
                 request.model.as_deref().unwrap_or("bge-m3"),
                 &request.texts,
-            ).await
+            )
+            .await
         }
         "zhipu" => {
             encode_with_zhipu(
                 &api_key,
                 request.model.as_deref().unwrap_or("Embedding-3-pro"),
                 &request.texts,
-            ).await
+            )
+            .await
         }
-        provider => {
-            Err(AppError::LlmApi(format!("Unsupported Embedding provider: {}", provider)))
-        }
+        provider => Err(AppError::LlmApi(format!(
+            "Unsupported Embedding provider: {}",
+            provider
+        ))),
     }
 }
 
@@ -167,11 +171,15 @@ pub async fn cloud_rerank_documents(
     let api_key = get_api_key(&request.provider)?;
     rerank_with_siliconflow(
         &api_key,
-        request.model.as_deref().unwrap_or("BAAI/bge-reranker-v2-m3"),
+        request
+            .model
+            .as_deref()
+            .unwrap_or("BAAI/bge-reranker-v2-m3"),
         &request.query,
         &request.documents,
         request.top_n,
-    ).await
+    )
+    .await
 }
 
 /// 使用 SiliconFlow Rerank API 重排序
@@ -204,13 +212,18 @@ async fn rerank_with_siliconflow(
 
     if !response.status().is_success() {
         let error_text = response.text().await.unwrap_or_default();
-        return Err(AppError::LlmApi(format!("SiliconFlow Rerank API returned an error: {}", error_text)));
+        return Err(AppError::LlmApi(format!(
+            "SiliconFlow Rerank API returned an error: {}",
+            error_text
+        )));
     }
 
-    let result: SiliconFlowRerankResponse = response
-        .json()
-        .await
-        .map_err(|e| AppError::LlmApi(format!("Failed to parse SiliconFlow Rerank response: {}", e)))?;
+    let result: SiliconFlowRerankResponse = response.json().await.map_err(|e| {
+        AppError::LlmApi(format!(
+            "Failed to parse SiliconFlow Rerank response: {}",
+            e
+        ))
+    })?;
 
     Ok(CloudRerankResponse {
         results: result.results,
@@ -244,17 +257,24 @@ async fn encode_with_siliconflow(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::LlmApi(format!("SiliconFlow Embedding API request failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::LlmApi(format!("SiliconFlow Embedding API request failed: {}", e))
+        })?;
 
     if !response.status().is_success() {
         let error_text = response.text().await.unwrap_or_default();
-        return Err(AppError::LlmApi(format!("SiliconFlow Embedding API returned an error: {}", error_text)));
+        return Err(AppError::LlmApi(format!(
+            "SiliconFlow Embedding API returned an error: {}",
+            error_text
+        )));
     }
 
-    let result: SiliconFlowEmbeddingResponse = response
-        .json()
-        .await
-        .map_err(|e| AppError::LlmApi(format!("Failed to parse SiliconFlow Embedding response: {}", e)))?;
+    let result: SiliconFlowEmbeddingResponse = response.json().await.map_err(|e| {
+        AppError::LlmApi(format!(
+            "Failed to parse SiliconFlow Embedding response: {}",
+            e
+        ))
+    })?;
 
     // 按 index 排序确保与输入顺序一致（API 规范不保证顺序）
     let mut embeddings: Vec<Vec<f32>> = result.data.into_iter().map(|d| d.embedding).collect();
@@ -302,14 +322,19 @@ async fn encode_with_giteeai(
 
     if !response.status().is_success() {
         let error_text = response.text().await.unwrap_or_default();
-        return Err(AppError::LlmApi(format!("Gitee AI Embedding API returned an error: {}", error_text)));
+        return Err(AppError::LlmApi(format!(
+            "Gitee AI Embedding API returned an error: {}",
+            error_text
+        )));
     }
 
     // 响应格式与 SiliconFlow 一致（OpenAI 兼容），复用同一反序列化结构
-    let result: SiliconFlowEmbeddingResponse = response
-        .json()
-        .await
-        .map_err(|e| AppError::LlmApi(format!("Failed to parse Gitee AI Embedding response: {}", e)))?;
+    let result: SiliconFlowEmbeddingResponse = response.json().await.map_err(|e| {
+        AppError::LlmApi(format!(
+            "Failed to parse Gitee AI Embedding response: {}",
+            e
+        ))
+    })?;
 
     let mut embeddings: Vec<Vec<f32>> = result.data.into_iter().map(|d| d.embedding).collect();
 
@@ -335,16 +360,16 @@ async fn encode_with_zhipu(
     // 使用全局 HTTP Client
     let client = get_client();
     let url = "https://open.bigmodel.cn/api/paas/v4/embeddings";
-    
+
     let mut all_embeddings: Vec<Vec<f32>> = Vec::new();
-    
+
     // ZhipuAI 每次只能处理一个文本，需要分批请求
     for text in texts {
         let body = serde_json::json!({
             "model": model,
             "input": text,
         });
-        
+
         let response = client
             .post(url)
             .header("Authorization", format!("Bearer {}", api_key))
@@ -353,24 +378,27 @@ async fn encode_with_zhipu(
             .send()
             .await
             .map_err(|e| AppError::LlmApi(format!("Embedding API request failed: {}", e)))?;
-        
+
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::LlmApi(format!("Embedding API returned an error: {}", error_text)));
+            return Err(AppError::LlmApi(format!(
+                "Embedding API returned an error: {}",
+                error_text
+            )));
         }
-        
+
         let result: ZhipuEmbeddingResponse = response
             .json()
             .await
             .map_err(|e| AppError::LlmApi(format!("Failed to parse Embedding response: {}", e)))?;
-        
+
         if let Some(data) = result.data.first() {
             all_embeddings.push(data.embedding.clone());
         }
     }
-    
+
     let dimension = all_embeddings.first().map(|v| v.len()).unwrap_or(0);
-    
+
     Ok(CloudEmbeddingResponse {
         embeddings: all_embeddings,
         dimension,
@@ -383,7 +411,11 @@ async fn encode_with_zhipu(
 pub async fn cloud_embedding_list_providers(
     _state: State<'_, AppState>,
 ) -> CommandResult<Vec<String>> {
-    Ok(vec!["siliconflow".to_string(), "giteeai".to_string(), "zhipu".to_string()])
+    Ok(vec![
+        "siliconflow".to_string(),
+        "giteeai".to_string(),
+        "zhipu".to_string(),
+    ])
 }
 
 /// 获取指定提供商的可用 Embedding 模型列表
@@ -393,19 +425,12 @@ pub async fn cloud_embedding_list_models(
     provider: String,
 ) -> CommandResult<Vec<String>> {
     let models = match provider.as_str() {
-        "siliconflow" => vec![
-            "BAAI/bge-m3".to_string(),
-        ],
-        "giteeai" => vec![
-            "bge-m3".to_string(),
-        ],
-        "zhipu" => vec![
-            "Embedding-3-pro".to_string(),
-            "Embedding-2".to_string(),
-        ],
+        "siliconflow" => vec!["BAAI/bge-m3".to_string()],
+        "giteeai" => vec!["bge-m3".to_string()],
+        "zhipu" => vec!["Embedding-3-pro".to_string(), "Embedding-2".to_string()],
         _ => vec![],
     };
-    
+
     Ok(models)
 }
 
@@ -422,9 +447,7 @@ pub async fn set_siliconflow_api_key(
 
 /// 获取 SiliconFlow API Key 配置状态
 #[tauri::command]
-pub async fn get_siliconflow_api_key_status(
-    _state: State<'_, AppState>,
-) -> CommandResult<bool> {
+pub async fn get_siliconflow_api_key_status(_state: State<'_, AppState>) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
     Ok(keystore.has_api_key(SILICONFLOW_PROVIDER).unwrap_or(false))
 }
@@ -442,9 +465,7 @@ pub async fn set_giteeai_api_key(
 
 /// 获取 Gitee AI API Key 配置状态
 #[tauri::command]
-pub async fn get_giteeai_api_key_status(
-    _state: State<'_, AppState>,
-) -> CommandResult<bool> {
+pub async fn get_giteeai_api_key_status(_state: State<'_, AppState>) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
     Ok(keystore.has_api_key(GITEEAI_PROVIDER).unwrap_or(false))
 }

@@ -108,17 +108,20 @@ pub async fn memory_create(
 ) -> CommandResult<MemoryItem> {
     let db = state.db.lock().await;
     let layer = parse_layer(&request.layer).map_err(|e| crate::error::AppError::Generic(e))?;
-    
-    let memory = db.memory_repo().create_with_details(
-        &request.agent_id,
-        layer,
-        &request.content,
-        request.category.as_deref(),
-        request.importance,
-        request.source_message_ids.as_deref(),
-        request.metadata_json.as_deref(),
-    ).await?;
-    
+
+    let memory = db
+        .memory_repo()
+        .create_with_details(
+            &request.agent_id,
+            layer,
+            &request.content,
+            request.category.as_deref(),
+            request.importance,
+            request.source_message_ids.as_deref(),
+            request.metadata_json.as_deref(),
+        )
+        .await?;
+
     Ok(memory.into())
 }
 
@@ -131,9 +134,12 @@ pub async fn memory_list_by_layer(
 ) -> CommandResult<Vec<MemoryItem>> {
     let db = state.db.lock().await;
     let memory_layer = parse_layer(&layer).map_err(|e| crate::error::AppError::Generic(e))?;
-    
-    let memories = db.memory_repo().list_by_layer(&agent_id, memory_layer).await?;
-    
+
+    let memories = db
+        .memory_repo()
+        .list_by_layer(&agent_id, memory_layer)
+        .await?;
+
     Ok(memories.into_iter().map(|m| m.into()).collect())
 }
 
@@ -145,9 +151,12 @@ pub async fn memory_list_facts(
     category: String,
 ) -> CommandResult<Vec<MemoryItem>> {
     let db = state.db.lock().await;
-    
-    let memories = db.memory_repo().list_facts_by_category(&agent_id, &category).await?;
-    
+
+    let memories = db
+        .memory_repo()
+        .list_facts_by_category(&agent_id, &category)
+        .await?;
+
     Ok(memories.into_iter().map(|m| m.into()).collect())
 }
 
@@ -158,50 +167,50 @@ pub async fn memory_update(
     id: String,
     content: Option<String>,
     importance: Option<i32>,
-    category: Option<String>,  // 支持事实类别更新
+    category: Option<String>, // 支持事实类别更新
 ) -> CommandResult<MemoryItem> {
     let db = state.db.lock().await;
-    
+
     // 如果有 category 或 importance 更新（事实元数据更新）
     if category.is_some() || importance.is_some() {
-        let memory = db.memory_repo()
-            .update_fact_metadata(&id, category.as_deref(), importance).await?;
-        
+        let memory = db
+            .memory_repo()
+            .update_fact_metadata(&id, category.as_deref(), importance)
+            .await?;
+
         // 如果同时有内容更新，再更新内容
         if let Some(new_content) = content {
             let memory = db.memory_repo().update_content(&id, &new_content).await?;
             return Ok(memory.into());
         }
-        
+
         return Ok(memory.into());
     }
-    
+
     // 如果只有内容更新
     if let Some(new_content) = content {
         let memory = db.memory_repo().update_content(&id, &new_content).await?;
         return Ok(memory.into());
     }
-    
+
     // 没有更新，返回原记录
-    let memory = db.memory_repo().get(&id).await?
-        .ok_or_else(|| crate::error::AppError::NotFound(format!("Memory does not exist: {}", id)))?;
-    
+    let memory = db.memory_repo().get(&id).await?.ok_or_else(|| {
+        crate::error::AppError::NotFound(format!("Memory does not exist: {}", id))
+    })?;
+
     Ok(memory.into())
 }
 
 /// 删除记忆
 #[tauri::command]
-pub async fn memory_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> CommandResult<()> {
+pub async fn memory_delete(state: State<'_, AppState>, id: String) -> CommandResult<()> {
     let db = state.db.lock().await;
     db.memory_repo().delete(&id).await?;
     Ok(())
 }
 
 /// 删除摘要（包含向量索引）
-/// 
+///
 /// 同时删除记忆记录和对应的向量索引，保证数据一致性
 #[tauri::command]
 pub async fn memory_delete_summary_with_vector(
@@ -210,20 +219,23 @@ pub async fn memory_delete_summary_with_vector(
     agent_id: String,
 ) -> CommandResult<()> {
     let db = state.db.lock().await;
-    
+
     // 1. 删除记忆记录
     db.memory_repo().delete(&id).await?;
-    
+
     // 2. 删除向量索引（documentId 格式与 MemoryVectorIndex 一致）
     let document_id = format!("memory_summary_{}", id);
     // 忽略向量删除失败（可能不存在索引）
-    let _ = db.vector_repo().delete_by_document(&agent_id, &document_id).await;
-    
+    let _ = db
+        .vector_repo()
+        .delete_by_document(&agent_id, &document_id)
+        .await;
+
     Ok(())
 }
 
 /// 删除事实（包含向量索引）
-/// 
+///
 /// 同时删除记忆记录和对应的向量索引，保证数据一致性
 #[tauri::command]
 pub async fn memory_delete_fact_with_vector(
@@ -232,15 +244,18 @@ pub async fn memory_delete_fact_with_vector(
     agent_id: String,
 ) -> CommandResult<()> {
     let db = state.db.lock().await;
-    
+
     // 1. 删除记忆记录
     db.memory_repo().delete(&id).await?;
-    
+
     // 2. 删除向量索引（documentId 格式与 MemoryVectorIndex 一致）
     let document_id = format!("memory_fact_{}", id);
     // 忽略向量删除失败（可能不存在索引）
-    let _ = db.vector_repo().delete_by_document(&agent_id, &document_id).await;
-    
+    let _ = db
+        .vector_repo()
+        .delete_by_document(&agent_id, &document_id)
+        .await;
+
     Ok(())
 }
 
@@ -256,7 +271,7 @@ pub async fn memory_get_stats(
 }
 
 /// 根据源消息 ID 批量删除短期缓冲记录
-/// 
+///
 /// 用于消息撤销时同步删除关联的 short_term 记忆
 #[tauri::command]
 pub async fn memory_delete_by_source_ids(
@@ -266,13 +281,16 @@ pub async fn memory_delete_by_source_ids(
     source_message_ids: Vec<String>,
 ) -> CommandResult<u64> {
     let db = state.db.lock().await;
-    let deleted = db.memory_repo().delete_by_source_ids(&agent_id, &source_message_ids).await?;
+    let deleted = db
+        .memory_repo()
+        .delete_by_source_ids(&agent_id, &source_message_ids)
+        .await?;
     emit_short_term_memory_changed(&app, &agent_id, deleted, source_message_ids);
     Ok(deleted)
 }
 
 /// 清空指定 Agent 的短期缓冲记录
-/// 
+///
 /// 用于 Planning 模式取消时清理短期缓冲，解决 ShortTermView 不同步问题
 #[tauri::command]
 pub async fn memory_clear_short_term(
@@ -281,7 +299,10 @@ pub async fn memory_clear_short_term(
     agent_id: String,
 ) -> CommandResult<u64> {
     let db = state.db.lock().await;
-    let deleted = db.memory_repo().clear_layer(&agent_id, MemoryLayer::ShortTerm).await?;
+    let deleted = db
+        .memory_repo()
+        .clear_layer(&agent_id, MemoryLayer::ShortTerm)
+        .await?;
     emit_short_term_memory_changed(&app, &agent_id, deleted, Vec::new());
     Ok(deleted)
 }
@@ -297,7 +318,7 @@ pub struct MemoryContextResponse {
 }
 
 /// 获取记忆上下文（用于 LLM 上下文注入）
-/// 
+///
 /// 一次性返回指定 Agent 的 facts 和 summaries 层记忆
 /// 供前端 ContextAssembler 使用
 #[tauri::command]
@@ -306,11 +327,17 @@ pub async fn memory_get_context(
     agent_id: String,
 ) -> CommandResult<MemoryContextResponse> {
     let db = state.db.lock().await;
-    
+
     // 并行查询事实层和摘要层
-    let facts = db.memory_repo().list_by_layer(&agent_id, MemoryLayer::Fact).await?;
-    let summaries = db.memory_repo().list_by_layer(&agent_id, MemoryLayer::Summary).await?;
-    
+    let facts = db
+        .memory_repo()
+        .list_by_layer(&agent_id, MemoryLayer::Fact)
+        .await?;
+    let summaries = db
+        .memory_repo()
+        .list_by_layer(&agent_id, MemoryLayer::Summary)
+        .await?;
+
     Ok(MemoryContextResponse {
         facts: facts.into_iter().map(|m| m.into()).collect(),
         summaries: summaries.into_iter().map(|m| m.into()).collect(),
@@ -358,12 +385,12 @@ pub async fn memory_candidate_create(
 ) -> CommandResult<MemoryCandidateItem> {
     let db = state.db.lock().await;
     let pool = db.pool();
-    
+
     let id = uuid::Uuid::new_v4().to_string();
     let occurrence_count = request.occurrence_count.unwrap_or(1);
     let user_confirmed = request.user_confirmed.unwrap_or(false);
     let score = request.score.unwrap_or(0);
-    
+
     sqlx::query(
         r#"
         INSERT INTO memory_candidates (id, agent_id, content, category, occurrence_count, first_seen_at, last_seen_at, user_confirmed, score)
@@ -382,7 +409,7 @@ pub async fn memory_candidate_create(
     .execute(pool)
     .await
     .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
-    
+
     Ok(MemoryCandidateItem {
         id,
         agent_id: request.agent_id,
@@ -404,7 +431,7 @@ pub async fn memory_candidate_list(
 ) -> CommandResult<Vec<MemoryCandidateItem>> {
     let db = state.db.lock().await;
     let pool = db.pool();
-    
+
     let rows: Vec<(String, String, String, String, i32, i64, i64, i32, i32)> = sqlx::query_as(
         r#"
         SELECT id, agent_id, content, category, occurrence_count, first_seen_at, last_seen_at, user_confirmed, score
@@ -417,18 +444,21 @@ pub async fn memory_candidate_list(
     .fetch_all(pool)
     .await
     .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
-    
-    Ok(rows.into_iter().map(|r| MemoryCandidateItem {
-        id: r.0,
-        agent_id: r.1,
-        content: r.2,
-        category: r.3,
-        occurrence_count: r.4,
-        first_seen_at: r.5,
-        last_seen_at: r.6,
-        user_confirmed: r.7 == 1,
-        score: r.8,
-    }).collect())
+
+    Ok(rows
+        .into_iter()
+        .map(|r| MemoryCandidateItem {
+            id: r.0,
+            agent_id: r.1,
+            content: r.2,
+            category: r.3,
+            occurrence_count: r.4,
+            first_seen_at: r.5,
+            last_seen_at: r.6,
+            user_confirmed: r.7 == 1,
+            score: r.8,
+        })
+        .collect())
 }
 
 /// 更新候选事实
@@ -443,7 +473,7 @@ pub async fn memory_candidate_update(
 ) -> CommandResult<()> {
     let db = state.db.lock().await;
     let pool = db.pool();
-    
+
     // 构建动态 SQL（简化版：更新所有提供的字段）
     if let Some(count) = occurrence_count {
         sqlx::query("UPDATE memory_candidates SET occurrence_count = ? WHERE id = ?")
@@ -453,7 +483,7 @@ pub async fn memory_candidate_update(
             .await
             .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
     }
-    
+
     if let Some(ts) = last_seen_at {
         sqlx::query("UPDATE memory_candidates SET last_seen_at = ? WHERE id = ?")
             .bind(ts)
@@ -462,7 +492,7 @@ pub async fn memory_candidate_update(
             .await
             .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
     }
-    
+
     if let Some(confirmed) = user_confirmed {
         sqlx::query("UPDATE memory_candidates SET user_confirmed = ? WHERE id = ?")
             .bind(if confirmed { 1 } else { 0 })
@@ -471,7 +501,7 @@ pub async fn memory_candidate_update(
             .await
             .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
     }
-    
+
     if let Some(s) = score {
         sqlx::query("UPDATE memory_candidates SET score = ? WHERE id = ?")
             .bind(s)
@@ -480,25 +510,22 @@ pub async fn memory_candidate_update(
             .await
             .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
     }
-    
+
     Ok(())
 }
 
 /// 删除候选事实
 #[tauri::command]
-pub async fn memory_candidate_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> CommandResult<()> {
+pub async fn memory_candidate_delete(state: State<'_, AppState>, id: String) -> CommandResult<()> {
     let db = state.db.lock().await;
     let pool = db.pool();
-    
+
     sqlx::query("DELETE FROM memory_candidates WHERE id = ?")
         .bind(&id)
         .execute(pool)
         .await
         .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
-    
+
     Ok(())
 }
 
@@ -510,7 +537,7 @@ pub async fn memory_candidate_delete_batch(
 ) -> CommandResult<u64> {
     let db = state.db.lock().await;
     let pool = db.pool();
-    
+
     let mut deleted = 0u64;
     for id in ids {
         let result = sqlx::query("DELETE FROM memory_candidates WHERE id = ?")
@@ -520,7 +547,6 @@ pub async fn memory_candidate_delete_batch(
             .map_err(|e| crate::error::AppError::Database(e.to_string()))?;
         deleted += result.rows_affected();
     }
-    
+
     Ok(deleted)
 }
-

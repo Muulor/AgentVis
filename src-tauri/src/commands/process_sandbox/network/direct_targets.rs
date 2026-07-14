@@ -85,11 +85,7 @@ pub(crate) struct NetworkDirectTargetRiskInfo {
 }
 
 impl NetworkDirectTargetRiskInfo {
-    fn new(
-        risk: &'static str,
-        resolved_ip_samples: Vec<String>,
-        reason: &'static str,
-    ) -> Self {
+    fn new(risk: &'static str, resolved_ip_samples: Vec<String>, reason: &'static str) -> Self {
         Self {
             risk,
             resolved_ip_samples,
@@ -103,7 +99,10 @@ impl NetworkDirectTargetRiskInfo {
         } else {
             self.resolved_ip_samples.join(",")
         };
-        format!("resolvedRisk={}; reason={}; ips={}", self.risk, self.reason, ips)
+        format!(
+            "resolvedRisk={}; reason={}; ips={}",
+            self.risk, self.reason, ips
+        )
     }
 }
 
@@ -1040,7 +1039,10 @@ mod tests {
     #[tokio::test]
     async fn resolved_risk_classifies_literal_direct_targets() {
         let public = NetworkDirectTarget::new("ssh", "8.8.8.8", 22).unwrap();
-        assert_eq!(resolve_network_direct_target_risk(&public).await.risk, "public");
+        assert_eq!(
+            resolve_network_direct_target_risk(&public).await.risk,
+            "public"
+        );
 
         let private = NetworkDirectTarget::new("ssh", "127.0.0.1", 22).unwrap();
         assert_eq!(
@@ -1066,8 +1068,7 @@ mod tests {
         );
         assert_eq!(private_risk.reason, "hostnameEncodedPrivateOrLocalIp");
 
-        let metadata =
-            NetworkDirectTarget::new("tcp", "169-254-169-254.sslip.io", 80).unwrap();
+        let metadata = NetworkDirectTarget::new("tcp", "169-254-169-254.sslip.io", 80).unwrap();
         let metadata_risk = resolve_network_direct_target_risk(&metadata).await;
         assert_eq!(metadata_risk.risk, "metadata");
         assert_eq!(

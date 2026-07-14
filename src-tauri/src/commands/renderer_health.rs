@@ -128,14 +128,16 @@ pub fn start_renderer_health_watchdog() {
             };
 
             let elapsed = now.duration_since(last_heartbeat_at);
-            if elapsed < STALE_HEARTBEAT_THRESHOLD || !should_log_stale(now, state.last_stale_log_at)
+            if elapsed < STALE_HEARTBEAT_THRESHOLD
+                || !should_log_stale(now, state.last_stale_log_at)
             {
                 continue;
             }
 
             log_stale_heartbeat(elapsed, state.last_snapshot.as_ref());
             state.last_stale_log_at = Some(now);
-        }) {
+        })
+    {
         log::error!("failed to start renderer health watchdog: {}", error);
     }
 }

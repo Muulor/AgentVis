@@ -57,9 +57,7 @@ async fn main() {
     // 测试 2: 基本对话
     println!("[2/3] 测试基本对话...");
     let request = ChatRequest {
-        messages: vec![
-            ChatMessage::user("请用一句话回答：1 + 1 等于几？"),
-        ],
+        messages: vec![ChatMessage::user("请用一句话回答：1 + 1 等于几？")],
         max_tokens: Some(50),
         stream: false,
         ..Default::default()

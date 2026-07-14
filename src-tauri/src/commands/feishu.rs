@@ -3,17 +3,15 @@
 //! 将飞书 REST API 调用代理到 Rust 后端
 //! 绕过 Tauri Webview 的 CORS 限制
 
-use serde::{Deserialize, Serialize};
-use tauri::State;
-use tauri::Manager;
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_ENGINE};
-use crate::AppState;
 use crate::error::CommandResult;
-
+use crate::AppState;
+use base64::{engine::general_purpose::STANDARD as BASE64_ENGINE, Engine as _};
+use serde::{Deserialize, Serialize};
+use tauri::Manager;
+use tauri::State;
 
 /// 飞书 API 基础 URL
 const FEISHU_API_BASE: &str = "https://open.feishu.cn/open-apis";
-
 
 // ═══════════════════════════════════════════════════════════════
 // 请求/响应类型
@@ -77,9 +75,9 @@ pub async fn feishu_get_token(
     app_secret: String,
 ) -> CommandResult<TokenResult> {
     let client = reqwest::Client::new();
-    
+
     let url = format!("{}/auth/v3/tenant_access_token/internal", FEISHU_API_BASE);
-    
+
     let body = serde_json::json!({
         "app_id": app_id,
         "app_secret": app_secret,
@@ -91,17 +89,19 @@ pub async fn feishu_get_token(
         .json(&body)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Feishu API request failed: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!("Feishu API request failed: {}", e))
+        })?;
 
-    let result: FeishuTokenResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Feishu API response: {}", e)))?;
+    let result: FeishuTokenResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Feishu API response: {}", e))
+    })?;
 
     if result.code != 0 || result.tenant_access_token.is_none() {
-        return Err(crate::error::AppError::Generic(
-            format!("Failed to get tenant_access_token [code={}]: {}", result.code, result.msg)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Failed to get tenant_access_token [code={}]: {}",
+            result.code, result.msg
+        )));
     }
 
     Ok(TokenResult {
@@ -139,13 +139,12 @@ pub async fn feishu_send_message(
             receive_id_type
         )));
     }
-    
+
     let url = format!(
         "{}/im/v1/messages?receive_id_type={}",
-        FEISHU_API_BASE,
-        receive_id_type
+        FEISHU_API_BASE, receive_id_type
     );
-    
+
     let body = serde_json::json!({
         "receive_id": chat_id,
         "msg_type": msg_type,
@@ -159,22 +158,22 @@ pub async fn feishu_send_message(
         .json(&body)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to send Feishu message: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!("Failed to send Feishu message: {}", e))
+        })?;
 
-    let result: FeishuSendResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Feishu send response: {}", e)))?;
+    let result: FeishuSendResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Feishu send response: {}", e))
+    })?;
 
     if result.code != 0 {
-        return Err(crate::error::AppError::Generic(
-            format!("Failed to send Feishu message [code={}]: {}", result.code, result.msg)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Failed to send Feishu message [code={}]: {}",
+            result.code, result.msg
+        )));
     }
 
-    let message_id = result.data
-        .and_then(|d| d.message_id)
-        .unwrap_or_default();
+    let message_id = result.data.and_then(|d| d.message_id).unwrap_or_default();
 
     Ok(SendResult { message_id })
 }
@@ -195,9 +194,9 @@ pub async fn feishu_update_message(
     content: String,
 ) -> CommandResult<()> {
     let client = reqwest::Client::new();
-    
+
     let url = format!("{}/im/v1/messages/{}", FEISHU_API_BASE, message_id);
-    
+
     // 注意：飞书更新消息 API 必须携带 msg_type，否则服务端不知道 content 的序列化格式，
     // 会导致手机端（对格式校验更严格）无法渲染卡片内容，显示为空白气泡。
     let body = serde_json::json!({
@@ -212,17 +211,19 @@ pub async fn feishu_update_message(
         .json(&body)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to update Feishu card: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!("Failed to update Feishu card: {}", e))
+        })?;
 
-    let result: FeishuGenericResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Feishu update response: {}", e)))?;
+    let result: FeishuGenericResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Feishu update response: {}", e))
+    })?;
 
     if result.code != 0 {
-        return Err(crate::error::AppError::Generic(
-            format!("Failed to update Feishu card [code={}]: {}", result.code, result.msg)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Failed to update Feishu card [code={}]: {}",
+            result.code, result.msg
+        )));
     }
 
     Ok(())
@@ -243,17 +244,19 @@ pub async fn feishu_delete_message(
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to delete Feishu message: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!("Failed to delete Feishu message: {}", e))
+        })?;
 
-    let result: FeishuGenericResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Feishu delete response: {}", e)))?;
+    let result: FeishuGenericResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to parse Feishu delete response: {}", e))
+    })?;
 
     if result.code != 0 {
-        return Err(crate::error::AppError::Generic(
-            format!("Failed to delete Feishu message [code={}]: {}", result.code, result.msg)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Failed to delete Feishu message [code={}]: {}",
+            result.code, result.msg
+        )));
     }
 
     Ok(())
@@ -281,15 +284,16 @@ pub async fn feishu_http_proxy(
 ) -> CommandResult<FeishuProxyResponse> {
     // 安全检查：只允许飞书域名
     if !request.url.starts_with("https://open.feishu.cn/") {
-        return Err(crate::error::AppError::Generic(
-            format!("Feishu proxy only supports the open.feishu.cn domain: {}", request.url)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Feishu proxy only supports the open.feishu.cn domain: {}",
+            request.url
+        )));
     }
 
     let client = reqwest::Client::new();
-    
+
     let mut req_builder = client.post(&request.url);
-    
+
     // 转发所有请求头
     for (key, value) in &request.headers {
         // 跳过浏览器不允许设置的头部
@@ -299,12 +303,10 @@ pub async fn feishu_http_proxy(
         }
         req_builder = req_builder.header(key.as_str(), value.as_str());
     }
-    
-    let response = req_builder
-        .body(request.body)
-        .send()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Feishu proxy request failed: {}", e)))?;
+
+    let response = req_builder.body(request.body).send().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Feishu proxy request failed: {}", e))
+    })?;
 
     let status = response.status().as_u16();
     let response_headers: std::collections::HashMap<String, String> = response
@@ -312,11 +314,10 @@ pub async fn feishu_http_proxy(
         .iter()
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or_default().to_string()))
         .collect();
-    
-    let response_body = response
-        .text()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to read Feishu proxy response: {}", e)))?;
+
+    let response_body = response.text().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to read Feishu proxy response: {}", e))
+    })?;
 
     Ok(FeishuProxyResponse {
         status,
@@ -411,9 +412,9 @@ pub async fn feishu_upload_image(
     use reqwest::multipart;
 
     // 将 base64 解码为二进制
-    let image_bytes = BASE64_ENGINE
-        .decode(&image_base64)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to decode image base64: {}", e)))?;
+    let image_bytes = BASE64_ENGINE.decode(&image_base64).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to decode image base64: {}", e))
+    })?;
 
     let file_name = format!("image.{}", image_type_hint);
     // 根据扩展名推断 MIME 类型
@@ -438,23 +439,29 @@ pub async fn feishu_upload_image(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Feishu image upload request failed: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!("Feishu image upload request failed: {}", e))
+        })?;
 
-    let result: FeishuImageUploadResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Feishu image upload response: {}", e)))?;
+    let result: FeishuImageUploadResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!(
+            "Failed to parse Feishu image upload response: {}",
+            e
+        ))
+    })?;
 
     if result.code != 0 {
-        return Err(crate::error::AppError::Generic(
-            format!("Feishu image upload failed [code={}]: {}", result.code, result.msg)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Feishu image upload failed [code={}]: {}",
+            result.code, result.msg
+        )));
     }
 
-    let image_key = result
-        .data
-        .and_then(|d| d.image_key)
-        .ok_or_else(|| crate::error::AppError::Generic("Feishu image upload response is missing image_key".to_string()))?;
+    let image_key = result.data.and_then(|d| d.image_key).ok_or_else(|| {
+        crate::error::AppError::Generic(
+            "Feishu image upload response is missing image_key".to_string(),
+        )
+    })?;
 
     Ok(ImageUploadResult { image_key })
 }
@@ -482,9 +489,9 @@ pub async fn feishu_upload_file(
     use reqwest::multipart;
 
     // 将 base64 解码为二进制
-    let file_bytes = BASE64_ENGINE
-        .decode(&file_base64)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to decode file base64: {}", e)))?;
+    let file_bytes = BASE64_ENGINE.decode(&file_base64).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to decode file base64: {}", e))
+    })?;
 
     let url = format!("{}/im/v1/files", FEISHU_API_BASE);
     let client = reqwest::Client::new();
@@ -509,23 +516,29 @@ pub async fn feishu_upload_file(
         .multipart(form)
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Feishu file upload request failed: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!("Feishu file upload request failed: {}", e))
+        })?;
 
-    let result: FeishuFileUploadResponse = response
-        .json()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse Feishu file upload response: {}", e)))?;
+    let result: FeishuFileUploadResponse = response.json().await.map_err(|e| {
+        crate::error::AppError::Generic(format!(
+            "Failed to parse Feishu file upload response: {}",
+            e
+        ))
+    })?;
 
     if result.code != 0 {
-        return Err(crate::error::AppError::Generic(
-            format!("Feishu file upload failed [code={}]: {}", result.code, result.msg)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Feishu file upload failed [code={}]: {}",
+            result.code, result.msg
+        )));
     }
 
-    let file_key = result
-        .data
-        .and_then(|d| d.file_key)
-        .ok_or_else(|| crate::error::AppError::Generic("Feishu file upload response is missing file_key".to_string()))?;
+    let file_key = result.data.and_then(|d| d.file_key).ok_or_else(|| {
+        crate::error::AppError::Generic(
+            "Feishu file upload response is missing file_key".to_string(),
+        )
+    })?;
 
     Ok(FileUploadResult { file_key })
 }
@@ -561,13 +574,19 @@ pub async fn feishu_download_resource(
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Feishu resource download request failed: {}", e)))?;
+        .map_err(|e| {
+            crate::error::AppError::Generic(format!(
+                "Feishu resource download request failed: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status().as_u16();
-        return Err(crate::error::AppError::Generic(
-            format!("Feishu resource download failed, HTTP status: {}", status)
-        ));
+        return Err(crate::error::AppError::Generic(format!(
+            "Feishu resource download failed, HTTP status: {}",
+            status
+        )));
     }
 
     // 从响应头中提取 MIME 类型
@@ -578,10 +597,9 @@ pub async fn feishu_download_resource(
         .unwrap_or("application/octet-stream")
         .to_string();
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to read Feishu downloaded resource: {}", e)))?;
+    let bytes = response.bytes().await.map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to read Feishu downloaded resource: {}", e))
+    })?;
 
     let base64_content = BASE64_ENGINE.encode(&bytes);
 
@@ -609,18 +627,18 @@ fn infer_image_mime(ext: &str) -> String {
 
 /// 根据文件名推断 MIME 类型
 fn infer_file_mime(file_name: &str) -> String {
-    let ext = file_name
-        .rsplit('.')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
+    let ext = file_name.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {
         "pdf" => "application/pdf".to_string(),
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string(),
+        "docx" => {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string()
+        }
         "doc" => "application/msword".to_string(),
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string(),
         "xls" => "application/vnd.ms-excel".to_string(),
-        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation".to_string(),
+        "pptx" => {
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation".to_string()
+        }
         "ppt" => "application/vnd.ms-powerpoint".to_string(),
         "txt" => "text/plain".to_string(),
         "md" => "text/markdown".to_string(),
@@ -648,34 +666,45 @@ pub async fn feishu_save_attachment(
     file_name: String,
 ) -> CommandResult<String> {
     // 解码 base64
-    let bytes = BASE64_ENGINE
-        .decode(&base64_content)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to decode attachment base64: {}", e)))?;
+    let bytes = BASE64_ENGINE.decode(&base64_content).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to decode attachment base64: {}", e))
+    })?;
 
     // 获取 AppData 目录，创建 im_attachments 子目录
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e))
+    })?;
 
     let attachments_dir = app_data_dir.join("im_attachments");
-    std::fs::create_dir_all(&attachments_dir)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to create attachment directory: {}", e)))?;
+    std::fs::create_dir_all(&attachments_dir).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to create attachment directory: {}", e))
+    })?;
 
     // 净化文件名，防止路径穿越
     let safe_name = file_name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '.' || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '.' || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>();
 
     let file_path = attachments_dir.join(&safe_name);
 
-    std::fs::write(&file_path, &bytes)
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to save attachment file: {}", e)))?;
+    std::fs::write(&file_path, &bytes).map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to save attachment file: {}", e))
+    })?;
 
     let abs_path = file_path
         .to_str()
-        .ok_or_else(|| crate::error::AppError::Generic("Attachment path contains non-UTF-8 characters".to_string()))?
+        .ok_or_else(|| {
+            crate::error::AppError::Generic(
+                "Attachment path contains non-UTF-8 characters".to_string(),
+            )
+        })?
         .to_string();
 
     Ok(abs_path)
@@ -699,14 +728,13 @@ pub async fn feishu_write_app_data_file(
     // 安全校验：file_name 不允许包含路径分隔符，防止路径穿越
     if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
         return Err(crate::error::AppError::Generic(
-            "file_name must not contain path separators or ..".to_string()
+            "file_name must not contain path separators or ..".to_string(),
         ));
     }
 
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e))
+    })?;
 
     let file_path = app_data_dir.join(&file_name);
 
@@ -715,7 +743,9 @@ pub async fn feishu_write_app_data_file(
 
     let abs_path = file_path
         .to_str()
-        .ok_or_else(|| crate::error::AppError::Generic("File path contains non-UTF-8 characters".to_string()))?
+        .ok_or_else(|| {
+            crate::error::AppError::Generic("File path contains non-UTF-8 characters".to_string())
+        })?
         .to_string();
 
     Ok(abs_path)
@@ -738,14 +768,13 @@ pub async fn feishu_delete_app_data_file(
     // 安全校验：file_name 不允许包含路径分隔符或 ..，防止路径穿越攻击
     if file_name.contains('/') || file_name.contains('\\') || file_name.contains("..") {
         return Err(crate::error::AppError::Generic(
-            "file_name must not contain path separators or ..".to_string()
+            "file_name must not contain path separators or ..".to_string(),
         ));
     }
 
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e)))?;
+    let app_data_dir = app.path().app_data_dir().map_err(|e| {
+        crate::error::AppError::Generic(format!("Failed to get AppData directory: {}", e))
+    })?;
 
     let file_path = app_data_dir.join(&file_name);
 

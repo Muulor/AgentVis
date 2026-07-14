@@ -104,9 +104,7 @@ pub async fn cron_list_by_agent(
 
 /// 列出所有已启用的定时任务（调度器启动时加载）
 #[tauri::command]
-pub async fn cron_list_all_enabled(
-    state: State<'_, AppState>,
-) -> CommandResult<Vec<CronJobItem>> {
+pub async fn cron_list_all_enabled(state: State<'_, AppState>) -> CommandResult<Vec<CronJobItem>> {
     let db = state.db.lock().await;
     let jobs = db.cron_repo().list_all_enabled().await?;
     Ok(jobs.into_iter().map(|j| j.into()).collect())
@@ -136,10 +134,7 @@ pub async fn cron_update(
 
 /// 删除定时任务
 #[tauri::command]
-pub async fn cron_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> CommandResult<()> {
+pub async fn cron_delete(state: State<'_, AppState>, id: String) -> CommandResult<()> {
     let db = state.db.lock().await;
     db.cron_repo().delete(&id).await?;
     Ok(())

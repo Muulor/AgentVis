@@ -1,4 +1,4 @@
-﻿//! Message 数据访问层
+//! Message 数据访问层
 //!
 //! 提供消息实体的 CRUD 操作
 
@@ -37,24 +37,24 @@ impl MessageRepository {
     }
 
     /// 创建新的消息
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - 所属 Agent ID
     /// * `role` - 消息角色
     /// * `content` - 消息内容
     /// * `metadata` - 元数据（JSON 字符串，可选）
-    /// 
+    ///
     /// # Returns
     /// 创建成功的 Message 实体
     pub async fn create(
-        &self, 
-        agent_id: &str, 
-        role: MessageRole, 
+        &self,
+        agent_id: &str,
+        role: MessageRole,
         content: &str,
         metadata: Option<String>,
     ) -> AppResult<Message> {
         let message = Message::with_metadata(agent_id, role, content, metadata);
-        
+
         sqlx::query(
             r#"
             INSERT INTO messages (id, agent_id, role, content, metadata, created_at, deleted_at)
@@ -128,19 +128,19 @@ impl MessageRepository {
     }
 
     /// 获取指定 Agent 的消息列表
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - Agent ID
     /// * `limit` - 最多返回条数
     /// * `offset` - 偏移量
-    /// 
+    ///
     /// # Returns
     /// 消息列表，按创建时间升序排列 (最早的在前)
     pub async fn list_by_agent(
-        &self, 
-        agent_id: &str, 
-        limit: i64, 
-        offset: i64
+        &self,
+        agent_id: &str,
+        limit: i64,
+        offset: i64,
     ) -> AppResult<Vec<Message>> {
         let messages: Vec<Message> = sqlx::query_as(
             r#"
@@ -304,11 +304,11 @@ impl MessageRepository {
     }
 
     /// 获取指定 Agent 最近的 N 条消息
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - Agent ID
     /// * `count` - 返回条数
-    /// 
+    ///
     /// # Returns
     /// 消息列表，按创建时间升序排列
     pub async fn get_recent(&self, agent_id: &str, count: i64) -> AppResult<Vec<Message>> {
@@ -382,18 +382,23 @@ impl MessageRepository {
     }
 
     /// 获取指定消息 ID 之后的所有消息（增量加载）
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - Agent ID
     /// * `after_message_id` - 起始消息 ID（不包含）
     /// * `limit` - 最大返回数量
-    /// 
+    ///
     /// # Returns
     /// 消息列表，按创建时间升序排列
-    pub async fn get_after(&self, agent_id: &str, after_message_id: &str, limit: i64) -> AppResult<Vec<Message>> {
+    pub async fn get_after(
+        &self,
+        agent_id: &str,
+        after_message_id: &str,
+        limit: i64,
+    ) -> AppResult<Vec<Message>> {
         // 先获取起始消息的创建时间
         let after_message = self.get(after_message_id).await?;
-        
+
         let messages: Vec<Message> = if let Some(msg) = after_message {
             sqlx::query_as(
                 r#"
@@ -431,7 +436,12 @@ impl MessageRepository {
     ///
     /// # Returns
     /// 消息列表，按创建时间升序排列（最早在前）
-    pub async fn get_before(&self, agent_id: &str, before_message_id: &str, count: i64) -> AppResult<Vec<Message>> {
+    pub async fn get_before(
+        &self,
+        agent_id: &str,
+        before_message_id: &str,
+        count: i64,
+    ) -> AppResult<Vec<Message>> {
         // 先获取边界消息的创建时间
         let before_message = self.get(before_message_id).await?;
 
@@ -486,21 +496,21 @@ impl MessageRepository {
     }
 
     /// 根据 ID 列表批量获取消息
-    /// 
+    ///
     /// # Arguments
     /// * `ids` - 消息 ID 列表
-    /// 
+    ///
     /// # Returns
     /// 消息列表（顺序可能与输入不同）
     pub async fn get_by_ids(&self, ids: &[String]) -> AppResult<Vec<Message>> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
-        
+
         // 构建占位符 (?, ?, ...)
         let placeholders: Vec<&str> = ids.iter().map(|_| "?").collect();
         let placeholders_str = placeholders.join(", ");
-        
+
         let query = format!(
             r#"
             SELECT id, agent_id, role, content, metadata, created_at, deleted_at
@@ -510,17 +520,17 @@ impl MessageRepository {
             "#,
             placeholders_str
         );
-        
+
         let mut query_builder = sqlx::query_as::<_, Message>(&query);
         for id in ids {
             query_builder = query_builder.bind(id);
         }
-        
+
         let messages = query_builder
             .fetch_all(&self.pool)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
-        
+
         Ok(messages)
     }
 
@@ -567,7 +577,7 @@ impl MessageRepository {
     /// 软删除消息
     pub async fn soft_delete(&self, id: &str) -> AppResult<()> {
         let now = Utc::now().timestamp_millis();
-        
+
         let result = sqlx::query(
             r#"
             UPDATE messages 
@@ -582,7 +592,10 @@ impl MessageRepository {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         if result.rows_affected() == 0 {
-            return Err(AppError::NotFound(format!("Message does not exist or has been deleted: {}", id)));
+            return Err(AppError::NotFound(format!(
+                "Message does not exist or has been deleted: {}",
+                id
+            )));
         }
 
         Ok(())
@@ -591,10 +604,13 @@ impl MessageRepository {
     /// List message ids from the given message onward for an agent.
     pub async fn list_ids_from(&self, id: &str, agent_id: &str) -> AppResult<Vec<String>> {
         let message = self.get(id).await?;
-        let message = message.ok_or_else(|| AppError::NotFound(format!("Message not found: {}", id)))?;
+        let message =
+            message.ok_or_else(|| AppError::NotFound(format!("Message not found: {}", id)))?;
 
         if message.agent_id != agent_id {
-            return Err(AppError::Forbidden("Message does not belong to the specified agent".to_string()));
+            return Err(AppError::Forbidden(
+                "Message does not belong to the specified agent".to_string(),
+            ));
         }
 
         let rows: Vec<(String,)> = sqlx::query_as(
@@ -628,15 +644,18 @@ impl MessageRepository {
     /// 删除的消息数量
     pub async fn retract_from(&self, id: &str, agent_id: &str) -> AppResult<u64> {
         let now = Utc::now().timestamp_millis();
-        
+
         // 获取起始消息的创建时间
         let message = self.get(id).await?;
-        let message = message.ok_or_else(|| AppError::NotFound(format!("Message does not exist: {}", id)))?;
-        
+        let message =
+            message.ok_or_else(|| AppError::NotFound(format!("Message does not exist: {}", id)))?;
+
         if message.agent_id != agent_id {
-            return Err(AppError::Forbidden("Message does not belong to the specified Agent".to_string()));
+            return Err(AppError::Forbidden(
+                "Message does not belong to the specified Agent".to_string(),
+            ));
         }
-        
+
         let result = sqlx::query(
             r#"
             UPDATE messages 
@@ -672,11 +691,7 @@ impl MessageRepository {
     ///
     /// # Returns
     /// 按创建时间升序排列的消息列表
-    pub async fn list_by_hub_id(
-        &self,
-        hub_id: &str,
-        limit: i64,
-    ) -> AppResult<Vec<Message>> {
+    pub async fn list_by_hub_id(&self, hub_id: &str, limit: i64) -> AppResult<Vec<Message>> {
         // 使用 UNION ALL 合并两类 Hub 消息：
         // - 类型1：直接以 hub_id 为 agent_id 存储（无 @提及）
         // - 类型2：metadata 中 hubId 字段等于 hub_id（有 @提及，存在对应 Agent 下）
@@ -833,7 +848,7 @@ impl MessageRepository {
     /// 清空指定 Agent 的所有消息
     pub async fn clear_by_agent(&self, agent_id: &str) -> AppResult<u64> {
         let now = Utc::now().timestamp_millis();
-        
+
         let result = sqlx::query(
             r#"
             UPDATE messages 
@@ -871,12 +886,15 @@ mod tests {
     #[tokio::test]
     async fn test_create_message() {
         let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        let message = msg_repo.create(&agent.id, MessageRole::User, "你好", None).await.unwrap();
-        
+
+        let message = msg_repo
+            .create(&agent.id, MessageRole::User, "你好", None)
+            .await
+            .unwrap();
+
         assert!(!message.id.is_empty());
         assert_eq!(message.agent_id, agent.id);
         assert_eq!(message.role, "user");
@@ -886,19 +904,28 @@ mod tests {
     #[tokio::test]
     async fn test_list_messages() {
         let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        msg_repo.create(&agent.id, MessageRole::User, "消息1", None).await.unwrap();
-        msg_repo.create(&agent.id, MessageRole::Assistant, "消息2", None).await.unwrap();
-        msg_repo.create(&agent.id, MessageRole::User, "消息3", None).await.unwrap();
-        
+
+        msg_repo
+            .create(&agent.id, MessageRole::User, "消息1", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::Assistant, "消息2", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::User, "消息3", None)
+            .await
+            .unwrap();
+
         let messages = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
-        
+
         // 验证返回了 3 条消息
         assert_eq!(messages.len(), 3);
-        
+
         // 验证所有消息内容都存在
         let contents: Vec<&str> = messages.iter().map(|m| m.content.as_str()).collect();
         assert!(contents.contains(&"消息1"));
@@ -915,11 +942,21 @@ mod tests {
         let other_agent = agent_repo.create(&hub.id, "其他 Agent").await.unwrap();
 
         msg_repo
-            .create(&agent.id, MessageRole::User, "Automation Lane 用户反馈", None)
+            .create(
+                &agent.id,
+                MessageRole::User,
+                "Automation Lane 用户反馈",
+                None,
+            )
             .await
             .unwrap();
         msg_repo
-            .create(&agent.id, MessageRole::Assistant, "automation lane 修复记录", None)
+            .create(
+                &agent.id,
+                MessageRole::Assistant,
+                "automation lane 修复记录",
+                None,
+            )
             .await
             .unwrap();
         msg_repo
@@ -931,7 +968,12 @@ mod tests {
             .await
             .unwrap();
         let other_agent_message = msg_repo
-            .create(&other_agent.id, MessageRole::User, "Automation Lane other agent", None)
+            .create(
+                &other_agent.id,
+                MessageRole::User,
+                "Automation Lane other agent",
+                None,
+            )
             .await
             .unwrap();
         msg_repo
@@ -950,7 +992,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(all_matches.len(), 2);
-        assert!(all_matches.iter().all(|message| message.agent_id == agent.id));
+        assert!(all_matches
+            .iter()
+            .all(|message| message.agent_id == agent.id));
 
         let second_page = msg_repo
             .search_by_agent(&agent.id, "Automation Lane", &[], 1, 1, None, None)
@@ -961,7 +1005,15 @@ mod tests {
         assert_eq!(second_page[0].agent_id, agent.id);
 
         let user_matches = msg_repo
-            .search_by_agent(&agent.id, "Automation Lane", &[String::from("user")], 10, 0, None, None)
+            .search_by_agent(
+                &agent.id,
+                "Automation Lane",
+                &[String::from("user")],
+                10,
+                0,
+                None,
+                None,
+            )
             .await
             .unwrap();
 
@@ -1061,7 +1113,9 @@ mod tests {
         assert_eq!(asc_user_timeline.len(), 2);
         assert_eq!(asc_user_timeline[0].id, first_user.id);
         assert_eq!(asc_user_timeline[1].id, second_user.id);
-        assert!(asc_user_timeline.iter().all(|message| message.agent_id == agent.id));
+        assert!(asc_user_timeline
+            .iter()
+            .all(|message| message.agent_id == agent.id));
 
         let desc_second_page = msg_repo
             .timeline_by_agent(
@@ -1088,27 +1142,29 @@ mod tests {
         assert_eq!(narrow_timeline[0].id, assistant.id);
     }
 
-
     #[tokio::test]
     async fn test_get_recent_messages() {
         let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
+
         for i in 1..=5 {
-            msg_repo.create(&agent.id, MessageRole::User, &format!("消息{}", i), None).await.unwrap();
+            msg_repo
+                .create(&agent.id, MessageRole::User, &format!("消息{}", i), None)
+                .await
+                .unwrap();
         }
-        
+
         let recent = msg_repo.get_recent(&agent.id, 3).await.unwrap();
-        
+
         // 验证返回了 3 条消息
         assert_eq!(recent.len(), 3);
-        
+
         // 验证返回的消息确实是创建的消息之一
         let all_msgs = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
         assert_eq!(all_msgs.len(), 5);
-        
+
         // 验证 recent 中的消息都在 all_msgs 中
         for r in &recent {
             assert!(all_msgs.iter().any(|m| m.id == r.id));
@@ -1137,7 +1193,12 @@ mod tests {
             .await
             .unwrap();
         let latest = msg_repo
-            .create(&agent.id, MessageRole::Assistant, "latest agent message", None)
+            .create(
+                &agent.id,
+                MessageRole::Assistant,
+                "latest agent message",
+                None,
+            )
             .await
             .unwrap();
         let other_latest = msg_repo
@@ -1173,7 +1234,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            latest_by_agent.get(&agent.id).map(|message| message.content.as_str()),
+            latest_by_agent
+                .get(&agent.id)
+                .map(|message| message.content.as_str()),
             Some("latest agent message")
         );
         assert_eq!(
@@ -1184,32 +1247,40 @@ mod tests {
         );
     }
 
-
     #[tokio::test]
     async fn test_retract_messages() {
         let (hub_repo, agent_repo, msg_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        let msg1 = msg_repo.create(&agent.id, MessageRole::User, "消息1", None).await.unwrap();
-        msg_repo.create(&agent.id, MessageRole::Assistant, "消息2", None).await.unwrap();
-        msg_repo.create(&agent.id, MessageRole::User, "消息3", None).await.unwrap();
-        
+
+        let msg1 = msg_repo
+            .create(&agent.id, MessageRole::User, "消息1", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::Assistant, "消息2", None)
+            .await
+            .unwrap();
+        msg_repo
+            .create(&agent.id, MessageRole::User, "消息3", None)
+            .await
+            .unwrap();
+
         // 验证创建了 3 条消息
         let all = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
         assert_eq!(all.len(), 3);
-        
+
         // 软删除第一条消息（单条删除验证）
         msg_repo.soft_delete(&msg1.id).await.unwrap();
-        
+
         let remaining = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
         assert_eq!(remaining.len(), 2);
-        
+
         // 清空剩余消息
         let count = msg_repo.clear_by_agent(&agent.id).await.unwrap();
         assert_eq!(count, 2);
-        
+
         let final_count = msg_repo.list_by_agent(&agent.id, 10, 0).await.unwrap();
         assert!(final_count.is_empty());
     }
@@ -1221,9 +1292,18 @@ mod tests {
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
 
-        let first = msg_repo.create(&agent.id, MessageRole::User, "first", None).await.unwrap();
-        let second = msg_repo.create(&agent.id, MessageRole::Assistant, "second", None).await.unwrap();
-        let third = msg_repo.create(&agent.id, MessageRole::User, "third", None).await.unwrap();
+        let first = msg_repo
+            .create(&agent.id, MessageRole::User, "first", None)
+            .await
+            .unwrap();
+        let second = msg_repo
+            .create(&agent.id, MessageRole::Assistant, "second", None)
+            .await
+            .unwrap();
+        let third = msg_repo
+            .create(&agent.id, MessageRole::User, "third", None)
+            .await
+            .unwrap();
 
         for message in [&first, &second, &third] {
             msg_repo
@@ -1251,5 +1331,4 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, ordered[0].id);
     }
-
 }

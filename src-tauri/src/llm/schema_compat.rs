@@ -96,10 +96,14 @@ mod tests {
 
         assert!(sanitized.get("oneOf").is_none());
         assert!(sanitized["properties"]["query"].get("anyOf").is_none());
-        assert!(sanitized["properties"]["items"]["items"].get("allOf").is_none());
-        assert!(sanitized["properties"]["items"]["items"]["properties"]["id"]
-            .get("not")
+        assert!(sanitized["properties"]["items"]["items"]
+            .get("allOf")
             .is_none());
+        assert!(
+            sanitized["properties"]["items"]["items"]["properties"]["id"]
+                .get("not")
+                .is_none()
+        );
     }
 
     #[test]

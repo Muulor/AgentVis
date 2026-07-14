@@ -1,4 +1,4 @@
-﻿//! VectorRepository - 向量数据访问层
+//! VectorRepository - 向量数据访问层
 //!
 //! 提供文档块向量存储和检索的 CRUD 操作
 
@@ -27,12 +27,7 @@ pub struct ChunkEmbedding {
 
 impl ChunkEmbedding {
     /// 创建新的文档块
-    pub fn new(
-        agent_id: &str,
-        document_id: &str,
-        chunk_index: i32,
-        content: &str,
-    ) -> Self {
+    pub fn new(agent_id: &str, document_id: &str, chunk_index: i32, content: &str) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             agent_id: agent_id.to_string(),
@@ -110,12 +105,9 @@ impl VectorRepository {
             .map(|value| value.to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let now = Utc::now().timestamp();
-        
+
         // 将 f32 向量转换为字节数组 (小端序)
-        let embedding_bytes: Vec<u8> = embedding
-            .iter()
-            .flat_map(|f| f.to_le_bytes())
-            .collect();
+        let embedding_bytes: Vec<u8> = embedding.iter().flat_map(|f| f.to_le_bytes()).collect();
 
         sqlx::query(
             r#"
@@ -275,17 +267,17 @@ impl VectorRepository {
             }
             None => self.list_by_agent(agent_id).await?,
         };
-        
+
         let mut results: Vec<VectorSearchResult> = Vec::new();
-        
+
         for chunk in chunks {
             if let Some(embedding_bytes) = &chunk.embedding {
                 // 将字节数组转回 f32 向量
                 let stored_embedding = bytes_to_f32_vec(embedding_bytes);
-                
+
                 // 计算余弦相似度
                 let similarity = cosine_similarity(query_embedding, &stored_embedding);
-                
+
                 if similarity >= threshold {
                     results.push(VectorSearchResult {
                         chunk_id: chunk.id,
@@ -298,13 +290,17 @@ impl VectorRepository {
                 }
             }
         }
-        
+
         // 按相似度降序排序
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-        
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
         // 截取 top_k
         results.truncate(top_k);
-        
+
         Ok(results)
     }
 
@@ -321,14 +317,15 @@ impl VectorRepository {
 
     /// 删除指定文档的所有向量
     pub async fn delete_by_document(&self, agent_id: &str, document_id: &str) -> AppResult<u64> {
-        let result = sqlx::query(
-            "DELETE FROM chunk_embeddings WHERE agent_id = ? AND document_id = ?",
-        )
-        .bind(agent_id)
-        .bind(document_id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| AppError::Database(format!("Failed to delete document vectors: {}", e)))?;
+        let result =
+            sqlx::query("DELETE FROM chunk_embeddings WHERE agent_id = ? AND document_id = ?")
+                .bind(agent_id)
+                .bind(document_id)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| {
+                    AppError::Database(format!("Failed to delete document vectors: {}", e))
+                })?;
 
         Ok(result.rows_affected())
     }
@@ -431,21 +428,21 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 mod tests {
     use super::*;
     use crate::db::schema::{create_pool, initialize_schema};
-    use crate::db::{HubRepository, AgentRepository};
+    use crate::db::{AgentRepository, HubRepository};
 
     /// 设置测试数据库并创建必要的 Hub 和 Agent
     async fn setup_test_db_with_agent() -> (VectorRepository, String) {
         let pool = create_pool("sqlite::memory:").await.unwrap();
         initialize_schema(&pool).await.unwrap();
-        
+
         // 创建测试 Hub
         let hub_repo = HubRepository::new(pool.clone());
         let hub = hub_repo.create("Test Hub").await.unwrap();
-        
+
         // 创建测试 Agent
         let agent_repo = AgentRepository::new(pool.clone());
         let agent = agent_repo.create(&hub.id, "Test Agent").await.unwrap();
-        
+
         let vector_repo = VectorRepository::new(pool);
         (vector_repo, agent.id)
     }
@@ -453,7 +450,7 @@ mod tests {
     #[tokio::test]
     async fn test_insert_and_get_chunk() {
         let (repo, agent_id) = setup_test_db_with_agent().await;
-        
+
         let embedding = vec![0.1, 0.2, 0.3, 0.4];
         let chunk = repo
             .insert_chunk(
@@ -480,25 +477,55 @@ mod tests {
     #[tokio::test]
     async fn test_search_similar() {
         let (repo, agent_id) = setup_test_db_with_agent().await;
-        
+
         // 插入几个向量
         let embedding1 = vec![1.0, 0.0, 0.0, 0.0];
         let embedding2 = vec![0.9, 0.1, 0.0, 0.0]; // 与 embedding1 相似
         let embedding3 = vec![0.0, 0.0, 1.0, 0.0]; // 与 embedding1 不相似
-        
-        repo.insert_chunk(&agent_id, "doc-1", 0, "Content 1", &embedding1, None, None, None)
-            .await
-            .unwrap();
-        repo.insert_chunk(&agent_id, "doc-1", 1, "Content 2", &embedding2, None, None, None)
-            .await
-            .unwrap();
-        repo.insert_chunk(&agent_id, "doc-1", 2, "Content 3", &embedding3, None, None, None)
-            .await
-            .unwrap();
+
+        repo.insert_chunk(
+            &agent_id,
+            "doc-1",
+            0,
+            "Content 1",
+            &embedding1,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "doc-1",
+            1,
+            "Content 2",
+            &embedding2,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "doc-1",
+            2,
+            "Content 3",
+            &embedding3,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         // 搜索与 embedding1 相似的
         let query = vec![1.0, 0.0, 0.0, 0.0];
-        let results = repo.search_similar(&agent_id, &query, 2, 0.5, None).await.unwrap();
+        let results = repo
+            .search_similar(&agent_id, &query, 2, 0.5, None)
+            .await
+            .unwrap();
 
         assert_eq!(results.len(), 2);
         assert!(results[0].score > results[1].score); // 第一个应该分数更高
@@ -507,21 +534,48 @@ mod tests {
     #[tokio::test]
     async fn test_get_stats() {
         let (repo, agent_id) = setup_test_db_with_agent().await;
-        
+
         let embedding = vec![0.1, 0.2, 0.3];
-        
-        repo.insert_chunk(&agent_id, "doc-1", 0, "Content 1", &embedding, None, None, None)
-            .await
-            .unwrap();
-        repo.insert_chunk(&agent_id, "doc-1", 1, "Content 2", &embedding, None, None, None)
-            .await
-            .unwrap();
-        repo.insert_chunk(&agent_id, "doc-2", 0, "Content 3", &embedding, None, None, None)
-            .await
-            .unwrap();
+
+        repo.insert_chunk(
+            &agent_id,
+            "doc-1",
+            0,
+            "Content 1",
+            &embedding,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "doc-1",
+            1,
+            "Content 2",
+            &embedding,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "doc-2",
+            0,
+            "Content 3",
+            &embedding,
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
         let stats = repo.get_stats(&agent_id).await.unwrap();
-        
+
         assert_eq!(stats.document_count, 2);
         assert_eq!(stats.chunk_count, 3);
     }
@@ -556,7 +610,10 @@ mod tests {
         .await
         .unwrap();
 
-        let chunks = repo.list_knowledge_chunks_for_bm25(&agent_id).await.unwrap();
+        let chunks = repo
+            .list_knowledge_chunks_for_bm25(&agent_id)
+            .await
+            .unwrap();
 
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].id, "chunk-knowledge");
@@ -583,4 +640,3 @@ mod tests {
         assert!((cosine_similarity(&e, &f) - expected).abs() < 0.0001);
     }
 }
-

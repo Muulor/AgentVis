@@ -522,9 +522,6 @@ mod tests {
         let mut blocked_event = audit_event(2001);
         blocked_event.reason = "proxy_bypass_signal_blocked".to_string();
         blocked_event.guard_mode = Some("hardBlock".to_string());
-        assert!(!sandbox_audit_event_matches_query(
-            &blocked_event,
-            &query
-        ));
+        assert!(!sandbox_audit_event_matches_query(&blocked_event, &query));
     }
 }

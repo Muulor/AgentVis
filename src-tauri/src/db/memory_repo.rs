@@ -1,4 +1,4 @@
-﻿//! Memory 数据访问层
+//! Memory 数据访问层
 //!
 //! 提供三层记忆系统的 CRUD 操作
 
@@ -20,17 +20,22 @@ impl MemoryRepository {
     }
 
     /// 创建新的记忆
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - 所属 Agent ID
     /// * `layer` - 记忆层级
     /// * `content` - 记忆内容
-    /// 
+    ///
     /// # Returns
     /// 创建成功的 Memory 实体
-    pub async fn create(&self, agent_id: &str, layer: MemoryLayer, content: &str) -> AppResult<Memory> {
+    pub async fn create(
+        &self,
+        agent_id: &str,
+        layer: MemoryLayer,
+        content: &str,
+    ) -> AppResult<Memory> {
         let memory = Memory::new(agent_id, layer, content);
-        
+
         sqlx::query(
             r#"
             INSERT INTO memories (id, agent_id, layer, content, category, importance, 
@@ -70,7 +75,7 @@ impl MemoryRepository {
         memory.importance = importance;
         memory.source_message_ids = source_message_ids.map(|s| s.to_string());
         memory.metadata_json = metadata_json.map(|s| s.to_string());
-        
+
         sqlx::query(
             r#"
             INSERT INTO memories (id, agent_id, layer, content, category, importance, 
@@ -114,14 +119,18 @@ impl MemoryRepository {
     }
 
     /// 获取指定 Agent 和层级的记忆列表
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - Agent ID
     /// * `layer` - 记忆层级
-    /// 
+    ///
     /// # Returns
     /// 记忆列表，按创建时间降序排列
-    pub async fn list_by_layer(&self, agent_id: &str, layer: MemoryLayer) -> AppResult<Vec<Memory>> {
+    pub async fn list_by_layer(
+        &self,
+        agent_id: &str,
+        layer: MemoryLayer,
+    ) -> AppResult<Vec<Memory>> {
         let memories: Vec<Memory> = sqlx::query_as(
             r#"
             SELECT id, agent_id, layer, content, category, importance, 
@@ -160,7 +169,11 @@ impl MemoryRepository {
     }
 
     /// 获取指定 Agent 和类别的事实记忆
-    pub async fn list_facts_by_category(&self, agent_id: &str, category: &str) -> AppResult<Vec<Memory>> {
+    pub async fn list_facts_by_category(
+        &self,
+        agent_id: &str,
+        category: &str,
+    ) -> AppResult<Vec<Memory>> {
         let memories: Vec<Memory> = sqlx::query_as(
             r#"
             SELECT id, agent_id, layer, content, category, importance, 
@@ -182,7 +195,7 @@ impl MemoryRepository {
     /// 更新记忆内容
     pub async fn update_content(&self, id: &str, content: &str) -> AppResult<Memory> {
         let now = Utc::now().timestamp_millis();
-        
+
         sqlx::query(
             r#"
             UPDATE memories 
@@ -197,7 +210,9 @@ impl MemoryRepository {
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        self.get(id).await?.ok_or_else(|| AppError::NotFound(format!("Memory does not exist: {}", id)))
+        self.get(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Memory does not exist: {}", id)))
     }
 
     /// 更新事实记忆的类别和重要性
@@ -208,7 +223,7 @@ impl MemoryRepository {
         importance: Option<i32>,
     ) -> AppResult<Memory> {
         let now = Utc::now().timestamp_millis();
-        
+
         sqlx::query(
             r#"
             UPDATE memories 
@@ -226,7 +241,9 @@ impl MemoryRepository {
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        self.get(id).await?.ok_or_else(|| AppError::NotFound(format!("Memory does not exist: {}", id)))
+        self.get(id)
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("Memory does not exist: {}", id)))
     }
 
     /// 删除记忆
@@ -245,18 +262,22 @@ impl MemoryRepository {
     }
 
     /// 根据源消息 ID 删除 short_term 层级的记忆
-    /// 
+    ///
     /// 用于撤销消息时同步删除关联的短期缓冲记录
-    /// 
+    ///
     /// # Arguments
     /// * `agent_id` - Agent ID
     /// * `source_message_ids` - 源消息 ID 列表
-    /// 
+    ///
     /// # Returns
     /// 删除的记录数量
-    pub async fn delete_by_source_ids(&self, agent_id: &str, source_message_ids: &[String]) -> AppResult<u64> {
+    pub async fn delete_by_source_ids(
+        &self,
+        agent_id: &str,
+        source_message_ids: &[String],
+    ) -> AppResult<u64> {
         let mut total_deleted: u64 = 0;
-        
+
         for source_id in source_message_ids {
             // 使用 LIKE 匹配，因为 source_message_ids 可能包含多个 ID
             // 格式为: "[\"msg-1\", \"msg-2\"]" 或单个 "msg-1"
@@ -274,10 +295,10 @@ impl MemoryRepository {
             .execute(&self.pool)
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
-            
+
             total_deleted += result.rows_affected();
         }
-        
+
         Ok(total_deleted)
     }
 
@@ -301,7 +322,7 @@ impl MemoryRepository {
     /// 获取指定 Agent 各层级的记忆统计
     pub async fn get_stats(&self, agent_id: &str) -> AppResult<MemoryStats> {
         let short_term: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memories WHERE agent_id = ? AND layer = 'short_term'"
+            "SELECT COUNT(*) FROM memories WHERE agent_id = ? AND layer = 'short_term'",
         )
         .bind(agent_id)
         .fetch_one(&self.pool)
@@ -309,20 +330,19 @@ impl MemoryRepository {
         .map_err(|e| AppError::Database(e.to_string()))?;
 
         let summary: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memories WHERE agent_id = ? AND layer = 'summary'"
+            "SELECT COUNT(*) FROM memories WHERE agent_id = ? AND layer = 'summary'",
         )
         .bind(agent_id)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-        let fact: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memories WHERE agent_id = ? AND layer = 'fact'"
-        )
-        .bind(agent_id)
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        let fact: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM memories WHERE agent_id = ? AND layer = 'fact'")
+                .bind(agent_id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
 
         Ok(MemoryStats {
             short_term_count: short_term.0,
@@ -360,12 +380,15 @@ mod tests {
     #[tokio::test]
     async fn test_create_memory() {
         let (hub_repo, agent_repo, mem_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        let memory = mem_repo.create(&agent.id, MemoryLayer::ShortTerm, "短期记忆内容").await.unwrap();
-        
+
+        let memory = mem_repo
+            .create(&agent.id, MemoryLayer::ShortTerm, "短期记忆内容")
+            .await
+            .unwrap();
+
         assert!(!memory.id.is_empty());
         assert_eq!(memory.agent_id, agent.id);
         assert_eq!(memory.layer, "short_term");
@@ -374,17 +397,32 @@ mod tests {
     #[tokio::test]
     async fn test_list_by_layer() {
         let (hub_repo, agent_repo, mem_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        mem_repo.create(&agent.id, MemoryLayer::ShortTerm, "短期1").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::ShortTerm, "短期2").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::Fact, "事实1").await.unwrap();
-        
-        let short_term = mem_repo.list_by_layer(&agent.id, MemoryLayer::ShortTerm).await.unwrap();
-        let facts = mem_repo.list_by_layer(&agent.id, MemoryLayer::Fact).await.unwrap();
-        
+
+        mem_repo
+            .create(&agent.id, MemoryLayer::ShortTerm, "短期1")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::ShortTerm, "短期2")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::Fact, "事实1")
+            .await
+            .unwrap();
+
+        let short_term = mem_repo
+            .list_by_layer(&agent.id, MemoryLayer::ShortTerm)
+            .await
+            .unwrap();
+        let facts = mem_repo
+            .list_by_layer(&agent.id, MemoryLayer::Fact)
+            .await
+            .unwrap();
+
         assert_eq!(short_term.len(), 2);
         assert_eq!(facts.len(), 1);
     }
@@ -392,20 +430,23 @@ mod tests {
     #[tokio::test]
     async fn test_create_with_details() {
         let (hub_repo, agent_repo, mem_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        let memory = mem_repo.create_with_details(
-            &agent.id,
-            MemoryLayer::Fact,
-            "用户偏好简洁回复",
-            Some("USER_PREFERENCE"),
-            Some(5),
-            Some(r#"["msg-1", "msg-2"]"#),
-            None,
-        ).await.unwrap();
-        
+
+        let memory = mem_repo
+            .create_with_details(
+                &agent.id,
+                MemoryLayer::Fact,
+                "用户偏好简洁回复",
+                Some("USER_PREFERENCE"),
+                Some(5),
+                Some(r#"["msg-1", "msg-2"]"#),
+                None,
+            )
+            .await
+            .unwrap();
+
         assert_eq!(memory.category, Some("USER_PREFERENCE".to_string()));
         assert_eq!(memory.importance, Some(5));
     }
@@ -445,19 +486,37 @@ mod tests {
     #[tokio::test]
     async fn test_get_stats() {
         let (hub_repo, agent_repo, mem_repo) = setup_test_db().await;
-        
+
         let hub = hub_repo.create("测试 Hub").await.unwrap();
         let agent = agent_repo.create(&hub.id, "测试 Agent").await.unwrap();
-        
-        mem_repo.create(&agent.id, MemoryLayer::ShortTerm, "短期1").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::ShortTerm, "短期2").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::Summary, "摘要1").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::Fact, "事实1").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::Fact, "事实2").await.unwrap();
-        mem_repo.create(&agent.id, MemoryLayer::Fact, "事实3").await.unwrap();
-        
+
+        mem_repo
+            .create(&agent.id, MemoryLayer::ShortTerm, "短期1")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::ShortTerm, "短期2")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::Summary, "摘要1")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::Fact, "事实1")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::Fact, "事实2")
+            .await
+            .unwrap();
+        mem_repo
+            .create(&agent.id, MemoryLayer::Fact, "事实3")
+            .await
+            .unwrap();
+
         let stats = mem_repo.get_stats(&agent.id).await.unwrap();
-        
+
         assert_eq!(stats.short_term_count, 2);
         assert_eq!(stats.summary_count, 1);
         assert_eq!(stats.fact_count, 3);

@@ -205,7 +205,9 @@ fn classify_helper_error(error: &str) -> (&'static str, &'static str) {
     if normalized.contains("timed out waiting for broker response") {
         return ("broker_response_timeout", "broker_response_timeout");
     }
-    if normalized.contains("invalid request json") || normalized.contains("missing broker request json") {
+    if normalized.contains("invalid request json")
+        || normalized.contains("missing broker request json")
+    {
         return ("invalid_request", "broker_helper_invalid_request");
     }
     if normalized.contains("invalid broker response json") {
@@ -252,22 +254,15 @@ mod tests {
 
         assert!(!response.ok);
         assert_eq!(response.error.as_deref(), Some("boom"));
-        assert_eq!(
-            response.reason_code.as_deref(),
-            Some("broker_helper_error")
-        );
-        assert_eq!(
-            response.error_kind.as_deref(),
-            Some("broker_helper_error")
-        );
+        assert_eq!(response.reason_code.as_deref(), Some("broker_helper_error"));
+        assert_eq!(response.error_kind.as_deref(), Some("broker_helper_error"));
         assert!(response.headers.is_empty());
     }
 
     #[test]
     fn error_response_classifies_helper_timeout() {
-        let response = error_response(
-            "timed out waiting for broker response after 35000ms".to_string(),
-        );
+        let response =
+            error_response("timed out waiting for broker response after 35000ms".to_string());
 
         assert_eq!(
             response.reason_code.as_deref(),

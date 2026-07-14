@@ -1,4 +1,4 @@
-﻿//! Snapshot 数据访问层
+//! Snapshot 数据访问层
 //!
 //! 提供文档快照的 CRUD 操作，用于 Fast-Apply Engine 的版本控制
 
@@ -150,7 +150,10 @@ impl SnapshotRepository {
         .map_err(|e| AppError::Database(format!("Failed to delete snapshot: {}", e)))?;
 
         if result.rows_affected() == 0 {
-            return Err(AppError::NotFound(format!("Snapshot {} does not exist", id)));
+            return Err(AppError::NotFound(format!(
+                "Snapshot {} does not exist",
+                id
+            )));
         }
 
         Ok(())
@@ -277,9 +280,15 @@ mod tests {
         // 创建 5 个快照（每次间隔 2ms 确保 created_at 毫秒时间戳单调递增，
         // 避免内存 SQLite 执行过快导致时间戳相同、UUID 排序不确定的竞态）
         for i in 1..=5 {
-            repo.create("doc-1", &format!("Version {}", i), None, Some(&format!("v{}", i)), None)
-                .await
-                .unwrap();
+            repo.create(
+                "doc-1",
+                &format!("Version {}", i),
+                None,
+                Some(&format!("v{}", i)),
+                None,
+            )
+            .await
+            .unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(2)).await;
         }
 

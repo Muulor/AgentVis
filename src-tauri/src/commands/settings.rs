@@ -33,7 +33,7 @@ pub async fn settings_get_api_key_status(
     _state: State<'_, AppState>,
 ) -> CommandResult<Vec<ApiKeyStatus>> {
     let keystore = WindowsKeystore::new();
-    
+
     let providers = [
         "openai",
         "anthropic",
@@ -51,7 +51,7 @@ pub async fn settings_get_api_key_status(
         "context7",
     ];
     let mut status = Vec::new();
-    
+
     for provider in providers {
         let configured = keystore.has_api_key(provider).unwrap_or(false);
         status.push(ApiKeyStatus {
@@ -59,7 +59,7 @@ pub async fn settings_get_api_key_status(
             configured,
         });
     }
-    
+
     Ok(status)
 }
 
@@ -102,15 +102,14 @@ pub async fn get_image_generation_api_key_status(
     _state: State<'_, AppState>,
 ) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
-    Ok(keystore.has_api_key(IMAGE_GENERATION_PROVIDER).unwrap_or(false))
+    Ok(keystore
+        .has_api_key(IMAGE_GENERATION_PROVIDER)
+        .unwrap_or(false))
 }
 
 /// Save a GitHub Personal Access Token for GitHub API operations.
 #[tauri::command]
-pub async fn set_github_token(
-    _state: State<'_, AppState>,
-    api_key: String,
-) -> CommandResult<()> {
+pub async fn set_github_token(_state: State<'_, AppState>, api_key: String) -> CommandResult<()> {
     let keystore = WindowsKeystore::new();
     keystore.store_api_key(GITHUB_PROVIDER, &api_key)?;
     Ok(())
@@ -118,18 +117,14 @@ pub async fn set_github_token(
 
 /// Return whether a GitHub token is configured.
 #[tauri::command]
-pub async fn get_github_token_status(
-    _state: State<'_, AppState>,
-) -> CommandResult<bool> {
+pub async fn get_github_token_status(_state: State<'_, AppState>) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
     Ok(keystore.has_api_key(GITHUB_PROVIDER).unwrap_or(false))
 }
 
 /// Validate the configured GitHub token with a lightweight rate-limit request.
 #[tauri::command]
-pub async fn test_github_token(
-    _state: State<'_, AppState>,
-) -> CommandResult<bool> {
+pub async fn test_github_token(_state: State<'_, AppState>) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
     let Some(api_key) = keystore.get_api_key(GITHUB_PROVIDER)? else {
         return Ok(false);
@@ -165,18 +160,14 @@ pub async fn set_context7_api_key(
 
 /// Return whether a Context7 API key is configured.
 #[tauri::command]
-pub async fn get_context7_api_key_status(
-    _state: State<'_, AppState>,
-) -> CommandResult<bool> {
+pub async fn get_context7_api_key_status(_state: State<'_, AppState>) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
     Ok(keystore.has_api_key(CONTEXT7_PROVIDER).unwrap_or(false))
 }
 
 /// Validate the configured Context7 API key with a lightweight library search.
 #[tauri::command]
-pub async fn test_context7_api_key(
-    _state: State<'_, AppState>,
-) -> CommandResult<bool> {
+pub async fn test_context7_api_key(_state: State<'_, AppState>) -> CommandResult<bool> {
     let keystore = WindowsKeystore::new();
     let Some(api_key) = keystore.get_api_key(CONTEXT7_PROVIDER)? else {
         return Ok(false);
@@ -206,18 +197,18 @@ pub async fn settings_test_api_key(
     _state: State<'_, AppState>,
     provider: String,
 ) -> CommandResult<bool> {
-    use crate::llm::{LlmProvider, ProviderConfig, OpenAIAdapter, AnthropicAdapter, GeminiAdapter};
-    
+    use crate::llm::{AnthropicAdapter, GeminiAdapter, LlmProvider, OpenAIAdapter, ProviderConfig};
+
     let keystore = WindowsKeystore::new();
     let api_key = keystore.get_api_key(&provider)?;
-    
+
     let api_key = match api_key {
         Some(key) => key,
         None => return Ok(false),
     };
-    
+
     let config = ProviderConfig::new(api_key);
-    
+
     let result = match provider.as_str() {
         "openai" => {
             let adapter = OpenAIAdapter::new(config);
@@ -316,7 +307,7 @@ pub async fn settings_test_api_key(
         }
         _ => return Ok(false),
     };
-    
+
     result
 }
 
@@ -346,16 +337,17 @@ pub async fn im_save_credentials(
     app_secret: String,
 ) -> CommandResult<()> {
     let keystore = WindowsKeystore::new();
-    
+
     let key = format!("im_{}_credentials", platform);
     // 合并为紧凑 JSON，减少存储大小
     let value = serde_json::json!({
         "id": app_id,
         "secret": app_secret,
-    }).to_string();
-    
+    })
+    .to_string();
+
     keystore.store_api_key(&key, &value)?;
-    
+
     Ok(())
 }
 
@@ -366,17 +358,18 @@ pub async fn im_get_credentials(
     platform: String,
 ) -> CommandResult<ImCredentials> {
     let keystore = WindowsKeystore::new();
-    
+
     let key = format!("im_{}_credentials", platform);
-    
+
     let stored = keystore.get_api_key(&key)?;
-    
+
     match stored {
         Some(json_str) => {
             // 解析 JSON 格式的凭据
-            let parsed: serde_json::Value = serde_json::from_str(&json_str)
-                .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse credentials: {}", e)))?;
-            
+            let parsed: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+                crate::error::AppError::Generic(format!("Failed to parse credentials: {}", e))
+            })?;
+
             Ok(ImCredentials {
                 app_id: parsed["id"].as_str().unwrap_or_default().to_string(),
                 app_secret: parsed["secret"].as_str().unwrap_or_default().to_string(),
@@ -423,12 +416,14 @@ pub async fn im_save_bot_credentials(
         serde_json::json!({
             "botToken": bot_token.unwrap_or_default(),
             "appToken": app_token.unwrap_or_default(),
-        }).to_string()
+        })
+        .to_string()
     } else {
         serde_json::json!({
             "id": app_id.unwrap_or_default(),
             "secret": app_secret.unwrap_or_default(),
-        }).to_string()
+        })
+        .to_string()
     };
 
     keystore.store_api_key(&key, &value)?;
@@ -452,8 +447,9 @@ pub async fn im_get_bot_credentials(
 
     match stored {
         Some(json_str) => {
-            let parsed: serde_json::Value = serde_json::from_str(&json_str)
-                .map_err(|e| crate::error::AppError::Generic(format!("Failed to parse bot credentials: {}", e)))?;
+            let parsed: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+                crate::error::AppError::Generic(format!("Failed to parse bot credentials: {}", e))
+            })?;
 
             Ok(ImCredentials {
                 app_id: parsed["id"]
@@ -500,4 +496,3 @@ pub async fn im_delete_bot_credentials(
 
     Ok(())
 }
-

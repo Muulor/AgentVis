@@ -40,7 +40,11 @@ impl LlmProvider {
 
     /// 获取所有支持的提供商
     pub fn all() -> &'static [LlmProvider] {
-        &[LlmProvider::OpenAI, LlmProvider::Anthropic, LlmProvider::Gemini]
+        &[
+            LlmProvider::OpenAI,
+            LlmProvider::Anthropic,
+            LlmProvider::Gemini,
+        ]
     }
 }
 
@@ -48,19 +52,19 @@ impl LlmProvider {
 pub trait Keystore: Send + Sync {
     /// 存储 API Key
     fn store_api_key(&self, provider: &str, key: &str) -> AppResult<()>;
-    
+
     /// 获取 API Key
     fn get_api_key(&self, provider: &str) -> AppResult<Option<String>>;
-    
+
     /// 删除 API Key
     fn delete_api_key(&self, provider: &str) -> AppResult<()>;
-    
+
     /// 检查是否已配置 API Key
     fn has_api_key(&self, provider: &str) -> AppResult<bool>;
 }
 
 /// Windows Keystore 实现
-/// 
+///
 /// 使用 keyring crate 与 Windows Credential Manager 交互
 pub struct WindowsKeystore {
     service: String,
@@ -95,19 +99,22 @@ impl Default for WindowsKeystore {
 
 impl Keystore for WindowsKeystore {
     fn store_api_key(&self, provider: &str, key: &str) -> AppResult<()> {
-        let entry = self.get_entry(provider)
+        let entry = self
+            .get_entry(provider)
             .map_err(|e| AppError::Keystore(format!("Unable to access key storage: {}", e)))?;
-        
-        entry.set_password(key)
+
+        entry
+            .set_password(key)
             .map_err(|e| AppError::Keystore(format!("Unable to store API key: {}", e)))?;
-        
+
         Ok(())
     }
 
     fn get_api_key(&self, provider: &str) -> AppResult<Option<String>> {
-        let entry = self.get_entry(provider)
+        let entry = self
+            .get_entry(provider)
             .map_err(|e| AppError::Keystore(format!("Unable to access key storage: {}", e)))?;
-        
+
         match entry.get_password() {
             Ok(password) => Ok(Some(password)),
             Err(keyring::Error::NoEntry) => Ok(None),
@@ -116,45 +123,53 @@ impl Keystore for WindowsKeystore {
     }
 
     fn delete_api_key(&self, provider: &str) -> AppResult<()> {
-        let entry = self.get_entry(provider)
+        let entry = self
+            .get_entry(provider)
             .map_err(|e| AppError::Keystore(format!("Unable to access key storage: {}", e)))?;
-        
+
         match entry.delete_credential() {
             Ok(()) => Ok(()),
-            Err(keyring::Error::NoEntry) => Ok(()),  // 不存在也视为成功
-            Err(e) => Err(AppError::Keystore(format!("Unable to delete API key: {}", e))),
+            Err(keyring::Error::NoEntry) => Ok(()), // 不存在也视为成功
+            Err(e) => Err(AppError::Keystore(format!(
+                "Unable to delete API key: {}",
+                e
+            ))),
         }
     }
 
     fn has_api_key(&self, provider: &str) -> AppResult<bool> {
-        let entry = self.get_entry(provider)
+        let entry = self
+            .get_entry(provider)
             .map_err(|e| AppError::Keystore(format!("Unable to access key storage: {}", e)))?;
-        
+
         match entry.get_password() {
             Ok(_) => Ok(true),
             Err(keyring::Error::NoEntry) => Ok(false),
-            Err(e) => Err(AppError::Keystore(format!("Unable to check API key: {}", e))),
+            Err(e) => Err(AppError::Keystore(format!(
+                "Unable to check API key: {}",
+                e
+            ))),
         }
     }
 }
 
 /// 获取 API Key 的脱敏显示
-/// 
+///
 /// 例如: "sk-abc...xyz" 显示为 "sk-abc...xyz" (前6后3)
 #[allow(dead_code)] // 当前仅在测试中使用，保留作为 UI 展示 API Key 时的脱敏工具
 pub fn mask_api_key(key: &str) -> String {
     if key.len() <= 12 {
         return "*".repeat(key.len());
     }
-    
+
     let prefix_len = 6.min(key.len() / 3);
     let suffix_len = 3.min(key.len() / 4);
     let mask_len = key.len() - prefix_len - suffix_len;
-    
+
     format!(
         "{}{}{}",
         &key[..prefix_len],
-        "*".repeat(mask_len.min(10)),  // 最多10个星号
+        "*".repeat(mask_len.min(10)), // 最多10个星号
         &key[key.len() - suffix_len..]
     )
 }
@@ -167,8 +182,14 @@ mod tests {
     fn test_llm_provider_from_str() {
         assert_eq!(LlmProvider::from_str("openai"), Some(LlmProvider::OpenAI));
         assert_eq!(LlmProvider::from_str("OpenAI"), Some(LlmProvider::OpenAI));
-        assert_eq!(LlmProvider::from_str("claude"), Some(LlmProvider::Anthropic));
-        assert_eq!(LlmProvider::from_str("anthropic"), Some(LlmProvider::Anthropic));
+        assert_eq!(
+            LlmProvider::from_str("claude"),
+            Some(LlmProvider::Anthropic)
+        );
+        assert_eq!(
+            LlmProvider::from_str("anthropic"),
+            Some(LlmProvider::Anthropic)
+        );
         assert_eq!(LlmProvider::from_str("gemini"), Some(LlmProvider::Gemini));
         assert_eq!(LlmProvider::from_str("google"), Some(LlmProvider::Gemini));
         assert_eq!(LlmProvider::from_str("unknown"), None);
@@ -179,7 +200,7 @@ mod tests {
         // 短密钥
         assert_eq!(mask_api_key("abc"), "***");
         assert_eq!(mask_api_key("abcdefgh"), "********");
-        
+
         // 长密钥
         let key = "sk-abcdef1234567890xyz";
         let masked = mask_api_key(key);

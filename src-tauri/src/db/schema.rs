@@ -335,9 +335,11 @@ pub async fn initialize_schema(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
     .await?;
 
     if safety_footer_enabled_columns.is_empty() {
-        sqlx::query("ALTER TABLE agents ADD COLUMN sub_agent_safety_footer_enabled INTEGER DEFAULT 0")
-            .execute(pool)
-            .await?;
+        sqlx::query(
+            "ALTER TABLE agents ADD COLUMN sub_agent_safety_footer_enabled INTEGER DEFAULT 0",
+        )
+        .execute(pool)
+        .await?;
         log::info!("数据库迁移: 已添加 agents.sub_agent_safety_footer_enabled 列");
     }
 

@@ -3,11 +3,11 @@
 //! 提供交付物保存、文档管理等 IPC 命令
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 use tauri::{Manager, State};
 
-use crate::error::{AppResult, AppError};
+use crate::error::{AppError, AppResult};
 use crate::AppState;
 
 use super::command_validator;
@@ -39,12 +39,17 @@ fn large_tool_arg_dir(app_handle: &tauri::AppHandle) -> AppResult<PathBuf> {
 fn validate_large_tool_arg_ref(ref_id: &str) -> AppResult<()> {
     let is_valid = ref_id.starts_with(LARGE_TOOL_ARG_REF_PREFIX)
         && ref_id.len() <= 128
-        && ref_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.');
+        && ref_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.');
 
     if is_valid {
         Ok(())
     } else {
-        Err(AppError::Generic(format!("Invalid large tool arg ref: {}", ref_id)))
+        Err(AppError::Generic(format!(
+            "Invalid large tool arg ref: {}",
+            ref_id
+        )))
     }
 }
 
@@ -58,13 +63,15 @@ pub(crate) fn stage_large_tool_arg_content(
     content: &str,
 ) -> AppResult<String> {
     let dir = large_tool_arg_dir(app_handle)?;
-    fs::create_dir_all(&dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create large tool arg directory: {}", e)))?;
+    fs::create_dir_all(&dir).map_err(|e| {
+        AppError::FileSystem(format!("Failed to create large tool arg directory: {}", e))
+    })?;
 
     let ref_id = format!("{}{}.txt", LARGE_TOOL_ARG_REF_PREFIX, uuid::Uuid::new_v4());
     let path = dir.join(&ref_id);
-    fs::write(&path, content.as_bytes())
-        .map_err(|e| AppError::FileSystem(format!("Failed to stage large tool arg content: {}", e)))?;
+    fs::write(&path, content.as_bytes()).map_err(|e| {
+        AppError::FileSystem(format!("Failed to stage large tool arg content: {}", e))
+    })?;
 
     log::info!(
         "[file] staged large tool arg content: ref={}, bytes={}",
@@ -112,24 +119,24 @@ pub async fn file_write_deliverable(
         .path()
         .app_data_dir()
         .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
-    
+
     // 创建交付物目录: <app_data>/deliverables/<agent_id>/
     let deliverables_dir = base_dir.join("deliverables").join(&agent_id);
     fs::create_dir_all(&deliverables_dir)
         .map_err(|e| AppError::FileSystem(format!("Failed to create directory: {}", e)))?;
-    
+
     // 处理文件名冲突（如果文件已存在，添加时间戳后缀）
     let final_file_name = get_unique_filename(&deliverables_dir, &file_name);
     let file_path = deliverables_dir.join(&final_file_name);
-    
+
     // 写入文件
     fs::write(&file_path, &content)
         .map_err(|e| AppError::FileSystem(format!("Failed to write file: {}", e)))?;
-    
+
     let path_str = file_path.to_string_lossy().to_string();
-    
+
     log::debug!("[file] 交付物已保存: {}", path_str);
-    
+
     Ok(path_str)
 }
 
@@ -145,44 +152,58 @@ pub async fn file_write_deliverable(
 /// # Returns
 /// 文件内容（文本文件原样返回，二进制文件返回提取的文本）
 #[tauri::command]
-pub async fn file_read_content(
-    file_path: String,
-) -> AppResult<String> {
+pub async fn file_read_content(file_path: String) -> AppResult<String> {
     let path = PathBuf::from(&file_path);
-    
+
     if !path.exists() {
-        return Err(AppError::NotFound(format!("File does not exist: {}", file_path)));
+        return Err(AppError::NotFound(format!(
+            "File does not exist: {}",
+            file_path
+        )));
     }
-    
+
     // 检测文件扩展名，对办公文档自动路由到 document_parser
-    let ext = path.extension()
+    let ext = path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase());
-    
+
     match ext.as_deref() {
         Some("docx") => {
             log::debug!("[file] 检测到 .docx 文件，自动解析为文本: {}", file_path);
             let text = super::document_parser::parse_docx(file_path.clone()).await?;
-            Ok(format!("[Automatically parsed from {} - extracted text content follows]\n\n{}", 
-                path.file_name().unwrap_or_default().to_string_lossy(), text))
+            Ok(format!(
+                "[Automatically parsed from {} - extracted text content follows]\n\n{}",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                text
+            ))
         }
         Some("xlsx") | Some("xls") => {
             log::debug!("[file] 检测到 Excel 文件，自动解析为文本: {}", file_path);
             let text = super::document_parser::parse_xlsx(file_path.clone()).await?;
-            Ok(format!("[Automatically parsed from {} - extracted Markdown table follows]\n\n{}", 
-                path.file_name().unwrap_or_default().to_string_lossy(), text))
+            Ok(format!(
+                "[Automatically parsed from {} - extracted Markdown table follows]\n\n{}",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                text
+            ))
         }
         Some("pptx") => {
             log::debug!("[file] 检测到 .pptx 文件，自动解析为文本: {}", file_path);
             let text = super::document_parser::parse_pptx(file_path.clone()).await?;
-            Ok(format!("[Automatically parsed from {} - extracted Markdown content follows]\n\n{}", 
-                path.file_name().unwrap_or_default().to_string_lossy(), text))
+            Ok(format!(
+                "[Automatically parsed from {} - extracted Markdown content follows]\n\n{}",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                text
+            ))
         }
         Some("pdf") => {
             log::debug!("[file] 检测到 .pdf 文件，自动解析为文本: {}", file_path);
             let text = super::document_parser::parse_pdf(file_path.clone()).await?;
-            Ok(format!("[Automatically parsed from {} - extracted text content follows]\n\n{}", 
-                path.file_name().unwrap_or_default().to_string_lossy(), text))
+            Ok(format!(
+                "[Automatically parsed from {} - extracted text content follows]\n\n{}",
+                path.file_name().unwrap_or_default().to_string_lossy(),
+                text
+            ))
         }
         _ => {
             // 文本文件：直接读取
@@ -214,22 +235,31 @@ pub async fn file_list_deliverables(
         .path()
         .app_data_dir()
         .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
-    
+
     // 目录结构: deliverables/<hub_name>/<agent_name>/
-    let deliverables_dir = base_dir.join("deliverables").join(&hub_name).join(&agent_name);
-    
+    let deliverables_dir = base_dir
+        .join("deliverables")
+        .join(&hub_name)
+        .join(&agent_name);
+
     if !deliverables_dir.exists() {
         return Ok(vec![]);
     }
-    
+
     let mut files = Vec::new();
-    
+
     // 递归读取目录下的所有文件（包括子目录）
-    collect_files_recursively(&deliverables_dir, &deliverables_dir, &mut files, &hub_name, &agent_name)?;
-    
+    collect_files_recursively(
+        &deliverables_dir,
+        &deliverables_dir,
+        &mut files,
+        &hub_name,
+        &agent_name,
+    )?;
+
     // 按创建时间倒序
     files.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-    
+
     Ok(files)
 }
 
@@ -249,23 +279,25 @@ fn collect_files_recursively(
             }
             if path.is_file() {
                 if let Ok(metadata) = entry.metadata() {
-                    let file_name = path.file_name()
+                    let file_name = path
+                        .file_name()
                         .map(|s| s.to_string_lossy().to_string())
                         .unwrap_or_default();
-                    
-                    let created_at = metadata.created()
+
+                    let created_at = metadata
+                        .created()
                         .ok()
                         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                         .map(|d| d.as_secs() as i64)
                         .unwrap_or(0);
-                    
+
                     // 使用相对路径生成唯一 id，
                     // 避免不同子目录下同名文件（如 README.md）产生相同 id
-                    let relative_path = path.strip_prefix(base_dir)
+                    let relative_path = path
+                        .strip_prefix(base_dir)
                         .map(|p| p.to_string_lossy().to_string())
                         .unwrap_or_else(|_| file_name.clone());
-                    let safe_relative = relative_path
-                        .replace(['/', '\\'], "_");
+                    let safe_relative = relative_path.replace(['/', '\\'], "_");
 
                     files.push(FileInfoResponse {
                         id: format!("{}_{}_{}", hub_name, agent_name, safe_relative),
@@ -650,49 +682,57 @@ pub async fn save_clipboard_image(
     mime_type: String,
     target_dir: Option<String>,
 ) -> AppResult<String> {
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD;
-    
+    use base64::Engine;
+
     // 根据 MIME 类型确定文件扩展名
     let extension = match mime_type.as_str() {
         "image/png" => "png",
         "image/jpeg" | "image/jpg" => "jpg",
         "image/webp" => "webp",
         "image/gif" => "gif",
-        _ => "png",  // 默认使用 png
+        _ => "png", // 默认使用 png
     };
-    
+
     // 获取保存目录：优先写入调用方指定目录，未指定时保持旧的临时目录行为
     let clipboard_dir = if let Some(dir) = normalize_optional_dir(target_dir) {
         PathBuf::from(dir)
     } else {
-        let temp_dir = app_handle
-            .path()
-            .temp_dir()
-            .map_err(|e| AppError::FileSystem(format!("Failed to get temporary directory: {}", e)))?;
+        let temp_dir = app_handle.path().temp_dir().map_err(|e| {
+            AppError::FileSystem(format!("Failed to get temporary directory: {}", e))
+        })?;
         temp_dir.join("clipboard_images")
     };
 
-    fs::create_dir_all(&clipboard_dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create image attachment directory: {}", e)))?;
-    
+    fs::create_dir_all(&clipboard_dir).map_err(|e| {
+        AppError::FileSystem(format!(
+            "Failed to create image attachment directory: {}",
+            e
+        ))
+    })?;
+
     // 生成唯一文件名
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S_%3f");
     let file_name = format!("clipboard_{}.{}", timestamp, extension);
     let file_path = clipboard_dir.join(&file_name);
-    
+
     // 解码 base64 数据
-    let image_data = STANDARD.decode(&base64_data)
+    let image_data = STANDARD
+        .decode(&base64_data)
         .map_err(|e| AppError::Generic(format!("Invalid base64 data: {}", e)))?;
-    
+
     // 写入文件
     fs::write(&file_path, &image_data)
         .map_err(|e| AppError::FileSystem(format!("Failed to write image: {}", e)))?;
-    
+
     let path_str = file_path.to_string_lossy().to_string();
-    
-    log::debug!("[file] 剪贴板图片已保存: {} ({} bytes)", path_str, image_data.len());
-    
+
+    log::debug!(
+        "[file] 剪贴板图片已保存: {} ({} bytes)",
+        path_str,
+        image_data.len()
+    );
+
     Ok(path_str)
 }
 
@@ -716,39 +756,46 @@ pub async fn save_dropped_file(
     mime_type: String,
     target_dir: Option<String>,
 ) -> AppResult<String> {
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD;
-    
+    use base64::Engine;
+
     // 获取保存目录：优先写入调用方指定目录，未指定时保持旧的临时目录行为
     let dropped_dir = if let Some(dir) = normalize_optional_dir(target_dir) {
         PathBuf::from(dir)
     } else {
-        let temp_dir = app_handle
-            .path()
-            .temp_dir()
-            .map_err(|e| AppError::FileSystem(format!("Failed to get temporary directory: {}", e)))?;
+        let temp_dir = app_handle.path().temp_dir().map_err(|e| {
+            AppError::FileSystem(format!("Failed to get temporary directory: {}", e))
+        })?;
         temp_dir.join("dropped_files")
     };
 
-    fs::create_dir_all(&dropped_dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create dropped file directory: {}", e)))?;
+    fs::create_dir_all(&dropped_dir).map_err(|e| {
+        AppError::FileSystem(format!("Failed to create dropped file directory: {}", e))
+    })?;
 
     // 保留原文件名；仅在同名文件已存在时追加序号避免覆盖
-    let safe_file_name = get_unique_filename_with_counter(&dropped_dir, &sanitize_filename(&file_name));
+    let safe_file_name =
+        get_unique_filename_with_counter(&dropped_dir, &sanitize_filename(&file_name));
     let file_path = dropped_dir.join(&safe_file_name);
-    
+
     // 解码 base64 数据
-    let file_data = STANDARD.decode(&base64_data)
+    let file_data = STANDARD
+        .decode(&base64_data)
         .map_err(|e| AppError::Generic(format!("Invalid base64 data: {}", e)))?;
-    
+
     // 写入文件
     fs::write(&file_path, &file_data)
         .map_err(|e| AppError::FileSystem(format!("Failed to write file: {}", e)))?;
-    
+
     let path_str = file_path.to_string_lossy().to_string();
-    
-    log::debug!("[file] 拖放文件已保存: {} ({} bytes, {})", path_str, file_data.len(), mime_type);
-    
+
+    log::debug!(
+        "[file] 拖放文件已保存: {} ({} bytes, {})",
+        path_str,
+        file_data.len(),
+        mime_type
+    );
+
     Ok(path_str)
 }
 
@@ -827,18 +874,18 @@ fn ensure_path_within_root(root: &Path, path: &Path) -> AppResult<()> {
 /// 获取唯一文件名（避免冲突）
 fn get_unique_filename(dir: &Path, file_name: &str) -> String {
     let path = dir.join(file_name);
-    
+
     if !path.exists() {
         return file_name.to_string();
     }
-    
+
     // 分离文件名和扩展名
     let (base_name, extension) = if let Some(dot_idx) = file_name.rfind('.') {
         (&file_name[..dot_idx], &file_name[dot_idx..])
     } else {
         (file_name, "")
     };
-    
+
     // 添加时间戳
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     format!("{}_{}{}", base_name, timestamp, extension)
@@ -857,7 +904,10 @@ fn get_unique_filename_with_counter(dir: &Path, file_name: &str) -> String {
     }
 
     let (base_name, extension) = if let Some(dot_idx) = normalized_file_name.rfind('.') {
-        (&normalized_file_name[..dot_idx], &normalized_file_name[dot_idx..])
+        (
+            &normalized_file_name[..dot_idx],
+            &normalized_file_name[dot_idx..],
+        )
     } else {
         (normalized_file_name.as_str(), "")
     };
@@ -915,13 +965,13 @@ pub async fn file_write_to_path(
         .app_data_dir()
         .unwrap_or_else(|_| PathBuf::from("."));
     command_validator::validate_path_write_safety(&file_path, &app_data_dir)?;
-    
+
     // 确保父目录存在
     if let Some(parent) = file_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| AppError::FileSystem(format!("Failed to create directory: {}", e)))?;
     }
-    
+
     // 如果文件存在且需要备份
     let backup_path = if create_backup && file_path.exists() {
         let backup = file_create_backup_internal(&app_handle, &path)?;
@@ -929,14 +979,14 @@ pub async fn file_write_to_path(
     } else {
         None
     };
-    
+
     // 写入文件
     let bytes = content.as_bytes();
     fs::write(&file_path, bytes)
         .map_err(|e| AppError::FileSystem(format!("Failed to write file: {}", e)))?;
-    
+
     log::debug!("[file] 已写入文件: {} ({} bytes)", path, bytes.len());
-    
+
     Ok(WriteResult {
         success: true,
         file_path: path,
@@ -956,24 +1006,28 @@ pub async fn file_write_to_path(
 /// base64 编码的文件内容
 #[tauri::command]
 pub async fn file_read_as_base64(path: String) -> AppResult<String> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
     let file_path = PathBuf::from(&path);
-    
+
     if !file_path.exists() {
         return Err(AppError::NotFound(format!("File does not exist: {}", path)));
     }
-    
+
     // 读取文件
     let bytes = fs::read(&file_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to read file: {}", e)))?;
-    
+
     // 编码为 base64
     let encoded = STANDARD.encode(&bytes);
-    
-    log::debug!("[file] 已读取文件为 base64: {} ({} bytes -> {} chars)", 
-             path, bytes.len(), encoded.len());
-    
+
+    log::debug!(
+        "[file] 已读取文件为 base64: {} ({} bytes -> {} chars)",
+        path,
+        bytes.len(),
+        encoded.len()
+    );
+
     Ok(encoded)
 }
 
@@ -997,7 +1051,7 @@ pub async fn file_read_image_downscaled_as_base64(
     path: String,
     max_width: u32,
 ) -> AppResult<(String, String, bool)> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
 
     let file_path = PathBuf::from(&path);
 
@@ -1018,7 +1072,8 @@ pub async fn file_read_image_downscaled_as_base64(
     if original_width <= max_width {
         // 未超过阈值，返回原始文件（保留原格式，避免不必要的重编码）
         let encoded = STANDARD.encode(&bytes);
-        let ext = file_path.extension()
+        let ext = file_path
+            .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("png")
             .to_lowercase();
@@ -1031,7 +1086,10 @@ pub async fn file_read_image_downscaled_as_base64(
         };
         log::debug!(
             "[file] 图片未超过最大宽度，原样返回: {} ({}×{}, max={})",
-            path, original_width, original_height, max_width
+            path,
+            original_width,
+            original_height,
+            max_width
         );
         return Ok((encoded, mime.to_string(), false));
     }
@@ -1040,11 +1098,7 @@ pub async fn file_read_image_downscaled_as_base64(
     let scale = max_width as f64 / original_width as f64;
     let new_height = (original_height as f64 * scale).round() as u32;
 
-    let resized = img.resize_exact(
-        max_width,
-        new_height,
-        image::imageops::FilterType::Lanczos3,
-    );
+    let resized = img.resize_exact(max_width, new_height, image::imageops::FilterType::Lanczos3);
 
     // 编码为 PNG 并返回 base64
     let mut png_buffer = std::io::Cursor::new(Vec::new());
@@ -1056,7 +1110,12 @@ pub async fn file_read_image_downscaled_as_base64(
 
     log::debug!(
         "[file] 📐 图片已缩放: {} ({}×{} → {}×{}, scale={:.2})",
-        path, original_width, original_height, max_width, new_height, scale
+        path,
+        original_width,
+        original_height,
+        max_width,
+        new_height,
+        scale
     );
 
     Ok((encoded, "image/png".to_string(), true))
@@ -1080,26 +1139,30 @@ pub async fn file_copy_to_attachments(
     target_dir: Option<String>,
 ) -> AppResult<String> {
     let source = PathBuf::from(&source_path);
-    
+
     if !source.exists() {
-        return Err(AppError::NotFound(format!("File does not exist: {}", source_path)));
+        return Err(AppError::NotFound(format!(
+            "File does not exist: {}",
+            source_path
+        )));
     }
-    
+
     // 获取附件目录：优先写入调用方指定的 workdir/attachments，未指定时保持旧目录
     let attachments_dir = if let Some(dir) = normalize_optional_dir(target_dir) {
         PathBuf::from(dir)
     } else {
-        let app_data_dir = app_handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
+        let app_data_dir = app_handle.path().app_data_dir().map_err(|e| {
+            AppError::FileSystem(format!("Failed to get app data directory: {}", e))
+        })?;
         app_data_dir.join("attachments").join(&agent_id)
     };
-    fs::create_dir_all(&attachments_dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create attachments directory: {}", e)))?;
+    fs::create_dir_all(&attachments_dir).map_err(|e| {
+        AppError::FileSystem(format!("Failed to create attachments directory: {}", e))
+    })?;
 
     // 默认保留原文件名；仅在目标目录已有不同文件同名时追加序号避免覆盖
-    let file_name = source.file_name()
+    let file_name = source
+        .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
@@ -1107,12 +1170,12 @@ pub async fn file_copy_to_attachments(
     let preferred_target_path = attachments_dir.join(&safe_file_name);
 
     if preferred_target_path.exists() {
-        let source_canonical = source
-            .canonicalize()
-            .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize source file: {}", e)))?;
-        let target_canonical = preferred_target_path
-            .canonicalize()
-            .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize target file: {}", e)))?;
+        let source_canonical = source.canonicalize().map_err(|e| {
+            AppError::FileSystem(format!("Failed to canonicalize source file: {}", e))
+        })?;
+        let target_canonical = preferred_target_path.canonicalize().map_err(|e| {
+            AppError::FileSystem(format!("Failed to canonicalize target file: {}", e))
+        })?;
 
         if source_canonical == target_canonical {
             let target_path_str = preferred_target_path.to_string_lossy().to_string();
@@ -1127,10 +1190,10 @@ pub async fn file_copy_to_attachments(
     // 复制文件
     fs::copy(&source, &target_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to copy file: {}", e)))?;
-    
+
     let target_path_str = target_path.to_string_lossy().to_string();
     log::debug!("[file] 已复制附件: {} -> {}", source_path, target_path_str);
-    
+
     Ok(target_path_str)
 }
 
@@ -1144,14 +1207,14 @@ pub async fn file_copy_to_attachments(
 #[tauri::command]
 pub async fn file_get_size(path: String) -> AppResult<u64> {
     let file_path = PathBuf::from(&path);
-    
+
     if !file_path.exists() {
         return Err(AppError::NotFound(format!("File does not exist: {}", path)));
     }
-    
+
     let metadata = fs::metadata(&file_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to get file metadata: {}", e)))?;
-    
+
     Ok(metadata.len())
 }
 
@@ -1165,57 +1228,52 @@ pub async fn file_get_size(path: String) -> AppResult<u64> {
 /// # Returns
 /// 备份文件路径
 #[tauri::command]
-pub async fn file_create_backup(
-    app_handle: tauri::AppHandle,
-    path: String,
-) -> AppResult<String> {
+pub async fn file_create_backup(app_handle: tauri::AppHandle, path: String) -> AppResult<String> {
     file_create_backup_internal(&app_handle, &path)
 }
 
 /// 内部备份函数
-fn file_create_backup_internal(
-    app_handle: &tauri::AppHandle,
-    path: &str,
-) -> AppResult<String> {
+fn file_create_backup_internal(app_handle: &tauri::AppHandle, path: &str) -> AppResult<String> {
     let source_path = PathBuf::from(path);
-    
+
     if !source_path.exists() {
         return Err(AppError::NotFound(format!("File does not exist: {}", path)));
     }
-    
+
     // 获取备份目录
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
-    
+
     let backups_dir = app_data_dir.join("backups");
     fs::create_dir_all(&backups_dir)
         .map_err(|e| AppError::FileSystem(format!("Failed to create backup directory: {}", e)))?;
-    
+
     // 生成备份文件名：原文件名_时间戳.扩展名
-    let file_name = source_path.file_name()
+    let file_name = source_path
+        .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    
+
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    
+
     let (base_name, extension) = if let Some(dot_idx) = file_name.rfind('.') {
         (&file_name[..dot_idx], &file_name[dot_idx..])
     } else {
         (file_name.as_str(), "")
     };
-    
+
     let backup_file_name = format!("{}_{}{}", base_name, timestamp, extension);
     let backup_path = backups_dir.join(&backup_file_name);
-    
+
     // 复制文件
     fs::copy(&source_path, &backup_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to create backup: {}", e)))?;
-    
+
     let backup_path_str = backup_path.to_string_lossy().to_string();
     log::debug!("[file] 已创建备份: {} -> {}", path, backup_path_str);
-    
+
     Ok(backup_path_str)
 }
 
@@ -1227,13 +1285,14 @@ fn file_create_backup_internal(
 /// # Arguments
 /// * `file_path` - 文件路径
 #[tauri::command]
-pub async fn file_open_system(
-    file_path: String,
-) -> AppResult<()> {
+pub async fn file_open_system(file_path: String) -> AppResult<()> {
     let path = PathBuf::from(&file_path);
 
     if !path.exists() {
-        return Err(AppError::NotFound(format!("File does not exist: {}", file_path)));
+        return Err(AppError::NotFound(format!(
+            "File does not exist: {}",
+            file_path
+        )));
     }
 
     #[cfg(target_os = "windows")]
@@ -1307,16 +1366,18 @@ fn initialize_shell_com() -> AppResult<ComApartmentGuard> {
     use windows_sys::Win32::Foundation::RPC_E_CHANGED_MODE;
     use windows_sys::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
 
-    let hr = unsafe {
-        CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32)
-    };
+    let hr = unsafe { CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32) };
 
     if hresult_succeeded(hr) {
-        Ok(ComApartmentGuard { should_uninitialize: true })
+        Ok(ComApartmentGuard {
+            should_uninitialize: true,
+        })
     } else if hr == RPC_E_CHANGED_MODE {
         // The thread is already initialized with a different COM apartment.
         // Shell APIs can still run; this branch must not call CoUninitialize.
-        Ok(ComApartmentGuard { should_uninitialize: false })
+        Ok(ComApartmentGuard {
+            should_uninitialize: false,
+        })
     } else {
         Err(AppError::Generic(format!(
             "Failed to initialize COM for File Explorer: {}",
@@ -1359,7 +1420,12 @@ fn reveal_path_in_file_explorer(path: &Path) -> AppResult<()> {
     let handle = std::thread::Builder::new()
         .name("agentvis-shell-reveal".to_string())
         .spawn(move || reveal_path_in_file_explorer_on_sta_thread(&path))
-        .map_err(|e| AppError::Generic(format!("Failed to start File Explorer reveal thread: {}", e)))?;
+        .map_err(|e| {
+            AppError::Generic(format!(
+                "Failed to start File Explorer reveal thread: {}",
+                e
+            ))
+        })?;
 
     handle
         .join()
@@ -1369,10 +1435,7 @@ fn reveal_path_in_file_explorer(path: &Path) -> AppResult<()> {
 #[cfg(target_os = "windows")]
 fn reveal_path_in_file_explorer_on_sta_thread(path: &Path) -> AppResult<()> {
     use windows_sys::Win32::UI::Shell::{
-        Common::ITEMIDLIST,
-        ILFree,
-        SHOpenFolderAndSelectItems,
-        SHParseDisplayName,
+        Common::ITEMIDLIST, ILFree, SHOpenFolderAndSelectItems, SHParseDisplayName,
     };
 
     let _com = initialize_shell_com()?;
@@ -1423,13 +1486,14 @@ fn reveal_path_in_file_explorer_on_sta_thread(path: &Path) -> AppResult<()> {
 /// # Arguments
 /// * `file_path` - 文件或目录路径
 #[tauri::command]
-pub async fn file_reveal_in_explorer(
-    file_path: String,
-) -> AppResult<()> {
+pub async fn file_reveal_in_explorer(file_path: String) -> AppResult<()> {
     let path = PathBuf::from(&file_path);
 
     if !path.exists() {
-        return Err(AppError::NotFound(format!("Path does not exist: {}", file_path)));
+        return Err(AppError::NotFound(format!(
+            "Path does not exist: {}",
+            file_path
+        )));
     }
 
     let canonical_path = path
@@ -1460,7 +1524,8 @@ pub async fn file_reveal_in_explorer(
     {
         let canonical_file_path = canonical_path.to_string_lossy().to_string();
         // Linux 无统一的"选中文件"能力，fallback 为打开父目录
-        let parent = canonical_path.parent()
+        let parent = canonical_path
+            .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| canonical_file_path.clone());
         std::process::Command::new("xdg-open")
@@ -1480,7 +1545,8 @@ mod reveal_in_explorer_tests {
 
     #[test]
     fn explorer_compatible_path_keeps_normal_paths() {
-        let path = r"C:\Users\Muulo\Documents\Videos\Agent Harness explained in 8min.. [1a1VXDdIyrk].mp4";
+        let path =
+            r"C:\Users\Muulo\Documents\Videos\Agent Harness explained in 8min.. [1a1VXDdIyrk].mp4";
 
         assert_eq!(explorer_compatible_path(path), path);
     }
@@ -1556,8 +1622,8 @@ pub async fn file_import_to_workspace(
     is_directory: bool,
     base64_data: Option<String>,
 ) -> AppResult<WorkspaceImportResult> {
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
 
     let app_data_dir = app_handle
         .path()
@@ -1580,15 +1646,16 @@ pub async fn file_import_to_workspace(
                 .join("deliverables")
                 .join(&hub_name)
                 .join(&agent_name);
-            fs::create_dir_all(&root)
-                .map_err(|e| AppError::FileSystem(format!("Failed to create workspace directory: {}", e)))?;
+            fs::create_dir_all(&root).map_err(|e| {
+                AppError::FileSystem(format!("Failed to create workspace directory: {}", e))
+            })?;
             root
         }
     };
 
-    let canonical_root = workspace_root
-        .canonicalize()
-        .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize workspace root: {}", e)))?;
+    let canonical_root = workspace_root.canonicalize().map_err(|e| {
+        AppError::FileSystem(format!("Failed to canonicalize workspace root: {}", e))
+    })?;
 
     let current_relative = sanitize_optional_relative_path(&current_relative_path)?;
     let current_dir = canonical_root.join(current_relative);
@@ -1602,8 +1669,9 @@ pub async fn file_import_to_workspace(
 
     if is_directory {
         command_validator::validate_path_write_safety(&target_path, &app_data_dir)?;
-        fs::create_dir_all(&target_path)
-            .map_err(|e| AppError::FileSystem(format!("Failed to create imported folder: {}", e)))?;
+        fs::create_dir_all(&target_path).map_err(|e| {
+            AppError::FileSystem(format!("Failed to create imported folder: {}", e))
+        })?;
         ensure_path_within_root(&canonical_root, &target_path)?;
 
         let relative_path = target_path
@@ -1611,10 +1679,7 @@ pub async fn file_import_to_workspace(
             .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
             .unwrap_or_else(|_| item_relative_path.clone());
 
-        log::debug!(
-            "[file] 已导入文件夹到工作区: {}",
-            target_path.display()
-        );
+        log::debug!("[file] 已导入文件夹到工作区: {}", target_path.display());
 
         return Ok(WorkspaceImportResult {
             file_path: target_path.to_string_lossy().to_string(),
@@ -1627,8 +1692,9 @@ pub async fn file_import_to_workspace(
         .parent()
         .ok_or_else(|| AppError::Generic("Invalid import target path".to_string()))?;
     command_validator::validate_path_write_safety(&target_path, &app_data_dir)?;
-    fs::create_dir_all(parent_dir)
-        .map_err(|e| AppError::FileSystem(format!("Failed to create imported file directory: {}", e)))?;
+    fs::create_dir_all(parent_dir).map_err(|e| {
+        AppError::FileSystem(format!("Failed to create imported file directory: {}", e))
+    })?;
     ensure_path_within_root(&canonical_root, parent_dir)?;
 
     let file_name = target_path
@@ -1685,11 +1751,15 @@ pub async fn file_write_staged_tool_arg_to_path(
 
     let staged_path = resolve_large_tool_arg_path(&app_handle, &ref_id)?;
     if !staged_path.exists() {
-        return Err(AppError::NotFound(format!("Large tool arg ref does not exist: {}", ref_id)));
+        return Err(AppError::NotFound(format!(
+            "Large tool arg ref does not exist: {}",
+            ref_id
+        )));
     }
 
-    let bytes = fs::read(&staged_path)
-        .map_err(|e| AppError::FileSystem(format!("Failed to read staged tool arg content: {}", e)))?;
+    let bytes = fs::read(&staged_path).map_err(|e| {
+        AppError::FileSystem(format!("Failed to read staged tool arg content: {}", e))
+    })?;
 
     if let Some(parent) = file_path.parent() {
         fs::create_dir_all(parent)
@@ -1707,7 +1777,11 @@ pub async fn file_write_staged_tool_arg_to_path(
         .map_err(|e| AppError::FileSystem(format!("Failed to write staged content: {}", e)))?;
 
     if let Err(e) = fs::remove_file(&staged_path) {
-        log::warn!("[file] failed to remove staged tool arg ref {}: {}", ref_id, e);
+        log::warn!(
+            "[file] failed to remove staged tool arg ref {}: {}",
+            ref_id,
+            e
+        );
     }
 
     log::info!(
@@ -1751,7 +1825,10 @@ pub async fn file_list_directory(
         .map_err(|e| AppError::FileSystem(format!("Failed to get app data directory: {}", e)))?;
 
     // 交付物根目录: deliverables/<hub_name>/<agent_name>/
-    let root_dir = base_dir.join("deliverables").join(&hub_name).join(&agent_name);
+    let root_dir = base_dir
+        .join("deliverables")
+        .join(&hub_name)
+        .join(&agent_name);
 
     if !root_dir.exists() {
         return Ok(vec![]);
@@ -1763,18 +1840,25 @@ pub async fn file_list_directory(
     } else {
         let target = root_dir.join(&relative_path);
         // 安全检查：防止路径遍历攻击
-        let canonical_root = root_dir.canonicalize()
-            .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize root path: {}", e)))?;
-        let canonical_target = target.canonicalize()
+        let canonical_root = root_dir.canonicalize().map_err(|e| {
+            AppError::FileSystem(format!("Failed to canonicalize root path: {}", e))
+        })?;
+        let canonical_target = target
+            .canonicalize()
             .map_err(|e| AppError::FileSystem(format!("Path does not exist: {}", e)))?;
         if !canonical_target.starts_with(&canonical_root) {
-            return Err(AppError::Generic("Invalid path: access outside the deliverables root is not allowed".to_string()));
+            return Err(AppError::Generic(
+                "Invalid path: access outside the deliverables root is not allowed".to_string(),
+            ));
         }
         target
     };
 
     if !target_dir.is_dir() {
-        return Err(AppError::Generic(format!("Not a directory: {}", target_dir.display())));
+        return Err(AppError::Generic(format!(
+            "Not a directory: {}",
+            target_dir.display()
+        )));
     }
 
     let mut entries = Vec::new();
@@ -1782,7 +1866,8 @@ pub async fn file_list_directory(
     if let Ok(dir_entries) = fs::read_dir(&target_dir) {
         for entry in dir_entries.flatten() {
             let path = entry.path();
-            let name = path.file_name()
+            let name = path
+                .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
 
@@ -1795,7 +1880,8 @@ pub async fn file_list_directory(
 
             let (size, created_at) = if let Ok(metadata) = entry.metadata() {
                 let size = if is_directory { 0 } else { metadata.len() };
-                let created_at = metadata.created()
+                let created_at = metadata
+                    .created()
                     .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs() as i64)
@@ -1806,7 +1892,8 @@ pub async fn file_list_directory(
             };
 
             // 相对于交付物根目录的路径
-            let entry_relative_path = path.strip_prefix(&root_dir)
+            let entry_relative_path = path
+                .strip_prefix(&root_dir)
                 .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
                 .unwrap_or_else(|_| name.clone());
 
@@ -1822,12 +1909,10 @@ pub async fn file_list_directory(
     }
 
     // 排序：目录优先，同类按名称排序
-    entries.sort_by(|a, b| {
-        match (a.is_directory, b.is_directory) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(entries)
@@ -1855,7 +1940,10 @@ pub async fn file_list_project_directory(
     let root = PathBuf::from(&root_dir);
 
     if !root.exists() || !root.is_dir() {
-        return Err(AppError::NotFound(format!("Project directory does not exist: {}", root_dir)));
+        return Err(AppError::NotFound(format!(
+            "Project directory does not exist: {}",
+            root_dir
+        )));
     }
 
     // 计算目标目录
@@ -1864,18 +1952,25 @@ pub async fn file_list_project_directory(
     } else {
         let target = root.join(&relative_path);
         // 安全检查：防止路径遍历攻击（.. 逃逸到 root_dir 之外）
-        let canonical_root = root.canonicalize()
-            .map_err(|e| AppError::FileSystem(format!("Failed to canonicalize root path: {}", e)))?;
-        let canonical_target = target.canonicalize()
+        let canonical_root = root.canonicalize().map_err(|e| {
+            AppError::FileSystem(format!("Failed to canonicalize root path: {}", e))
+        })?;
+        let canonical_target = target
+            .canonicalize()
             .map_err(|e| AppError::FileSystem(format!("Path does not exist: {}", e)))?;
         if !canonical_target.starts_with(&canonical_root) {
-            return Err(AppError::Generic("Invalid path: access outside the project root is not allowed".to_string()));
+            return Err(AppError::Generic(
+                "Invalid path: access outside the project root is not allowed".to_string(),
+            ));
         }
         target
     };
 
     if !target_dir.is_dir() {
-        return Err(AppError::Generic(format!("Not a directory: {}", target_dir.display())));
+        return Err(AppError::Generic(format!(
+            "Not a directory: {}",
+            target_dir.display()
+        )));
     }
 
     let mut entries = Vec::new();
@@ -1883,7 +1978,8 @@ pub async fn file_list_project_directory(
     if let Ok(dir_entries) = fs::read_dir(&target_dir) {
         for entry in dir_entries.flatten() {
             let path = entry.path();
-            let name = path.file_name()
+            let name = path
+                .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_default();
 
@@ -1896,7 +1992,8 @@ pub async fn file_list_project_directory(
 
             let (size, created_at) = if let Ok(metadata) = entry.metadata() {
                 let size = if is_directory { 0 } else { metadata.len() };
-                let created_at = metadata.created()
+                let created_at = metadata
+                    .created()
                     .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs() as i64)
@@ -1907,7 +2004,8 @@ pub async fn file_list_project_directory(
             };
 
             // 相对路径：相对于项目根目录
-            let entry_relative_path = path.strip_prefix(&root)
+            let entry_relative_path = path
+                .strip_prefix(&root)
                 .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
                 .unwrap_or_else(|_| name.clone());
 
@@ -1923,12 +2021,10 @@ pub async fn file_list_project_directory(
     }
 
     // 排序：目录优先，同类按名称排序
-    entries.sort_by(|a, b| {
-        match (a.is_directory, b.is_directory) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(entries)
@@ -2103,7 +2199,10 @@ pub async fn backup_clean(
 
             for (path, size, created) in backup_files {
                 let group_key = extract_original_name(&path);
-                groups.entry(group_key).or_default().push((path, size, created));
+                groups
+                    .entry(group_key)
+                    .or_default()
+                    .push((path, size, created));
             }
 
             let mut to_delete = Vec::new();
@@ -2141,7 +2240,8 @@ pub async fn backup_clean(
 
     log::debug!(
         "[backup] 清理完成: 删除 {} 个文件，释放 {} 字节",
-        deleted_count, freed_bytes
+        deleted_count,
+        freed_bytes
     );
 
     Ok(CleanResult {

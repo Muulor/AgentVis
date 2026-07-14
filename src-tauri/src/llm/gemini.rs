@@ -2,16 +2,18 @@
 //!
 //! 实现 Gemini generateContent API 的调用
 
+use super::http_client::{
+    get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout,
+};
 use async_trait::async_trait;
 use futures::stream::Stream;
-use super::http_client::{get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout};
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
 use super::types::{
-    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, StreamChunk,
-    ReasoningTraceCallback, ReasoningTraceProgress, ToolCallProgressCallback,
-    ToolCallStreamProgress, TOOL_CALL_PROGRESS_MIN_BYTES,
+    ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, ReasoningTraceCallback,
+    ReasoningTraceProgress, StreamChunk, ToolCallProgressCallback, ToolCallStreamProgress,
+    TOOL_CALL_PROGRESS_MIN_BYTES,
 };
 use super::LlmProvider;
 use crate::error::{AppError, AppResult};
@@ -23,7 +25,7 @@ const DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com";
 const DEFAULT_MODEL: &str = "gemini-2.5-flash";
 
 /// Gemini 适配器
-/// 
+///
 /// 使用全局共享 HTTP Client，复用连接池
 pub struct GeminiAdapter {
     config: ProviderConfig,
@@ -93,15 +95,18 @@ impl GeminiAdapter {
                 }
                 ChatRole::User => {
                     // 构建 parts 列表
-                    let mut parts: Vec<GeminiPart> = Vec::new();			
+                    let mut parts: Vec<GeminiPart> = Vec::new();
 
                     // 如果有 system 消息，合并到第一条用户消息前面
                     let text_content = if let Some(sys) = system_text.take() {
-                        format!("[System Instructions]\n{}\n\n[User Message]\n{}", sys, msg.content)
+                        format!(
+                            "[System Instructions]\n{}\n\n[User Message]\n{}",
+                            sys, msg.content
+                        )
                     } else {
                         msg.content.clone()
                     };
-                    
+
                     // 添加文本 part
                     parts.push(GeminiPart {
                         text: text_content,
@@ -158,11 +163,9 @@ impl GeminiAdapter {
             // 图像生成模型需要指定响应模态（如 ["Image"] 或 ["Text", "Image"]）
             response_modalities: request.response_modalities.clone(),
             // 图像配置（宽高比、分辨率等）嵌套在 generationConfig 内部
-            image_config: request.image_config.as_ref().map(|cfg| {
-                GeminiImageConfig {
-                    aspect_ratio: cfg.aspect_ratio.clone(),
-                    image_size: cfg.image_size.clone(),
-                }
+            image_config: request.image_config.as_ref().map(|cfg| GeminiImageConfig {
+                aspect_ratio: cfg.aspect_ratio.clone(),
+                image_size: cfg.image_size.clone(),
             }),
             thinking_config: Self::thinking_config_for_model(&model, &request.response_modalities),
         };
@@ -182,7 +185,12 @@ impl GeminiAdapter {
     fn build_tool_request_body(
         &self,
         request: &super::types::ToolChatRequest,
-    ) -> (GeminiRequest, String, std::collections::HashMap<String, String>, usize) {
+    ) -> (
+        GeminiRequest,
+        String,
+        std::collections::HashMap<String, String>,
+        usize,
+    ) {
         use super::types::ToolChatRole;
 
         let model = self.get_model(request.model_id.as_deref());
@@ -200,7 +208,10 @@ impl GeminiAdapter {
                 }
                 ToolChatRole::User => {
                     let text_content = if let Some(sys) = system_text.take() {
-                        format!("[System Instructions]\n{}\n\n[User Message]\n{}", sys, msg.content)
+                        format!(
+                            "[System Instructions]\n{}\n\n[User Message]\n{}",
+                            sys, msg.content
+                        )
                     } else {
                         msg.content.clone()
                     };
@@ -228,7 +239,10 @@ impl GeminiAdapter {
                                 function_response: None,
                             });
                         }
-                        log::trace!("[GeminiAdapter] 📷 chat_with_tools: 添加 {} 张图片", images.len());
+                        log::trace!(
+                            "[GeminiAdapter] 📷 chat_with_tools: 添加 {} 张图片",
+                            images.len()
+                        );
                     }
 
                     contents.push(GeminiContent {
@@ -238,8 +252,9 @@ impl GeminiAdapter {
                 }
                 ToolChatRole::Assistant => {
                     if let Some(ref tool_calls) = msg.tool_calls {
-                        let parts: Vec<GeminiPart> = tool_calls.iter().map(|tc| {
-                            GeminiPart {
+                        let parts: Vec<GeminiPart> = tool_calls
+                            .iter()
+                            .map(|tc| GeminiPart {
                                 text: String::new(),
                                 thought: None,
                                 thought_signature: tc.thought_signature.clone(),
@@ -250,8 +265,8 @@ impl GeminiAdapter {
                                     args: tc.args.clone(),
                                 }),
                                 function_response: None,
-                            }
-                        }).collect();
+                            })
+                            .collect();
                         contents.push(GeminiContent {
                             role: Some("model".to_string()),
                             parts,
@@ -279,9 +294,12 @@ impl GeminiAdapter {
                     }
                 }
                 ToolChatRole::Tool => {
-                    let tool_name = msg.tool_name.clone()
+                    let tool_name = msg
+                        .tool_name
+                        .clone()
                         .or_else(|| {
-                            msg.tool_call_id.as_ref()
+                            msg.tool_call_id
+                                .as_ref()
                                 .and_then(|id| id.split('_').next())
                                 .map(|name| name.to_string())
                         })
@@ -299,8 +317,11 @@ impl GeminiAdapter {
                             let mut image_refs = serde_json::Map::new();
 
                             for (i, img) in images.iter().enumerate() {
-                                let display_name = format!("tool_image_{}.{}",
-                                    i, img.mime_type.split('/').last().unwrap_or("png"));
+                                let display_name = format!(
+                                    "tool_image_{}.{}",
+                                    i,
+                                    img.mime_type.split('/').last().unwrap_or("png")
+                                );
                                 fn_response_parts.push(GeminiFunctionResponsePart {
                                     inline_data: Some(GeminiFunctionResponseBlob {
                                         mime_type: img.mime_type.clone(),
@@ -310,11 +331,14 @@ impl GeminiAdapter {
                                 });
                                 image_refs.insert(
                                     format!("image_{}", i),
-                                    serde_json::json!({ "$ref": display_name })
+                                    serde_json::json!({ "$ref": display_name }),
                                 );
                             }
 
-                            image_refs.insert("result".to_string(), serde_json::Value::String(msg.content.clone()));
+                            image_refs.insert(
+                                "result".to_string(),
+                                serde_json::Value::String(msg.content.clone()),
+                            );
 
                             let parts = vec![GeminiPart {
                                 text: String::new(),
@@ -373,8 +397,10 @@ impl GeminiAdapter {
                                 function_call: None,
                                 function_response: None,
                             });
-                            log::trace!("[GeminiAdapter] 📷 Gemini 2.x 降级: {} 张 inlineData parts (平级)",
-                                images.len());
+                            log::trace!(
+                                "[GeminiAdapter] 📷 Gemini 2.x 降级: {} 张 inlineData parts (平级)",
+                                images.len()
+                            );
 
                             contents.push(GeminiContent {
                                 role: Some("user".to_string()),
@@ -406,24 +432,28 @@ impl GeminiAdapter {
         }
 
         // 构建工具定义（函数名保护 + Schema 规范化）
-        let mut name_mapping: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut name_mapping: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         let tools = request.tools.as_ref().and_then(|tool_defs| {
             if tool_defs.is_empty() {
                 return None;
             }
             Some(vec![GeminiTool {
-                function_declarations: tool_defs.iter().map(|t| {
-                    let normalized_params = normalize_schema_types(&t.parameters);
-                    let safe_name = sanitize_function_name(&t.name);
-                    if safe_name != t.name {
-                        name_mapping.insert(safe_name.clone(), t.name.clone());
-                    }
-                    GeminiFunctionDeclaration {
-                        name: safe_name,
-                        description: t.description.clone(),
-                        parameters: normalized_params,
-                    }
-                }).collect(),
+                function_declarations: tool_defs
+                    .iter()
+                    .map(|t| {
+                        let normalized_params = normalize_schema_types(&t.parameters);
+                        let safe_name = sanitize_function_name(&t.name);
+                        if safe_name != t.name {
+                            name_mapping.insert(safe_name.clone(), t.name.clone());
+                        }
+                        GeminiFunctionDeclaration {
+                            name: safe_name,
+                            description: t.description.clone(),
+                            parameters: normalized_params,
+                        }
+                    })
+                    .collect(),
             }])
         });
 
@@ -431,7 +461,7 @@ impl GeminiAdapter {
             temperature: request.temperature,
             max_output_tokens: request.max_tokens,
             response_modalities: None, // Function Calling 不需要图像输出模态
-            image_config: None, // Function Calling 不需要图像配置
+            image_config: None,        // Function Calling 不需要图像配置
             thinking_config: Self::thinking_config_for_model(&model, &None),
         };
 
@@ -460,7 +490,10 @@ impl GeminiAdapter {
         };
 
         if let Some(ref base) = self.config.base_url {
-            let clean_base = base.trim_end_matches("/v1beta").trim_end_matches("/v1").trim_end_matches('/');
+            let clean_base = base
+                .trim_end_matches("/v1beta")
+                .trim_end_matches("/v1")
+                .trim_end_matches('/');
             format!("{}/v1beta/models/{}:{}", clean_base, model, action)
         } else {
             format!("{}/v1beta/models/{}:{}", self.base_url(), model, action)
@@ -473,29 +506,40 @@ impl GeminiAdapter {
         name_mapping: &std::collections::HashMap<String, String>,
         finish_reason: Option<String>,
     ) -> super::types::ToolChatResponse {
-        use super::types::{ToolChatResponse, ToolCall as TypesToolCall};
+        use super::types::{ToolCall as TypesToolCall, ToolChatResponse};
 
-        let function_calls: Vec<TypesToolCall> = parts.iter()
-            .filter_map(|p| p.function_call.as_ref().map(|fc| {
-                let original_name = name_mapping.get(&fc.name)
-                    .cloned()
-                    .unwrap_or_else(|| fc.name.clone());
-                TypesToolCall {
-                    name: original_name,
-                    args: fc.args.clone(),
-                    id: fc.id.clone(),
-                    thought_signature: p.thought_signature.clone(),
-                }
-            }))
+        let function_calls: Vec<TypesToolCall> = parts
+            .iter()
+            .filter_map(|p| {
+                p.function_call.as_ref().map(|fc| {
+                    let original_name = name_mapping
+                        .get(&fc.name)
+                        .cloned()
+                        .unwrap_or_else(|| fc.name.clone());
+                    TypesToolCall {
+                        name: original_name,
+                        args: fc.args.clone(),
+                        id: fc.id.clone(),
+                        thought_signature: p.thought_signature.clone(),
+                    }
+                })
+            })
             .collect();
 
         if !function_calls.is_empty() {
-            let text_content: String = parts.iter()
-                .filter(|p| !p.text.is_empty() && p.function_call.is_none() && p.thought != Some(true))
+            let text_content: String = parts
+                .iter()
+                .filter(|p| {
+                    !p.text.is_empty() && p.function_call.is_none() && p.thought != Some(true)
+                })
                 .map(|p| p.text.clone())
                 .collect::<Vec<_>>()
                 .join("");
-            let content = if text_content.is_empty() { None } else { Some(text_content) };
+            let content = if text_content.is_empty() {
+                None
+            } else {
+                Some(text_content)
+            };
 
             return ToolChatResponse {
                 response_type: "tool_use".to_string(),
@@ -509,7 +553,8 @@ impl GeminiAdapter {
             };
         }
 
-        let text_content: String = parts.iter()
+        let text_content: String = parts
+            .iter()
             .filter(|p| !p.text.is_empty() && p.thought != Some(true))
             .map(|p| p.text.clone())
             .collect::<Vec<_>>()
@@ -574,10 +619,16 @@ impl GeminiAdapter {
         let (body, model, name_mapping, body_size_kb) = self.build_tool_request_body(&request);
         let url = self.build_url(&model, false);
 
-        log::trace!("[GeminiAdapter] 🔧 chat_with_tools | URL: {} | body: {} KB", url, body_size_kb);
+        log::trace!(
+            "[GeminiAdapter] 🔧 chat_with_tools | URL: {} | body: {} KB",
+            url,
+            body_size_kb
+        );
         if let Some(first_tool) = body.tools.as_ref().and_then(|tools| tools.first()) {
-            log::trace!("[GeminiAdapter] 🔧 包含 {} 个工具定义",
-                first_tool.function_declarations.len());
+            log::trace!(
+                "[GeminiAdapter] 🔧 包含 {} 个工具定义",
+                first_tool.function_declarations.len()
+            );
         }
 
         let response = get_client()
@@ -588,9 +639,13 @@ impl GeminiAdapter {
             .send()
             .await
             .map_err(|e| {
-                let error_type = if e.is_timeout() { "timeout" }
-                    else if e.is_connect() { "connection failed" }
-                    else { "network error" };
+                let error_type = if e.is_timeout() {
+                    "timeout"
+                } else if e.is_connect() {
+                    "connection failed"
+                } else {
+                    "network error"
+                };
                 AppError::LlmApi(format!(
                     "Request failed ({}): {} | Request body: {} KB",
                     error_type, e, body_size_kb
@@ -604,7 +659,10 @@ impl GeminiAdapter {
                 response_type: "error".to_string(),
                 content: None,
                 tool_calls: None,
-                error: Some(format!("API returned an error ({}): {}", status, error_text)),
+                error: Some(format!(
+                    "API returned an error ({}): {}",
+                    status, error_text
+                )),
                 finish_reason: None,
                 input_tokens: None,
                 output_tokens: None,
@@ -617,11 +675,13 @@ impl GeminiAdapter {
             .await
             .map_err(|e| AppError::LlmApi(format!("Failed to read response: {}", e)))?;
 
-        let api_response: GeminiResponse = serde_json::from_str(&response_text)
-            .map_err(|e| {
-                let preview = safe_truncate(&response_text, 500);
-                AppError::LlmApi(format!("Failed to parse response: {} | Raw response: {}", e, preview))
-            })?;
+        let api_response: GeminiResponse = serde_json::from_str(&response_text).map_err(|e| {
+            let preview = safe_truncate(&response_text, 500);
+            AppError::LlmApi(format!(
+                "Failed to parse response: {} | Raw response: {}",
+                e, preview
+            ))
+        })?;
 
         if let Some(candidate) = api_response.candidates.first() {
             if let Some(reason) = &candidate.finish_reason {
@@ -662,38 +722,49 @@ impl GeminiAdapter {
         progress_callback: Option<super::types::ToolCallProgressCallback>,
         reasoning_callback: Option<ReasoningTraceCallback>,
     ) -> AppResult<super::types::ToolChatResponse> {
+        use super::types::ToolChatResponse;
         use eventsource_stream::Eventsource;
         use futures::StreamExt;
-        use super::types::ToolChatResponse;
 
         let (body, model, name_mapping, body_size_kb) = self.build_tool_request_body(&request);
         let url = self.build_url(&model, true);
 
-        log::trace!("[GeminiAdapter] 🔧 chat_stream_with_tools | URL: {} | body: {} KB", url, body_size_kb);
+        log::trace!(
+            "[GeminiAdapter] 🔧 chat_stream_with_tools | URL: {} | body: {} KB",
+            url,
+            body_size_kb
+        );
 
         let start_timeout = stream_start_timeout();
-        let response = tokio::time::timeout(start_timeout, get_streaming_client()
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .header("x-goog-api-key", &self.config.api_key)
-            .json(&body)
-            .send())
-            .await
-            .map_err(|_| {
-                AppError::LlmApi(format!(
-                    "Streaming connection timed out (no response headers within {} seconds)",
-                    start_timeout.as_secs()
-                ))
-            })?
-            .map_err(|e| {
-                let error_type = if e.is_timeout() { "timeout" }
-                    else if e.is_connect() { "connection failed" }
-                    else { "network error" };
-                AppError::LlmApi(format!(
-                    "Streaming request failed ({}): {} | Request body: {} KB",
-                    error_type, e, body_size_kb
-                ))
-            })?;
+        let response = tokio::time::timeout(
+            start_timeout,
+            get_streaming_client()
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("x-goog-api-key", &self.config.api_key)
+                .json(&body)
+                .send(),
+        )
+        .await
+        .map_err(|_| {
+            AppError::LlmApi(format!(
+                "Streaming connection timed out (no response headers within {} seconds)",
+                start_timeout.as_secs()
+            ))
+        })?
+        .map_err(|e| {
+            let error_type = if e.is_timeout() {
+                "timeout"
+            } else if e.is_connect() {
+                "connection failed"
+            } else {
+                "network error"
+            };
+            AppError::LlmApi(format!(
+                "Streaming request failed ({}): {} | Request body: {} KB",
+                error_type, e, body_size_kb
+            ))
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -788,14 +859,18 @@ impl GeminiAdapter {
                 }
                 Err(e) => {
                     return Err(AppError::LlmApi(format!(
-                        "Streaming error (received {} chunks): {}", chunk_count, e
+                        "Streaming error (received {} chunks): {}",
+                        chunk_count, e
                     )));
                 }
             }
         }
 
-        log::trace!("[GeminiAdapter] 📊 流式接收完成: {} chunks, {} parts",
-            chunk_count, all_parts.len());
+        log::trace!(
+            "[GeminiAdapter] 📊 流式接收完成: {} chunks, {} parts",
+            chunk_count,
+            all_parts.len()
+        );
 
         // 组装响应：复用 extract_tool_response_from_parts
         if reasoning_seen {
@@ -807,19 +882,18 @@ impl GeminiAdapter {
             }
         }
 
-        let mut result = Self::extract_tool_response_from_parts(
-            &all_parts,
-            &name_mapping,
-            final_finish_reason,
-        );
+        let mut result =
+            Self::extract_tool_response_from_parts(&all_parts, &name_mapping, final_finish_reason);
         // 注入 token 用量
         result.input_tokens = final_input_tokens;
         result.output_tokens = final_output_tokens;
 
-        log::trace!("[GeminiAdapter] 📊 流式结果: type={}, content={} 字符, tool_calls={}",
+        log::trace!(
+            "[GeminiAdapter] 📊 流式结果: type={}, content={} 字符, tool_calls={}",
             result.response_type,
             result.content.as_ref().map_or(0, |c| c.len()),
-            result.tool_calls.as_ref().map_or(0, |tc| tc.len()));
+            result.tool_calls.as_ref().map_or(0, |tc| tc.len())
+        );
 
         Ok(result)
     }
@@ -835,7 +909,10 @@ impl LlmProvider for GeminiAdapter {
 
         // 调试日志：输出实际发送的 max_output_tokens
         if let Some(ref gen_config) = body.generation_config {
-            log::trace!("[GeminiAdapter]  max_output_tokens: {:?}", gen_config.max_output_tokens);
+            log::trace!(
+                "[GeminiAdapter]  max_output_tokens: {:?}",
+                gen_config.max_output_tokens
+            );
         }
         log::trace!("[GeminiAdapter]  请求 URL: {}", url);
 
@@ -916,21 +993,24 @@ impl LlmProvider for GeminiAdapter {
         let body = self.build_request_body(&request);
 
         let start_timeout = stream_start_timeout();
-        let response = tokio::time::timeout(start_timeout, get_streaming_client()
-            .post(&url)
-            .header("Content-Type", "application/json")
-            // 使用 x-goog-api-key Header 传递 API Key，兼容更多代理
-            .header("x-goog-api-key", &self.config.api_key)
-            .json(&body)
-            .send())
-            .await
-            .map_err(|_| {
-                AppError::LlmApi(format!(
-                    "Streaming connection timed out (no response headers within {} seconds)",
-                    start_timeout.as_secs()
-                ))
-            })?
-            .map_err(|e| AppError::LlmApi(format!("Request failed: {}", e)))?;
+        let response = tokio::time::timeout(
+            start_timeout,
+            get_streaming_client()
+                .post(&url)
+                .header("Content-Type", "application/json")
+                // 使用 x-goog-api-key Header 传递 API Key，兼容更多代理
+                .header("x-goog-api-key", &self.config.api_key)
+                .json(&body)
+                .send(),
+        )
+        .await
+        .map_err(|_| {
+            AppError::LlmApi(format!(
+                "Streaming connection timed out (no response headers within {} seconds)",
+                start_timeout.as_secs()
+            ))
+        })?
+        .map_err(|e| AppError::LlmApi(format!("Request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1031,7 +1111,9 @@ impl LlmProvider for GeminiAdapter {
 
         match self.chat(request).await {
             Ok(_) => Ok(true),
-            Err(AppError::LlmApi(msg)) if msg.contains("400") || msg.contains("API_KEY") => Ok(false),
+            Err(AppError::LlmApi(msg)) if msg.contains("400") || msg.contains("API_KEY") => {
+                Ok(false)
+            }
             Err(e) => Err(e),
         }
     }

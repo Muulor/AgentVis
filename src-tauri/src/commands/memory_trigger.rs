@@ -15,7 +15,9 @@ pub async fn memory_trigger_get(
 ) -> CommandResult<Option<MemoryTriggerState>> {
     let db = state.db.lock().await;
     let repo = MemoryTriggerRepository::new(db.pool().clone());
-    repo.get(&agent_id).await.map_err(|e| crate::error::AppError::Database(e.to_string()))
+    repo.get(&agent_id)
+        .await
+        .map_err(|e| crate::error::AppError::Database(e.to_string()))
 }
 
 /// 获取或创建触发器状态
@@ -26,7 +28,9 @@ pub async fn memory_trigger_get_or_create(
 ) -> CommandResult<MemoryTriggerState> {
     let db = state.db.lock().await;
     let repo = MemoryTriggerRepository::new(db.pool().clone());
-    repo.get_or_create(&agent_id).await.map_err(|e| crate::error::AppError::Database(e.to_string()))
+    repo.get_or_create(&agent_id)
+        .await
+        .map_err(|e| crate::error::AppError::Database(e.to_string()))
 }
 
 /// 更新触发器状态
@@ -38,7 +42,9 @@ pub async fn memory_trigger_update(
 ) -> CommandResult<MemoryTriggerState> {
     let db = state.db.lock().await;
     let repo = MemoryTriggerRepository::new(db.pool().clone());
-    repo.update(&agent_id, update).await.map_err(|e| crate::error::AppError::Database(e.to_string()))
+    repo.update(&agent_id, update)
+        .await
+        .map_err(|e| crate::error::AppError::Database(e.to_string()))
 }
 
 /// 自增轮次计数
@@ -49,7 +55,9 @@ pub async fn memory_trigger_increment_turn(
 ) -> CommandResult<MemoryTriggerState> {
     let db = state.db.lock().await;
     let repo = MemoryTriggerRepository::new(db.pool().clone());
-    repo.increment_turn(&agent_id).await.map_err(|e| crate::error::AppError::Database(e.to_string()))
+    repo.increment_turn(&agent_id)
+        .await
+        .map_err(|e| crate::error::AppError::Database(e.to_string()))
 }
 
 /// 累加信号分数
@@ -61,7 +69,9 @@ pub async fn memory_trigger_accumulate_score(
 ) -> CommandResult<MemoryTriggerState> {
     let db = state.db.lock().await;
     let repo = MemoryTriggerRepository::new(db.pool().clone());
-    repo.accumulate_score(&agent_id, delta).await.map_err(|e| crate::error::AppError::Database(e.to_string()))
+    repo.accumulate_score(&agent_id, delta)
+        .await
+        .map_err(|e| crate::error::AppError::Database(e.to_string()))
 }
 
 /// 提取后重置状态
@@ -73,7 +83,9 @@ pub async fn memory_trigger_reset(
 ) -> CommandResult<MemoryTriggerState> {
     let db = state.db.lock().await;
     let repo = MemoryTriggerRepository::new(db.pool().clone());
-    repo.reset_after_extract(&agent_id, current_turn).await.map_err(|e| crate::error::AppError::Database(e.to_string()))
+    repo.reset_after_extract(&agent_id, current_turn)
+        .await
+        .map_err(|e| crate::error::AppError::Database(e.to_string()))
 }
 
 /// 更新上次处理的消息 ID（用于生命周期触发内容变化检测）

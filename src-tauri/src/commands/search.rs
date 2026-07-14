@@ -5,10 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
-use crate::error::{AppResult, AppError};
+use crate::error::{AppError, AppResult};
 
 // ==================== 常量 ====================
 
@@ -41,17 +41,22 @@ const HARD_GREP_OUTPUT_TOKEN_BUDGET: usize = 10000;
 
 /// grep 模式中，需要跳过的目录（不搜索这些目录）
 const SKIP_DIRS: &[&str] = &[
-    "node_modules", ".git", "__pycache__", ".next", "dist", "build",
-    "target", ".svn", ".hg", "vite_preview",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".next",
+    "dist",
+    "build",
+    "target",
+    ".svn",
+    ".hg",
+    "vite_preview",
 ];
 
 /// grep 模式中，需要跳过的二进制/大文件扩展名
 const SKIP_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg",
-    "mp3", "mp4", "avi", "mov", "wav",
-    "zip", "tar", "gz", "rar", "7z",
-    "exe", "dll", "so", "dylib",
-    "woff", "woff2", "ttf", "eot",
+    "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "mp3", "mp4", "avi", "mov", "wav",
+    "zip", "tar", "gz", "rar", "7z", "exe", "dll", "so", "dylib", "woff", "woff2", "ttf", "eot",
     "sqlite", "db",
 ];
 
@@ -64,9 +69,7 @@ const MAX_TEXT_FILE_SIZE: u64 = 10 * 1024 * 1024;
 const MAX_DOCUMENT_FILE_SIZE: u64 = 20 * 1024 * 1024;
 
 /// grep 模式中，会通过 document_parser 提取文本后再搜索的文档扩展名
-const SEARCHABLE_DOCUMENT_EXTENSIONS: &[&str] = &[
-    "docx", "xlsx", "xls", "pptx", "pdf",
-];
+const SEARCHABLE_DOCUMENT_EXTENSIONS: &[&str] = &["docx", "xlsx", "xls", "pptx", "pdf"];
 
 /// 需要跳过的压缩/打包文件后缀模式
 const SKIP_MIN_SUFFIXES: &[&str] = &[".min.js", ".min.css", ".bundle.js"];
@@ -173,13 +176,20 @@ pub async fn code_grep(
 ) -> AppResult<GrepSearchResult> {
     let root = PathBuf::from(&search_path);
     if !root.exists() {
-        return Err(AppError::NotFound(format!("Search path does not exist: {}", search_path)));
+        return Err(AppError::NotFound(format!(
+            "Search path does not exist: {}",
+            search_path
+        )));
     }
 
     let use_regex = is_regex.unwrap_or(false);
     let smart_case_insensitive = should_use_case_insensitive(&query, case_insensitive);
     let max_results = clamp_limit(max_results, DEFAULT_GREP_MAX_RESULTS, HARD_GREP_MAX_RESULTS);
-    let context_chars = clamp_limit(context_chars, DEFAULT_GREP_CONTEXT_CHARS, HARD_GREP_CONTEXT_CHARS);
+    let context_chars = clamp_limit(
+        context_chars,
+        DEFAULT_GREP_CONTEXT_CHARS,
+        HARD_GREP_CONTEXT_CHARS,
+    );
     let max_matches_per_file = clamp_limit(
         max_matches_per_file,
         DEFAULT_GREP_MAX_MATCHES_PER_FILE,
@@ -280,7 +290,10 @@ pub async fn code_grep(
         // 跳过压缩/打包文件（如 .min.js、.bundle.js）
         if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
             let file_name_lower = file_name.to_lowercase();
-            if SKIP_MIN_SUFFIXES.iter().any(|suffix| file_name_lower.ends_with(suffix)) {
+            if SKIP_MIN_SUFFIXES
+                .iter()
+                .any(|suffix| file_name_lower.ends_with(suffix))
+            {
                 diagnostics.skipped_minified_files += 1;
                 continue;
             }
@@ -318,7 +331,12 @@ pub async fn code_grep(
             }
 
             if let Some(first_match) = pattern.find(line) {
-                let snippet = build_match_snippet(line, first_match.start(), first_match.end(), context_chars);
+                let snippet = build_match_snippet(
+                    line,
+                    first_match.start(),
+                    first_match.end(),
+                    context_chars,
+                );
                 let estimated_tokens = estimate_tokens(&snippet) + estimate_tokens(&file_key) + 16;
                 if !results.is_empty() && emitted_tokens + estimated_tokens > max_output_tokens {
                     diagnostics.output_limit_reached = true;
@@ -367,7 +385,10 @@ pub async fn code_find(
 ) -> AppResult<Vec<FindResult>> {
     let root = PathBuf::from(&search_path);
     if !root.exists() {
-        return Err(AppError::NotFound(format!("Search path does not exist: {}", search_path)));
+        return Err(AppError::NotFound(format!(
+            "Search path does not exist: {}",
+            search_path
+        )));
     }
 
     // 构建 glob 匹配器
@@ -429,7 +450,11 @@ pub async fn code_find(
 
         results.push(FindResult {
             path: entry.path().to_string_lossy().to_string(),
-            file_type: if is_dir { "directory".to_string() } else { "file".to_string() },
+            file_type: if is_dir {
+                "directory".to_string()
+            } else {
+                "file".to_string()
+            },
             size,
         });
     }
@@ -447,9 +472,7 @@ pub async fn code_find(
 /// # Arguments
 /// * `path` - 文件路径
 #[tauri::command]
-pub async fn code_outline(
-    path: String,
-) -> AppResult<Vec<OutlineItem>> {
+pub async fn code_outline(path: String) -> AppResult<Vec<OutlineItem>> {
     let file_path = PathBuf::from(&path);
     if !file_path.exists() {
         return Err(AppError::NotFound(format!("File does not exist: {}", path)));
@@ -458,7 +481,8 @@ pub async fn code_outline(
     let source = fs::read_to_string(&file_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to read file: {}", e)))?;
 
-    let ext = file_path.extension()
+    let ext = file_path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
@@ -478,10 +502,7 @@ pub async fn code_outline(
 /// * `path` - 文件路径
 /// * `symbol_name` - 符号名称（如 "MyClass.handleClick"）
 #[tauri::command]
-pub async fn code_symbol(
-    path: String,
-    symbol_name: String,
-) -> AppResult<String> {
+pub async fn code_symbol(path: String, symbol_name: String) -> AppResult<String> {
     let file_path = PathBuf::from(&path);
     if !file_path.exists() {
         return Err(AppError::NotFound(format!("File does not exist: {}", path)));
@@ -490,7 +511,8 @@ pub async fn code_symbol(
     let source = fs::read_to_string(&file_path)
         .map_err(|e| AppError::FileSystem(format!("Failed to read file: {}", e)))?;
 
-    let ext = file_path.extension()
+    let ext = file_path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|e| e.to_lowercase())
         .unwrap_or_default();
@@ -521,7 +543,11 @@ pub async fn code_symbol(
         None => Err(AppError::NotFound(format!(
             "Symbol \"{}\" was not found (available symbols: {})",
             symbol_name,
-            items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join(", ")
+            items
+                .iter()
+                .map(|i| i.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ))),
     }
 }
@@ -541,31 +567,23 @@ fn parse_outline(source: &str, ext: &str) -> AppResult<Vec<OutlineItem>> {
                 tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
             }
         }
-        "js" | "jsx" | "mjs" | "cjs" => {
-            tree_sitter_javascript::LANGUAGE.into()
-        }
-        "py" => {
-            tree_sitter_python::LANGUAGE.into()
-        }
-        "rs" => {
-            tree_sitter_rust::LANGUAGE.into()
-        }
-        "css" | "scss" => {
-            tree_sitter_css::LANGUAGE.into()
-        }
-        "json" => {
-            tree_sitter_json::LANGUAGE.into()
-        }
+        "js" | "jsx" | "mjs" | "cjs" => tree_sitter_javascript::LANGUAGE.into(),
+        "py" => tree_sitter_python::LANGUAGE.into(),
+        "rs" => tree_sitter_rust::LANGUAGE.into(),
+        "css" | "scss" => tree_sitter_css::LANGUAGE.into(),
+        "json" => tree_sitter_json::LANGUAGE.into(),
         _ => {
             // 不支持的语言：回退到简易行数统计
             return Ok(vec![]);
         }
     };
 
-    parser.set_language(&language)
+    parser
+        .set_language(&language)
         .map_err(|e| AppError::Generic(format!("Failed to set tree-sitter language: {}", e)))?;
 
-    let tree = parser.parse(source, None)
+    let tree = parser
+        .parse(source, None)
         .ok_or_else(|| AppError::Generic("tree-sitter parsing failed".to_string()))?;
 
     let source_bytes = source.as_bytes();
@@ -573,18 +591,10 @@ fn parse_outline(source: &str, ext: &str) -> AppResult<Vec<OutlineItem>> {
 
     // 根据语言类型提取符号
     let items = match ext {
-        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => {
-            extract_ts_js_symbols(root, source_bytes)
-        }
-        "py" => {
-            extract_python_symbols(root, source_bytes)
-        }
-        "rs" => {
-            extract_rust_symbols(root, source_bytes)
-        }
-        "css" | "scss" => {
-            extract_css_symbols(root, source_bytes)
-        }
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" => extract_ts_js_symbols(root, source_bytes),
+        "py" => extract_python_symbols(root, source_bytes),
+        "rs" => extract_rust_symbols(root, source_bytes),
+        "css" | "scss" => extract_css_symbols(root, source_bytes),
         _ => vec![],
     };
 
@@ -615,7 +625,8 @@ fn extract_ts_js_symbols(node: tree_sitter::Node, source: &[u8]) -> Vec<OutlineI
             }
             // 类声明
             "class_declaration" => {
-                let name = child.child_by_field_name("name")
+                let name = child
+                    .child_by_field_name("name")
                     .map(|n| node_text(n, source))
                     .unwrap_or_else(|| "<anonymous>".to_string());
                 let sig = extract_signature(child, source);
@@ -687,7 +698,9 @@ fn extract_ts_js_symbols(node: tree_sitter::Node, source: &[u8]) -> Vec<OutlineI
                         if let Some(name_node) = declarator.child_by_field_name("name") {
                             if let Some(value_node) = declarator.child_by_field_name("value") {
                                 let kind_str = match value_node.kind() {
-                                    "arrow_function" | "function" | "function_expression" => "function",
+                                    "arrow_function" | "function" | "function_expression" => {
+                                        "function"
+                                    }
                                     _ => continue, // 跳过非函数常量
                                 };
                                 let name = node_text(name_node, source);
@@ -713,7 +726,11 @@ fn extract_ts_js_symbols(node: tree_sitter::Node, source: &[u8]) -> Vec<OutlineI
 }
 
 /// 提取类的成员方法
-fn extract_class_members(class_node: tree_sitter::Node, source: &[u8], class_name: &str) -> Vec<OutlineItem> {
+fn extract_class_members(
+    class_node: tree_sitter::Node,
+    source: &[u8],
+    class_name: &str,
+) -> Vec<OutlineItem> {
     let mut methods = Vec::new();
 
     // 查找 class_body 节点
@@ -768,7 +785,8 @@ fn extract_python_symbols(node: tree_sitter::Node, source: &[u8]) -> Vec<Outline
                 }
             }
             "class_definition" => {
-                let class_name = child.child_by_field_name("name")
+                let class_name = child
+                    .child_by_field_name("name")
                     .map(|n| node_text(n, source))
                     .unwrap_or_else(|| "<anonymous>".to_string());
                 let sig = extract_signature(child, source);
@@ -961,7 +979,11 @@ fn extract_impl_name(impl_node: tree_sitter::Node, source: &[u8]) -> String {
 }
 
 /// 提取 Rust impl 块中的方法
-fn extract_impl_methods(impl_node: tree_sitter::Node, source: &[u8], impl_name: &str) -> Vec<OutlineItem> {
+fn extract_impl_methods(
+    impl_node: tree_sitter::Node,
+    source: &[u8],
+    impl_name: &str,
+) -> Vec<OutlineItem> {
     let mut methods = Vec::new();
 
     // 查找 declaration_list（impl 体）
@@ -1045,7 +1067,11 @@ fn record_skipped_dir(diagnostics: &mut GrepDiagnostics, path: &Path) {
         .file_name()
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_else(|| path.to_string_lossy().to_string());
-    if !diagnostics.skipped_dirs.iter().any(|existing| existing == &name) {
+    if !diagnostics
+        .skipped_dirs
+        .iter()
+        .any(|existing| existing == &name)
+    {
         diagnostics.skipped_dirs.push(name);
     }
 }
@@ -1054,7 +1080,9 @@ fn record_skipped_dir(diagnostics: &mut GrepDiagnostics, path: &Path) {
 fn should_skip_file(path: &Path) -> bool {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         let ext_lower = ext.to_lowercase();
-        return SKIP_EXTENSIONS.iter().any(|skip| *skip == ext_lower.as_str());
+        return SKIP_EXTENSIONS
+            .iter()
+            .any(|skip| *skip == ext_lower.as_str());
     }
     false
 }
@@ -1179,7 +1207,10 @@ fn looks_like_binary(bytes: &[u8]) -> bool {
         return false;
     }
 
-    let nul_count = bytes[..sample_len].iter().filter(|byte| **byte == 0).count();
+    let nul_count = bytes[..sample_len]
+        .iter()
+        .filter(|byte| **byte == 0)
+        .count();
     nul_count * 100 / sample_len > 5
 }
 
@@ -1308,12 +1339,14 @@ fn estimate_tokens(text: &str) -> usize {
 
     let chinese_chars = text
         .chars()
-        .filter(|ch| matches!(
-            *ch,
-            '\u{4E00}'..='\u{9FFF}' |
-            '\u{3400}'..='\u{4DBF}' |
-            '\u{F900}'..='\u{FAFF}'
-        ))
+        .filter(|ch| {
+            matches!(
+                *ch,
+                '\u{4E00}'..='\u{9FFF}' |
+                '\u{3400}'..='\u{4DBF}' |
+                '\u{F900}'..='\u{FAFF}'
+            )
+        })
         .count();
     let other_chars = text.chars().count().saturating_sub(chinese_chars);
 
@@ -1322,9 +1355,11 @@ fn estimate_tokens(text: &str) -> usize {
 
 /// 构建 glob 模式列表
 fn build_glob_patterns(includes: &Option<Vec<String>>) -> Vec<glob::Pattern> {
-    includes.as_ref()
+    includes
+        .as_ref()
         .map(|patterns| {
-            patterns.iter()
+            patterns
+                .iter()
                 .filter_map(|p| glob::Pattern::new(p).ok())
                 .collect()
         })
@@ -1359,7 +1394,13 @@ mod tests {
 
     #[test]
     fn searchable_documents_are_not_skipped_as_binary_files() {
-        for file_name in ["report.docx", "sheet.xlsx", "legacy.xls", "deck.pptx", "paper.pdf"] {
+        for file_name in [
+            "report.docx",
+            "sheet.xlsx",
+            "legacy.xls",
+            "deck.pptx",
+            "paper.pdf",
+        ] {
             let path = Path::new(file_name);
             assert!(is_searchable_document(path));
             assert!(!should_skip_file(path));
@@ -1375,11 +1416,8 @@ mod tests {
         let attachments = root.join("attachments");
         fs::create_dir_all(&attachments).expect("create attachments directory");
         let file_path = attachments.join("flight-x.md");
-        fs::write(
-            &file_path,
-            "# 译后记\n\n陶立夏 上海，二〇一年十一月\n",
-        )
-        .expect("write markdown attachment");
+        fs::write(&file_path, "# 译后记\n\n陶立夏 上海，二〇一年十一月\n")
+            .expect("write markdown attachment");
 
         let results = code_grep(
             "译后记|陶立夏".to_string(),
@@ -1399,8 +1437,14 @@ mod tests {
 
         assert_eq!(results.matches.len(), 2);
         assert_eq!(results.diagnostics.scanned_files, 1);
-        assert!(results.matches.iter().any(|item| item.file.ends_with("flight-x.md") && item.line == 1));
-        assert!(results.matches.iter().any(|item| item.file.ends_with("flight-x.md") && item.line == 3));
+        assert!(results
+            .matches
+            .iter()
+            .any(|item| item.file.ends_with("flight-x.md") && item.line == 1));
+        assert!(results
+            .matches
+            .iter()
+            .any(|item| item.file.ends_with("flight-x.md") && item.line == 3));
     }
 
     #[tokio::test]
@@ -1459,11 +1503,8 @@ mod tests {
         let long_prefix = "前".repeat(80);
         let long_suffix = "后".repeat(80);
         let file_path = docs.join("flight.md");
-        fs::write(
-            &file_path,
-            format!("{}译后记{}", long_prefix, long_suffix),
-        )
-        .expect("write markdown");
+        fs::write(&file_path, format!("{}译后记{}", long_prefix, long_suffix))
+            .expect("write markdown");
 
         let results = code_grep(
             "译后记".to_string(),
@@ -1491,7 +1532,9 @@ mod tests {
     #[test]
     fn decode_text_bytes_supports_utf8_and_utf16_bom() {
         assert_eq!(
-            decode_text_bytes("AgentVis 搜索".as_bytes()).ok().as_deref(),
+            decode_text_bytes("AgentVis 搜索".as_bytes())
+                .ok()
+                .as_deref(),
             Some("AgentVis 搜索")
         );
 
@@ -1499,7 +1542,10 @@ mod tests {
         for unit in "中文搜索".encode_utf16() {
             utf16le.extend_from_slice(&unit.to_le_bytes());
         }
-        assert_eq!(decode_text_bytes(&utf16le).ok().as_deref(), Some("中文搜索"));
+        assert_eq!(
+            decode_text_bytes(&utf16le).ok().as_deref(),
+            Some("中文搜索")
+        );
     }
 
     #[cfg(target_os = "windows")]
@@ -1507,12 +1553,18 @@ mod tests {
     fn decode_text_bytes_supports_gbk_on_windows() {
         let (encoded, _, had_errors) = encoding_rs::GBK.encode("中文搜索");
         assert!(!had_errors);
-        assert_eq!(decode_text_bytes(&encoded).ok().as_deref(), Some("中文搜索"));
+        assert_eq!(
+            decode_text_bytes(&encoded).ok().as_deref(),
+            Some("中文搜索")
+        );
     }
 
     #[test]
     fn decode_text_bytes_skips_probable_binary_content() {
         let bytes = [0, 1, 2, 0, 3, 4, 0, 5, 6, 0, 7, 8, 0, 9, 10, 0];
-        assert!(matches!(decode_text_bytes(&bytes), Err(SearchContentSkip::ProbableBinary)));
+        assert!(matches!(
+            decode_text_bytes(&bytes),
+            Err(SearchContentSkip::ProbableBinary)
+        ));
     }
 }
