@@ -151,6 +151,7 @@ function createMockDependencies(): HandlerDependencies {
 
   const mockCallbacks = {
     onThinkingPhase: vi.fn(),
+    onResponseStream: vi.fn(),
     onThought: vi.fn(),
     onMetricsUpdate: vi.fn(),
     onBudgetUpdate: vi.fn(),
@@ -274,6 +275,75 @@ describe('StateHandlers', () => {
       await handleMasterDecision(fsmContext, handlerContext);
 
       expect(handlerContext.dependencies.masterBrain!.decide).toHaveBeenCalled();
+    });
+
+    it('应该只把 RESPOND_TO_USER.response 的累积内容流式转发给 UI', async () => {
+      const response = '第一段\n第二段："引用"，路径 C:\\tmp';
+      const completeDecision = JSON.stringify({
+        decision: 'RESPOND_TO_USER',
+        rationale: '内部决策理由含伪字段 "response":"内部草稿"，也不应进入回复',
+        riskAssessment: { level: 'low', notes: '无风险' },
+        draft: { response: '嵌套的内部草稿也不应进入回复' },
+        response,
+      });
+      const responsePrefix = '"response":"';
+      const firstSnapshotEnd =
+        completeDecision.lastIndexOf(responsePrefix) + responsePrefix.length + '第一段'.length;
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamDelta?.(completeDecision.slice(0, firstSnapshotEnd));
+        streamOptions?.onStreamDelta?.(completeDecision);
+        return createMockDecision('RESPOND_TO_USER', { response });
+      });
+
+      await handleMasterDecision(fsmContext, handlerContext);
+
+      const onResponseStream = handlerContext.dependencies.callbacks.onResponseStream;
+      expect(onResponseStream).toHaveBeenNthCalledWith(1, '第一段');
+      expect(onResponseStream).toHaveBeenNthCalledWith(2, response);
+      expect(onResponseStream).toHaveBeenCalledTimes(2);
+    });
+
+    it('不应该把 SPAWN_SUB_AGENT 决策中的其他字段流式显示为用户回复', async () => {
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamDelta?.(
+          JSON.stringify({
+            decision: 'SPAWN_SUB_AGENT',
+            rationale: '需要继续执行任务',
+            response: '这个额外字段也不应显示',
+            nestedDraft: {
+              decision: 'RESPOND_TO_USER',
+              response: '嵌套决策中的内部草稿也不应显示',
+            },
+          })
+        );
+        return createMockDecision('SPAWN_SUB_AGENT');
+      });
+
+      await handleMasterDecision(fsmContext, handlerContext);
+
+      expect(handlerContext.dependencies.callbacks.onResponseStream).not.toHaveBeenCalled();
+    });
+
+    it('MasterBrain 重试时应该清除上一轮未完成的回复快照', async () => {
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","response":"旧的未完成回复');
+        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","rationale":"纠错重试"}');
+        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","response":"新的完整回复"}');
+        return createMockDecision('RESPOND_TO_USER', { response: '新的完整回复' });
+      });
+
+      await handleMasterDecision(fsmContext, handlerContext);
+
+      const onResponseStream = handlerContext.dependencies.callbacks.onResponseStream;
+      expect(onResponseStream).toHaveBeenCalledTimes(3);
+      expect((onResponseStream as ReturnType<typeof vi.fn>).mock.calls).toEqual([
+        ['旧的未完成回复'],
+        [''],
+        ['新的完整回复'],
+      ]);
     });
 
     it('should pass sandboxMode into MasterBrainInputBuilder', async () => {

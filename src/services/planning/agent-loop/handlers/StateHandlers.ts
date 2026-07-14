@@ -214,25 +214,196 @@ function extractStreamingDisplayContent(rawContent: string): string {
  * @param fieldName - 要提取的字段名
  * @returns 提取的字段值（已反转义），未找到时返回 undefined
  */
-function extractJsonStringValue(jsonContent: string, fieldName: string): string | undefined {
+function extractJsonStringValue(
+  jsonContent: string,
+  fieldName: string,
+  trimValue = true
+): string | undefined {
   // 匹配 "fieldName": "value"，其中 value 可包含转义字符
-  // 末尾的 "? 是可选的——流式输出时字段值可能尚未闭合
-  const pattern = new RegExp(`"${fieldName}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"?`, 's');
+  // 不要求右引号存在——流式输出时字段值可能尚未闭合
+  const pattern = new RegExp(`"${fieldName}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`, 's');
   const match = jsonContent.match(pattern);
   if (!match) return undefined;
 
   const rawValue = match[1];
-  if (!rawValue) return undefined;
+  if (rawValue === undefined) return undefined;
+  const unescaped = decodeStreamingJsonString(rawValue);
 
-  // 反转义常见 JSON 转义序列
-  const unescaped = rawValue
-    .replace(/\\n/g, '\n')
-    .replace(/\\t/g, '\t')
-    .replace(/\\"/g, '"')
-    .replace(/\\\//g, '/')
-    .replace(/\\\\/g, '\\');
+  return trimValue ? unescaped.trim() || undefined : unescaped;
+}
 
-  return unescaped.trim() || undefined;
+/**
+ * 容错解码流式 JSON 字符串。
+ *
+ * 与 JSON.parse 不同，这里允许字符串尚未闭合，并暂时忽略末尾未完成的转义序列。
+ */
+function decodeStreamingJsonString(rawValue: string): string {
+  let decoded = '';
+
+  for (let index = 0; index < rawValue.length; index += 1) {
+    const character = rawValue.charAt(index);
+    if (character !== '\\') {
+      decoded += character;
+      continue;
+    }
+
+    if (index + 1 >= rawValue.length) break;
+
+    const escaped = rawValue.charAt((index += 1));
+    switch (escaped) {
+      case '"':
+      case '\\':
+      case '/':
+        decoded += escaped;
+        break;
+      case 'b':
+        decoded += '\b';
+        break;
+      case 'f':
+        decoded += '\f';
+        break;
+      case 'n':
+        decoded += '\n';
+        break;
+      case 'r':
+        decoded += '\r';
+        break;
+      case 't':
+        decoded += '\t';
+        break;
+      case 'u': {
+        const unicodeHex = rawValue.slice(index + 1, index + 5);
+        if (unicodeHex.length < 4) return decoded;
+        if (/^[0-9a-fA-F]{4}$/.test(unicodeHex)) {
+          decoded += String.fromCharCode(Number.parseInt(unicodeHex, 16));
+          index += 4;
+        } else {
+          decoded += '\\u';
+        }
+        break;
+      }
+      default:
+        decoded += `\\${escaped}`;
+    }
+  }
+
+  return decoded;
+}
+
+interface StreamingJsonStringToken {
+  rawValue: string;
+  endIndex: number;
+  complete: boolean;
+}
+
+function scanStreamingJsonString(
+  jsonContent: string,
+  openingQuoteIndex: number
+): StreamingJsonStringToken {
+  let escaped = false;
+
+  for (let index = openingQuoteIndex + 1; index < jsonContent.length; index += 1) {
+    const character = jsonContent.charAt(index);
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character === '"') {
+      return {
+        rawValue: jsonContent.slice(openingQuoteIndex + 1, index),
+        endIndex: index,
+        complete: true,
+      };
+    }
+  }
+
+  return {
+    rawValue: jsonContent.slice(openingQuoteIndex + 1),
+    endIndex: Math.max(openingQuoteIndex, jsonContent.length - 1),
+    complete: false,
+  };
+}
+
+/**
+ * 从首个 JSON 对象的顶层安全提取字符串字段，避免命中 rationale 等字符串里的伪字段。
+ */
+function extractTopLevelStreamingJsonStringField(
+  jsonContent: string,
+  fieldName: string
+): { value: string; complete: boolean } | undefined {
+  let objectDepth = 0;
+  let arrayDepth = 0;
+  let rootStarted = false;
+
+  for (let index = 0; index < jsonContent.length; index += 1) {
+    const character = jsonContent.charAt(index);
+
+    if (character === '"') {
+      const token = scanStreamingJsonString(jsonContent, index);
+      if (!token.complete) return undefined;
+
+      if (rootStarted && objectDepth === 1 && arrayDepth === 0) {
+        let cursor = token.endIndex + 1;
+        while (/\s/.test(jsonContent.charAt(cursor))) cursor += 1;
+
+        if (jsonContent.charAt(cursor) === ':') {
+          const key = decodeStreamingJsonString(token.rawValue);
+          if (key === fieldName) {
+            cursor += 1;
+            while (/\s/.test(jsonContent.charAt(cursor))) cursor += 1;
+            if (jsonContent.charAt(cursor) !== '"') return undefined;
+
+            const valueToken = scanStreamingJsonString(jsonContent, cursor);
+            return {
+              value: decodeStreamingJsonString(valueToken.rawValue),
+              complete: valueToken.complete,
+            };
+          }
+        }
+      }
+
+      index = token.endIndex;
+      continue;
+    }
+
+    if (character === '{') {
+      rootStarted = true;
+      objectDepth += 1;
+    } else if (character === '}') {
+      objectDepth = Math.max(0, objectDepth - 1);
+      if (rootStarted && objectDepth === 0) return undefined;
+    } else if (character === '[' && rootStarted) {
+      arrayDepth += 1;
+    } else if (character === ']' && rootStarted) {
+      arrayDepth = Math.max(0, arrayDepth - 1);
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 仅从 RESPOND_TO_USER 决策中提取面向用户的 response 累积快照。
+ *
+ * 不复用 Thought 的兜底文本，避免把 reasoning、rationale 或 JSON 骨架泄漏到回复气泡。
+ */
+function extractStreamingResponseContent(rawContent: string): string | undefined {
+  const jsonFenceMatch = rawContent.match(/```json\s*\n?\s*\{/);
+  const plainJsonStart = rawContent.indexOf('{');
+  const jsonStartIndex = jsonFenceMatch
+    ? rawContent.indexOf('{', jsonFenceMatch.index)
+    : plainJsonStart;
+  if (jsonStartIndex < 0) return undefined;
+
+  const jsonPart = rawContent.substring(jsonStartIndex);
+  const decision = extractTopLevelStreamingJsonStringField(jsonPart, 'decision');
+  if (!decision?.complete || decision.value !== 'RESPOND_TO_USER') return undefined;
+
+  return extractTopLevelStreamingJsonStringField(jsonPart, 'response')?.value;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -345,6 +516,7 @@ export async function handleMasterDecision(
     // 2. 调用 MasterBrain 获取决策
     // 传入流式回调：LLM 输出过程中，原始内容实时推送到 ANALYZING 阶段的 Thought 卡片
     // 流式结束 JSON 解析完成后，三阶段内容（rationale/notes/task）依次覆盖更新为解析结果
+    let lastResponseSnapshot: string | undefined;
     const decision = await masterBrain.decide(input, {
       onStreamDelta: (accumulatedContent) => {
         // 从累积的 LLM 原始输出中增量提取 JSON 字段值，
@@ -355,6 +527,14 @@ export async function handleMasterDecision(
           phase: 'ANALYZING',
           content: displayContent,
         });
+
+        if (callbacks.onResponseStream) {
+          const responseSnapshot = extractStreamingResponseContent(accumulatedContent);
+          if (responseSnapshot !== lastResponseSnapshot) {
+            lastResponseSnapshot = responseSnapshot;
+            callbacks.onResponseStream(responseSnapshot ?? '');
+          }
+        }
       },
       onReasoningTrace: callbacks.onReasoningTrace,
     });

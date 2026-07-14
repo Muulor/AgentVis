@@ -130,6 +130,7 @@ chat/
 ├── ImageLightbox.module.css      # 灯箱样式
 ├── InlineGeneratedImages.tsx     # 内联生成图片展示组件
 ├── InlineGeneratedImages.module.css # 内联生成图片样式
+├── inlineGeneratedImageVisibility.ts # 生成图片失败项的可见性过滤
 ├── inputContextTokens.ts         # 输入上下文 token 结构
 ├── fileMentionUtils.ts           # 文件提及工具
 ├── skillSlashUtils.ts            # 技能 / 聊天命令 工具
@@ -226,14 +227,14 @@ errors/
 file/
 ├── CodeHighlight.tsx             # 代码语法高亮组件（含 Vite 项目预览触发）
 ├── CodeHighlight.module.css      # 代码高亮样式（含 Layers 预览按钮）
-├── FileContextMenu.tsx           # 文件右键菜单
+├── FileContextMenu.tsx           # 文件右键菜单（用户删除进入 Windows 回收站）
 ├── FileContextMenu.module.css    # 右键菜单样式
 ├── FileItem.tsx                  # 文件列表项
 ├── FileItem.module.css           # 文件项样式
 ├── FileTypeIcon.tsx              # 按文件名/扩展名映射的语言类型图标
 ├── FileTypeIcon.module.css       # 文件类型图标与主题色样式
 ├── FileTypeIconRegistry.ts       # 精确文件名、扩展名与文件家族图标映射
-├── FileList.tsx                  # 文件列表组件（含交付物文件夹 ▶ Run Preview）
+├── FileList.tsx                  # 文件列表组件（含交付物文件夹 ▶ Run Preview、系统回收站删除）
 ├── FileList.module.css           # 文件列表样式（含 projectPreviewBtn）
 ├── FileListPathRecovery.ts
 ├── WorkspaceImportService.ts     # HTML5 拖拽分块传输与事务式工作区导入协调
@@ -1104,7 +1105,7 @@ commands/
 ├── agent.rs                      # 智能体相关命令
 ├── hub.rs                        # Hub 相关命令
 ├── message.rs                    # 消息相关命令
-├── file.rs                       # 文件管理命令
+├── file.rs                       # 文件管理命令（含可信工作区边界校验与 Windows 回收站操作）
 ├── text_preview.rs               # 大型文本有界读取与 Markdown 复杂度分析命令
 ├── workspace_import.rs           # 工作区导入 session、staging、分块写入与整批提交/回滚
 ├── preview_staging.rs            # Project Preview root-relative 有界 no-follow 源读取与 owned workspace 资产复制

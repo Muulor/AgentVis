@@ -5,9 +5,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::fs;
-use tauri::Manager;
+use tauri::{Manager, State};
 
 use crate::error::{AppResult, AppError};
+use crate::AppState;
 
 use super::command_validator;
 
@@ -283,32 +284,352 @@ fn collect_files_recursively(
     Ok(())
 }
 
-/// 删除交付物（支持文件和文件夹）
+async fn resolve_agent_workspace_root(
+    app_handle: &tauri::AppHandle,
+    state: &State<'_, AppState>,
+    agent_id: &str,
+) -> AppResult<PathBuf> {
+    let db = state.db.lock().await;
+    let agent = db
+        .agent_repo()
+        .get(agent_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Agent does not exist: {agent_id}")))?;
+
+    if let Some(project_path) = agent
+        .project_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+    {
+        return Ok(PathBuf::from(project_path));
+    }
+
+    let hub = db
+        .hub_repo()
+        .get(&agent.hub_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("Hub does not exist: {}", agent.hub_id)))?;
+    let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+        AppError::FileSystem(format!("Failed to get app data directory: {error}"))
+    })?;
+
+    Ok(app_data_dir
+        .join("deliverables")
+        .join(super::agent::sanitize_folder_name(&hub.name))
+        .join(super::agent::sanitize_folder_name(&agent.name)))
+}
+
+/// 将前端请求的绝对路径收敛为可信工作区内的直接文件系统对象。
 ///
-/// # Arguments
-/// * `file_path` - 文件或文件夹路径
+/// 这里只 canonicalize 父目录，避免把末级符号链接解析到工作区外；Windows Shell
+/// 删除末级链接时会删除链接本身，并且未设置 `FOFX_NOSKIPJUNCTIONS`，不会遍历 junction。
+fn validate_system_trash_target(
+    workspace_root: &Path,
+    requested_target: &Path,
+) -> AppResult<PathBuf> {
+    if !workspace_root.is_absolute() || !requested_target.is_absolute() {
+        return Err(AppError::Forbidden(
+            "System trash requires absolute workspace and target paths".to_string(),
+        ));
+    }
+
+    let canonical_root = workspace_root.canonicalize().map_err(|error| {
+        AppError::FileSystem(format!(
+            "Failed to resolve the Agent workspace root '{}': {error}",
+            workspace_root.display()
+        ))
+    })?;
+    if !canonical_root.is_dir() {
+        return Err(AppError::Forbidden(format!(
+            "Agent workspace root is not a directory: {}",
+            workspace_root.display()
+        )));
+    }
+
+    let target_name = requested_target.file_name().ok_or_else(|| {
+        AppError::Forbidden(
+            "The Agent workspace root cannot be moved to the system trash".to_string(),
+        )
+    })?;
+    let target_parent = requested_target.parent().ok_or_else(|| {
+        AppError::Forbidden(
+            "The Agent workspace root cannot be moved to the system trash".to_string(),
+        )
+    })?;
+    let canonical_parent = target_parent.canonicalize().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            AppError::NotFound(format!(
+                "File parent does not exist: {}",
+                target_parent.display()
+            ))
+        } else {
+            AppError::FileSystem(format!(
+                "Failed to resolve the target parent '{}': {error}",
+                target_parent.display()
+            ))
+        }
+    })?;
+
+    if !canonical_parent.starts_with(&canonical_root) {
+        return Err(AppError::Forbidden(format!(
+            "Manual deletion is limited to the current Agent workspace: {}",
+            requested_target.display()
+        )));
+    }
+
+    let normalized_target = canonical_parent.join(target_name);
+    if normalized_target == canonical_root {
+        return Err(AppError::Forbidden(
+            "The Agent workspace root cannot be moved to the system trash".to_string(),
+        ));
+    }
+
+    fs::symlink_metadata(&normalized_target).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            AppError::NotFound(format!(
+                "File does not exist: {}",
+                normalized_target.display()
+            ))
+        } else {
+            AppError::FileSystem(format!(
+                "Failed to inspect trash target '{}': {error}",
+                normalized_target.display()
+            ))
+        }
+    })?;
+
+    let targets_import_staging = normalized_target
+        .ancestors()
+        .take_while(|path| path.starts_with(&canonical_root) && *path != canonical_root)
+        .any(super::workspace_import::is_workspace_import_staging_dir);
+    if targets_import_staging {
+        return Err(AppError::Forbidden(
+            "AgentVis workspace import staging cannot be moved to the system trash".to_string(),
+        ));
+    }
+
+    Ok(normalized_target)
+}
+
+#[cfg(target_os = "windows")]
+fn move_to_windows_recycle_bin_on_sta_thread(path: &Path) -> AppResult<()> {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
+    use windows::Win32::UI::Shell::{
+        FileOperation, IFileOperation, IFileOperationProgressSink, IShellItem,
+        SHCreateItemFromParsingName, FOFX_ADDUNDORECORD, FOFX_RECYCLEONDELETE, FOF_NOCONFIRMATION,
+        FOF_NOERRORUI, FOF_SILENT,
+    };
+
+    let _com = initialize_shell_com()?;
+    let display_path = explorer_compatible_path(&path.to_string_lossy());
+    let shell_path = HSTRING::from(display_path.as_str());
+
+    let operation: IFileOperation = unsafe {
+        CoCreateInstance(&FileOperation, None, CLSCTX_INPROC_SERVER).map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to create the Windows recycle operation: {error}"
+            ))
+        })?
+    };
+    let item: IShellItem = unsafe {
+        SHCreateItemFromParsingName(&shell_path, None).map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to resolve the Windows Shell item '{}': {error}",
+                path.display()
+            ))
+        })?
+    };
+
+    let flags =
+        FOFX_RECYCLEONDELETE | FOFX_ADDUNDORECORD | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+    unsafe {
+        operation.SetOperationFlags(flags).map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to configure the Windows recycle operation: {error}"
+            ))
+        })?;
+        operation
+            .DeleteItem(&item, None::<&IFileOperationProgressSink>)
+            .map_err(|error| {
+                AppError::FileSystem(format!(
+                    "Failed to queue the Windows recycle operation: {error}"
+                ))
+            })?;
+        operation.PerformOperations().map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to move the item to the Windows Recycle Bin: {error}"
+            ))
+        })?;
+
+        if operation
+            .GetAnyOperationsAborted()
+            .map_err(|error| {
+                AppError::FileSystem(format!(
+                    "Failed to verify the Windows recycle operation: {error}"
+                ))
+            })?
+            .as_bool()
+        {
+            return Err(AppError::FileSystem(
+                "The Windows recycle operation was cancelled".to_string(),
+            ));
+        }
+    }
+
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(_) => Err(AppError::FileSystem(
+            "Windows left the item in place instead of moving it to the Recycle Bin".to_string(),
+        )),
+        Err(error) => Err(AppError::FileSystem(format!(
+            "Failed to verify the recycled item '{}': {error}",
+            path.display()
+        ))),
+    }
+}
+
+#[cfg(target_os = "windows")]
+async fn move_to_system_trash(path: PathBuf) -> AppResult<()> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("agentvis-system-trash".to_string())
+        .spawn(move || {
+            let _ = sender.send(move_to_windows_recycle_bin_on_sta_thread(&path));
+        })
+        .map_err(|error| {
+            AppError::FileSystem(format!(
+                "Failed to start the Windows recycle operation: {error}"
+            ))
+        })?;
+
+    receiver.await.map_err(|_| {
+        AppError::FileSystem("The Windows recycle operation terminated unexpectedly".to_string())
+    })?
+}
+
+#[cfg(not(target_os = "windows"))]
+async fn move_to_system_trash(_path: PathBuf) -> AppResult<()> {
+    Err(AppError::Forbidden(
+        "System trash is currently supported only on Windows".to_string(),
+    ))
+}
+
+/// 将用户在右栏主动删除的文件或文件夹移入 Windows 回收站。
+///
+/// Agent 发起的命令删除仍由 `trash_bin.rs` 拦截并进入 Agent Trash Bin；本命令只处理
+/// 用户操作，并且从数据库推导可信工作区根目录，不信任前端提供的路径边界。
 #[tauri::command]
-pub async fn file_delete(
+pub async fn file_move_to_system_trash(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    agent_id: String,
     file_path: String,
 ) -> AppResult<()> {
-    let path = PathBuf::from(&file_path);
-    
-    if !path.exists() {
-        return Err(AppError::NotFound(format!("File does not exist: {}", file_path)));
-    }
-    
-    // 根据路径类型选择不同的删除方式
-    if path.is_dir() {
-        fs::remove_dir_all(&path)
-            .map_err(|e| AppError::FileSystem(format!("Failed to delete folder: {}", e)))?;
-        log::debug!("[file] 文件夹已删除: {}", file_path);
-    } else {
-        fs::remove_file(&path)
-            .map_err(|e| AppError::FileSystem(format!("Failed to delete file: {}", e)))?;
-        log::debug!("[file] 文件已删除: {}", file_path);
-    }
-    
+    let workspace_root = resolve_agent_workspace_root(&app_handle, &state, &agent_id).await?;
+    let target = validate_system_trash_target(&workspace_root, Path::new(&file_path))?;
+
+    move_to_system_trash(target.clone()).await?;
+    log::info!(
+        "[file] 用户已将工作区条目移入系统回收站: agent_id={}, path={}",
+        agent_id,
+        target.display()
+    );
     Ok(())
+}
+
+#[cfg(test)]
+mod system_trash_target_tests {
+    use super::*;
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new(label: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "agentvis-system-trash-{label}-{}",
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir_all(&path).expect("create test directory");
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn accepts_existing_item_inside_workspace() {
+        let workspace = TestDirectory::new("inside");
+        let nested = workspace.0.join("nested");
+        fs::create_dir_all(&nested).expect("create nested directory");
+        let file = workspace.0.join("report.md");
+        fs::write(&file, b"test").expect("write test file");
+        let requested = nested.join("..").join("report.md");
+
+        let validated = validate_system_trash_target(&workspace.0, &requested)
+            .expect("workspace item should be accepted");
+
+        assert_eq!(
+            validated,
+            workspace
+                .0
+                .canonicalize()
+                .expect("canonical workspace")
+                .join("report.md")
+        );
+    }
+
+    #[test]
+    fn rejects_workspace_root() {
+        let workspace = TestDirectory::new("root");
+
+        let error = validate_system_trash_target(&workspace.0, &workspace.0)
+            .expect_err("workspace root must be rejected");
+
+        assert!(matches!(error, AppError::Forbidden(_)));
+    }
+
+    #[test]
+    fn rejects_item_from_sibling_directory() {
+        let parent = TestDirectory::new("siblings");
+        let workspace = parent.0.join("workspace");
+        let sibling = parent.0.join("sibling");
+        fs::create_dir_all(&workspace).expect("create workspace");
+        fs::create_dir_all(&sibling).expect("create sibling");
+        let file = sibling.join("outside.txt");
+        fs::write(&file, b"outside").expect("write sibling file");
+
+        let error = validate_system_trash_target(&workspace, &file)
+            .expect_err("sibling item must be rejected");
+
+        assert!(matches!(error, AppError::Forbidden(_)));
+    }
+
+    #[test]
+    fn rejects_missing_item() {
+        let workspace = TestDirectory::new("missing");
+        let missing = workspace.0.join("missing.txt");
+
+        let error = validate_system_trash_target(&workspace.0, &missing)
+            .expect_err("missing item must be rejected");
+
+        assert!(matches!(error, AppError::NotFound(_)));
+    }
+
+    #[test]
+    fn rejects_relative_target() {
+        let workspace = TestDirectory::new("relative");
+
+        let error = validate_system_trash_target(&workspace.0, Path::new("report.md"))
+            .expect_err("relative item must be rejected");
+
+        assert!(matches!(error, AppError::Forbidden(_)));
+    }
 }
 
 /// 保存剪贴板图片数据到临时文件

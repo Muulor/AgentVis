@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildHistoricalAttachmentContext,
   buildPlanningCheckpointProgressText,
+  canPublishPlanningStream,
   getPlanningHistoryEffectiveContent,
   isPlanningCheckpointMessage,
   isRecoverablePlanningCheckpointMessage,
@@ -36,6 +37,13 @@ describe('usePlanningMode helpers', () => {
     expect(isMessagePresentInList(messages, 'user-1')).toBe(true);
     expect(isMessagePresentInList(messages, 'deleted-user')).toBe(false);
     expect(isMessagePresentInList(messages, null)).toBe(true);
+  });
+
+  it('publishes Planning stream updates only for the active, non-cancelled run', () => {
+    expect(canPublishPlanningStream('run-current', 'run-current', false)).toBe(true);
+    expect(canPublishPlanningStream('run-current', 'run-current', true)).toBe(false);
+    expect(canPublishPlanningStream('run-new', 'run-old', false)).toBe(false);
+    expect(canPublishPlanningStream(undefined, 'run-old', false)).toBe(false);
   });
 
   it('uses assistant metadata.persistContent when rebuilding Planning history', () => {

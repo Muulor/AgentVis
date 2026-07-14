@@ -258,6 +258,8 @@ export interface AgentLoopCallbacks {
   onThinkingPhase?: (event: ThinkingPhaseEvent) => void;
   /** Master Brain provider reasoning_content 流事件 */
   onReasoningTrace?: (event: ReasoningTraceEvent) => void;
+  /** Master Brain RESPOND_TO_USER.response 字段的累积流快照 */
+  onResponseStream?: (accumulatedContent: string) => void;
 
   // ═══ Sub-Agent 生命周期回调 ═══
 

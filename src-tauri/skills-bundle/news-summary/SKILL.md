@@ -68,7 +68,7 @@ Fetch current RSS headlines and optional article bodies through a Script Skill c
 | Category | Description | Sources |
 | --- | --- | --- |
 | `general` | 综合新闻 | 新华社, 纽约时报双语版, 界面新闻, 澎湃新闻, NPR, Al Jazeera |
-| `ai` | AI 前沿 | The Verge AI, MIT Tech Review AI, Ars Technica, Wired Science, TechCrunch AI |
+| `ai` | AI 前沿 | AI HOT, The Verge AI, MIT Tech Review AI, Ars Technica, Wired Science, TechCrunch AI |
 | `finance` | 财经风向 | FT Markets, TechCrunch Venture, 华尔街见闻中文, 36氪 |
 | `culture` | 文化与深思 | The Atlantic, New Yorker Culture, Aeon Magazine, Nowness, Southern Weekly (南方周末) |
 | `all` | All categories | All configured sources |

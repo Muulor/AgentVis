@@ -78,25 +78,6 @@
   opacity: 1;
 }
 
-/* 加载失败占位符 */
-.thumbnailError {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 250px;
-  height: 250px;
-  border-radius: 8px;
-  background: var(--inline-image-placeholder-bg);
-  border: 1px dashed var(--inline-image-placeholder-border);
-  color: var(--inline-image-placeholder-text);
-}
-
-.errorText {
-  font-size: 11px;
-}
-
 /* 加载中占位符 */
 .thumbnailLoading {
   display: flex;

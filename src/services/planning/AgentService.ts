@@ -177,6 +177,13 @@ export interface ProcessMessageOptions {
   onReasoningTrace?: (event: ReasoningTraceEvent) => void;
 
   /**
+   * Master Brain 最终用户回复的累积流快照
+   *
+   * 仅在决策类型为 RESPOND_TO_USER 时触发，不包含结构化决策 JSON。
+   */
+  onResponseStream?: (accumulatedContent: string) => void;
+
+  /**
    * 治理器指标更新回调（FSM 可视化 ）
    *
    * 用于显示预算、进度、风险等指标
@@ -535,6 +542,7 @@ export class AgentService {
         // FSM 可视化回调
         onThinkingPhase: options.onThinkingPhase,
         onReasoningTrace: options.onReasoningTrace,
+        onResponseStream: options.onResponseStream,
         onMetricsUpdate: options.onMetricsUpdate,
         onFSMStateChange: options.onFSMStateChange,
 

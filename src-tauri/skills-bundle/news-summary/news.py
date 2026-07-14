@@ -92,6 +92,7 @@ class HTTPStatusError(Exception):
 
 FEEDS: list[FeedConfig] = [
     # ━━ AI 前沿 (AI & Frontier Tech) ━━
+    FeedConfig("AI HOT", "https://aihot.virxact.com/feed.xml", "ai", "zh"),
     FeedConfig("The Verge AI", "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "ai", "en"),
     FeedConfig("MIT Tech Review AI", "https://www.technologyreview.com/topic/artificial-intelligence/feed/", "ai", "en"),
     FeedConfig("Ars Technica", "https://arstechnica.com/information-technology/feed/", "ai", "en"),

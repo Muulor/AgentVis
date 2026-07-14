@@ -1,7 +1,7 @@
 /**
  * FileContextMenu - 文件右键菜单组件
  *
- * 提供文件的操作菜单：导出、删除
+ * 提供文件的操作菜单：导出、在资源管理器中显示、移入系统回收站
  */
 
 import { useEffect, useRef } from 'react';
@@ -116,7 +116,7 @@ export function FileContextMenu({
       </button>
       <button className={cx(styles.menuItem, styles.danger)} onClick={handleDelete}>
         <Trash2 size={14} />
-        <span>{isDirectory ? t('file.deleteFolder') : t('file.deleteFile')}</span>
+        <span>{isDirectory ? t('file.moveFolderToTrash') : t('file.moveFileToTrash')}</span>
       </button>
     </div>
   );

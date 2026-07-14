@@ -74,6 +74,8 @@ Go to "Settings -> File Protection" to add custom protected paths. Protected pat
 
 Files deleted by the Agent will be moved to the AgentVis Trash Bin. You can also view and restore files from the Trash Bin directly via "Settings -> File Protection" or periodically clean up redundant screenshots and temporary files deleted after the Agent executes tasks.
 
+Files that you remove manually from the right-side workspace file list do not enter the AgentVis Trash Bin. They are sent to the Windows Recycle Bin so that Agent deletion records remain easy to audit. If the item is on a network share or another location that does not support the system Recycle Bin, AgentVis keeps the item and reports the failure instead of falling back to permanent deletion.
+
 ### 4.2 Backup, Restore, and Migration
 
 "Settings -> General" also shows key application data information. You can export data as a backup at any time, and import a backup to restore it.

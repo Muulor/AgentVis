@@ -523,7 +523,20 @@ Deleted successfully.
 
 这些操作面向用户，不通过 Agent 执行恢复命令，因此不会把回收站内部路径暴露给 Agent。
 
-### 5.6 自动过期清理
+### 5.6 用户主动删除与 Windows 回收站
+
+右栏工作区文件列表中的删除属于**用户主动操作**，不会写入 Agent Trash Bin，也不会生成 Agent 删除审计记录。这样可以保持 Agent Trash Bin 只展示 Agent 发起的删除，便于用户判断 Agent 是否误删文件。
+
+用户确认后，前端调用独立的 `file_move_to_system_trash` 命令。后端不会信任前端提供的工作区根目录，而是根据 `agentId` 从数据库读取 Agent 绑定的外部项目路径；未绑定项目时，则根据数据库中的 Hub/Agent 名称推导对应的 `deliverables/<hub>/<agent>` 根目录。目标路径必须满足：
+
+- 是绝对路径，且父目录 canonicalize 后仍位于该 Agent 的可信工作区根目录内；
+- 不是工作区根目录本身；
+- 目标当前存在，且不位于 AgentVis 拥有的工作区导入 staging 内；
+- 末级链接只作为链接项交给 Windows Shell，操作不启用 `FOFX_NOSKIPJUNCTIONS`，不会主动遍历 junction。
+
+Windows 端通过 `IFileOperation` 和 `FOFX_RECYCLEONDELETE` 将条目移入系统回收站，并使用独立 STA 线程执行 Shell COM 操作。网络共享、特殊文件系统、文件占用或其他不支持回收站的情况会直接返回失败并保留原文件；实现中**没有永久删除 fallback**。
+
+### 5.7 自动过期清理
 
 应用启动时自动扫描 manifest，**超过 30 天**的条目物理删除并从 manifest 移除；清理完成后 manifest 会同步写回。短期内被误删的文件在此期间可通过文件保护 UI 恢复或手动清理。
 

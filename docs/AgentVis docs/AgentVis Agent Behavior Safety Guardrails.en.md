@@ -527,7 +527,20 @@ The **Agent Trash** area under "Settings -> File Protection" reads the manifest 
 
 These actions are user-facing and do not require the Agent to execute recovery commands, so internal Trash Bin paths remain hidden from the Agent.
 
-### 5.6 Automatic Expiration Cleanup
+### 5.6 User-Initiated Deletion and the Windows Recycle Bin
+
+Deletions performed on files in the right-hand workspace file list are classified as **user-initiated actions**. These operations are not recorded in the Agent Trash Bin, nor do they generate Agent deletion audit logs. This design ensures that the Agent Trash Bin exclusively displays deletions initiated by the Agent, facilitating user verification of potential accidental deletions by the Agent.
+
+Upon user confirmation, the frontend invokes the standalone `file_move_to_system_trash` command. The backend does not trust the workspace root directory provided by the frontend. Instead, it retrieves the external project path bound to the Agent from the database based on the `agentId`. If no project is bound, it derives the corresponding `deliverables/<hub>/<agent>` root directory from the Hub/Agent names stored in the database. The target path must satisfy the following conditions:
+
+- It must be an absolute path, and its parent directory, after canonicalization, must remain within the Agent’s trusted workspace root directory;
+- It must not be the workspace root directory itself;
+- The target must currently exist and must not reside within the workspace import staging area owned by AgentVis;
+- Symlinks at the leaf level are passed to the Windows Shell as link items. The operation does not enable `FOFX_NOSKIPJUNCTIONS` and does not actively traverse junctions.
+
+On the Windows side, entries are moved to the system Recycle Bin using `IFileOperation` with the `FOFX_RECYCLEONDELETE` flag. Shell COM operations are executed on a dedicated STA (Single-Threaded Apartment) thread. Failures due to network shares, special file systems, file locks, or other scenarios unsupported by the Recycle Bin will result in an immediate error return, leaving the original file intact. The implementation **does not include a fallback to permanent deletion**.
+
+### 5.7 Automatic Expiration Cleanup
 
 On application startup, the manifest is scanned automatically. Entries **older than 30 days** are physically deleted and removed from the manifest; the manifest is written back after cleanup. Files accidentally deleted in the short term can be recovered or manually cleaned through the File Protection UI.
 

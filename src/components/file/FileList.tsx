@@ -477,19 +477,20 @@ export function FileList({
     }
   };
 
-  // 请求删除文件（打开确认对话框）
+  // 请求移入系统回收站（打开确认对话框）
   const handleDeleteRequest = (file: FileItemData) => {
     setDeleteTarget(file);
   };
 
-  // 确认删除
+  // 确认移入系统回收站
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
     const deletedFileId = deleteTarget.id;
     setIsDeleting(true);
     try {
-      await invoke('file_delete', {
+      await invoke('file_move_to_system_trash', {
+        agentId,
         filePath: deleteTarget.filePath,
       });
 
@@ -503,12 +504,16 @@ export function FileList({
 
       toast({
         type: 'success',
-        title: deleteTarget.isDirectory ? t('file.folderDeleted') : t('file.fileDeleted'),
+        title: deleteTarget.isDirectory ? t('file.folderMovedToTrash') : t('file.fileMovedToTrash'),
       });
       setDeleteTarget(null);
     } catch (err) {
-      logger.error('[FileList] 删除文件失败:', err);
-      toast({ type: 'error', title: t('file.deleteFailed') });
+      logger.error('[FileList] 移入系统回收站失败:', err);
+      toast({
+        type: 'error',
+        title: t('file.moveToTrashFailed'),
+        description: t('file.moveToTrashFailedDescription'),
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -1059,18 +1064,18 @@ export function FileList({
         </div>
       )}
 
-      {/* 删除确认对话框 */}
+      {/* 移入系统回收站确认对话框 */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={handleCancelDelete}
         onConfirm={handleConfirmDelete}
-        title={t('agent.context.deleteTitle')}
+        title={t('file.moveToTrashTitle')}
         description={
           deleteTarget?.isDirectory
-            ? t('file.deleteFolderConfirm', { name: deleteTarget.fileName })
-            : t('file.deleteFileConfirm', { name: deleteTarget?.fileName ?? '' })
+            ? t('file.moveFolderToTrashConfirm', { name: deleteTarget.fileName })
+            : t('file.moveFileToTrashConfirm', { name: deleteTarget?.fileName ?? '' })
         }
-        confirmText={t('common.delete')}
+        confirmText={t('file.moveToTrashConfirm')}
         cancelText={t('common.cancel')}
         variant="danger"
         isLoading={isDeleting}

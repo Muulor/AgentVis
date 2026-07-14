@@ -208,6 +208,14 @@ export function isMessagePresentInList(
   return messages.some((message) => message.id === messageId);
 }
 
+export function canPublishPlanningStream(
+  activeRunId: string | undefined,
+  expectedRunId: string,
+  cancelRequested: boolean
+): boolean {
+  return activeRunId === expectedRunId && !cancelRequested;
+}
+
 export function getPlanningHistoryEffectiveContent(
   message: Pick<Message, 'role' | 'content' | 'metadata'>
 ): string {
@@ -1551,6 +1559,17 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             }
             schedulePlanningCheckpointFlush();
           },
+          onResponseStream: (accumulatedContent) => {
+            if (
+              canPublishPlanningStream(
+                contextUsageRunIdsRef.current.get(contextId),
+                contextUsageRunId,
+                cancelRequestedContextsRef.current.has(contextId)
+              )
+            ) {
+              setStreamingContent(contextId, accumulatedContent);
+            }
+          },
           onMetricsUpdate: (snapshot) => {
             fsmVisualizationActions.updateMetrics(snapshot, contextId);
           },
@@ -1629,7 +1648,15 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
         // MB 原始回复已经完成，立即展示给用户，避免 Visual Enhancer 的额外调用
         // 让界面长时间停留在 Working 状态。这里只更新临时 UI，不改变最终持久化内容。
-        if (result.content) {
+        if (
+          result.content &&
+          result.terminationReason !== 'cancelled' &&
+          canPublishPlanningStream(
+            contextUsageRunIdsRef.current.get(contextId),
+            contextUsageRunId,
+            cancelRequestedContextsRef.current.has(contextId)
+          )
+        ) {
           setStreamingContent(contextId, result.content);
         }
 
@@ -1802,6 +1829,17 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           addMessage(contextId, assistantMessage);
         } else {
           addHubMessage(contextId, assistantMessage);
+        }
+
+        // 静态消息加入后立即移除临时流式气泡，避免两份原文短暂重叠。
+        if (
+          canPublishPlanningStream(
+            contextUsageRunIdsRef.current.get(contextId),
+            contextUsageRunId,
+            cancelRequestedContextsRef.current.has(contextId)
+          )
+        ) {
+          finishStreaming(contextId);
         }
 
         // ====== 步骤 6.5: 消息级 Visual Enhancer 后台调度 ======
@@ -2093,22 +2131,18 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         useStatusStore.getState().setModelStatus('error');
       } finally {
         await stopPlanningCheckpointFlushes();
-        sendingContextsRef.current.delete(contextId);
-        cancelRequestedContextsRef.current.delete(contextId);
-        finishSending(contextId);
-        fsmVisualizationActions.setSubAgentRunning(false, contextId);
-        // 结束加载状态
-        if (contextId) {
+        const ownsCurrentPlanningRun =
+          contextUsageRunIdsRef.current.get(contextId) === contextUsageRunId;
+
+        if (ownsCurrentPlanningRun) {
+          sendingContextsRef.current.delete(contextId);
+          cancelRequestedContextsRef.current.delete(contextId);
+          finishSending(contextId);
+          fsmVisualizationActions.setSubAgentRunning(false, contextId);
           finishStreaming(contextId);
-        }
 
-        // 任务结束后恢复模型状态灯（瞬时错误不应持续红灯）
-        useStatusStore.getState().setModelStatus('online');
-
-        // Only the latest task in this context may clear Current Context. Cancellation
-        // unlocks the UI immediately, so a replacement task can start before an older
-        // service has finished unwinding its finally block.
-        if (contextId && contextUsageRunIdsRef.current.get(contextId) === contextUsageRunId) {
+          // 任务结束后恢复模型状态灯（瞬时错误不应持续红灯）
+          useStatusStore.getState().setModelStatus('online');
           useStatusStore.getState().clearContextPressure(contextId);
           contextUsageRunIdsRef.current.delete(contextId);
         }
@@ -2118,9 +2152,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         // 覆盖 SubAgentRunner 未注入 contextId（如 overrideSystemPrompt 路径）、
         // 或任务在进入 SA 之前即抛出异常的边缘场景。
         // cleanup() 是幂等操作，重复调用不引起副作用。
-        if (contextId) {
+        if (ownsCurrentPlanningRun) {
           const { useHitlStore } = await import('@stores/hitlStore');
-          useHitlStore.getState().cleanup(contextId);
+          // 动态导入期间同一上下文可能已启动新任务，此时不能清除新任务的 HITL 状态。
+          if (!contextUsageRunIdsRef.current.has(contextId)) {
+            useHitlStore.getState().cleanup(contextId);
+          }
         }
       }
     },

@@ -12,13 +12,17 @@
  * - 缩略图网格布局（最多 3 列）
  * - 悬停显示放大提示
  * - 点击触发 Lightbox 大图预览
- * - 图片加载失败时显示占位符
+ * - 图片读取或解码失败时从消息布局中移除
  */
 
 import { useState, useCallback, useMemo, useEffect, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { ZoomIn, ImageOff, Loader2 } from 'lucide-react';
+import { ZoomIn, Loader2 } from 'lucide-react';
 import { ImageLightbox } from './ImageLightbox';
+import {
+  addUnavailableImagePath,
+  getDisplayableImagePaths,
+} from './inlineGeneratedImageVisibility';
 import { useI18n } from '@/i18n';
 import styles from './InlineGeneratedImages.module.css';
 import { getLogger } from '@services/logger';
@@ -64,13 +68,14 @@ const THUMB_MAX_WIDTH = 400;
 const ThumbnailCard = memo(function ThumbnailCard({
   filePath,
   onImageClick,
+  onUnavailable,
 }: {
   filePath: string;
   onImageClick: (src: string, name: string) => void;
+  onUnavailable: (filePath: string) => void;
 }) {
   const { t } = useI18n();
   const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [hasError, setHasError] = useState(false);
   // 动态计算的容器尺寸（根据图片原始宽高比）
   const [cardSize, setCardSize] = useState<{ width: number; height: number }>({
     width: THUMB_MIN_SIDE,
@@ -85,18 +90,25 @@ const ThumbnailCard = memo(function ThumbnailCard({
 
   // 通过 Rust 命令读取图片文件为 base64 data URL，并检测原始宽高比
   useEffect(() => {
-    setHasError(false);
+    let cancelled = false;
+    let imageProbe: HTMLImageElement | null = null;
+
     setImageSrc(null);
     setCardSize({ width: THUMB_MIN_SIDE, height: THUMB_MIN_SIDE });
 
     const mimeType = getMimeType(filePath);
 
-    invoke<string>('file_read_as_base64', { path: filePath })
+    void invoke<string>('file_read_as_base64', { path: filePath })
       .then((base64) => {
+        if (cancelled) return;
+
         const dataUrl = `data:${mimeType};base64,${base64}`;
         // 使用 Image 对象检测原始宽高比，动态计算缩略图尺寸
         const img = new Image();
+        imageProbe = img;
         img.onload = () => {
+          if (cancelled) return;
+
           const { naturalWidth, naturalHeight } = img;
           const aspectRatio = naturalWidth / naturalHeight;
 
@@ -121,26 +133,25 @@ const ThumbnailCard = memo(function ThumbnailCard({
           setImageSrc(dataUrl);
         };
         img.onerror = () => {
-          // 尺寸检测失败时使用默认正方形
-          setImageSrc(dataUrl);
+          if (!cancelled) onUnavailable(filePath);
         };
         img.src = dataUrl;
       })
       .catch((error: unknown) => {
-        logger.warn('[InlineGeneratedImages] 读取图片失败:', filePath, error);
-        setHasError(true);
-      });
-  }, [filePath]);
+        if (cancelled) return;
 
-  // 加载失败占位符
-  if (hasError) {
-    return (
-      <div className={styles.thumbnailError}>
-        <ImageOff size={20} />
-        <span className={styles.errorText}>{t('chat.imageUnavailable')}</span>
-      </div>
-    );
-  }
+        logger.warn('[InlineGeneratedImages] 读取图片失败:', filePath, error);
+        onUnavailable(filePath);
+      });
+
+    return () => {
+      cancelled = true;
+      if (imageProbe) {
+        imageProbe.onload = null;
+        imageProbe.onerror = null;
+      }
+    };
+  }, [filePath, onUnavailable]);
 
   // 加载中
   if (!imageSrc) {
@@ -163,7 +174,7 @@ const ThumbnailCard = memo(function ThumbnailCard({
         alt={fileName}
         className={styles.thumbnailImage}
         loading="lazy"
-        onError={() => setHasError(true)}
+        onError={() => onUnavailable(filePath)}
       />
       <div className={styles.thumbnailOverlay}>
         <ZoomIn size={16} />
@@ -178,6 +189,7 @@ export const InlineGeneratedImages = memo(function InlineGeneratedImages({
   imagePaths,
 }: InlineGeneratedImagesProps) {
   const { t } = useI18n();
+  const [unavailablePaths, setUnavailablePaths] = useState<ReadonlySet<string>>(() => new Set());
   // Lightbox 状态
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [lightboxName, setLightboxName] = useState(t('chat.imageGenerated'));
@@ -191,14 +203,28 @@ export const InlineGeneratedImages = memo(function InlineGeneratedImages({
     setLightboxSrc(null);
   }, []);
 
-  if (imagePaths.length === 0) return null;
+  const handleImageUnavailable = useCallback((filePath: string) => {
+    setUnavailablePaths((current) => addUnavailableImagePath(current, filePath));
+  }, []);
+
+  const displayableImagePaths = useMemo(
+    () => getDisplayableImagePaths(imagePaths, unavailablePaths),
+    [imagePaths, unavailablePaths]
+  );
+
+  if (displayableImagePaths.length === 0) return null;
 
   return (
     <>
       <div className={styles.container}>
         <div className={styles.grid}>
-          {imagePaths.map((path) => (
-            <ThumbnailCard key={path} filePath={path} onImageClick={handleImageClick} />
+          {displayableImagePaths.map((path) => (
+            <ThumbnailCard
+              key={path}
+              filePath={path}
+              onImageClick={handleImageClick}
+              onUnavailable={handleImageUnavailable}
+            />
           ))}
         </div>
       </div>
