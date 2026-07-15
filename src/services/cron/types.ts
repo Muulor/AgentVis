@@ -48,4 +48,6 @@ export interface CronSchedulerStatus {
   isRunning: boolean;
   /** 当前跟踪的任务数量 */
   trackedJobCount: number;
+  /** 已进入执行或 Agent handoff 阶段的任务数量 */
+  executingJobCount: number;
 }

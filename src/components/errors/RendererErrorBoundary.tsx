@@ -5,10 +5,10 @@
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { getLogger } from '@services/logger';
 import { translate, type Language, type TranslationKey } from '@/i18n';
 import { isDynamicModuleLoadError } from './rendererRecovery';
+import { exitAfterRendererCrash } from './rendererCrashExit';
 import styles from './RendererErrorBoundary.module.css';
 
 let boundaryLogger: ReturnType<typeof getLogger> | undefined;
@@ -118,11 +118,7 @@ export function RendererCrashFallback({ error, language }: RendererCrashFallback
     : 'rendererRecovery.description';
 
   const handleClose = (): void => {
-    void getCurrentWindow()
-      .destroy()
-      .catch(() => {
-        window.close();
-      });
+    void exitAfterRendererCrash();
   };
 
   return (

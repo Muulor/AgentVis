@@ -6,6 +6,7 @@
  */
 
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
 import {
   isPermissionGranted,
   requestPermission,
@@ -196,6 +197,56 @@ function buildNotificationBody(payload: TaskCompletionNotificationPayload): stri
   return buildSummary(payload.content) || translate('notifications.taskCompletedFallbackSummary');
 }
 
+async function sendPlatformTaskCompletionNotification(
+  payload: TaskCompletionNotificationPayload,
+  title: string,
+  body: string
+): Promise<void> {
+  try {
+    const interactiveNotificationShown = await invoke<boolean>(
+      'show_task_completion_notification',
+      {
+        request: {
+          title,
+          body,
+          actionLabel: translate('notifications.taskCompletedOpenAction'),
+          target: {
+            messageId: payload.id,
+            contextType: payload.contextType,
+            contextId: payload.contextId,
+            agentId: payload.agentId,
+            hubId: payload.hubId,
+          },
+        },
+      }
+    );
+
+    if (interactiveNotificationShown) {
+      return;
+    }
+  } catch (error) {
+    logger.warn('[TaskCompletionNotifier] 交互式系统通知不可用，回退到基础桌面通知:', error);
+  }
+
+  sendNotification({
+    id: getNotificationId(payload.id),
+    title,
+    body,
+    group: 'agentvis-task-completed',
+    autoCancel: true,
+    silent: true,
+    extra: {
+      messageId: payload.id,
+      contextType: payload.contextType,
+      contextId: payload.contextId,
+      agentId: payload.agentId,
+      source: payload.source,
+      mode: payload.mode,
+      createdAt: payload.createdAt,
+    },
+  });
+}
+
 function getAudioContextConstructor(): typeof AudioContext | undefined {
   if (typeof window === 'undefined') return undefined;
   return window.AudioContext;
@@ -277,23 +328,11 @@ export async function notifyTaskCompleted(
       return;
     }
 
-    sendNotification({
-      id: getNotificationId(payload.id),
-      title: translate('notifications.taskCompletedTitle', { agentName: payload.agentName }),
-      body: buildNotificationBody(payload),
-      group: 'agentvis-task-completed',
-      autoCancel: true,
-      silent: true,
-      extra: {
-        messageId: payload.id,
-        contextType: payload.contextType,
-        contextId: payload.contextId,
-        agentId: payload.agentId,
-        source: payload.source,
-        mode: payload.mode,
-        createdAt: payload.createdAt,
-      },
+    const title = translate('notifications.taskCompletedTitle', {
+      agentName: payload.agentName,
     });
+    const body = buildNotificationBody(payload);
+    await sendPlatformTaskCompletionNotification(payload, title, body);
     playSoftCompletionChime();
   } catch (error) {
     logger.warn('[TaskCompletionNotifier] 发送任务完成系统通知失败:', error);

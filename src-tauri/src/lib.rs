@@ -18,6 +18,8 @@ use tokio::sync::Mutex;
 
 use commands::shell::BackgroundProcessRegistry;
 use commands::{
+    acknowledge_main_window_hidden_event,
+    acknowledge_system_tray_exit_request,
     // Agent commands
     agent_create,
     agent_delete,
@@ -30,7 +32,9 @@ use commands::{
     backup_get_stats,
     // Skills Bootstrap commands
     bootstrap_skills_if_needed,
+    cancel_system_tray_exit_request,
     check_elevated_privileges,
+    clear_pending_task_completion_notification_target,
     // Cloud Embedding commands
     cloud_embedding_encode,
     cloud_embedding_list_models,
@@ -62,6 +66,8 @@ use commands::{
     diff_record_update_message_id,
     diff_record_update_modification_statuses,
     diff_record_update_status,
+    exit_application,
+    exit_application_from_system_tray,
     feishu_delete_app_data_file,
     feishu_delete_message,
     feishu_download_resource,
@@ -93,11 +99,14 @@ use commands::{
     file_write_deliverable,
     file_write_staged_tool_arg_to_path,
     file_write_to_path,
+    get_active_system_tray_exit_request,
     get_app_info,
     get_context7_api_key_status,
     get_giteeai_api_key_status,
     get_github_token_status,
     get_image_generation_api_key_status,
+    get_pending_main_window_hidden_event,
+    get_pending_task_completion_notification_target,
     get_protected_paths,
     get_siliconflow_api_key_status,
     get_tavily_api_key_status,
@@ -216,6 +225,7 @@ use commands::{
     set_image_generation_api_key,
     set_protected_paths,
     set_siliconflow_api_key,
+    set_system_tray_labels,
     set_tavily_api_key,
     settings_delete_api_key,
     // Settings commands
@@ -227,6 +237,7 @@ use commands::{
     // Shell commands
     shell_execute,
     shell_kill,
+    show_task_completion_notification,
     // Skill Install commands
     skill_install_from_github,
     slack_auth_test,
@@ -521,6 +532,13 @@ pub fn run() {
     install_panic_hook();
 
     tauri::Builder::default()
+        // The single-instance plugin must be registered first so a second launch
+        // cannot initialize duplicate schedulers, IM channels, or tray icons.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Err(error) = commands::system_tray::restore_main_window(app) {
+                log::warn!("Failed to restore AgentVis after a second launch: {error}");
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -551,7 +569,12 @@ pub fn run() {
                 .level_for("reqwest::connect", log::LevelFilter::Warn)
                 .build(),
         )
+        .on_window_event(|window, event| {
+            commands::system_tray::handle_window_event(window, event);
+        })
         .setup(|app| {
+            commands::system_tray::install_system_tray(app)?;
+
             // 获取应用数据目录
             let app_data_dir = app.path().app_data_dir()
                 .expect("Failed to resolve application data directory");
@@ -661,6 +684,17 @@ pub fn run() {
             // 基础命令
             greet,
             get_app_info,
+            get_pending_task_completion_notification_target,
+            clear_pending_task_completion_notification_target,
+            show_task_completion_notification,
+            set_system_tray_labels,
+            get_active_system_tray_exit_request,
+            acknowledge_system_tray_exit_request,
+            cancel_system_tray_exit_request,
+            get_pending_main_window_hidden_event,
+            acknowledge_main_window_hidden_event,
+            exit_application_from_system_tray,
+            exit_application,
             // Hub 命令
             hub_create,
             hub_list,

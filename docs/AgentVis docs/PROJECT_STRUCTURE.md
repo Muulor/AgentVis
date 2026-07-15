@@ -220,6 +220,7 @@ errors/
 ├── RendererErrorBoundary.tsx        # 根级/子树错误边界、动态模块识别与 Reload/Close 恢复界面
 ├── RendererErrorBoundary.module.css # Renderer 安全恢复页面样式
 ├── RendererErrorBoundary.test.tsx   # 动态模块错误识别与独立恢复 UI 回归
+├── rendererCrashExit.ts              # Renderer 崩溃页的原生全进程退出与兼容兜底
 └── rendererRecovery.ts              # 动态 import/chunk 错误识别辅助逻辑
 ```
 
@@ -1011,8 +1012,8 @@ preview/
 ├── previewAssetCopier.test.ts    # asset copy owner token、destinationPrefix、skipFiles、预算及无 renderer fs 复制回归
 ├── trustedPreviewRuntime.ts      # AgentVis Vite 包装/静态服务器与可重放 lifecycle diagnostics bridge
 ├── trustedPreviewRuntime.test.ts # 包装边界、项目 alias/React TSX 编译及 fs/CORS/token/bridge 回归
-├── windowCloseLifecycle.ts       # 窗口关闭前同步失效请求、限时 cleanup 与 destroy 失败恢复
-├── windowCloseLifecycle.test.ts  # 关闭时序、cleanup timeout 与 destroy 重试回归
+├── applicationExitLifecycle.ts       # 应用退出前同步失效请求、限时 cleanup 与原生退出失败恢复
+├── applicationExitLifecycle.test.ts  # 退出时序、cleanup timeout 与原生退出重试回归
 ├── VitePreviewService.test.ts    # 路径/依赖预检、Import Map native-JS-only 拒绝与真实重试回归
 ├── VitePreviewServiceCleanup.test.ts # 原生 create/cleanup/stale、lease 门槛、公平 backlog 与 sweep 重调度回归
 ├── VitePreviewServiceCancellation.test.ts # source/package 写入、依赖链接与 shell execution 取消竞态回归
@@ -1055,8 +1056,19 @@ im-channel/
 
 ```
 desktop-notification/
-├── index.ts                      # 模块导出索引
-└── TaskCompletionNotifier.ts     # 任务完成通知组件
+├── index.ts                              # 模块导出索引
+├── TaskCompletionNotifier.ts             # 任务完成通知发送、权限、摘要与跨平台回退
+├── TaskCompletionNotifier.test.ts        # 交互式通知与跨平台回退回归测试
+├── TaskCompletionNavigation.ts           # 原生通知激活事件到 Hub/Agent 的导航桥接
+└── TaskCompletionNavigation.test.ts      # 通知跨 Hub 跳转与失效目标回归测试
+```
+
+### 📁 services/system-tray/ - Windows 托盘生命周期服务
+
+```
+system-tray/
+├── SystemTrayService.ts          # 托盘 i18n、Exit requestId/ACK 补领与 request-scoped 原生退出桥接
+└── SystemTrayService.test.ts     # Exit ACK/去重、hidden 补领、可见性恢复与原生命令回归
 ```
 
 ---
@@ -1106,6 +1118,8 @@ commands/
 ├── mod.rs                        # 模块入口
 ├── agent.rs                      # 智能体相关命令
 ├── hub.rs                        # Hub 相关命令
+├── desktop_notification.rs       # Windows WinRT 任务通知、动作按钮与窗口激活事件
+├── system_tray.rs                # 原生 Close→隐藏、retained ACK、Exit watchdog、共享恢复与单实例激活
 ├── message.rs                    # 消息相关命令
 ├── file.rs                       # 文件管理命令（含可信工作区边界校验与 Windows 回收站操作）
 ├── text_preview.rs               # 大型文本有界读取与 Markdown 复杂度分析命令

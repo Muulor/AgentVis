@@ -1,11 +1,14 @@
 export const zhCN = {
   app: {
-    closeConfirm: {
-      title: 'Agent 任务进行中',
-      description:
-        '当前有 Agent 正在执行任务，强制关闭应用将中断所有进行中的任务，且无法在重启后恢复。确定要退出吗？',
-      confirm: '确认退出',
-      cancel: '继续等待',
+    tray: {
+      open: '打开 AgentVis',
+      exit: '退出',
+    },
+    exitConfirm: {
+      title: '有 Agent 任务正在运行',
+      description: '退出 AgentVis 将中断所有进行中的任务，且重启后无法恢复。是否仍要退出？',
+      confirm: '退出并中断任务',
+      cancel: '继续运行',
     },
   },
   rendererRecovery: {
@@ -21,6 +24,7 @@ export const zhCN = {
   },
   notifications: {
     taskCompletedTitle: '{agentName} 完成了任务',
+    taskCompletedOpenAction: '查看回复',
     taskCompletedPrivateBody: '回复已在 AgentVis 中就绪。',
     taskCompletedPrivateBodyWithHub: '回复已在 Hub「{hubName}」中就绪。',
     taskCompletedFallbackSummary: '任务已完成，回复已在 AgentVis 中就绪。',

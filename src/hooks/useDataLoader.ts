@@ -20,6 +20,27 @@ const logger = getLogger('useDataLoader');
 
 // ==================== 工具函数 ====================
 
+export function shouldApplyAgentLoadResult(params: {
+  requestedHubId: string;
+  activeHubId: string | null;
+  requestGeneration: number;
+  latestGeneration: number;
+}): boolean {
+  return (
+    params.requestedHubId === params.activeHubId &&
+    params.requestGeneration === params.latestGeneration
+  );
+}
+
+export function resolveInitialHubId(
+  hubs: ReadonlyArray<{ id: string }>,
+  selectedHubId: string | null
+): string | null {
+  return selectedHubId && hubs.some((hub) => hub.id === selectedHubId)
+    ? selectedHubId
+    : (hubs[0]?.id ?? null);
+}
+
 /** 从已解析的 metadata 中安全提取 quotedFrom 列表 */
 
 /** Hub 类型 - 对应 Rust 端 HubItem */
@@ -75,6 +96,8 @@ export function useDataLoader(): void {
   const loadedAgentIds = useRef<Set<string>>(new Set());
   // 记录已加载消息的 Hub，避免重复加载
   const loadedHubIds = useRef<Set<string>>(new Set());
+  // Hub 快速切换时只允许最后一次 Agent 列表请求写入 store。
+  const agentLoadGenerationRef = useRef(0);
 
   // 初始化加载 Hub 列表
   useEffect(() => {
@@ -101,19 +124,35 @@ export function useDataLoader(): void {
 
         setHubs(formattedHubs);
 
-        // 2. 优先恢复上次选中的 Hub；如果不存在，再回退到第一个
-        const persistedHubExists = currentHubId
-          ? hubs.some((hub) => hub.id === currentHubId)
-          : false;
-        const initialHubId = persistedHubExists ? currentHubId : (hubs[0]?.id ?? null);
-        setCurrentHubId(initialHubId);
+        // 2. 优先使用当前 Store 选择（通知激活可能在 setHubs 订阅中刚更新它），
+        //    如果不存在，再回退到第一个 Hub。避免启动水合覆盖通知导航。
+        const selectedHubId = useHubStore.getState().currentHubId;
+        const initialHubId = resolveInitialHubId(hubs, selectedHubId);
+        if (initialHubId !== selectedHubId) {
+          setCurrentHubId(initialHubId);
+        }
 
         if (initialHubId) {
           // 3. 加载初始 Hub 下的 Agent
+          const requestGeneration = ++agentLoadGenerationRef.current;
           const agents = await invoke<AgentItem[]>('agent_list_by_hub', {
             hubId: initialHubId,
           });
-          setAgents(agents);
+          if (
+            shouldApplyAgentLoadResult({
+              requestedHubId: initialHubId,
+              activeHubId: useHubStore.getState().currentHubId,
+              requestGeneration,
+              latestGeneration: agentLoadGenerationRef.current,
+            })
+          ) {
+            setAgents(agents);
+          } else {
+            logger.trace('[useDataLoader] 忽略过期的初始 Hub Agent 列表响应', {
+              hubId: initialHubId,
+              requestGeneration,
+            });
+          }
         }
 
         logger.trace('[useDataLoader] 初始化数据加载完成', {
@@ -131,15 +170,31 @@ export function useDataLoader(): void {
   useEffect(() => {
     // 跳过初始加载（由上面的 effect 处理）
     if (!currentHubId) return;
+    const requestedHubId: string = currentHubId;
 
     async function loadAgentsForHub(): Promise<void> {
+      const requestGeneration = ++agentLoadGenerationRef.current;
       try {
         const agents = await invoke<AgentItem[]>('agent_list_by_hub', {
-          hubId: currentHubId,
+          hubId: requestedHubId,
         });
+        if (
+          !shouldApplyAgentLoadResult({
+            requestedHubId,
+            activeHubId: useHubStore.getState().currentHubId,
+            requestGeneration,
+            latestGeneration: agentLoadGenerationRef.current,
+          })
+        ) {
+          logger.trace('[useDataLoader] 忽略过期的 Hub Agent 列表响应', {
+            hubId: requestedHubId,
+            requestGeneration,
+          });
+          return;
+        }
         setAgents(agents);
         logger.trace('[useDataLoader] 加载 Hub 下的 Agent', {
-          hubId: currentHubId,
+          hubId: requestedHubId,
           agentCount: agents.length,
         });
       } catch (error) {

@@ -14,7 +14,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { CronJob } from './types';
+import type { CronJob, CronSchedulerStatus } from './types';
 import { matchesCronExpression, getNextRunTime, parseScheduleConfig } from './cronExpression';
 import { executeCronJob } from './CronExecutor';
 import { getLogger } from '@services/logger';
@@ -205,9 +205,10 @@ async function executeAndCleanup(job: CronJob): Promise<void> {
 /**
  * 获取调度器状态（供 UI 显示）
  */
-export function getSchedulerStatus(): { isRunning: boolean; trackedJobCount: number } {
+export function getSchedulerStatus(): CronSchedulerStatus {
   return {
     isRunning: state.isRunning,
     trackedJobCount: state.enabledJobs.length,
+    executingJobCount: state.executingJobs.size,
   };
 }

@@ -15,11 +15,26 @@ import {
   selectLightboxIndex,
 } from '@stores/attachmentViewerStore';
 import { useChatStore } from '@stores/chatStore';
+import { useImChannelStore } from '@stores/imChannelStore';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { startScheduler, stopScheduler } from '@services/cron';
+import { getSchedulerStatus, startScheduler, stopScheduler } from '@services/cron';
+import { listenForTaskCompletionNotificationNavigation } from '@services/desktop-notification';
 import { getLogger } from '@services/logger';
-import { closeWindowWithPreviewCleanup } from '@services/preview/windowCloseLifecycle';
+import {
+  createApplicationExitQueue,
+  exitApplicationWithPreviewCleanup,
+  type ApplicationExitAttempt,
+  type ApplicationExitGuard,
+  type ApplicationExitLifecycleResult,
+  type ApplicationExitQueue,
+} from '@services/preview/applicationExitLifecycle';
+import {
+  cancelSystemTrayExitRequest,
+  exitApplication,
+  listenForSystemTrayEvents,
+  resolveSystemTrayExitAction,
+  updateSystemTrayLabels,
+} from '@services/system-tray/SystemTrayService';
 import { usePreviewStore } from '@stores/previewStore';
 import { useUpdateStore } from '@stores/updateStore';
 import { useI18n } from '@/i18n';
@@ -45,6 +60,18 @@ function isReloadShortcutTestEnabled(): boolean {
   }
 }
 
+function getActiveTaskSources() {
+  const activeImTaskCount = Object.values(useImChannelStore.getState().connectionStates).filter(
+    (connection) => connection.activeTask !== null
+  ).length;
+
+  return {
+    sendingContextCount: useChatStore.getState().sendingContexts.size,
+    executingCronJobCount: getSchedulerStatus().executingJobCount,
+    activeImTaskCount,
+  };
+}
+
 /**
  * AgentVis 应用根组件
  * 负责初始化主题、加载持久化数据和渲染布局骨架
@@ -57,6 +84,36 @@ function App() {
 
   // 加载持久化数据（Hub 和 Agent）
   useDataLoader();
+
+  // 原生任务完成通知被点击时，恢复窗口并切换到对应的 Hub/Agent。
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listenForTaskCompletionNotificationNavigation()
+      .then((stopListening) => {
+        if (disposed) {
+          stopListening();
+          return;
+        }
+        unlisten = stopListening;
+      })
+      .catch((error: unknown) => {
+        logger.warn('[App] 注册任务完成通知跳转监听失败:', error);
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // 原生托盘菜单由 renderer 提供本地化文案，并随语言切换即时更新。
+  useEffect(() => {
+    void updateSystemTrayLabels(t('app.tray.open'), t('app.tray.exit')).catch((error: unknown) => {
+      logger.warn('[App] 更新系统托盘菜单文案失败:', error);
+    });
+  }, [t]);
 
   // 加载用户自定义模型配置（fire-and-forget，失败不阻塞启动）
   useEffect(() => {
@@ -255,69 +312,139 @@ function App() {
   const lightboxIndex = useAttachmentViewerStore(selectLightboxIndex);
   const { closeImageLightbox, goToPrevImage, goToNextImage } = useAttachmentViewerStore();
 
-  // ==================== 窗口关闭确认 ====================
-  // 仅在 renderer listener 存活时阻止默认关闭，再由前端检测是否有 Agent 任务。
-  // 若 React 根树崩溃并卸载 listener，Tauri 会恢复原生默认关闭，避免窗口锁死。
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-  const closeInProgressRef = useRef(false);
+  // ==================== 托盘退出确认 ====================
+  // 标题栏 X 由 Rust 原生层始终转换为隐藏；只有托盘 Exit 才进入此退出流程。
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [exitRequestId, setExitRequestId] = useState<number | null>(null);
+  const exitRequestIdRef = useRef<number | null>(null);
+  const exitInProgressRef = useRef<ApplicationExitGuard>({ currentRequestId: null });
+  const runExitAttemptRef = useRef<
+    (attempt: ApplicationExitAttempt) => Promise<ApplicationExitLifecycleResult>
+  >(() => Promise.resolve('failed'));
+  const exitQueueRef = useRef<ApplicationExitQueue | null>(null);
+  exitQueueRef.current ??= createApplicationExitQueue((attempt) =>
+    runExitAttemptRef.current(attempt)
+  );
 
-  const destroyWindowAfterPreviewCleanup = useCallback(async () => {
-    await closeWindowWithPreviewCleanup({
-      guard: closeInProgressRef,
-      invalidatePreviewRequest: () => usePreviewStore.getState().invalidateProjectRequest(),
-      cleanupPreview: () =>
-        import('@services/preview').then(({ vitePreviewService }) =>
-          vitePreviewService.stopProject()
-        ),
-      destroyWindow: () => getCurrentWindow().destroy(),
-      onCleanupTimeout: () => {
-        logger.warn('[App] Project Preview cleanup timed out during window close');
-      },
-      onCleanupError: (error) => {
-        logger.warn('[App] Project Preview cleanup failed during window close:', error);
-      },
-      onDestroyError: (error) => {
-        logger.warn('[App] Window destruction failed; close can be retried:', error);
-      },
-    });
+  const setOwnedExitRequest = useCallback((requestId: number) => {
+    exitRequestIdRef.current = requestId;
+    setExitRequestId(requestId);
+  }, []);
+
+  const clearOwnedExitRequest = useCallback((requestId: number) => {
+    if (exitRequestIdRef.current !== requestId) return;
+    exitRequestIdRef.current = null;
+    setExitRequestId((currentRequestId) =>
+      currentRequestId === requestId ? null : currentRequestId
+    );
+  }, []);
+
+  const runExitAttempt = useCallback(
+    async ({
+      requestId,
+      forceExit,
+    }: ApplicationExitAttempt): Promise<ApplicationExitLifecycleResult> =>
+      exitApplicationWithPreviewCleanup({
+        requestId,
+        guard: exitInProgressRef.current,
+        invalidatePreviewRequest: () => usePreviewStore.getState().invalidateProjectRequest(),
+        cleanupPreview: () =>
+          import('@services/preview').then(({ vitePreviewService }) =>
+            vitePreviewService.stopProject()
+          ),
+        canExitAfterCleanup: () =>
+          forceExit || resolveSystemTrayExitAction(getActiveTaskSources()) === 'exit',
+        onExitDeferred: () => {
+          if (exitRequestIdRef.current === requestId) {
+            setShowExitConfirm(true);
+          }
+        },
+        exitApplication: () => exitApplication(requestId),
+        onCleanupTimeout: () => {
+          logger.warn('[App] Project Preview cleanup timed out during application exit');
+        },
+        onCleanupError: (error) => {
+          logger.warn('[App] Project Preview cleanup failed during application exit:', error);
+        },
+        onExitError: (error) => {
+          logger.warn('[App] Application exit failed; Exit can be retried:', error);
+          clearOwnedExitRequest(requestId);
+          void cancelSystemTrayExitRequest(requestId).catch((cancelError: unknown) => {
+            logger.warn('[App] 清理失败的系统托盘退出请求失败:', cancelError);
+          });
+        },
+      }),
+    [clearOwnedExitRequest]
+  );
+  runExitAttemptRef.current = runExitAttempt;
+
+  const handleTrayExitRequested = useCallback(
+    (requestId: number) => {
+      // A fresh native request supersedes any attempt that has not started yet.
+      exitQueueRef.current?.clearPending();
+      setOwnedExitRequest(requestId);
+      if (resolveSystemTrayExitAction(getActiveTaskSources()) === 'confirm') {
+        setShowExitConfirm(true);
+        return;
+      }
+
+      setShowExitConfirm(false);
+      exitQueueRef.current?.enqueue({ requestId, forceExit: false });
+    },
+    [setOwnedExitRequest]
+  );
+
+  const handleMainWindowHidden = useCallback(() => {
+    // X/Alt+F4 在确认框打开时等同于取消并隐藏，避免下次 Open 显示旧状态。
+    exitQueueRef.current?.clearPending();
+    setShowExitConfirm(false);
+    exitRequestIdRef.current = null;
+    setExitRequestId(null);
   }, []);
 
   useEffect(() => {
-    const unlisten = getCurrentWindow().onCloseRequested((event) => {
-      event.preventDefault();
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
 
-      // 检测是否有 Agent 任务正在执行（Chat 和 Planning 模式共用 sendingContexts）
-      const { sendingContexts } = useChatStore.getState();
-      const hasActiveTask = sendingContexts.size > 0;
-
-      if (hasActiveTask) {
-        // 有任务进行中，弹出确认弹窗让用户决定
-        setShowCloseConfirm(true);
-      } else {
-        // 无任务，直接销毁窗口（destroy 绕过 CloseRequested 拦截，避免死循环）
-        void destroyWindowAfterPreviewCleanup();
-      }
-    });
+    void listenForSystemTrayEvents({
+      onExitRequested: handleTrayExitRequested,
+      onMainWindowHidden: handleMainWindowHidden,
+    })
+      .then((stopListening) => {
+        if (disposed) {
+          stopListening();
+          return;
+        }
+        unlisten = stopListening;
+      })
+      .catch((error: unknown) => {
+        logger.warn('[App] 注册系统托盘事件监听失败:', error);
+      });
 
     return () => {
-      void unlisten
-        .then((fn) => fn())
-        .catch((err: unknown) => {
-          logger.warn('[App] close-requested listener cleanup failed:', err);
-        });
+      disposed = true;
+      unlisten?.();
     };
-  }, [destroyWindowAfterPreviewCleanup]);
+  }, [handleMainWindowHidden, handleTrayExitRequested]);
 
-  /** 用户确认退出：销毁窗口（绕过 CloseRequested 拦截） */
-  const handleConfirmClose = useCallback(() => {
-    setShowCloseConfirm(false);
-    void destroyWindowAfterPreviewCleanup();
-  }, [destroyWindowAfterPreviewCleanup]);
+  /** 用户确认退出：清理 Preview 后终止完整进程。 */
+  const handleConfirmExit = useCallback(() => {
+    if (exitRequestId === null) return;
+    setShowExitConfirm(false);
+    exitQueueRef.current?.enqueue({ requestId: exitRequestId, forceExit: true });
+  }, [exitRequestId]);
 
-  /** 用户取消退出：关闭弹窗，继续等待任务完成 */
-  const handleCancelClose = useCallback(() => {
-    setShowCloseConfirm(false);
-  }, []);
+  /** 用户取消退出：保留窗口与后台任务。 */
+  const handleCancelExit = useCallback(() => {
+    exitQueueRef.current?.clearPending();
+    setShowExitConfirm(false);
+    if (exitRequestId === null) return;
+    const requestId = exitRequestId;
+    clearOwnedExitRequest(requestId);
+    void cancelSystemTrayExitRequest(requestId).catch((error: unknown) => {
+      logger.warn('[App] 取消系统托盘退出请求失败:', error);
+    });
+  }, [clearOwnedExitRequest, exitRequestId]);
 
   // 禁用浏览器默认右键菜单（保留应用自定义右键菜单）
   useEffect(() => {
@@ -386,15 +513,15 @@ function App() {
         <Shell />
         <NetworkDirectAuthorizationDialog />
         <NetworkUploadAuthorizationDialog />
-        {/* 窗口关闭确认弹窗（Agent 任务进行中时） */}
+        {/* 托盘退出确认弹窗（Agent 任务进行中时） */}
         <ConfirmDialog
-          open={showCloseConfirm}
-          onClose={handleCancelClose}
-          onConfirm={handleConfirmClose}
-          title={t('app.closeConfirm.title')}
-          description={t('app.closeConfirm.description')}
-          confirmText={t('app.closeConfirm.confirm')}
-          cancelText={t('app.closeConfirm.cancel')}
+          open={showExitConfirm}
+          onClose={handleCancelExit}
+          onConfirm={handleConfirmExit}
+          title={t('app.exitConfirm.title')}
+          description={t('app.exitConfirm.description')}
+          confirmText={t('app.exitConfirm.confirm')}
+          cancelText={t('app.exitConfirm.cancel')}
           variant="warning"
         />
         {/* 图片 Lightbox 模态框（全局层级） */}

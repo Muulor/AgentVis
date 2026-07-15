@@ -2,12 +2,16 @@ import type { TranslationResource } from './zh-CN';
 
 export const enUS = {
   app: {
-    closeConfirm: {
-      title: 'Agent Task In Progress',
+    tray: {
+      open: 'Open AgentVis',
+      exit: 'Exit',
+    },
+    exitConfirm: {
+      title: 'Agent tasks are still running',
       description:
-        'An Agent is currently running. Force quitting will interrupt all active tasks, and they cannot be restored after restart. Quit anyway?',
-      confirm: 'Quit',
-      cancel: 'Keep Waiting',
+        "Exiting AgentVis will stop all active tasks. They can't be resumed after restart. Exit anyway?",
+      confirm: 'Exit and stop tasks',
+      cancel: 'Keep running',
     },
   },
   rendererRecovery: {
@@ -25,6 +29,7 @@ export const enUS = {
   },
   notifications: {
     taskCompletedTitle: '{agentName} finished a task',
+    taskCompletedOpenAction: 'View reply',
     taskCompletedPrivateBody: 'The reply is ready in AgentVis.',
     taskCompletedPrivateBodyWithHub: 'The reply is ready in Hub "{hubName}".',
     taskCompletedFallbackSummary: 'The task is complete. The reply is ready in AgentVis.',
