@@ -1471,9 +1471,10 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           }
         }
 
-        if (historyMessages.length > 0) {
-          agentService.loadChatHistory(historyMessages);
-        }
+        // 每轮都用持久化历史快照覆盖缓存 Session，包括空历史。
+        // 删除全部消息后如果跳过空数组同步，上一轮 AgentLoop 的消息会残留在内存中，
+        // 并在下一次普通、Cron 或 IM 任务中重新进入 MB 上下文。
+        agentService.loadChatHistory(historyMessages);
 
         // ====== 步骤 4: 执行 AgentLoop ======
         // 构建引用上下文字符串，注入到 LLM 消息内容前（与 Chat 模式保持一致）

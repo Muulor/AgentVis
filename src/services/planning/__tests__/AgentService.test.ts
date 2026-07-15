@@ -61,4 +61,27 @@ describe('AgentService', () => {
     expect(messages[0]?.content).toContain('附件历史上下文已按约');
     expect(messages[0]?.content).toContain('夜航西飞.md');
   });
+
+  it('用空历史快照清除已存在 Session 的旧消息', () => {
+    const service = new AgentService({ agentId: 'agent-1' });
+    service.loadChatHistory([
+      {
+        role: 'user',
+        content: '已被删除的旧任务',
+        createdAt: 1,
+      },
+      {
+        role: 'assistant',
+        content: '已被删除的旧回复',
+        createdAt: 2,
+      },
+    ]);
+
+    const session = service.getOrCreateSession();
+    expect(session.getMessages()).toHaveLength(2);
+
+    service.loadChatHistory([]);
+
+    expect(session.getMessages()).toEqual([]);
+  });
 });
