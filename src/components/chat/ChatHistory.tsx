@@ -18,6 +18,12 @@ import { MessageBubble } from './MessageBubble';
 import { StreamingMessage } from './StreamingMessage';
 import { MultiSelectBar } from './MultiSelectBar';
 import { TextContextMenu, useTextContextMenu } from '@components/ui';
+import { getPlanningAutoScrollSignal } from './planningAutoScroll';
+import {
+  cancelThrottledScroll,
+  scheduleThrottledScroll,
+  type ScrollThrottleState,
+} from './streamingAutoScroll';
 import { useI18n } from '@/i18n';
 import type { ChatMode } from '@/types/chatMode';
 import type { UIMessage } from '@/types/message';
@@ -112,7 +118,7 @@ export const ChatHistory = memo(function ChatHistory({
   }, []);
 
   // 滚动节流 ref（流式内容变化用）
-  const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollThrottleRef = useRef<ScrollThrottleState>({ timer: null });
   // 滚动节流 ref（FSM 可视化内容变化用，独立于流式节流避免互斥）
   const fsmScrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -134,19 +140,17 @@ export const ChatHistory = memo(function ChatHistory({
 
   // 流式内容变化时节流滚动（每 100ms 最多滚动一次）
   useEffect(() => {
-    if (isStreaming && !scrollThrottleRef.current) {
-      scrollThrottleRef.current = setTimeout(() => {
-        scrollToBottom('auto');
-        scrollThrottleRef.current = null;
-      }, 100);
-    }
-    return () => {
-      if (scrollThrottleRef.current) {
-        clearTimeout(scrollThrottleRef.current);
-        scrollThrottleRef.current = null;
-      }
-    };
+    if (!isStreaming) return;
+    scheduleThrottledScroll(scrollThrottleRef.current, () => scrollToBottom('auto'), 100);
   }, [streamingContent, streamingReasoningContent, isStreaming, scrollToBottom]);
+
+  // 仅在组件卸载时取消任务；不能在每个 chunk 更新时清除，否则持续流会无限推迟滚动。
+  useEffect(
+    () => () => {
+      cancelThrottledScroll(scrollThrottleRef.current);
+    },
+    []
+  );
 
   // Planning 模式下监听 FSM 可视化内容变化（MB Thought / SA Observations），
   // 驱动外层聊天容器自动滚动到底部。
@@ -155,22 +159,14 @@ export const ChatHistory = memo(function ChatHistory({
   useEffect(() => {
     if (mode !== 'planning' || !contextId) return;
 
-    let prevSignal = 0;
+    const initialContext = useFSMVisualizationStore.getState().contextStates[contextId];
+    let prevSignal = initialContext ? getPlanningAutoScrollSignal(initialContext) : null;
 
     const unsubscribe = useFSMVisualizationStore.subscribe((state) => {
       const ctx = state.contextStates[contextId];
       if (!ctx) return;
 
-      // 计算内容变化信号：
-      // - thinkingSteps 数量 × 大基数 = 新步骤出现
-      // - 最后一步三阶段内容总长度 = thinking 流式内容持续增长
-      // - observations 数量 × 中基数 = SA 新工具调用/思考文字
-      const lastStep = ctx.thinkingSteps[ctx.thinkingSteps.length - 1];
-      const contentLen = lastStep
-        ? lastStep.analyzing.length + lastStep.planning.length + lastStep.decided.length
-        : 0;
-      const signal =
-        ctx.thinkingSteps.length * 10000 + contentLen + ctx.subAgentObservations.length * 100;
+      const signal = getPlanningAutoScrollSignal(ctx);
 
       if (signal !== prevSignal) {
         prevSignal = signal;

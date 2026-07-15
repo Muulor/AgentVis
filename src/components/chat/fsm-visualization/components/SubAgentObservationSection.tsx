@@ -11,7 +11,7 @@
  * - 运行态采用无外框布局，交给消息流自然滚动
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -325,6 +325,7 @@ function UserInterventionIndicator({ message }: { message: string }) {
 function SubAgentReasoningTrace({ trace }: { trace: ReasoningTraceView }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(trace.isStreaming ?? true);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (trace.isStreaming) {
@@ -333,6 +334,11 @@ function SubAgentReasoningTrace({ trace }: { trace: ReasoningTraceView }) {
       setExpanded(false);
     }
   }, [trace.completed, trace.isStreaming]);
+
+  useEffect(() => {
+    if (!expanded || !trace.isStreaming || !bodyRef.current) return;
+    bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [expanded, trace.content, trace.isStreaming]);
 
   const toggleExpanded = () => setExpanded((value) => !value);
   const toggleLabel = expanded
@@ -363,7 +369,7 @@ function SubAgentReasoningTrace({ trace }: { trace: ReasoningTraceView }) {
         </button>
       </Tooltip>
       {expanded && (
-        <div className={styles.reasoningTraceBody}>
+        <div ref={bodyRef} className={styles.reasoningTraceBody}>
           {trace.content || t('chat.subAgentReasoningTitle')}
         </div>
       )}

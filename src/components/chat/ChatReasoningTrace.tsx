@@ -26,6 +26,7 @@ export function ChatReasoningTrace({
   const { t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(defaultExpanded ?? (isStreaming && !answerStarted));
   const autoCollapsedRef = useRef(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const normalizedContent = content.trim();
 
   useEffect(() => {
@@ -42,6 +43,11 @@ export function ChatReasoningTrace({
       autoCollapsedRef.current = true;
     }
   }, [answerStarted, isStreaming, normalizedContent]);
+
+  useEffect(() => {
+    if (!isExpanded || !isStreaming || answerStarted || !bodyRef.current) return;
+    bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+  }, [answerStarted, isExpanded, isStreaming, normalizedContent]);
 
   if (!normalizedContent) {
     return null;
@@ -73,7 +79,11 @@ export function ChatReasoningTrace({
         </button>
       </Tooltip>
 
-      {isExpanded && <div className={styles.body}>{normalizedContent}</div>}
+      {isExpanded && (
+        <div ref={bodyRef} className={styles.body}>
+          {normalizedContent}
+        </div>
+      )}
     </div>
   );
 }

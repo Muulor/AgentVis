@@ -140,6 +140,8 @@ chat/
 ├── MessageActions.module.css     # 操作按钮样式
 ├── MessageBubble.tsx             # 消息气泡组件（支持多选模式、多文件项目预览收集）
 ├── MessageBubble.module.css      # 消息气泡样式（含 multiFilePreviewBtn）
+├── planningAutoScroll.ts         # Task 模式自动滚动信号
+├── streamingAutoScroll.ts        # 流式消息自动滚动节流器
 ├── PlanningTraceDetails.tsx      # Task 模式持久化执行详情轻量收纳组件
 ├── PlanningTraceDetails.module.css # Task 模式执行详情收纳样式
 ├── ModeSelector.tsx              # Chat / Task 模式选择器（内部 chat / planning）
