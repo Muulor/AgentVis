@@ -100,8 +100,8 @@ interface FileListProps {
   selectedFileId: string | null;
   /** 选择文件回调 */
   onSelectFile: (file: FileItemData) => void;
-  /** 文件删除后回调（用于清理预览状态） */
-  onFileDeleted?: (fileId: string) => void;
+  /** 文件删除后回调（携带物理路径，用于同步清理预览与 Diff 状态） */
+  onFileDeleted?: (file: FileItemData) => void | Promise<void>;
 }
 
 /**
@@ -486,25 +486,37 @@ export function FileList({
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
 
-    const deletedFileId = deleteTarget.id;
+    const deletedTarget = deleteTarget;
     setIsDeleting(true);
     try {
       await invoke('file_move_to_system_trash', {
         agentId,
-        filePath: deleteTarget.filePath,
+        filePath: deletedTarget.filePath,
       });
 
-      // 刷新当前目录
-      await loadDirectory(currentPath);
-
-      // 通知父组件清理预览
+      // 删除成功后立即同步状态，再与目录刷新并行等待。这样删除时间边界不会被目录 I/O
+      // 推迟，避免同路径快速重建出的新 Diff 被当成旧记录清理。
+      let stateSyncPromise: Promise<void> = Promise.resolve();
       if (onFileDeleted) {
-        onFileDeleted(deletedFileId);
+        try {
+          stateSyncPromise = Promise.resolve(onFileDeleted(deletedTarget)).catch(
+            (callbackError: unknown) => {
+              // 文件移动已经成功，后续状态同步失败不能被误报为“删除失败”。
+              logger.warn('[FileList] 文件删除后的状态同步失败:', callbackError);
+            }
+          );
+        } catch (callbackError) {
+          // 文件移动已经成功，后续状态同步失败不能被误报为“删除失败”。
+          logger.warn('[FileList] 文件删除后的状态同步失败:', callbackError);
+        }
       }
+      await Promise.all([loadDirectory(currentPath), stateSyncPromise]);
 
       toast({
         type: 'success',
-        title: deleteTarget.isDirectory ? t('file.folderMovedToTrash') : t('file.fileMovedToTrash'),
+        title: deletedTarget.isDirectory
+          ? t('file.folderMovedToTrash')
+          : t('file.fileMovedToTrash'),
       });
       setDeleteTarget(null);
     } catch (err) {

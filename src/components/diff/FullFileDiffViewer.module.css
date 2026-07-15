@@ -101,7 +101,7 @@
 
 .acceptAllBtn,
 .rejectAllBtn {
-  padding: 8px 20px;
+  padding: 8px 12px;
   border-radius: var(--radius-button);
   font-size: 13px;
   font-weight: 500;
@@ -110,6 +110,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
   /* 明确的边框按钮样式 */
   background: transparent;
   border: 1px solid var(--color-text-tertiary) !important;

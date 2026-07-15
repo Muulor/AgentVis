@@ -183,15 +183,17 @@ pub async fn update_modification_statuses(
 pub async fn update_active_snapshot(
     pool: &Pool<Sqlite>,
     context_id: &str,
+    document_id: &str,
     snapshot_id: Option<&str>,
 ) -> AppResult<()> {
     let now = Utc::now().timestamp_millis();
     sqlx::query(
-        "UPDATE diff_records SET active_snapshot_id = ?, updated_at = ? WHERE context_id = ? AND status = 'pending'"
+        "UPDATE diff_records SET active_snapshot_id = ?, updated_at = ? WHERE context_id = ? AND document_id = ? AND status = 'pending'"
     )
     .bind(snapshot_id)
     .bind(now)
     .bind(context_id)
+    .bind(document_id)
     .execute(pool)
     .await
     .map_err(|e| AppError::Database(e.to_string()))?;
@@ -220,4 +222,82 @@ pub async fn update_message_id(
     .await
     .map_err(|e| AppError::Database(e.to_string()))?;
     Ok(result.rows_affected())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::schema::{create_pool, initialize_schema};
+
+    #[tokio::test]
+    async fn update_active_snapshot_only_updates_pending_records_for_target_document() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        initialize_schema(&pool).await.unwrap();
+
+        let target_pending = create(
+            &pool,
+            &DiffRecord::new("context-a", "message-1", "document-a", "before", "after"),
+        )
+        .await
+        .unwrap();
+        let other_document_pending = create(
+            &pool,
+            &DiffRecord::new("context-a", "message-2", "document-b", "before", "after"),
+        )
+        .await
+        .unwrap();
+        let other_context_pending = create(
+            &pool,
+            &DiffRecord::new("context-b", "message-3", "document-a", "before", "after"),
+        )
+        .await
+        .unwrap();
+        let target_applied = create(
+            &pool,
+            &DiffRecord::new("context-a", "message-4", "document-a", "before", "after"),
+        )
+        .await
+        .unwrap();
+        update_status(&pool, &target_applied.id, DiffRecordStatus::Applied)
+            .await
+            .unwrap();
+
+        update_active_snapshot(&pool, "context-a", "document-a", Some("snapshot-a"))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            get_by_id(&pool, &target_pending.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .active_snapshot_id
+                .as_deref(),
+            Some("snapshot-a")
+        );
+        assert_eq!(
+            get_by_id(&pool, &other_document_pending.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .active_snapshot_id,
+            None
+        );
+        assert_eq!(
+            get_by_id(&pool, &other_context_pending.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .active_snapshot_id,
+            None
+        );
+        assert_eq!(
+            get_by_id(&pool, &target_applied.id)
+                .await
+                .unwrap()
+                .unwrap()
+                .active_snapshot_id,
+            None
+        );
+    }
 }

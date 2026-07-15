@@ -37,6 +37,7 @@ import { MentionInput } from './MentionInput';
 import { AttachmentButton } from './AttachmentButton';
 import { ProjectPathButton } from './ProjectPathButton';
 import { AttachmentPreview } from './AttachmentPreview';
+import { Tooltip } from '@components/ui/Tooltip';
 import {
   filterSkillSlashOptions,
   findSkillSlashTrigger,
@@ -1826,29 +1827,35 @@ export const ChatInput = memo(function ChatInput({
                 <div className={styles.skillDropdownHeader}>{t('chat.skillSlashHeader')}</div>
                 {filteredSkillOptions.length > 0 ? (
                   filteredSkillOptions.map((skill, index) => (
-                    <button
+                    <Tooltip
                       key={skill.name}
-                      className={styles.skillOption}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selectSkill(skill)}
-                      data-selected={index === selectedSkillIndex}
-                      title={skill.description}
+                      content={skill.description}
+                      multiline
+                      side="right"
+                      align="start"
                     >
-                      <span className={styles.skillOptionIcon}>/</span>
-                      <span className={styles.skillOptionText}>
-                        <span className={styles.skillOptionName}>{skill.name}</span>
-                        {skill.description && (
-                          <span className={styles.skillOptionDesc}>{skill.description}</span>
-                        )}
-                      </span>
-                      {skill.mode && (
-                        <span className={styles.skillOptionMode}>
-                          {skill.mode === 'guide'
-                            ? t('chat.skillModeGuide')
-                            : t('chat.skillModeScript')}
+                      <button
+                        className={styles.skillOption}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectSkill(skill)}
+                        data-selected={index === selectedSkillIndex}
+                      >
+                        <span className={styles.skillOptionIcon}>/</span>
+                        <span className={styles.skillOptionText}>
+                          <span className={styles.skillOptionName}>{skill.name}</span>
+                          {skill.description && (
+                            <span className={styles.skillOptionDesc}>{skill.description}</span>
+                          )}
                         </span>
-                      )}
-                    </button>
+                        {skill.mode && (
+                          <span className={styles.skillOptionMode}>
+                            {skill.mode === 'guide'
+                              ? t('chat.skillModeGuide')
+                              : t('chat.skillModeScript')}
+                          </span>
+                        )}
+                      </button>
+                    </Tooltip>
                   ))
                 ) : (
                   <div className={styles.skillEmpty}>{t('chat.skillSlashEmpty')}</div>
@@ -1862,22 +1869,22 @@ export const ChatInput = memo(function ChatInput({
                   <div className={styles.skillEmpty}>{t('chat.fileMentionLoading')}</div>
                 ) : filteredFileOptions.length > 0 ? (
                   filteredFileOptions.map((file, index) => (
-                    <button
-                      key={file.id}
-                      className={styles.skillOption}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selectFile(file)}
-                      data-selected={index === selectedFileIndex}
-                      title={file.path}
-                    >
-                      <span className={styles.skillOptionIcon}>
-                        {file.kind === 'folder' ? <Folder size={14} /> : <FileText size={14} />}
-                      </span>
-                      <span className={styles.skillOptionText}>
-                        <span className={styles.skillOptionName}>{file.label}</span>
-                        <span className={styles.skillOptionDesc}>{file.relativePath}</span>
-                      </span>
-                    </button>
+                    <Tooltip key={file.id} content={file.path} multiline side="right" align="start">
+                      <button
+                        className={styles.skillOption}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectFile(file)}
+                        data-selected={index === selectedFileIndex}
+                      >
+                        <span className={styles.skillOptionIcon}>
+                          {file.kind === 'folder' ? <Folder size={14} /> : <FileText size={14} />}
+                        </span>
+                        <span className={styles.skillOptionText}>
+                          <span className={styles.skillOptionName}>{file.label}</span>
+                          <span className={styles.skillOptionDesc}>{file.relativePath}</span>
+                        </span>
+                      </button>
+                    </Tooltip>
                   ))
                 ) : (
                   <div className={styles.skillEmpty}>{t('chat.fileMentionEmpty')}</div>

@@ -97,10 +97,17 @@ pub async fn diff_record_revert_by_message(
 pub async fn diff_record_update_active_snapshot(
     state: State<'_, AppState>,
     context_id: String,
+    document_id: String,
     snapshot_id: Option<String>,
 ) -> AppResult<()> {
     let db = state.db.lock().await;
-    diff_record_repo::update_active_snapshot(db.pool(), &context_id, snapshot_id.as_deref()).await
+    diff_record_repo::update_active_snapshot(
+        db.pool(),
+        &context_id,
+        &document_id,
+        snapshot_id.as_deref(),
+    )
+    .await
 }
 
 /// 更新 Diff 记录的 message_id

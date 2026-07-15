@@ -26,7 +26,148 @@ const logger = getLogger('diffStore');
  * 避免昂贵的 ContentMatcher.fuzzyMatch() 导致的 5 分钟阻塞叠加。
  */
 const loadModificationsGeneration = new Map<string, number>();
+const activeModificationLoadGenerations = new Map<string, number>();
+const latestModificationLoadTargets = new Map<string, { generation: number; content: string }>();
+const snapshotRollbackGenerations = new Map<string, number>();
 const persistedDiffLoadsInFlight = new Set<string>();
+
+interface DeletedPathMarker {
+  contextId: string;
+  deletedPath: string;
+  isDirectory: boolean;
+}
+
+/** 只保留最近的删除标记，覆盖“删除先于 Diff 回调启动”的短时竞态且限制内存增长。 */
+const MAX_DELETED_PATH_MARKERS = 256;
+const deletedPathMarkers: DeletedPathMarker[] = [];
+
+/**
+ * 规范化用于身份比较的文件路径。
+ *
+ * Diff 的 documentId 来自文件写入链路，而删除事件来自文件列表，两者在 Windows 上
+ * 可能使用不同的分隔符或大小写。这里只做比较用规范化，不改变实际读写路径。
+ */
+function normalizePathForComparison(filePath: string): string {
+  const hasUncPrefix = filePath.startsWith('\\\\') || filePath.startsWith('//');
+  let normalized = filePath.replace(/\\/g, '/').replace(/\/+/g, '/');
+  if (hasUncPrefix && !normalized.startsWith('//')) {
+    normalized = `/${normalized}`;
+  }
+
+  const driveMatch = normalized.match(/^([A-Za-z]:)(?:\/|$)/);
+  const isUncPath = normalized.startsWith('//');
+  const isUnixAbsolute = !isUncPath && normalized.startsWith('/');
+  const root = driveMatch?.[1] ?? (isUncPath ? '//' : isUnixAbsolute ? '/' : '');
+  const remainder = driveMatch
+    ? normalized.slice(driveMatch[0].length)
+    : isUncPath
+      ? normalized.slice(2)
+      : isUnixAbsolute
+        ? normalized.slice(1)
+        : normalized;
+  const segments: string[] = [];
+  const lockedSegments = isUncPath ? 2 : 0;
+
+  for (const segment of remainder.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length > lockedSegments && segments[segments.length - 1] !== '..') {
+        segments.pop();
+      } else if (!root) {
+        segments.push(segment);
+      }
+      continue;
+    }
+    segments.push(segment);
+  }
+
+  normalized =
+    root === '//'
+      ? `//${segments.join('/')}`
+      : root === '/'
+        ? `/${segments.join('/')}`
+        : driveMatch
+          ? `${root}${segments.length > 0 ? `/${segments.join('/')}` : ''}`
+          : segments.join('/');
+
+  return driveMatch || isUncPath ? normalized.toLowerCase() : normalized;
+}
+
+/** 判断 documentId 是否就是被删除路径，或位于被删除目录之下。 */
+function isPathDeleted(documentId: string, deletedPath: string, isDirectory: boolean): boolean {
+  const normalizedDocumentId = normalizePathForComparison(documentId);
+  const normalizedDeletedPath = normalizePathForComparison(deletedPath);
+
+  if (!normalizedDeletedPath) return false;
+  if (normalizedDocumentId === normalizedDeletedPath) return true;
+  if (!isDirectory) return false;
+  if (normalizedDeletedPath === '/') return normalizedDocumentId.startsWith('/');
+  return normalizedDocumentId.startsWith(`${normalizedDeletedPath}/`);
+}
+
+/** 使目标路径尚未完成的 loadModifications 结果失效，防止删除后被迟到结果重新插入。 */
+function invalidateModificationLoads(
+  contextId: string,
+  deletedPath: string,
+  isDirectory: boolean
+): boolean {
+  const contextPrefix = `${contextId}::`;
+  let invalidatedActiveLoad = false;
+  for (const [generationKey, generation] of loadModificationsGeneration) {
+    if (!generationKey.startsWith(contextPrefix)) continue;
+    const documentId = generationKey.slice(contextPrefix.length);
+    if (isPathDeleted(documentId, deletedPath, isDirectory)) {
+      if (activeModificationLoadGenerations.has(generationKey)) {
+        invalidatedActiveLoad = true;
+      }
+      loadModificationsGeneration.set(generationKey, generation + 1);
+    }
+  }
+  return invalidatedActiveLoad;
+}
+
+function hasActiveModificationLoadForContext(
+  contextId: string,
+  excludedGenerationKey?: string,
+  excludedGeneration?: number
+): boolean {
+  const contextPrefix = `${contextId}::`;
+  for (const [generationKey, generation] of activeModificationLoadGenerations) {
+    if (!generationKey.startsWith(contextPrefix)) continue;
+    if (generationKey === excludedGenerationKey && generation === excludedGeneration) continue;
+    return true;
+  }
+  return false;
+}
+
+function markDeletedPath(contextId: string, deletedPath: string, isDirectory: boolean): void {
+  const normalizedDeletedPath = normalizePathForComparison(deletedPath);
+  const duplicateIndex = deletedPathMarkers.findIndex(
+    (marker) =>
+      marker.contextId === contextId &&
+      marker.deletedPath === normalizedDeletedPath &&
+      marker.isDirectory === isDirectory
+  );
+  if (duplicateIndex >= 0) {
+    deletedPathMarkers.splice(duplicateIndex, 1);
+  }
+  deletedPathMarkers.push({
+    contextId,
+    deletedPath: normalizedDeletedPath,
+    isDirectory,
+  });
+  if (deletedPathMarkers.length > MAX_DELETED_PATH_MARKERS) {
+    deletedPathMarkers.shift();
+  }
+}
+
+function wasPathDeleted(contextId: string, documentId: string): boolean {
+  return deletedPathMarkers.some(
+    (marker) =>
+      marker.contextId === contextId &&
+      isPathDeleted(documentId, marker.deletedPath, marker.isDirectory)
+  );
+}
 
 // ==================== 常量 ====================
 
@@ -464,6 +605,17 @@ function buildModificationStatusMap(
 
 export type DiffMode = 'normal' | 'diff';
 
+/** Viewer 与审批逻辑必须同步切换的一组 Diff 投影字段。 */
+interface DiffProjectionState {
+  baseContent: string;
+  targetContent: string;
+  preAppliedContent?: string;
+  xml: string;
+  modifications: ModificationApplyResult[];
+  activeSnapshotId: string | null;
+  mode: DiffMode;
+}
+
 /**
  * 历史操作记录
  * 用于 Undo/Redo 栈
@@ -485,6 +637,10 @@ export interface HistoryEntry {
   pendingModificationsBefore?: ModificationApplyResult[];
   /** 操作后的修改列表状态 */
   pendingModificationsAfter?: ModificationApplyResult[];
+  /** 回滚类操作前的完整 Diff 投影，用于 Undo 后恢复同一套坐标基准 */
+  projectionBefore?: DiffProjectionState;
+  /** 回滚类操作后的完整 Diff 投影，用于 Redo 后恢复同一套坐标基准 */
+  projectionAfter?: DiffProjectionState;
 }
 
 /**
@@ -502,6 +658,8 @@ export interface FileDiffEntry {
   snapshots: DocumentSnapshot[];
   undoStack: HistoryEntry[];
   redoStack: HistoryEntry[];
+  /** 当前文件激活的历史快照；必须按文件保存，避免多文件切换串线 */
+  activeSnapshotId: string | null;
 }
 
 /**
@@ -587,6 +745,7 @@ function extractFileDiffEntry(ctx: ContextDiffState): FileDiffEntry | null {
     snapshots: ctx.snapshots,
     undoStack: ctx.undoStack,
     redoStack: ctx.redoStack,
+    activeSnapshotId: ctx.activeSnapshotId,
   };
 }
 
@@ -608,7 +767,218 @@ function applyFileDiffEntry(ctx: ContextDiffState, entry: FileDiffEntry): Contex
     undoStack: entry.undoStack,
     redoStack: entry.redoStack,
     activeFileId: entry.documentId,
+    activeSnapshotId: entry.activeSnapshotId,
   };
+}
+
+const ORIGINAL_FILE_VERSION_DESCRIPTION = 'Original file version';
+
+/**
+ * 历史列表按时间倒序，历史面板的语义是“前一版本 → 当前版本”。目标存在时优先取
+ * 它后面的同文档快照；目标是原始版本时以自身为空 Diff 基准。旧数据缺项时才回退
+ * 到显式原始快照或最旧保留项。
+ */
+function findSnapshotPreviewBase(
+  snapshots: DocumentSnapshot[],
+  targetSnapshot?: DocumentSnapshot
+): DocumentSnapshot | null {
+  if (targetSnapshot) {
+    if (targetSnapshot.description === ORIGINAL_FILE_VERSION_DESCRIPTION) return targetSnapshot;
+    const targetIndex = snapshots.findIndex((snapshot) => snapshot.id === targetSnapshot.id);
+    const previousSnapshot = targetIndex >= 0 ? snapshots[targetIndex + 1] : undefined;
+    if (previousSnapshot?.documentId === targetSnapshot.documentId) return previousSnapshot;
+
+    return (
+      snapshots.find(
+        (snapshot) =>
+          snapshot.documentId === targetSnapshot.documentId &&
+          snapshot.description === ORIGINAL_FILE_VERSION_DESCRIPTION
+      ) ?? null
+    );
+  }
+
+  return (
+    snapshots.find((snapshot) => snapshot.description === ORIGINAL_FILE_VERSION_DESCRIPTION) ??
+    snapshots[snapshots.length - 1] ??
+    null
+  );
+}
+
+function isModificationStatus(value: unknown): value is ModificationApplyResult['status'] {
+  return typeof value === 'string' && ['pending', 'applied', 'rejected', 'failed'].includes(value);
+}
+
+function resetGeneratedProjectionStatuses(
+  modifications: ModificationApplyResult[]
+): ModificationApplyResult[] {
+  return modifications.map((modification) => ({
+    ...modification,
+    status:
+      modification.status === 'failed' || !modification.matchResult.success ? 'failed' : 'pending',
+  }));
+}
+
+/**
+ * 快照状态按旧 XML 的修改块索引保存；动态历史预览会合成为新的整文件修改块。
+ * 只有拓扑数量和每个索引都兼容时才能复用，否则保持 pending 让用户看到真实内容差异，
+ * 避免把旧 index=0 的 applied/rejected 错套到整个文件。
+ */
+function applyCompatibleModificationStatuses(
+  modifications: ModificationApplyResult[],
+  statuses: Record<string, string> | undefined,
+  source: string
+): ModificationApplyResult[] {
+  if (!statuses) return resetGeneratedProjectionStatuses(modifications);
+
+  const statusKeys = Object.keys(statuses);
+  const isCompatible =
+    statusKeys.length === modifications.length &&
+    modifications.every((_, index) => {
+      const status = statuses[String(index)];
+      return status !== undefined && isModificationStatus(status);
+    });
+
+  if (!isCompatible) {
+    logger.warn(
+      `[diffStore] ${source} 的快照状态拓扑与动态 Diff 不兼容，保持 ${modifications.length} 个修改块为 pending`
+    );
+    return resetGeneratedProjectionStatuses(modifications);
+  }
+
+  return modifications.map((modification, index) => ({
+    ...modification,
+    status: statuses[String(index)] as ModificationApplyResult['status'],
+  }));
+}
+
+function parseModificationStatuses(
+  statusesJson: string | undefined,
+  source: string
+): Record<string, string> | undefined {
+  if (!statusesJson) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(statusesJson);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new TypeError('modification statuses must be an object');
+    }
+
+    const statuses: Record<string, string> = {};
+    for (const [index, status] of Object.entries(parsed)) {
+      if (!isModificationStatus(status)) {
+        throw new TypeError(`invalid modification status at index ${index}`);
+      }
+      statuses[index] = status;
+    }
+    return statuses;
+  } catch (error) {
+    logger.warn(`[diffStore] ${source} 的快照状态 JSON 无法解析，保持 preview 默认状态:`, error);
+    return undefined;
+  }
+}
+
+interface SnapshotSourceRecord {
+  documentId: string;
+  originalContent: string;
+  modifiedContent: string;
+  xmlModification: string | null;
+  modificationStatuses: string | null;
+}
+
+/** 内容相同的往返回写无法仅凭快照内容确定来源；歧义时保守使用相邻快照投影。 */
+function findUniqueSnapshotSourceRecord<T extends SnapshotSourceRecord>(
+  records: T[],
+  documentId: string,
+  targetContent: string,
+  source: string
+): T | undefined {
+  const matches = records.filter(
+    (record) =>
+      record.documentId === documentId &&
+      record.modifiedContent === targetContent &&
+      Boolean(record.xmlModification)
+  );
+  if (matches.length > 1) {
+    logger.warn(`[diffStore] ${source} 匹配到多个同内容源 Diff，改用相邻快照兜底`);
+    return undefined;
+  }
+  return matches[0];
+}
+
+/**
+ * 将快照 preview 的基准、目标、XML 与修改块作为不可拆分的状态单元提交，
+ * 并同步当前多文件条目，避免 Viewer、审批重建和文件切换使用不同轮次的基准。
+ */
+function syncActiveFileEntry(ctx: ContextDiffState): ContextDiffState {
+  const activeEntry = extractFileDiffEntry(ctx);
+  if (!activeEntry) return ctx;
+
+  const fileEntries = new Map(ctx.fileEntries);
+  fileEntries.set(activeEntry.documentId, activeEntry);
+  return { ...ctx, fileEntries };
+}
+
+function applySnapshotDiffProjection(
+  ctx: ContextDiffState,
+  projection: DiffProjectionState
+): ContextDiffState {
+  const projectedContext: ContextDiffState = {
+    ...ctx,
+    content: projection.targetContent,
+    originalContent: projection.baseContent,
+    preAppliedContent: projection.preAppliedContent ?? projection.targetContent,
+    originalXml: projection.xml,
+    pendingModifications: projection.modifications,
+    activeSnapshotId: projection.activeSnapshotId,
+    mode: projection.mode,
+  };
+  return syncActiveFileEntry(projectedContext);
+}
+
+/**
+ * 旧写入完成时若已有新操作接管，按最新 generation 重写目标内容；补偿期间 generation
+ * 再次变化则重试，避免补偿本身覆盖更晚一轮写入。连续高频变化时有界退出并记录错误。
+ */
+async function compensateSupersededFileWrite(
+  contextId: string,
+  documentId: string,
+  generationKey: string,
+  supersededLoadGeneration: number | undefined,
+  getContext: () => ContextDiffState | undefined,
+  writeContent: (content: string) => Promise<void>
+): Promise<void> {
+  const maxAttempts = 3;
+  const resolveCurrentTarget = (observedLoadGeneration: number | undefined) => {
+    const latestLoadTarget = latestModificationLoadTargets.get(generationKey);
+    const currentCtx = getContext();
+    return latestLoadTarget !== undefined &&
+      activeModificationLoadGenerations.get(generationKey) === observedLoadGeneration &&
+      latestLoadTarget.generation === observedLoadGeneration &&
+      latestLoadTarget.generation !== supersededLoadGeneration
+      ? latestLoadTarget.content
+      : currentCtx?.documentId === documentId
+        ? currentCtx.content
+        : currentCtx?.fileEntries.get(documentId)?.content;
+  };
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (wasPathDeleted(contextId, documentId)) return;
+
+    const observedLoadGeneration = loadModificationsGeneration.get(generationKey);
+    const observedMutationGeneration = snapshotRollbackGenerations.get(generationKey);
+    const supersedingContent = resolveCurrentTarget(observedLoadGeneration);
+    if (supersedingContent === undefined) return;
+
+    await writeContent(supersedingContent);
+    const latestLoadGeneration = loadModificationsGeneration.get(generationKey);
+    const generationsUnchanged =
+      latestLoadGeneration === observedLoadGeneration &&
+      snapshotRollbackGenerations.get(generationKey) === observedMutationGeneration;
+    if (generationsUnchanged && resolveCurrentTarget(latestLoadGeneration) === supersedingContent) {
+      return;
+    }
+  }
+
+  logger.error('[diffStore] 迟到文件写入补偿期间状态持续变化，已达到重试上限:', documentId);
 }
 
 interface DiffState {
@@ -675,6 +1045,12 @@ interface DiffActions {
   ) => Array<{ documentId: string; fileName: string; pendingCount: number }>;
   /** 将当前活跃文件的顶层状态同步回 fileEntries */
   syncActiveFileToEntries: (contextId: string) => void;
+  /** 文件/目录删除成功后，使对应的内存 Diff 和 pending 持久化记录失效 */
+  discardDiffsForDeletedPath: (
+    contextId: string,
+    deletedPath: string,
+    isDirectory: boolean
+  ) => Promise<void>;
 
   // ==================== 快照操作 ====================
   /** 加载快照列表 */
@@ -842,6 +1218,10 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
       // 恢复所有文档的 Diff（多文件支持）
       for (const [docId, record] of latestByDoc) {
         if (!record.xmlModification) continue;
+        if (wasPathDeleted(contextId, record.documentId)) {
+          logger.trace('[diffStore] 跳过本次会话中已删除路径的持久化 Diff:', record.documentId);
+          continue;
+        }
 
         // 文件存在性前置校验：用户可能在未审批 diff 的情况下手动删除了工作目录中的文件，
         // 此时 diff_record 仍为 pending 状态。若不检查文件存在性，恢复流程会以 DB 数据
@@ -870,7 +1250,9 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
         let activeSnapshotStatusesJson: string | null = null;
 
         // 尝试从数据库快照获取内容
-        if (record.activeSnapshotId) {
+        const activeSnapshotId = record.activeSnapshotId;
+        let validatedActiveSnapshotId: string | null = null;
+        if (activeSnapshotId) {
           try {
             interface SnapshotData {
               id: string;
@@ -881,16 +1263,24 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
               createdAt: number;
             }
             const snapshot = await invoke<SnapshotData | null>('snapshot_get', {
-              id: record.activeSnapshotId,
+              id: activeSnapshotId,
             });
-            if (snapshot) {
+            if (snapshot?.documentId === record.documentId) {
               currentContent = snapshot.content;
+              validatedActiveSnapshotId = activeSnapshotId;
               // 优先使用快照中保存的修改块状态，而非 diff_record 的最终状态
               // 原因：diff_record.modificationStatuses 记录的是截止上次操作的全局状态，
               // 但用户可能在多次回滚后停留在某个历史版本，该版本对应的精确状态
               // 只保存在 activeSnapshot.modificationStatusesJson 中
               activeSnapshotStatusesJson = snapshot.modificationStatusesJson;
-              logger.trace('[diffStore]  使用快照内容用于状态推断:', record.activeSnapshotId);
+              logger.trace('[diffStore]  使用快照内容用于状态推断:', activeSnapshotId);
+            } else if (snapshot) {
+              // 旧版后端曾按 context 批量写 active_snapshot_id，可能把文件 A 的快照
+              // 关联到文件 B。恢复端必须校验 documentId，避免把跨文件内容当作当前基准。
+              logger.warn(
+                '[diffStore] activeSnapshot 属于其他文档，忽略旧污染关联:',
+                activeSnapshotId
+              );
             }
           } catch {
             logger.warn('[diffStore]  无法读取快照，尝试读取文件');
@@ -947,9 +1337,16 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           `[diffStore]  重启恢复使用状态来源: ${activeSnapshotStatusesJson ? 'activeSnapshot' : record.modificationStatuses ? 'diffRecord' : 'none'}`
         );
 
+        // 上述快照/文件读取会让出事件循环；删除可能发生在最初存在性检查之后。
+        if (wasPathDeleted(contextId, record.documentId)) {
+          logger.trace('[diffStore] 持久化 Diff 在加载期间被删除，停止恢复:', record.documentId);
+          continue;
+        }
+
         // 使用原始内容解析 XML（得到完整 Diff 列表）
         // 但需要传递当前内容用于状态推断
-        await get().loadModifications(
+        const restoreGenerationKey = `${contextId}::${record.documentId}`;
+        const restorePromise = get().loadModifications(
           contextId,
           record.documentId,
           record.originalContent, // 用原始内容解析 XML，确保得到完整 Diff 列表
@@ -961,112 +1358,169 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           restoredPreAppliedContent, // preAppliedContent: 优先使用磁盘内容，兜底用 DB 记录
           effectiveModStatuses // 优先使用 activeSnapshot 的精确状态
         );
+        // loadModifications 会在首次 await 前同步分配 generation；必须立即绑定本次恢复的
+        // generation，不能等 promise 完成后再读，否则同路径的新 Diff 可能已接管该 key。
+        const restoreGeneration = loadModificationsGeneration.get(restoreGenerationKey);
+        await restorePromise;
+        const isRestoreCurrent = () => {
+          const restoredCtx = get().diffByContext.get(contextId);
+          return (
+            restoreGeneration !== undefined &&
+            loadModificationsGeneration.get(restoreGenerationKey) === restoreGeneration &&
+            !wasPathDeleted(contextId, record.documentId) &&
+            restoredCtx?.activeFileId === record.documentId &&
+            restoredCtx.fileEntries.has(record.documentId)
+          );
+        };
+        if (!isRestoreCurrent()) {
+          logger.trace('[diffStore] 持久化 Diff 恢复结果已失效，跳过后处理:', record.documentId);
+          continue;
+        }
 
         // === 重启恢复后：使用快照动态 XML 刷新 diff preview ===
         //
         // 背景：loadModifications 固定用 record.xmlModification（最终全量 XML）做 preview，
         // 无论用户上次停留在哪个版本，diff 面板都显示"原始→最终版"的全量 diff。
         //
-        // 列出该文档所有快照，找到基准（最旧快照=版本1）和目标（activeSnapshot），
+        // 列出该文档所有快照，优先恢复目标对应的源 Diff；源记录缺失时使用相邻历史版本
         // 动态生成 XML 并重新 preview，与 rollback() 的逻辑保持一致。
-        if (record.activeSnapshotId) {
+        if (activeSnapshotId) {
           try {
             // 直接从引擎获取快照列表，避免依赖 Zustand state 的异步时序
             const snapshots = await fastApplyEngine.listSnapshots(record.documentId);
-            const targetSnap = snapshots.find((s) => s.id === record.activeSnapshotId);
-            // snapshots 已按时间倒序排列（最新在前），最后一个是最旧快照（版本1 = 原始文件）
-            const baseSnap = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+            if (!isRestoreCurrent()) continue;
+            const targetSnap = snapshots.find(
+              (snapshot) =>
+                snapshot.id === activeSnapshotId && snapshot.documentId === record.documentId
+            );
+            if (targetSnap) validatedActiveSnapshotId = targetSnap.id;
+            const sourceRecord = targetSnap
+              ? findUniqueSnapshotSourceRecord(
+                  records,
+                  record.documentId,
+                  targetSnap.content,
+                  '重启恢复 activeSnapshot'
+                )
+              : undefined;
+            const fallbackBaseSnap = findSnapshotPreviewBase(snapshots, targetSnap);
+            const projectionBaseContent =
+              sourceRecord?.originalContent ?? fallbackBaseSnap?.content;
 
-            if (targetSnap && baseSnap) {
+            if (targetSnap && projectionBaseContent !== undefined) {
               let refreshedMods: ModificationApplyResult[];
+              let projectionXml = sourceRecord?.xmlModification ?? '';
+              if (!projectionXml) {
+                const { generateWholeFileReplaceXml } =
+                  await import('../services/fast-apply/DiffToXmlConverter');
+                if (!isRestoreCurrent()) continue;
+                projectionXml = generateWholeFileReplaceXml(
+                  projectionBaseContent,
+                  targetSnap.content
+                );
+              }
+              // 只有源 Diff 命中时，状态索引才与 XML 属于同一拓扑；动态相邻快照投影一律
+              // 使用 preview 自身的 pending/failed 状态，避免把旧 index=0 套到整文件块。
+              const projectionStatuses = sourceRecord
+                ? parseModificationStatuses(
+                    activeSnapshotStatusesJson ??
+                      sourceRecord.modificationStatuses ??
+                      effectiveModStatuses,
+                    '重启恢复 activeSnapshot'
+                  )
+                : undefined;
 
-              if (targetSnap.content === baseSnap.content) {
+              if (targetSnap.content === projectionBaseContent) {
                 // 目标是原始文件版本：无任何 diff，清空修改块，切回 normal 模式
                 refreshedMods = [];
                 logger.trace('[diffStore] 重启恢复：目标版本为原始文件，清空修改块');
               } else {
-                // 动态生成"base → target"的整文件替换 XML
-                const { generateWholeFileReplaceXml } =
-                  await import('../services/fast-apply/DiffToXmlConverter');
-                const dynamicXml = generateWholeFileReplaceXml(
-                  baseSnap.content,
-                  targetSnap.content
-                );
-                const batchResult = await measureRendererWorkAsync(
-                  'diffStore.loadPersistedDiffs.preview',
-                  {
-                    contentChars: baseSnap.content.length,
-                    contentLines: countTextLines(baseSnap.content),
-                    targetChars: targetSnap.content.length,
-                    targetLines: countTextLines(targetSnap.content),
-                    xmlChars: dynamicXml.length,
-                  },
-                  () => fastApplyEngine.preview(record.documentId, baseSnap.content, dynamicXml)
-                );
+                try {
+                  const batchResult = await measureRendererWorkAsync(
+                    'diffStore.loadPersistedDiffs.preview',
+                    {
+                      contentChars: projectionBaseContent.length,
+                      contentLines: countTextLines(projectionBaseContent),
+                      targetChars: targetSnap.content.length,
+                      targetLines: countTextLines(targetSnap.content),
+                      xmlChars: projectionXml.length,
+                    },
+                    () =>
+                      fastApplyEngine.preview(
+                        record.documentId,
+                        projectionBaseContent,
+                        projectionXml
+                      )
+                  );
+                  if (!isRestoreCurrent()) continue;
 
-                // 应用 effectiveModStatuses（精确恢复各块审批状态）
-                if (effectiveModStatuses) {
-                  try {
-                    const statusMap = JSON.parse(effectiveModStatuses) as Record<string, string>;
-                    refreshedMods = batchResult.results.map((mod, idx) => {
-                      const savedStatus = statusMap[String(idx)];
-                      return savedStatus
-                        ? { ...mod, status: savedStatus as ModificationApplyResult['status'] }
-                        : mod;
-                    });
-                  } catch {
-                    refreshedMods = batchResult.results;
-                  }
-                } else {
-                  refreshedMods = batchResult.results;
+                  refreshedMods = sourceRecord
+                    ? applyCompatibleModificationStatuses(
+                        batchResult.results,
+                        projectionStatuses,
+                        '重启恢复 activeSnapshot'
+                      )
+                    : resetGeneratedProjectionStatuses(batchResult.results);
+                  logger.trace(
+                    `[diffStore] 重启恢复：${sourceRecord ? '源 Diff' : '快照兜底'} preview 刷新完成，${refreshedMods.length} 个修改`
+                  );
+                } catch (previewError) {
+                  if (!isRestoreCurrent()) continue;
+                  // 失败时关闭不可信的 Diff，但仍提交一致的目标快照投影，允许后续重新恢复。
+                  logger.error(
+                    '[diffStore] 重启恢复后 snapshot preview 失败，关闭该文件的不可信 Diff:',
+                    previewError
+                  );
+                  refreshedMods = [];
                 }
-                logger.trace(
-                  `[diffStore] 重启恢复：动态 preview 刷新完成，${refreshedMods.length} 个修改`
-                );
               }
 
-              // 同步更新 pendingModifications、mode、activeSnapshotId
+              // preview 的坐标、Viewer 底稿和审批重建基准必须作为同一投影原子更新。
               set((state) => {
                 const newMap = new Map(state.diffByContext);
                 const rehydratedCtx = newMap.get(contextId);
                 if (rehydratedCtx) {
-                  newMap.set(contextId, {
-                    ...rehydratedCtx,
-                    pendingModifications: refreshedMods,
-                    mode: refreshedMods.length === 0 ? 'normal' : rehydratedCtx.mode,
-                    activeSnapshotId: record.activeSnapshotId,
-                  });
+                  newMap.set(
+                    contextId,
+                    applySnapshotDiffProjection(rehydratedCtx, {
+                      baseContent: projectionBaseContent,
+                      targetContent: targetSnap.content,
+                      xml: projectionXml,
+                      modifications: refreshedMods,
+                      mode: refreshedMods.length === 0 ? 'normal' : rehydratedCtx.mode,
+                      activeSnapshotId: targetSnap.id,
+                    })
+                  );
                 }
                 return { diffByContext: newMap };
               });
             } else {
-              // 找不到快照时，仅恢复 activeSnapshotId
-              set((state) => {
-                const newMap = new Map(state.diffByContext);
-                const restoredCtx = newMap.get(contextId);
-                if (restoredCtx) {
-                  newMap.set(contextId, {
-                    ...restoredCtx,
-                    activeSnapshotId: record.activeSnapshotId,
-                  });
-                }
-                return { diffByContext: newMap };
-              });
+              logger.warn(
+                '[diffStore] activeSnapshot 不属于当前文档或已不存在，跳过恢复:',
+                activeSnapshotId
+              );
             }
           } catch (refreshError) {
-            // 刷新失败静默降级，仅恢复 activeSnapshotId
-            logger.warn(
-              '[diffStore] 重启恢复后 preview 刷新失败，降级为仅恢复 activeSnapshotId:',
+            logger.error(
+              '[diffStore] 重启恢复后快照投影构建失败，关闭该文件的不可信 Diff:',
               refreshError
             );
+            if (!isRestoreCurrent() || !validatedActiveSnapshotId) continue;
             set((state) => {
               const newMap = new Map(state.diffByContext);
               const restoredCtx = newMap.get(contextId);
               if (restoredCtx) {
-                newMap.set(contextId, {
-                  ...restoredCtx,
-                  activeSnapshotId: record.activeSnapshotId,
-                });
+                newMap.set(
+                  contextId,
+                  applySnapshotDiffProjection(restoredCtx, {
+                    baseContent: currentContent,
+                    targetContent: currentContent,
+                    preAppliedContent: currentContent,
+                    xml: '',
+                    modifications: [],
+                    activeSnapshotId: validatedActiveSnapshotId,
+                    mode: 'normal',
+                  })
+                );
               }
               return { diffByContext: newMap };
             });
@@ -1102,6 +1556,41 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
     const generationKey = `${contextId}::${documentId}`;
     const currentGen = (loadModificationsGeneration.get(generationKey) ?? 0) + 1;
     loadModificationsGeneration.set(generationKey, currentGen);
+    activeModificationLoadGenerations.set(generationKey, currentGen);
+    const publishLatestLoadTarget = (targetContent: string) => {
+      if (
+        loadModificationsGeneration.get(generationKey) === currentGen &&
+        activeModificationLoadGenerations.get(generationKey) === currentGen
+      ) {
+        latestModificationLoadTargets.set(generationKey, {
+          generation: currentGen,
+          content: targetContent,
+        });
+      }
+    };
+    publishLatestLoadTarget(
+      isRestoring
+        ? (currentContentForInference ?? preAppliedContent ?? content)
+        : (preAppliedContent ?? content)
+    );
+
+    const settleCancelledLoad = () => {
+      if (activeModificationLoadGenerations.get(generationKey) === currentGen) {
+        activeModificationLoadGenerations.delete(generationKey);
+      }
+      const anotherLoadIsActive = hasActiveModificationLoadForContext(contextId);
+      set((state) => {
+        const ctx = state.diffByContext.get(contextId);
+        if (!ctx) return { diffByContext: state.diffByContext };
+        const newMap = new Map(state.diffByContext);
+        newMap.set(contextId, {
+          ...ctx,
+          isLoading: anotherLoadIsActive,
+          error: null,
+        });
+        return { diffByContext: newMap };
+      });
+    };
 
     // 设置加载状态
     set((state) => {
@@ -1122,6 +1611,32 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           `[diffStore] loadModifications 跳过过期的 preview()（gen=${currentGen}，当前=${loadModificationsGeneration.get(generationKey) ?? 'unknown'}）`
         );
         return;
+      }
+
+      // 删除事件可能早于 Diff 回调启动，此时 generation 尚不存在、无法由删除动作递增。
+      // 对命中过删除标记的路径验证磁盘现状：缺失说明是迟到回调；内容不同说明路径已被
+      // 另一轮写入重新创建，旧回调也不再代表当前文件。内容一致则视为有效的新建版本。
+      if (wasPathDeleted(contextId, documentId)) {
+        if (isRestoring) {
+          logger.trace('[diffStore] 已删除路径的持久化 Diff 不再恢复');
+          settleCancelledLoad();
+          return;
+        }
+        try {
+          const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
+          const diskContent = await tauriInvoke<string>('file_read_content', {
+            filePath: documentId,
+          });
+          if (preAppliedContent !== undefined && diskContent !== preAppliedContent) {
+            logger.trace('[diffStore] 删除后的迟到 Diff 与当前磁盘内容不一致，停止加载');
+            settleCancelledLoad();
+            return;
+          }
+        } catch {
+          logger.trace('[diffStore] 删除后的迟到 Diff 指向不存在的文件，停止加载');
+          settleCancelledLoad();
+          return;
+        }
       }
 
       // === 5.3 磁盘同步校验（仅首次加载，非恢复路径）===
@@ -1150,7 +1665,12 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
             logger.warn(
               `[diffStore] 5.3: 基准内容与磁盘不同步 (传入=${content.length} 字符, 磁盘=${diskContent.length} 字符)，使用磁盘内容更新基准`
             );
+            const previousContent = content;
             content = diskContent;
+            if (preAppliedContent === previousContent) {
+              preAppliedContent = diskContent;
+            }
+            publishLatestLoadTarget(diskContent);
           }
         } catch (diskError) {
           // 读取失败时静默降级，不影响主流程
@@ -1237,6 +1757,12 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
         }
       }
 
+      // fallback preview 也可能耗时；删除事件或更新的加载请求发生后，不再继续创建快照/记录。
+      if (loadModificationsGeneration.get(generationKey) !== currentGen) {
+        logger.trace('[diffStore] loadModifications 在 fallback preview 后已失效，停止提交');
+        return;
+      }
+
       // 首次加载时创建初始快照，恢复加载时跳过（避免重复创建快照）
       if (!isRestoring) {
         // 原始文件版本：所有 mod 均为 pending（SA 尚未有任何用户审批）
@@ -1282,11 +1808,17 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
         }
       }
 
+      // 快照 I/O 期间文件可能已被删除。快照可作为历史证据保留，但不能再创建 pending Diff。
+      if (loadModificationsGeneration.get(generationKey) !== currentGen) {
+        logger.trace('[diffStore] loadModifications 在快照创建后已失效，停止提交');
+        return;
+      }
+
       // 首次加载时持久化 Diff 记录，恢复加载时跳过（避免重复记录）
       if (messageId && !isRestoring) {
         try {
           const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('diff_record_create', {
+          const createdRecord = await invoke<{ id: string }>('diff_record_create', {
             request: {
               contextId,
               messageId,
@@ -1297,6 +1829,19 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
               xmlModification: xml,
             },
           });
+
+          // 删除可能恰好发生在 DB create 执行期间；立即关闭刚创建的记录，避免重启恢复。
+          if (loadModificationsGeneration.get(generationKey) !== currentGen) {
+            try {
+              await invoke('diff_record_update_status', {
+                id: createdRecord.id,
+                status: 'reverted',
+              });
+            } catch (statusError) {
+              logger.warn('[diffStore] 失效 Diff 记录标记 reverted 失败:', statusError);
+            }
+            return;
+          }
           logger.trace('[diffStore]  Diff 记录已持久化, messageId:', messageId);
         } catch (persistError) {
           logger.error('[diffStore] 持久化 Diff 记录失败:', persistError);
@@ -1376,8 +1921,15 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
             preAppliedContent,
             finalModifications
           );
+          publishLatestLoadTarget(rebuiltContent);
           logger.trace('[diffStore]  恢复时检测到 rejected 块，已重建 content');
         }
+      }
+
+      // 状态推断/内容重建包含异步工作，最终写入 Zustand 前必须再次确认本次加载仍有效。
+      if (loadModificationsGeneration.get(generationKey) !== currentGen) {
+        logger.trace('[diffStore] loadModifications 在状态重建后已失效，停止提交');
+        return;
       }
 
       // === Stale fileEntry 清理（非恢复模式）===
@@ -1435,19 +1987,30 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
         }
       }
 
+      // stale 探测和 DB 清理同样会让出事件循环；这是最终状态提交前的竞态护栏。
+      if (loadModificationsGeneration.get(generationKey) !== currentGen) {
+        logger.trace('[diffStore] loadModifications 在最终提交前已失效，丢弃迟到结果');
+        return;
+      }
+
+      const anotherLoadIsActive = hasActiveModificationLoadForContext(
+        contextId,
+        generationKey,
+        currentGen
+      );
+      let initialContent = isRestoring
+        ? (currentContentForInference ?? preAppliedContent ?? content)
+        : (preAppliedContent ?? content);
+      if (rebuiltContent !== null) {
+        initialContent = rebuiltContent;
+      }
+      publishLatestLoadTarget(initialContent);
       set((state) => {
         const newMap = new Map(state.diffByContext);
         const ctx = newMap.get(contextId) ?? createEmptyContextState();
         // file_write 覆盖模式：ctx.content 初始化为 preAppliedContent（磁盘当前状态）
         // 无 preAppliedContent 时回退为原始内容
         // originalContent 始终保存原始内容用于回滚和状态推断
-        let initialContent = preAppliedContent ?? content;
-
-        // 使用预计算的重建内容（若有）
-        if (rebuiltContent !== null) {
-          initialContent = rebuiltContent;
-        }
-
         // 多文件支持：保存当前活跃文件的状态到 fileEntries
         const newFileEntries = new Map(ctx.fileEntries);
         const currentEntry = extractFileDiffEntry(ctx);
@@ -1472,6 +2035,7 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           snapshots: [],
           undoStack: [],
           redoStack: [],
+          activeSnapshotId: null,
         };
         newFileEntries.set(documentId, newEntry);
 
@@ -1484,12 +2048,13 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           fileName,
           pendingModifications: finalModifications,
           originalXml: xml,
-          isLoading: false,
+          isLoading: anotherLoadIsActive,
           undoStack: [],
           redoStack: [],
           preAppliedContent: preAppliedContent ?? '',
           fileEntries: newFileEntries,
           activeFileId: documentId,
+          activeSnapshotId: null,
         });
         return { diffByContext: newMap, currentContextId: contextId };
       });
@@ -1502,16 +2067,31 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
         `[diffStore] loadModifications 失败: contextId=${contextId}, doc=${documentId}, xmlLen=${xml.length}`,
         error
       );
-      set((state) => {
-        const newMap = new Map(state.diffByContext);
-        const ctx = newMap.get(contextId) ?? createEmptyContextState();
-        newMap.set(contextId, {
-          ...ctx,
-          isLoading: false,
-          error: error instanceof Error ? error.message : 'Failed to load modifications',
+      // 过期加载的异常不能覆盖更新加载或删除动作刚提交的状态。
+      if (loadModificationsGeneration.get(generationKey) === currentGen) {
+        const anotherLoadIsActive = hasActiveModificationLoadForContext(
+          contextId,
+          generationKey,
+          currentGen
+        );
+        set((state) => {
+          const newMap = new Map(state.diffByContext);
+          const ctx = newMap.get(contextId) ?? createEmptyContextState();
+          newMap.set(contextId, {
+            ...ctx,
+            isLoading: anotherLoadIsActive,
+            error: error instanceof Error ? error.message : 'Failed to load modifications',
+          });
+          return { diffByContext: newMap };
         });
-        return { diffByContext: newMap };
-      });
+      }
+    } finally {
+      if (activeModificationLoadGenerations.get(generationKey) === currentGen) {
+        activeModificationLoadGenerations.delete(generationKey);
+      }
+      if (latestModificationLoadTargets.get(generationKey)?.generation === currentGen) {
+        latestModificationLoadTargets.delete(generationKey);
+      }
     }
   },
 
@@ -1625,6 +2205,7 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
             if (latestSnapshot) {
               await invoke('diff_record_update_active_snapshot', {
                 contextId,
+                documentId: ctx.documentId,
                 snapshotId: latestSnapshot.id,
               });
               logger.trace('[diffStore]  已更新 active_snapshot_id:', latestSnapshot.id);
@@ -1822,6 +2403,7 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           if (latestSnapshot) {
             await invoke('diff_record_update_active_snapshot', {
               contextId,
+              documentId: ctx.documentId,
               snapshotId: latestSnapshot.id,
             });
           }
@@ -1980,6 +2562,7 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           snapshots: current.snapshots,
           undoStack: current.undoStack,
           redoStack: current.redoStack,
+          activeSnapshotId: current.activeSnapshotId,
         });
       }
 
@@ -2197,6 +2780,7 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           if (latestSnapshot) {
             await invoke('diff_record_update_active_snapshot', {
               contextId,
+              documentId: ctx.documentId,
               snapshotId: latestSnapshot.id,
             });
           }
@@ -2324,6 +2908,126 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
     });
   },
 
+  discardDiffsForDeletedPath: async (contextId, deletedPath, isDirectory) => {
+    // 必须先取消迟到的 preview，再同步移除内存状态；二者都发生在首次 await 之前。
+    const deletedAt = Date.now();
+    markDeletedPath(contextId, deletedPath, isDirectory);
+    const invalidatedActiveLoad = invalidateModificationLoads(contextId, deletedPath, isDirectory);
+    const anotherLoadIsActive = Array.from(activeModificationLoadGenerations.keys()).some(
+      (generationKey) => {
+        const contextPrefix = `${contextId}::`;
+        if (!generationKey.startsWith(contextPrefix)) return false;
+        const documentId = generationKey.slice(contextPrefix.length);
+        return !isPathDeleted(documentId, deletedPath, isDirectory);
+      }
+    );
+
+    set((state) => {
+      const ctx = state.diffByContext.get(contextId);
+      if (!ctx) return { diffByContext: state.diffByContext };
+
+      // fileEntries 中的活跃条目可能落后于顶层镜像，先用最新顶层状态覆盖再筛除。
+      const newFileEntries = new Map(ctx.fileEntries);
+      const currentEntry = extractFileDiffEntry(ctx);
+      if (currentEntry) {
+        newFileEntries.set(currentEntry.documentId, currentEntry);
+      }
+
+      let removedEntry = false;
+      for (const documentId of newFileEntries.keys()) {
+        if (isPathDeleted(documentId, deletedPath, isDirectory)) {
+          newFileEntries.delete(documentId);
+          removedEntry = true;
+        }
+      }
+
+      const activeWasDeleted = [ctx.documentId, ctx.activeFileId].some(
+        (documentId) => documentId !== null && isPathDeleted(documentId, deletedPath, isDirectory)
+      );
+      if (!removedEntry && !activeWasDeleted) {
+        if (!invalidatedActiveLoad) return { diffByContext: state.diffByContext };
+        const newMap = new Map(state.diffByContext);
+        newMap.set(contextId, { ...ctx, isLoading: anotherLoadIsActive });
+        return { diffByContext: newMap };
+      }
+
+      const newMap = new Map(state.diffByContext);
+      if (!activeWasDeleted) {
+        // 删除的是非活跃文件：只更新条目集合，不扰动当前审批/Undo/Redo 状态。
+        newMap.set(contextId, {
+          ...ctx,
+          fileEntries: newFileEntries,
+          isLoading: invalidatedActiveLoad ? anotherLoadIsActive : ctx.isLoading,
+        });
+        return { diffByContext: newMap };
+      }
+
+      const nextPendingEntry = Array.from(newFileEntries.values()).find((entry) =>
+        entry.pendingModifications.some((modification) => modification.status === 'pending')
+      );
+
+      if (nextPendingEntry) {
+        const nextContext = applyFileDiffEntry(
+          { ...ctx, fileEntries: newFileEntries },
+          nextPendingEntry
+        );
+        newMap.set(contextId, {
+          ...nextContext,
+          // activeSnapshotId 属于刚删除的文件；目标文件的快照会由 select/load 流程刷新。
+          activeSnapshotId: null,
+          isLoading: anotherLoadIsActive,
+          error: null,
+        });
+      } else {
+        // 没有剩余待审批文件时清空顶层镜像；已完成文件仍保留在 fileEntries 供历史访问。
+        newMap.set(contextId, {
+          ...createEmptyContextState(),
+          fileEntries: newFileEntries,
+          isLoading: anotherLoadIsActive,
+        });
+      }
+
+      return {
+        diffByContext: newMap,
+        // 快照面板若仍指向已删除的活跃文件，也应一并关闭。
+        isSnapshotPanelOpen: false,
+      };
+    });
+
+    // 内存状态已同步完成；持久化清理为 best-effort，失败不应让已删除文件重新出现在 UI。
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      interface PendingDiffRecord {
+        id: string;
+        documentId: string;
+        createdAt?: number;
+      }
+      const pendingRecords = await invoke<PendingDiffRecord[]>('diff_record_get_pending', {
+        contextId,
+      });
+      const matchingRecords = pendingRecords.filter(
+        (record) =>
+          isPathDeleted(record.documentId, deletedPath, isDirectory) &&
+          (record.createdAt === undefined || record.createdAt < deletedAt)
+      );
+
+      await Promise.all(
+        matchingRecords.map(async (record) => {
+          try {
+            await invoke('diff_record_update_status', {
+              id: record.id,
+              status: 'reverted',
+            });
+          } catch (statusError) {
+            logger.warn('[diffStore] 删除路径的 Diff 记录标记 reverted 失败:', statusError);
+          }
+        })
+      );
+    } catch (cleanupError) {
+      logger.warn('[diffStore] 删除路径的 pending Diff 持久化清理失败:', cleanupError);
+    }
+  },
+
   // ==================== 快照操作 ====================
 
   loadSnapshots: async (contextId, documentId) => {
@@ -2359,86 +3063,121 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
   rollback: async (contextId, snapshotId) => {
     const ctx = get().getDiffState(contextId);
     const contentBefore = ctx.content;
-    const content = await fastApplyEngine.rollback(snapshotId);
+    const rollbackDocumentId = ctx.documentId;
+    const rollbackKey = `${contextId}::${rollbackDocumentId ?? ''}`;
+    const modificationGenerationAtStart = loadModificationsGeneration.get(rollbackKey);
+    if (activeModificationLoadGenerations.has(rollbackKey)) {
+      logger.trace('[diffStore] 同路径 Diff 正在加载，跳过历史回滚:', rollbackDocumentId);
+      return contentBefore;
+    }
+    const rollbackGeneration = (snapshotRollbackGenerations.get(rollbackKey) ?? 0) + 1;
+    snapshotRollbackGenerations.set(rollbackKey, rollbackGeneration);
+    const remainsAtRollbackSource = (currentCtx: ContextDiffState | undefined) =>
+      currentCtx?.documentId === rollbackDocumentId &&
+      currentCtx.activeFileId === ctx.activeFileId &&
+      currentCtx.content === contentBefore &&
+      currentCtx.originalContent === ctx.originalContent &&
+      currentCtx.originalXml === ctx.originalXml &&
+      currentCtx.pendingModifications === ctx.pendingModifications;
+    const isRollbackCurrent = () =>
+      snapshotRollbackGenerations.get(rollbackKey) === rollbackGeneration &&
+      loadModificationsGeneration.get(rollbackKey) === modificationGenerationAtStart &&
+      !activeModificationLoadGenerations.has(rollbackKey) &&
+      remainsAtRollbackSource(get().diffByContext.get(contextId));
 
-    // 将快照内容写入文件
-    if (ctx.documentId?.includes(':') === true) {
-      try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke<{ success: boolean }>('file_write_to_path', {
-          path: ctx.documentId,
-          content: content,
-          createBackup: false,
-        });
-        logger.trace('[diffStore] 文件已回滚到快照:', snapshotId);
-      } catch (error) {
-        logger.error('[diffStore] 回滚写入文件失败:', error);
-      }
+    const content = await fastApplyEngine.rollback(snapshotId);
+    if (!isRollbackCurrent()) {
+      logger.trace('[diffStore] 回滚内容返回时操作已失效，跳过迟到结果:', snapshotId);
+      return content;
     }
 
     // 回滚后重新 preview，刷新 matchResult / diff hunks（行号、内容定位）
     //
     // === 基于快照内容动态生成 preview XML ===
     //
-    // 1. 找到最旧的快照（版本1，即最初的原始文件）作为统一 diff 基准
-    // 2. 找到目标快照的内容
+    // 1. 优先匹配目标快照当时的源 Diff 记录，复用其 originalContent + XML
+    // 2. 源记录不可用时，使用历史列表中的相邻前一版本作为基准
     // 3. 动态生成 wholeFileReplace XML（baseContent → targetContent）
-    // 4. 用此临时 XML 做 preview，使 diff 面板准确反映目标版本相对于原始文件的变化量
+    // 4. 用同一组基准、XML 和 matchResult 原子刷新 Diff 面板
     //
     // 边界处理：
     // - 目标版本是原始文件版本（content === baseContent）→ 产出空 diff，面板无块（语义正确）
-    // - ctx.snapshots 为空或找不到快照 → 兜底到旧行为（ctx.originalContent + ctx.originalXml）
+    // - ctx.snapshots 为空或找不到快照 → 以当前 Diff 基准动态生成整文件投影
     // - 重启后：快照内容持久化于 DB，ctx.snapshots 由 loadSnapshots 加载，方案仍有效
     let refreshedModifications = ctx.pendingModifications;
-    const hasXml = !!ctx.originalXml;
     // 确定 preview 使用的基准内容和 XML
-    // 默认兜底：沿用旧行为，避免快照列表为空时崩溃
+    // 默认基准用于快照列表不完整时的整文件投影。
     let previewBaseContent = ctx.originalContent;
-    let previewXml = ctx.originalXml;
+    let previewXml = '';
+    let usesSnapshotProjection = false;
     // 目标快照（用于恢复 modificationStatuses）
     const targetSnapshot = ctx.snapshots.find((s) => s.id === snapshotId);
+    const baseSnapshot = findSnapshotPreviewBase(ctx.snapshots, targetSnapshot);
+    let sourceRecordStatuses: Record<string, string> | undefined;
+    let sourceRecordMatched = false;
 
-    if (ctx.snapshots.length > 0 && targetSnapshot) {
-      // 最旧的快照（时间最早）= 版本1 = 最初原始文件
-      // ctx.snapshots 已按时间倒序排列（最新在前），因此最后一个是最旧的
-      const baseSnapshot = ctx.snapshots[ctx.snapshots.length - 1];
-
-      if (baseSnapshot) {
-        try {
-          // 动态生成"baseContent → targetContent"的整文件替换 XML
-          // 避免使用 diffToXml（Myers diff 在重复内容文件中不稳定）
-          const { generateWholeFileReplaceXml } =
-            await import('../services/fast-apply/DiffToXmlConverter');
-          previewXml = generateWholeFileReplaceXml(baseSnapshot.content, targetSnapshot.content);
-          previewBaseContent = baseSnapshot.content;
-          logger.trace(
-            `[diffStore] 回滚 preview：使用动态 XML（base=${baseSnapshot.content.length}字符, target=${targetSnapshot.content.length}字符）`
+    // Post-write 快照可由当时的 diff_record.modifiedContent 精确反查源记录。
+    // 命中时沿用该轮 originalContent + XML，回滚后的行号与实时 Diff 完全同基准；
+    // 旧记录缺失或已清理时再退回快照内容重建。
+    if (ctx.documentId) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const records = await invoke<SnapshotSourceRecord[]>('diff_record_get_pending', {
+          contextId,
+        });
+        if (!isRollbackCurrent()) return content;
+        const sourceRecord = findUniqueSnapshotSourceRecord(
+          records,
+          ctx.documentId,
+          content,
+          '手工回滚'
+        );
+        if (sourceRecord?.xmlModification) {
+          previewBaseContent = sourceRecord.originalContent;
+          previewXml = sourceRecord.xmlModification;
+          sourceRecordStatuses = parseModificationStatuses(
+            sourceRecord.modificationStatuses ?? undefined,
+            '手工回滚源 Diff'
           );
-        } catch (xmlGenError) {
-          // XML 生成失败时静默降级到旧行为，保证回滚流程不中断
-          logger.warn('[diffStore] 回滚 XML 生成失败，降级为旧行为:', xmlGenError);
-          previewBaseContent = ctx.originalContent;
-          previewXml = ctx.originalXml;
+          sourceRecordMatched = true;
+          logger.trace('[diffStore] 回滚 preview：已匹配目标快照的源 Diff 记录');
         }
+      } catch (sourceLookupError) {
+        logger.warn(
+          '[diffStore] 回滚 preview：源 Diff 查询失败，使用快照内容兜底:',
+          sourceLookupError
+        );
       }
-    } else {
-      // 快照列表为空或找不到目标快照：兜底记录日志
-      logger.trace(
-        '[diffStore] 回滚：快照列表为空或未找到目标快照，使用旧行为（ctx.originalContent + ctx.originalXml）'
-      );
+    }
+
+    if (!sourceRecordMatched) {
+      try {
+        const fallbackBaseContent = baseSnapshot?.content ?? ctx.originalContent;
+        // 动态生成"baseContent → targetContent"的整文件替换 XML
+        // 避免 diffToXml 在重复内容中拆出不稳定的重叠修改块。
+        const { generateWholeFileReplaceXml } =
+          await import('../services/fast-apply/DiffToXmlConverter');
+        if (!isRollbackCurrent()) return content;
+        previewXml = generateWholeFileReplaceXml(fallbackBaseContent, content);
+        previewBaseContent = fallbackBaseContent;
+        usesSnapshotProjection = true;
+        logger.trace(
+          `[diffStore] 回滚 preview：使用动态 XML（base=${fallbackBaseContent.length}字符, target=${content.length}字符）`
+        );
+      } catch (xmlGenError) {
+        // 尚未写盘，直接终止比提交旧 XML + 新内容的错位投影更安全。
+        logger.error('[diffStore] 回滚 XML 生成失败，终止回滚:', xmlGenError);
+        throw xmlGenError;
+      }
     }
 
     // 特殊情况：目标版本内容与基准内容相同（即原始文件版本）
     // 此时无任何 diff，直接清空修改块列表，避免后续 preview 生成空 diff 占位修改块
     // 用户回滚到原始文件版本，期望看到"无任何待审批改动"，而非空 diff 的伪修改块
-    if (
-      targetSnapshot &&
-      ctx.snapshots.length > 0 &&
-      targetSnapshot.content === ctx.snapshots[ctx.snapshots.length - 1]?.content
-    ) {
+    if (content === previewBaseContent) {
       refreshedModifications = [];
       logger.trace('[diffStore] 回滚：目标版本内容与基准相同（原始文件版本），清空修改块');
-    } else if (hasXml) {
+    } else if (previewXml) {
       try {
         const batchResult = await measureRendererWorkAsync(
           'diffStore.rollback.preview',
@@ -2448,23 +3187,29 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
             xmlChars: previewXml.length,
             hasTargetSnapshot: Boolean(targetSnapshot),
           },
-          () => fastApplyEngine.preview(ctx.documentId ?? '', previewBaseContent, previewXml)
+          () => fastApplyEngine.preview(rollbackDocumentId ?? '', previewBaseContent, previewXml)
         );
+        if (!isRollbackCurrent()) {
+          logger.trace('[diffStore] 回滚 preview 返回时操作已失效，跳过迟到结果:', snapshotId);
+          return content;
+        }
 
-        if (targetSnapshot?.modificationStatuses) {
-          // 主路径：快照中有保存的精确状态，直接恢复，无需内容推断
-          // 解决 INSERT 操作中"search 和 replace 均存在于回滚版本"导致的模糊分支问题
-          const savedStatuses = targetSnapshot.modificationStatuses;
-          refreshedModifications = batchResult.results.map((newMod, idx) => {
-            const savedStatus = savedStatuses[String(idx)] as
-              | ModificationApplyResult['status']
-              | undefined;
-            return {
-              ...newMod, // 使用新 matchResult（行号和 diff hunks 已基于当前内容刷新）
-              status: savedStatus ?? newMod.status,
-            };
-          });
-          logger.trace(`[diffStore] 回滚后精确恢复快照状态：${JSON.stringify(savedStatuses)}`);
+        const compatibleStatuses = sourceRecordMatched
+          ? (targetSnapshot?.modificationStatuses ?? sourceRecordStatuses)
+          : undefined;
+        if (compatibleStatuses) {
+          refreshedModifications = applyCompatibleModificationStatuses(
+            batchResult.results,
+            compatibleStatuses,
+            '手工回滚'
+          );
+          logger.trace(
+            `[diffStore] 回滚后恢复兼容的快照状态：${JSON.stringify(compatibleStatuses)}`
+          );
+        } else if (sourceRecordMatched || usesSnapshotProjection) {
+          // 动态整文件块与回滚前的旧分块没有稳定索引关系，保持 preview 默认 pending。
+          refreshedModifications = resetGeneratedProjectionStatuses(batchResult.results);
+          logger.trace('[diffStore] 回滚动态投影无兼容状态，保持修改块 pending');
         } else {
           // 兜底路径：快照无状态数据（旧版本快照）→ 使用内容推断 + 状态继承
           // 继承原有的用户已审批状态（已接受/已拒绝的块保持不变）
@@ -2483,70 +3228,140 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           `[diffStore] 回滚后重新 preview 完成：${refreshedModifications.length} 个修改`
         );
       } catch (previewError) {
-        logger.warn('[diffStore] 回滚后重新 preview 失败，使用状态推断兜底:', previewError);
-        refreshedModifications = inferModificationStatus(
-          content,
-          ctx.pendingModifications,
-          ctx.originalContent
-        );
+        // preview 失败时尚未写盘；终止操作可同时保住磁盘内容和旧投影的一致性。
+        logger.error('[diffStore] 回滚后重新 preview 失败，终止回滚:', previewError);
+        throw previewError;
       }
-    } else {
-      // 无 XML 时回退到推断
-      refreshedModifications = inferModificationStatus(
-        content,
-        ctx.pendingModifications,
-        ctx.originalContent
-      );
     }
 
-    // 推入 Undo 栈
-    const newUndoStack = [
-      ...ctx.undoStack,
-      {
-        type: 'rollback' as const,
-        contentBefore,
-        contentAfter: content,
-        description: `Rollback to version ${snapshotId.substring(0, 8)}`,
-        timestamp: Date.now(),
-        pendingModificationsBefore: ctx.pendingModifications,
-        pendingModificationsAfter: refreshedModifications,
-      },
-    ];
-    if (newUndoStack.length > MAX_HISTORY_DEPTH) {
-      newUndoStack.shift();
+    // preview 成功后才写盘，缩短有副作用的竞态窗口。若写盘期间有更新操作接管，
+    // 立即把该文档的最新内存内容补写回去，避免旧回滚覆盖新 Diff 的磁盘状态。
+    if (!isRollbackCurrent()) return content;
+    if (rollbackDocumentId?.includes(':') === true) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      try {
+        await invoke<{ success: boolean }>('file_write_to_path', {
+          path: rollbackDocumentId,
+          content,
+          createBackup: false,
+        });
+        logger.trace('[diffStore] 文件已回滚到快照:', snapshotId);
+      } catch (writeError) {
+        logger.error('[diffStore] 回滚写入文件失败:', writeError);
+        throw writeError;
+      }
+
+      if (!isRollbackCurrent()) {
+        try {
+          await compensateSupersededFileWrite(
+            contextId,
+            rollbackDocumentId,
+            rollbackKey,
+            modificationGenerationAtStart,
+            () => get().diffByContext.get(contextId),
+            async (supersedingContent) => {
+              await invoke('file_write_to_path', {
+                path: rollbackDocumentId,
+                content: supersedingContent,
+                createBackup: false,
+              });
+            }
+          );
+        } catch (compensationError) {
+          logger.error('[diffStore] 迟到回滚的磁盘补偿写入失败:', compensationError);
+        }
+        logger.trace('[diffStore] 回滚写盘期间操作已失效，跳过状态提交:', snapshotId);
+        return content;
+      }
     }
 
+    const projectionBefore: DiffProjectionState = {
+      baseContent: ctx.originalContent,
+      targetContent: ctx.content,
+      preAppliedContent: ctx.preAppliedContent,
+      xml: ctx.originalXml,
+      modifications: ctx.pendingModifications,
+      activeSnapshotId: ctx.activeSnapshotId,
+      mode: ctx.mode,
+    };
+    if (!isRollbackCurrent()) return content;
     set((state) => {
       const newMap = new Map(state.diffByContext);
-      newMap.set(contextId, {
-        ...ctx,
-        content,
-        // 若修改块为空（回滚到原始文件版本），切回 normal 模式关闭 diff 面板
-        // 避免 diff 模式下显示空修改块列表带来的困惑
-        mode: refreshedModifications.length === 0 ? 'normal' : ctx.mode,
-        pendingModifications: refreshedModifications,
-        undoStack: newUndoStack,
-        redoStack: [],
-        activeSnapshotId: snapshotId, // 记录当前停留版本，历史面板顶部显示"当前版本（版本N）"
-      });
+      const currentCtx = newMap.get(contextId);
+      const operationIsCurrent =
+        snapshotRollbackGenerations.get(rollbackKey) === rollbackGeneration &&
+        loadModificationsGeneration.get(rollbackKey) === modificationGenerationAtStart &&
+        !activeModificationLoadGenerations.has(rollbackKey) &&
+        remainsAtRollbackSource(currentCtx);
+      if (!currentCtx || !operationIsCurrent) return { diffByContext: state.diffByContext };
+
+      const projectionAfter: DiffProjectionState = {
+        baseContent: previewBaseContent,
+        targetContent: content,
+        preAppliedContent: content,
+        xml: previewXml,
+        modifications: refreshedModifications,
+        activeSnapshotId: snapshotId,
+        mode: refreshedModifications.length === 0 ? 'normal' : currentCtx.mode,
+      };
+      const newUndoStack = [
+        ...currentCtx.undoStack,
+        {
+          type: 'rollback' as const,
+          contentBefore,
+          contentAfter: content,
+          description: `Rollback to version ${snapshotId.substring(0, 8)}`,
+          timestamp: Date.now(),
+          pendingModificationsBefore: ctx.pendingModifications,
+          pendingModificationsAfter: refreshedModifications,
+          projectionBefore,
+          projectionAfter,
+        },
+      ];
+      if (newUndoStack.length > MAX_HISTORY_DEPTH) newUndoStack.shift();
+
+      newMap.set(
+        contextId,
+        applySnapshotDiffProjection(
+          {
+            ...currentCtx,
+            undoStack: newUndoStack,
+            redoStack: [],
+          },
+          projectionAfter
+        )
+      );
       return { diffByContext: newMap };
     });
 
     // 刷新快照列表
-    if (ctx.documentId) {
-      void get().loadSnapshots(contextId, ctx.documentId);
+    if (rollbackDocumentId) {
+      void get().loadSnapshots(contextId, rollbackDocumentId);
     }
 
     // 更新 active_snapshot_id 标记（用于重启后恢复正确版本）
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('diff_record_update_active_snapshot', {
-        contextId,
-        snapshotId, // 直接使用回滚目标的快照 ID
-      });
-      logger.trace('[diffStore]  已更新 active_snapshot_id (rollback):', snapshotId);
-    } catch (snapshotError) {
-      logger.warn('[diffStore]  更新快照标记失败:', snapshotError);
+    if (rollbackDocumentId) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const committedCtx = get().diffByContext.get(contextId);
+        if (
+          snapshotRollbackGenerations.get(rollbackKey) !== rollbackGeneration ||
+          loadModificationsGeneration.get(rollbackKey) !== modificationGenerationAtStart ||
+          activeModificationLoadGenerations.has(rollbackKey) ||
+          committedCtx?.documentId !== rollbackDocumentId ||
+          committedCtx.activeSnapshotId !== snapshotId
+        ) {
+          return content;
+        }
+        await invoke('diff_record_update_active_snapshot', {
+          contextId,
+          documentId: rollbackDocumentId,
+          snapshotId, // 直接使用回滚目标的快照 ID
+        });
+        logger.trace('[diffStore]  已更新 active_snapshot_id (rollback):', snapshotId);
+      } catch (snapshotError) {
+        logger.warn('[diffStore]  更新快照标记失败:', snapshotError);
+      }
     }
 
     return content;
@@ -2574,8 +3389,15 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
       const diffRecords = await invoke<PersistedDiffRecord[]>('diff_record_get_pending', {
         contextId,
       });
-      const currentDiffRecord = diffRecords[0];
-      const isActiveVersion = currentDiffRecord?.activeSnapshotId === snapshotId;
+      const currentDocumentRecords = diffRecords.filter(
+        (record) => record.documentId === ctx.documentId
+      );
+      const currentDiffRecord =
+        currentDocumentRecords.find((record) => record.activeSnapshotId === snapshotId) ??
+        currentDocumentRecords[0];
+      const isActiveVersion = currentDocumentRecords.some(
+        (record) => record.activeSnapshotId === snapshotId
+      );
 
       // 2. 执行删除
       await invoke('snapshot_delete', { id: snapshotId });
@@ -2642,9 +3464,8 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
           }
         }
 
-        // 对所有 pending 的 diff_records 都标记为 reverted
-        // 防止切换窗口后 loadPersistedDiffs 重新恢复已删除文件的 diff
-        for (const record of diffRecords) {
+        // 仅清理当前文档的 pending 记录；同一 context 下其他文件必须继续保留。
+        for (const record of currentDocumentRecords) {
           if (record.id !== currentDiffRecord?.id) {
             try {
               await invoke('diff_record_update_status', {
@@ -2680,21 +3501,59 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
     const ctx = get().getDiffState(contextId);
     if (ctx.undoStack.length === 0) return;
 
+    const undoDocumentId = ctx.documentId;
+    const undoKey = `${contextId}::${undoDocumentId ?? ''}`;
+    const undoLoadGeneration = loadModificationsGeneration.get(undoKey);
+    if (activeModificationLoadGenerations.has(undoKey)) {
+      logger.trace('[diffStore] 同路径 Diff 正在加载，跳过 Undo:', undoDocumentId);
+      return;
+    }
+
     // 弹出最后一个操作
     const newUndoStack = [...ctx.undoStack];
     const lastEntry = newUndoStack.pop();
     if (!lastEntry) return;
 
+    const undoGeneration = (snapshotRollbackGenerations.get(undoKey) ?? 0) + 1;
+    snapshotRollbackGenerations.set(undoKey, undoGeneration);
+    const remainsAtUndoSource = (currentCtx: ContextDiffState | undefined) =>
+      snapshotRollbackGenerations.get(undoKey) === undoGeneration &&
+      loadModificationsGeneration.get(undoKey) === undoLoadGeneration &&
+      !activeModificationLoadGenerations.has(undoKey) &&
+      currentCtx?.documentId === undoDocumentId &&
+      currentCtx.content === ctx.content &&
+      currentCtx.undoStack === ctx.undoStack &&
+      currentCtx.redoStack === ctx.redoStack;
+    const isUndoCurrent = () => remainsAtUndoSource(get().diffByContext.get(contextId));
+
     // 将文件内容恢复到操作前
-    if (ctx.documentId?.includes(':') === true) {
+    if (!isUndoCurrent()) return;
+    if (undoDocumentId?.includes(':') === true) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke<{ success: boolean }>('file_write_to_path', {
-          path: ctx.documentId,
+          path: undoDocumentId,
           content: lastEntry.contentBefore,
           createBackup: false,
         });
         logger.trace('[diffStore] Undo 操作:', lastEntry.description);
+        if (!isUndoCurrent()) {
+          await compensateSupersededFileWrite(
+            contextId,
+            undoDocumentId,
+            undoKey,
+            undoLoadGeneration,
+            () => get().diffByContext.get(contextId),
+            async (supersedingContent) => {
+              await invoke('file_write_to_path', {
+                path: undoDocumentId,
+                content: supersedingContent,
+                createBackup: false,
+              });
+            }
+          );
+          return;
+        }
       } catch (error) {
         logger.error('[diffStore] Undo 写入文件失败:', error);
         return;
@@ -2707,17 +3566,61 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
       newRedoStack.shift();
     }
 
+    if (!isUndoCurrent()) return;
     set((state) => {
-      const newMap = new Map(state.diffByContext);
-      newMap.set(contextId, {
-        ...ctx,
-        content: lastEntry.contentBefore,
-        pendingModifications: lastEntry.pendingModificationsBefore ?? ctx.pendingModifications,
+      const currentCtx = state.diffByContext.get(contextId);
+      if (
+        !currentCtx ||
+        snapshotRollbackGenerations.get(undoKey) !== undoGeneration ||
+        loadModificationsGeneration.get(undoKey) !== undoLoadGeneration ||
+        activeModificationLoadGenerations.has(undoKey) ||
+        !remainsAtUndoSource(currentCtx)
+      ) {
+        return { diffByContext: state.diffByContext };
+      }
+
+      const stackUpdatedCtx = {
+        ...currentCtx,
         undoStack: newUndoStack,
         redoStack: newRedoStack,
-      });
+      };
+      const restoredCtx = lastEntry.projectionBefore
+        ? applySnapshotDiffProjection(stackUpdatedCtx, lastEntry.projectionBefore)
+        : syncActiveFileEntry({
+            ...stackUpdatedCtx,
+            content: lastEntry.contentBefore,
+            pendingModifications:
+              lastEntry.pendingModificationsBefore ?? currentCtx.pendingModifications,
+          });
+      const newMap = new Map(state.diffByContext);
+      newMap.set(contextId, restoredCtx);
       return { diffByContext: newMap };
     });
+
+    if (ctx.documentId && lastEntry.projectionBefore) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const committedCtx = get().diffByContext.get(contextId);
+        if (
+          snapshotRollbackGenerations.get(undoKey) !== undoGeneration ||
+          loadModificationsGeneration.get(undoKey) !== undoLoadGeneration ||
+          activeModificationLoadGenerations.has(undoKey) ||
+          committedCtx?.documentId !== undoDocumentId ||
+          committedCtx.activeSnapshotId !== lastEntry.projectionBefore.activeSnapshotId ||
+          committedCtx.undoStack !== newUndoStack ||
+          committedCtx.redoStack !== newRedoStack
+        ) {
+          return;
+        }
+        await invoke('diff_record_update_active_snapshot', {
+          contextId,
+          documentId: ctx.documentId,
+          snapshotId: lastEntry.projectionBefore.activeSnapshotId,
+        });
+      } catch (snapshotError) {
+        logger.warn('[diffStore] Undo 更新快照标记失败:', snapshotError);
+      }
+    }
 
     // 刷新快照列表
     if (ctx.documentId) {
@@ -2729,21 +3632,59 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
     const ctx = get().getDiffState(contextId);
     if (ctx.redoStack.length === 0) return;
 
+    const redoDocumentId = ctx.documentId;
+    const redoKey = `${contextId}::${redoDocumentId ?? ''}`;
+    const redoLoadGeneration = loadModificationsGeneration.get(redoKey);
+    if (activeModificationLoadGenerations.has(redoKey)) {
+      logger.trace('[diffStore] 同路径 Diff 正在加载，跳过 Redo:', redoDocumentId);
+      return;
+    }
+
     // 弹出最后一个操作
     const newRedoStack = [...ctx.redoStack];
     const lastEntry = newRedoStack.pop();
     if (!lastEntry) return;
 
+    const redoGeneration = (snapshotRollbackGenerations.get(redoKey) ?? 0) + 1;
+    snapshotRollbackGenerations.set(redoKey, redoGeneration);
+    const remainsAtRedoSource = (currentCtx: ContextDiffState | undefined) =>
+      snapshotRollbackGenerations.get(redoKey) === redoGeneration &&
+      loadModificationsGeneration.get(redoKey) === redoLoadGeneration &&
+      !activeModificationLoadGenerations.has(redoKey) &&
+      currentCtx?.documentId === redoDocumentId &&
+      currentCtx.content === ctx.content &&
+      currentCtx.undoStack === ctx.undoStack &&
+      currentCtx.redoStack === ctx.redoStack;
+    const isRedoCurrent = () => remainsAtRedoSource(get().diffByContext.get(contextId));
+
     // 将文件内容恢复到操作后
-    if (ctx.documentId?.includes(':') === true) {
+    if (!isRedoCurrent()) return;
+    if (redoDocumentId?.includes(':') === true) {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke<{ success: boolean }>('file_write_to_path', {
-          path: ctx.documentId,
+          path: redoDocumentId,
           content: lastEntry.contentAfter,
           createBackup: false,
         });
         logger.trace('[diffStore]  Redo 操作:', lastEntry.description);
+        if (!isRedoCurrent()) {
+          await compensateSupersededFileWrite(
+            contextId,
+            redoDocumentId,
+            redoKey,
+            redoLoadGeneration,
+            () => get().diffByContext.get(contextId),
+            async (supersedingContent) => {
+              await invoke('file_write_to_path', {
+                path: redoDocumentId,
+                content: supersedingContent,
+                createBackup: false,
+              });
+            }
+          );
+          return;
+        }
       } catch (error) {
         logger.error('[diffStore] Redo 写入文件失败:', error);
         return;
@@ -2756,17 +3697,61 @@ export const useDiffStore = create<DiffState & DiffActions>((set, get) => ({
       newUndoStack.shift();
     }
 
+    if (!isRedoCurrent()) return;
     set((state) => {
-      const newMap = new Map(state.diffByContext);
-      newMap.set(contextId, {
-        ...ctx,
-        content: lastEntry.contentAfter,
-        pendingModifications: lastEntry.pendingModificationsAfter ?? ctx.pendingModifications,
+      const currentCtx = state.diffByContext.get(contextId);
+      if (
+        !currentCtx ||
+        snapshotRollbackGenerations.get(redoKey) !== redoGeneration ||
+        loadModificationsGeneration.get(redoKey) !== redoLoadGeneration ||
+        activeModificationLoadGenerations.has(redoKey) ||
+        !remainsAtRedoSource(currentCtx)
+      ) {
+        return { diffByContext: state.diffByContext };
+      }
+
+      const stackUpdatedCtx = {
+        ...currentCtx,
         undoStack: newUndoStack,
         redoStack: newRedoStack,
-      });
+      };
+      const restoredCtx = lastEntry.projectionAfter
+        ? applySnapshotDiffProjection(stackUpdatedCtx, lastEntry.projectionAfter)
+        : syncActiveFileEntry({
+            ...stackUpdatedCtx,
+            content: lastEntry.contentAfter,
+            pendingModifications:
+              lastEntry.pendingModificationsAfter ?? currentCtx.pendingModifications,
+          });
+      const newMap = new Map(state.diffByContext);
+      newMap.set(contextId, restoredCtx);
       return { diffByContext: newMap };
     });
+
+    if (ctx.documentId && lastEntry.projectionAfter) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const committedCtx = get().diffByContext.get(contextId);
+        if (
+          snapshotRollbackGenerations.get(redoKey) !== redoGeneration ||
+          loadModificationsGeneration.get(redoKey) !== redoLoadGeneration ||
+          activeModificationLoadGenerations.has(redoKey) ||
+          committedCtx?.documentId !== redoDocumentId ||
+          committedCtx.activeSnapshotId !== lastEntry.projectionAfter.activeSnapshotId ||
+          committedCtx.undoStack !== newUndoStack ||
+          committedCtx.redoStack !== newRedoStack
+        ) {
+          return;
+        }
+        await invoke('diff_record_update_active_snapshot', {
+          contextId,
+          documentId: ctx.documentId,
+          snapshotId: lastEntry.projectionAfter.activeSnapshotId,
+        });
+      } catch (snapshotError) {
+        logger.warn('[diffStore] Redo 更新快照标记失败:', snapshotError);
+      }
+    }
 
     // 刷新快照列表
     if (ctx.documentId) {

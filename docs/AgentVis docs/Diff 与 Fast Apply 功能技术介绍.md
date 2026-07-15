@@ -370,6 +370,11 @@ Diff 记录（`diff_records` 表）和快照在应用重启时可恢复：
 - 若无持久化状态，且磁盘内容等于 `preAppliedContent`，保持全部 `pending`（避免 Sub-Agent 刚写完就被误判为 applied）
 - 若无持久化状态且内容已偏离 `preAppliedContent`，调用 `inferModificationStatus()` 基于当前文件内容启发式推断各块状态
 - 若恢复时发现目标文件已不存在，会将对应 `diff_record` 标记为 `reverted` 并跳过 stale Diff
+- 运行期间通过文件列表成功删除文件或目录后，会按物理路径立即失效对应的内存 Diff，并将匹配的 `pending` 记录标记为 `reverted`；删除目录时只匹配路径边界内的后代文件
+- 删除动作还会递增对应 `loadModifications` 的 generation，并保留有界的删除路径标记；即使 Diff 回调在删除后才启动，也会重新读取磁盘，目标不存在或内容已属于另一轮写入时直接丢弃。异步预览、快照和持久化阶段提交前会复核 generation，持久化清理也只处理删除时刻之前创建的记录，防止迟到结果或同路径快速重建互相污染；启动恢复时的存在性检查仍作为兜底
+- 历史回滚会优先用目标快照内容唯一匹配同文档的源 `diff_record`，并恢复该轮 `originalContent + XML`；源记录缺失或匹配有歧义时，按历史面板“前一版本 → 当前版本”的语义用相邻快照生成整文件投影
+- 回滚投影会原子更新内容、Diff 基准、XML、`matchResult`、审批状态和 `activeSnapshotId`，并同步到对应 `fileEntries`；动态生成的投影不会复用旧 XML 的状态索引，可应用块重置为 `pending`、匹配失败块保持 `failed`，Undo/Redo 也保存并恢复完整投影。手工回滚只有在 preview 成功后才写盘；同一文件的实时 Diff 仍在加载时不会启动 Rollback/Undo/Redo，写盘期间被更新一轮接管时则用经磁盘校正或恢复重建后的最终目标内容补偿。重启恢复若无法重建可信 preview，则关闭该文件的 Diff 而不展示错位结果
+- `active_snapshot_id` 的写入按 `contextId + documentId` 限定；重启恢复时还会校验快照所属文档，避免旧版跨文件污染数据造成 Diff 基准串线
 
 ---
 

@@ -140,6 +140,7 @@ export function RightPanel() {
   const selectFile = useDiffStore((state) => state.selectFile);
   const getFileList = useDiffStore((state) => state.getFileList);
   const hasCompletedDiff = useDiffStore((state) => state.getCompletedDiffFiles);
+  const discardDiffsForDeletedPath = useDiffStore((state) => state.discardDiffsForDeletedPath);
 
   // 审批已完成的文件列表（normal 模式下，为每个文件提供独立的历史版本入口）
   // 空数组 = 没有可查历史的文件，不展示任何提示条
@@ -487,19 +488,27 @@ export function RightPanel() {
     </div>
   );
 
-  // 处理文件删除（清理预览状态）
+  // 处理文件删除（同步清理普通预览与以绝对路径为键的 Diff 状态）
   const handleFileDeleted = useCallback(
-    (deletedFileId: string) => {
+    async (deletedFile: FileItemData) => {
       // 如果删除的是当前选中的文件，清理预览
-      if (selectedFile?.id === deletedFileId) {
+      if (selectedFile?.id === deletedFile.id) {
         previewRequestIdRef.current += 1;
         setSelectedFile(null);
         setPreviewContent('');
         setTextPreviewDecision(null);
         setIsPreviewLoading(false);
       }
+
+      if (contextId) {
+        await discardDiffsForDeletedPath(
+          contextId,
+          deletedFile.filePath,
+          deletedFile.isDirectory === true
+        );
+      }
     },
-    [selectedFile]
+    [contextId, discardDiffsForDeletedPath, selectedFile]
   );
 
   /**
