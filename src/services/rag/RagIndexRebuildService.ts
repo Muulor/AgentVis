@@ -19,13 +19,18 @@ import {
 import { getVectorStore, type ChunkEmbeddingUpdate, type VectorStore } from './VectorStore';
 import type { Chunk } from '@/types/rag';
 import { ragIndexCoordinator, type RagIndexMigrationLease } from './RagIndexCoordinator';
+import {
+  encodeEmbeddingInputs,
+  isEmbeddingAggregationMetadataStale,
+  withEmbeddingAggregationMetadata,
+  type EmbeddingInputResult,
+} from './EmbeddingInputPlanner';
 
 const logger = getLogger('RagIndexRebuildService');
 /**
- * Match EmbeddingService's maximum provider request size so every successful
- * remote call can be persisted before the next one starts. Keeping a separate
- * checkpoint here avoids losing earlier provider responses when a later call is
- * rate-limited or times out.
+ * Persist after every 25 original logical chunks. A legacy oversized chunk may
+ * expand into several provider windows, but successful logical batches still
+ * become restart-safe before the rebuild advances to the next checkpoint.
  */
 const REBUILD_CHECKPOINT_BATCH_SIZE = 25;
 
@@ -130,10 +135,8 @@ export class RagIndexRebuildService {
           throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_REBUILD');
         }
         const chunks = await this.vectorStore.listChunks(agentId);
-        const staleChunks = chunks.filter(
-          (chunk) =>
-            chunk.metadata.embeddingProfileId !== route.profileId ||
-            chunk.metadata.embeddingDimension !== expectedDimension
+        const staleChunks = chunks.filter((chunk) =>
+          this.isChunkStale(chunk, route.profileId, expectedDimension)
         );
         const skippedForAgent = chunks.length - staleChunks.length;
         skippedChunkCount += skippedForAgent;
@@ -166,23 +169,22 @@ export class RagIndexRebuildService {
             agentId,
             completedChunks: rebuiltChunkCount + skippedChunkCount,
           });
-          const embeddings = await embeddingService.encodeBatchWithRoute(texts, route, 'document');
+          const embeddingResults = await this.encodeRebuildTexts(texts, route, expectedDimension);
           const updates: ChunkEmbeddingUpdate[] = [];
 
           for (let index = 0; index < batch.length; index++) {
             const chunk = batch[index];
-            const embedding = embeddings[index];
-            if (!chunk || !embedding) {
+            const embeddingResult = embeddingResults[index];
+            if (!chunk || !embeddingResult) {
               throw new Error('RAG_REBUILD_EMBEDDING_MISSING');
             }
-            if (embedding.length !== expectedDimension) {
-              throw new Error('RAG_REBUILD_EMBEDDING_DIMENSION_MISMATCH');
-            }
+            const { embedding, segmentCount } = embeddingResult;
+            const metadata = withEmbeddingAggregationMetadata(chunk.metadata, segmentCount);
             updates.push({
               chunkId: chunk.id,
               embedding,
               metadata: JSON.stringify({
-                ...chunk.metadata,
+                ...metadata,
                 embeddingProfileId: route.profileId,
                 embeddingDimension: embedding.length,
               }),
@@ -246,6 +248,32 @@ export class RagIndexRebuildService {
       heading: chunk.metadata.heading,
       content: chunk.content,
     });
+  }
+
+  private isChunkStale(chunk: Chunk, profileId: string, expectedDimension: number): boolean {
+    if (
+      chunk.metadata.embeddingProfileId !== profileId ||
+      chunk.metadata.embeddingDimension !== expectedDimension
+    ) {
+      return true;
+    }
+
+    return isEmbeddingAggregationMetadataStale(this.buildRebuildText(chunk), chunk.metadata);
+  }
+
+  private async encodeRebuildTexts(
+    texts: string[],
+    route: ResolvedEmbeddingRoute,
+    expectedDimension: number
+  ): Promise<EmbeddingInputResult[]> {
+    return encodeEmbeddingInputs(
+      texts,
+      (expandedTexts) => embeddingService.encodeBatchWithRoute(expandedTexts, route, 'document'),
+      {
+        expectedDimension,
+        errorPrefix: 'RAG_REBUILD',
+      }
+    );
   }
 }
 

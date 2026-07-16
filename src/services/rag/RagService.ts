@@ -24,6 +24,7 @@ import { buildBm25IndexText, buildEmbeddingIndexText } from './RagQueryPreproces
 import { createDocumentOverviewChunk } from './DocumentOverviewBuilder';
 import { getLogger } from '@services/logger';
 import { ragIndexCoordinator } from './RagIndexCoordinator';
+import { encodeEmbeddingInputs, withEmbeddingAggregationMetadata } from './EmbeddingInputPlanner';
 
 const logger = getLogger('RagService');
 
@@ -173,10 +174,8 @@ export class RagService {
     const writerLease = await ragIndexCoordinator.acquireWriter();
     try {
       const embeddingRoute = embeddingService.getActiveRoute();
-      const embeddings = await embeddingService.encodeBatchWithRoute(
-        texts,
-        embeddingRoute,
-        'document'
+      const embeddingResults = await encodeEmbeddingInputs(texts, (expandedTexts) =>
+        embeddingService.encodeBatchWithRoute(expandedTexts, embeddingRoute, 'document')
       );
 
       // 第三步：存储到向量数据库 + BM25 索引
@@ -184,14 +183,26 @@ export class RagService {
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        const embedding = embeddings[i];
-        if (!chunk || !embedding) continue;
+        const embeddingResult = embeddingResults[i];
+        if (!chunk || !embeddingResult) {
+          throw new Error('RAG_EMBEDDING_RESULT_COUNT_MISMATCH');
+        }
         if (embeddingService.getActiveProfileId() !== embeddingRoute.profileId) {
           throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_INDEX');
         }
 
         // 向量存储
-        await this.vectorStore.insert(chunk, embedding, embeddingRoute.profileId);
+        await this.vectorStore.insert(
+          {
+            ...chunk,
+            metadata: withEmbeddingAggregationMetadata(
+              chunk.metadata,
+              embeddingResult.segmentCount
+            ),
+          },
+          embeddingResult.embedding,
+          embeddingRoute.profileId
+        );
 
         // BM25 索引使用元数据增强文本，便于文件名/路径/章节标题类 query 命中。
         // 向量检索和最终注入仍使用 chunk.content，避免元数据污染语义上下文。

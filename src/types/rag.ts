@@ -79,6 +79,10 @@ export interface ChunkMetadata {
   embeddingProfileId?: string;
   /** 持久化向量的维度，用于重建和诊断。 */
   embeddingDimension?: number;
+  /** 超长索引输入的稳定聚合策略版本。 */
+  embeddingAggregationVersion?: string;
+  /** 聚合为当前单一逻辑向量的 Embedding 窗口数量。 */
+  embeddingSegmentCount?: number;
   /** 来源文件名 */
   fileName?: string;
   /** 来源文件路径 */

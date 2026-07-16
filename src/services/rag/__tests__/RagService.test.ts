@@ -249,6 +249,65 @@ describe('RagService', () => {
     expect(childPayload?.params.metadata).toContain('features_deep_dive.md');
   });
 
+  it('bounds final metadata-enriched inputs without multiplying persisted chunks', async () => {
+    interface RagIndexPayload {
+      params: {
+        chunk_id: string;
+        content: string;
+        metadata: string;
+      };
+    }
+
+    const longHeading = `# ${'metadata-heading-'.repeat(500)}`;
+    const content = `${longHeading}\n\n${'Indexable body content. '.repeat(12)}`;
+    encodeBatchMock.mockImplementation(async (texts: string[]) =>
+      texts.map((_text, index) => [index + 1, 1])
+    );
+    invokeMock.mockImplementation((command: string, payload?: RagIndexPayload) => {
+      if (command === 'rag_index_chunk') {
+        return Promise.resolve({
+          id: payload?.params.chunk_id ?? 'chunk-id',
+          success: true,
+        });
+      }
+      return Promise.reject(new Error(`Unexpected command: ${command}`));
+    });
+
+    const count = await new RagService().indexDocument('agent-1', 'long-section-path.md', content, {
+      fileName: 'long-section-path.md',
+      documentType: 'markdown',
+    });
+
+    const physicalInputs = encodeBatchMock.mock.calls[0]?.[0] as string[];
+    const insertCalls = invokeMock.mock.calls.filter((call) => call[0] === 'rag_index_chunk');
+    const insertPayloads = insertCalls.map((call) => call[1] as RagIndexPayload);
+    const aggregatedPayloads = insertPayloads.filter((payload) => {
+      const metadata = JSON.parse(payload.params.metadata) as {
+        embeddingAggregationVersion?: string;
+        embeddingSegmentCount?: number;
+      };
+      return metadata.embeddingAggregationVersion === 'utf8-window-weighted-v1';
+    });
+
+    expect(physicalInputs.length).toBeGreaterThan(count);
+    expect(
+      physicalInputs.every((text) => new TextEncoder().encode(text).byteLength <= 6 * 1024)
+    ).toBe(true);
+    expect(insertCalls).toHaveLength(count);
+    expect(aggregatedPayloads.length).toBeGreaterThan(0);
+    for (const payload of aggregatedPayloads) {
+      const metadata = JSON.parse(payload.params.metadata) as {
+        embeddingProfileId?: string;
+        embeddingDimension?: number;
+        embeddingSegmentCount?: number;
+      };
+      expect(metadata.embeddingProfileId).toBe('rag-embedding:v1:siliconflow:BAAI/bge-m3');
+      expect(metadata.embeddingDimension).toBe(2);
+      expect(metadata.embeddingSegmentCount).toBeGreaterThan(1);
+      expect(payload.params.content).not.toContain('Section:');
+    }
+  });
+
   it('does not persist partial knowledge indexes when embedding is rate-limited', async () => {
     const rateLimitError = new Error('RAG_GEMINI_EMBEDDING_HTTP_429');
     const content = [

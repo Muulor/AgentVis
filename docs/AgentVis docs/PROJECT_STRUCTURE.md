@@ -971,6 +971,7 @@ rag/
 ├── HybridRetriever.ts            # 混合检索器（向量+关键词）
 ├── VectorStore.ts                # 向量存储（单例 + LRU 缓存）
 ├── EmbeddingService.ts           # profile-aware 嵌入服务（SiliconFlow/OpenAI/Gemini + LRU + 按 profile 节流退避）
+├── EmbeddingInputPlanner.ts      # 最终索引输入的 UTF-8 窗口规划、向量聚合与 metadata 标记
 ├── RagConnectionConfig.ts        # RAG 路由验证、推荐/原生 Gemini 配置与 Embedding profile
 ├── RagConnectionService.ts       # RAG 连接测试、启用及重建编排
 ├── RagIndexCoordinator.ts        # 索引写入与 profile 迁移互斥协调
@@ -986,6 +987,7 @@ rag/
     ├── LruCache.test.ts          # LRU 缓存测试
     ├── BM25Index.test.ts         # BM25 索引测试
     ├── DocumentChunker.test.ts   # 文档分块测试
+    ├── EmbeddingInputPlanner.test.ts # 最终索引输入窗口与聚合测试
     ├── DocumentOverviewBuilder.test.ts # 文档总览合成块测试
     ├── HybridRetrieverOutput.test.ts # 混合检索输出策略测试
     ├── RagQueryPreprocessor.test.ts  # 查询预处理测试

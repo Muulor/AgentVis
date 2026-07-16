@@ -6,6 +6,16 @@ import {
 } from '../EmbeddingService';
 import type { ResolvedEmbeddingRoute } from '../RagConnectionConfig';
 
+const loggerMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+}));
+
+vi.mock('@services/logger', () => ({
+  getLogger: () => loggerMocks,
+}));
+
 function makeRoute(profileId: string): ResolvedEmbeddingRoute {
   return {
     mode: 'custom',
@@ -34,6 +44,7 @@ function makeGeminiRoute(): ResolvedEmbeddingRoute {
 describe('EmbeddingService', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   it('routes custom requests explicitly and isolates cache by profile and purpose', async () => {
@@ -393,6 +404,166 @@ describe('EmbeddingService', () => {
       expect(String(error)).not.toContain('secret-api-key');
     });
     expect(invokeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('recursively splits HTTP 400 batches and preserves result order and cache entries', async () => {
+    const route = makeRoute('rag-embedding:v1:custom:openai-adaptive-batch');
+    const texts = ['secret-alpha', 'secret-beta', 'secret-gamma', 'secret-delta'];
+    const vectors = new Map(texts.map((text, index) => [text, [index + 1, 0]]));
+    const invokeFn = vi.fn(async (_command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { texts: string[] };
+      if (request.texts.length > 1) {
+        throw new Error('Custom RAG Embedding API returned HTTP 400; body=provider-secret');
+      }
+      const text = request.texts[0] ?? '';
+      return {
+        embeddings: [vectors.get(text)],
+        dimension: 2,
+        model: 'embed-v1',
+      };
+    });
+    const service = new EmbeddingService({
+      routeResolver: () => route,
+      invokeFn,
+    });
+
+    await expect(service.encodeBatch(texts, 'document')).resolves.toEqual([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+    ]);
+    expect(invokeFn).toHaveBeenCalledTimes(7);
+    expect(
+      invokeFn.mock.calls.map((call) => {
+        const request = call[1]?.request as { texts: string[] };
+        return request.texts;
+      })
+    ).toEqual([
+      texts,
+      texts.slice(0, 2),
+      texts.slice(0, 1),
+      texts.slice(1, 2),
+      texts.slice(2),
+      texts.slice(2, 3),
+      texts.slice(3),
+    ]);
+
+    const splitLogs = loggerMocks.warn.mock.calls.filter(
+      ([message]) => message === '[EmbeddingService] Splitting HTTP 400 embedding batch'
+    );
+    expect(splitLogs).toHaveLength(3);
+    expect(splitLogs[0]?.[1]).toEqual({
+      itemCount: 4,
+      totalUtf8Bytes: 47,
+      maxItemUtf8Bytes: 12,
+    });
+    expect(JSON.stringify(splitLogs)).not.toContain('secret-alpha');
+    expect(JSON.stringify(splitLogs)).not.toContain('provider-secret');
+
+    await expect(service.encodeBatch(texts, 'document')).resolves.toEqual([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+    ]);
+    expect(invokeFn).toHaveBeenCalledTimes(7);
+  });
+
+  it('applies adaptive HTTP 400 splitting to Gemini batches', async () => {
+    const route = makeGeminiRoute();
+    const invokeFn = vi.fn(async (_command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { texts: string[] };
+      if (request.texts.length > 1) {
+        throw new Error('Google Gemini Embedding API returned HTTP 400; body=secret');
+      }
+      return {
+        embeddings: [[request.texts[0] === 'first' ? 1 : 2, 0]],
+        dimension: 2,
+        model: 'gemini-embedding-2',
+      };
+    });
+    const service = new EmbeddingService({
+      routeResolver: () => route,
+      invokeFn,
+      geminiRequestIntervalMs: 0,
+    });
+
+    await expect(service.encodeBatch(['first', 'second'], 'document')).resolves.toEqual([
+      [1, 0],
+      [2, 0],
+    ]);
+    expect(invokeFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not split other client errors or retryable HTTP failures', async () => {
+    vi.useFakeTimers();
+    const route = makeRoute('rag-embedding:v1:custom:openai-no-adaptive-batch');
+    const unauthorizedInvoke = vi
+      .fn()
+      .mockRejectedValue('Custom RAG Embedding API returned HTTP 401');
+    const unauthorizedService = new EmbeddingService({
+      routeResolver: () => route,
+      invokeFn: unauthorizedInvoke,
+    });
+
+    await expect(
+      unauthorizedService.encodeBatch(['first', 'second'], 'document')
+    ).rejects.toMatchObject({ code: 'HTTP_401', attemptCount: 1 });
+    expect(unauthorizedInvoke).toHaveBeenCalledTimes(1);
+
+    const rateLimitedInvoke = vi
+      .fn()
+      .mockRejectedValueOnce('Custom RAG Embedding API returned HTTP 429')
+      .mockResolvedValue({
+        embeddings: [
+          [1, 0],
+          [2, 0],
+        ],
+        dimension: 2,
+        model: 'embed-v1',
+      });
+    const rateLimitedService = new EmbeddingService({
+      routeResolver: () => route,
+      invokeFn: rateLimitedInvoke,
+      openAiMaxRetries: 1,
+      openAiRetryBaseDelayMs: 10,
+      openAiRetryMaxDelayMs: 10,
+      randomFn: () => 0,
+    });
+
+    const result = rateLimitedService.encodeBatch(['first', 'second'], 'document');
+    await vi.runAllTimersAsync();
+    await expect(result).resolves.toEqual([
+      [1, 0],
+      [2, 0],
+    ]);
+    expect(rateLimitedInvoke).toHaveBeenCalledTimes(2);
+    for (const call of rateLimitedInvoke.mock.calls) {
+      expect((call[1]?.request as { texts: string[] }).texts).toEqual(['first', 'second']);
+    }
+  });
+
+  it('stops adaptive splitting when its abort signal is cancelled', async () => {
+    const route = makeRoute('rag-embedding:v1:custom:openai-abort-adaptive-batch');
+    const controller = new AbortController();
+    const invokeFn = vi.fn(async (_command: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { texts: string[] };
+      if (request.texts.length > 1) {
+        throw new Error('Custom RAG Embedding API returned HTTP 400');
+      }
+      controller.abort();
+      return { embeddings: [[1, 0]], dimension: 2, model: 'embed-v1' };
+    });
+    const service = new EmbeddingService({
+      routeResolver: () => route,
+      invokeFn,
+    });
+
+    await expect(
+      service.encodeBatchWithRoute(['first', 'second'], route, 'document', controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(invokeFn).toHaveBeenCalledTimes(2);
   });
 
   it('isolates retry queues by embedding profile', async () => {

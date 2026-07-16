@@ -85,7 +85,7 @@ export function buildDocumentOverviewContent(input: BuildDocumentOverviewContent
 
   const overview = lines.join('\n').trim();
   return overview.length > MAX_OVERVIEW_CHARS
-    ? `${overview.slice(0, MAX_OVERVIEW_CHARS).trim()}...`
+    ? `${sliceWithoutSplittingSurrogatePair(overview, MAX_OVERVIEW_CHARS).trim()}...`
     : overview;
 }
 
@@ -175,7 +175,22 @@ function extractLeadText(content: string): string {
 
   flush();
 
-  return paragraphs.slice(0, 2).join('\n\n').slice(0, MAX_LEAD_CHARS).trim();
+  return sliceWithoutSplittingSurrogatePair(
+    paragraphs.slice(0, 2).join('\n\n'),
+    MAX_LEAD_CHARS
+  ).trim();
+}
+
+function sliceWithoutSplittingSurrogatePair(value: string, maxLength: number): string {
+  let end = Math.min(Math.max(0, Math.floor(maxLength)), value.length);
+  if (end > 0 && end < value.length) {
+    const previous = value.charCodeAt(end - 1);
+    const current = value.charCodeAt(end);
+    if (previous >= 0xd800 && previous <= 0xdbff && current >= 0xdc00 && current <= 0xdfff) {
+      end--;
+    }
+  }
+  return value.slice(0, end);
 }
 
 function stripFrontmatter(content: string): string {

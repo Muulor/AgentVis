@@ -63,4 +63,21 @@ describe('DocumentOverviewBuilder', () => {
     expect(chunk?.metadata.parentChunkId).toBe(chunk?.id);
     expect(chunk?.content).toContain('Title: AgentVis Features');
   });
+
+  it('does not split an emoji surrogate pair at the overview limit', () => {
+    const overview = buildDocumentOverviewContent({
+      documentId: 'emoji-overview',
+      content: `# ${'😀'.repeat(1_000)}\n\nlead`,
+      metadata: { fileName: 'emoji.md' },
+      childChunkCount: 1,
+      parentChunkCount: 1,
+    });
+
+    const hasUnpairedSurrogate = Array.from(overview).some((character) => {
+      if (character.length !== 1) return false;
+      const codeUnit = character.charCodeAt(0);
+      return codeUnit >= 0xd800 && codeUnit <= 0xdfff;
+    });
+    expect(hasUnpairedSurrogate).toBe(false);
+  });
 });

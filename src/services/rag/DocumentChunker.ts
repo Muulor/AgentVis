@@ -42,8 +42,8 @@ function generateChunkId(): string {
  * 文档分块器类
  *
  * 实现 Parent-Child 两级分块策略：
- * 1. Parent: 按 H2/H3 标题分割的完整章节 (800-1500 字符)
- * 2. Child: 小粒度片段 (200-400 字符)，用于向量检索
+ * 1. Parent: 按标题分割的完整章节，仅用于层级上下文恢复
+ * 2. Child: 受 chunkSize 硬上限约束的小粒度片段，用于向量检索
  */
 export class DocumentChunker {
   private config: ChunkingConfig;
@@ -272,76 +272,22 @@ export class DocumentChunker {
     sectionPath: string,
     baseMetadata: Partial<ChunkMetadata>
   ): Chunk[] {
-    const children: Chunk[] = [];
-
-    // 如果内容较短，直接作为一个 Child
-    if (content.length <= this.CHILD_SIZE * 1.5) {
-      if (content.trim().length >= this.config.minChunkSize) {
-        children.push(
-          this.createChunk(content.trim(), agentId, documentId, 0, {
-            ...baseMetadata,
-            documentType: 'markdown',
-            parentChunkId,
-            sectionPath,
-            isParent: false,
-          })
-        );
-      }
-      return children;
+    const normalizedContent = content.trim();
+    if (normalizedContent.length < this.config.minChunkSize) {
+      return [];
     }
 
-    // 按句子分割，然后组合成 Child 块
-    const sentences = this.splitIntoSentences(content);
-    let currentChunk = '';
-    let chunkIndex = 0;
-
-    for (const sentence of sentences) {
-      if (currentChunk.length + sentence.length > this.CHILD_SIZE) {
-        // 保存当前块
-        if (currentChunk.trim().length >= this.config.minChunkSize) {
-          children.push(
-            this.createChunk(currentChunk.trim(), agentId, documentId, chunkIndex++, {
-              ...baseMetadata,
-              documentType: 'markdown',
-              parentChunkId,
-              sectionPath,
-              isParent: false,
-            })
-          );
-        }
-
-        // 开始新块（带重叠）
-        const overlap = this.getOverlapText(currentChunk);
-        currentChunk = overlap + sentence;
-      } else {
-        currentChunk += sentence;
-      }
-    }
-
-    // 保存最后一个块
-    if (currentChunk.trim().length >= this.config.minChunkSize) {
-      children.push(
-        this.createChunk(currentChunk.trim(), agentId, documentId, chunkIndex, {
-          ...baseMetadata,
-          documentType: 'markdown',
-          parentChunkId,
-          sectionPath,
-          isParent: false,
-        })
-      );
-    }
-
-    return children;
-  }
-
-  /**
-   * 按句子分割文本
-   */
-  private splitIntoSentences(text: string): string[] {
-    // 中英文句子分割
-    const sentencePattern = /([^。！？.!?\n]+[。！？.!?\n]?)/g;
-    const matches = text.match(sentencePattern);
-    return matches ?? [text];
+    // Markdown Child 仍以较细粒度检索，但绝不能超过全局 chunkSize。
+    const childLimit = Math.min(this.CHILD_SIZE, this.getHardChunkLimit());
+    return this.splitWithHardLimit(normalizedContent, childLimit).map((childContent, index) =>
+      this.createChunk(childContent, agentId, documentId, index, {
+        ...baseMetadata,
+        documentType: 'markdown',
+        parentChunkId,
+        sectionPath,
+        isParent: false,
+      })
+    );
   }
 
   /**
@@ -391,69 +337,18 @@ export class DocumentChunker {
     documentId: string,
     baseMetadata: Partial<ChunkMetadata>
   ): Chunk[] {
-    const chunks: Chunk[] = [];
-    // 先按空行分段；对无空行的文本（如 JSON），整个文件会成为一个段落
-    const rawParagraphs = content.split(/\n\s*\n/);
-
-    // 对超长段落按行强制切分，防止无空行的文件变成单个巨大 chunk
-    const paragraphs: string[] = [];
-    for (const para of rawParagraphs) {
-      const trimmed = para.trim();
-      if (trimmed.length <= this.config.chunkSize * 2) {
-        paragraphs.push(trimmed);
-      } else {
-        // 按行累积切分
-        const lines = trimmed.split('\n');
-        let buffer = '';
-        for (const line of lines) {
-          if (buffer.length + line.length + 1 > this.config.chunkSize) {
-            if (buffer.length >= this.config.minChunkSize) {
-              paragraphs.push(buffer);
-            }
-            buffer = line;
-          } else {
-            buffer += (buffer ? '\n' : '') + line;
-          }
-        }
-        if (buffer) {
-          paragraphs.push(buffer);
-        }
-      }
+    const normalizedContent = content.trim();
+    if (normalizedContent.length < this.config.minChunkSize) {
+      return [];
     }
 
-    let currentChunk = '';
-    let chunkIndex = 0;
-
-    for (const paragraph of paragraphs) {
-      if (!paragraph) continue;
-
-      if (currentChunk.length + paragraph.length > this.config.chunkSize) {
-        if (currentChunk.length >= this.config.minChunkSize) {
-          chunks.push(
-            this.createChunk(currentChunk.trim(), agentId, documentId, chunkIndex++, {
-              ...baseMetadata,
-              documentType: 'text',
-            })
-          );
-        }
-
-        const overlap = this.getOverlapText(currentChunk);
-        currentChunk = overlap + paragraph + '\n\n';
-      } else {
-        currentChunk += paragraph + '\n\n';
-      }
-    }
-
-    if (currentChunk.trim().length >= this.config.minChunkSize) {
-      chunks.push(
-        this.createChunk(currentChunk.trim(), agentId, documentId, chunkIndex++, {
+    return this.splitWithHardLimit(normalizedContent, this.getHardChunkLimit()).map(
+      (chunkContent, index) =>
+        this.createChunk(chunkContent, agentId, documentId, index, {
           ...baseMetadata,
           documentType: 'text',
         })
-      );
-    }
-
-    return chunks;
+    );
   }
 
   /**
@@ -467,6 +362,9 @@ export class DocumentChunker {
   ): Chunk[] {
     const chunks: Chunk[] = [];
     const language = this.detectCodeLanguage(content);
+    if (content.trim().length < this.config.minChunkSize) {
+      return chunks;
+    }
 
     const functionPatterns: Record<string, RegExp> = {
       typescript:
@@ -492,19 +390,25 @@ export class DocumentChunker {
       for (let i = 0; i < matches.length; i++) {
         const match = matches[i];
         const nextMatch = matches[i + 1];
-        const startIndex = match?.index ?? 0;
+        // 第一段从文件开头开始，保留 imports、文件注释等函数前导内容。
+        const startIndex = i === 0 ? 0 : (match?.index ?? 0);
         const endIndex = nextMatch?.index ?? content.length;
 
         const chunkContent = content.slice(startIndex, endIndex).trim();
 
-        if (chunkContent.length >= this.config.minChunkSize) {
-          chunks.push(
-            this.createChunk(chunkContent, agentId, documentId, chunkIndex++, {
-              ...baseMetadata,
-              documentType: 'code',
-              codeLanguage: language,
-            })
-          );
+        if (chunkContent) {
+          for (const limitedContent of this.splitWithHardLimit(
+            chunkContent,
+            this.getHardChunkLimit()
+          )) {
+            chunks.push(
+              this.createChunk(limitedContent, agentId, documentId, chunkIndex++, {
+                ...baseMetadata,
+                documentType: 'code',
+                codeLanguage: language,
+              })
+            );
+          }
         }
       }
     } else {
@@ -519,6 +423,101 @@ export class DocumentChunker {
   }
 
   /**
+   * 获取实际的硬上限。
+   *
+   * UTF-16 中一个补充平面字符需要两个 code unit，因此至少保留 2，避免在 emoji
+   * 等字符的代理对中间切开。正常配置远大于这个下限。
+   */
+  private getHardChunkLimit(): number {
+    return Math.max(2, Math.floor(this.config.chunkSize));
+  }
+
+  /**
+   * 按硬上限切分内容。
+   *
+   * 优先在换行、标点或空白后切分；不存在自然边界时按长度强制切分。相邻分块保留
+   * 少量重叠，且所有边界都会避开 Unicode 代理对，保证超长单行和 emoji 文本也能
+   * 稳定前进且不丢失头尾内容。
+   */
+  private splitWithHardLimit(content: string, maxSize: number): string[] {
+    const normalizedContent = content.trim();
+    if (!normalizedContent) {
+      return [];
+    }
+
+    if (normalizedContent.length <= maxSize) {
+      return [normalizedContent];
+    }
+
+    const chunks: string[] = [];
+    const overlapSize = Math.min(this.CHILD_OVERLAP, Math.floor(maxSize / 5));
+    let start = 0;
+
+    while (start < normalizedContent.length) {
+      const hardEnd = Math.min(start + maxSize, normalizedContent.length);
+      let end = this.moveBoundaryBeforeSurrogatePair(normalizedContent, hardEnd);
+
+      if (end < normalizedContent.length) {
+        const minimumNaturalBoundary = start + Math.floor((end - start) * 0.6);
+        const naturalBoundary = this.findNaturalBoundary(
+          normalizedContent,
+          minimumNaturalBoundary,
+          end
+        );
+        if (naturalBoundary > start) {
+          end = naturalBoundary;
+        }
+      }
+
+      // maxSize >= 2；此分支仅防御意外配置或异常 Unicode 输入导致无法前进。
+      if (end <= start) {
+        end = Math.min(start + maxSize, normalizedContent.length);
+      }
+
+      const chunkContent = normalizedContent.slice(start, end).trim();
+      if (chunkContent) {
+        chunks.push(chunkContent);
+      }
+
+      if (end >= normalizedContent.length) {
+        break;
+      }
+
+      let nextStart = Math.max(start + 1, end - overlapSize);
+      nextStart = this.moveBoundaryBeforeSurrogatePair(normalizedContent, nextStart);
+      start = nextStart > start ? nextStart : end;
+    }
+
+    return chunks;
+  }
+
+  /** 在靠近硬上限处寻找自然切分点。 */
+  private findNaturalBoundary(content: string, minimum: number, maximum: number): number {
+    for (let boundary = maximum; boundary > minimum; boundary--) {
+      const previousCharacter = content[boundary - 1];
+      if (previousCharacter && /[\n\s。！？.!?；;，,、]/u.test(previousCharacter)) {
+        return this.moveBoundaryBeforeSurrogatePair(content, boundary);
+      }
+    }
+
+    return maximum;
+  }
+
+  /** 避免切分点落在 UTF-16 高、低代理项之间。 */
+  private moveBoundaryBeforeSurrogatePair(content: string, boundary: number): number {
+    if (boundary <= 0 || boundary >= content.length) {
+      return boundary;
+    }
+
+    const previous = content.charCodeAt(boundary - 1);
+    const current = content.charCodeAt(boundary);
+    const previousIsHighSurrogate = previous >= 0xd800 && previous <= 0xdbff;
+    const currentIsLowSurrogate = current >= 0xdc00 && current <= 0xdfff;
+
+    return previousIsHighSurrogate && currentIsLowSurrogate ? boundary - 1 : boundary;
+  }
+
+  /**
    * 检测代码语言
    */
   private detectCodeLanguage(content: string): string {
@@ -530,25 +529,6 @@ export class DocumentChunker {
     // TypeScript / JavaScript 特征
     if (/\b(function|const|let|var|interface|type|class)\s+\w+/m.test(content)) return 'typescript';
     return 'text';
-  }
-
-  /**
-   * 获取重叠文本
-   */
-  private getOverlapText(text: string): string {
-    if (text.length <= this.CHILD_OVERLAP) {
-      return text;
-    }
-
-    const overlapStart = text.length - this.CHILD_OVERLAP;
-    const overlapText = text.slice(overlapStart);
-
-    const spaceIndex = overlapText.indexOf(' ');
-    if (spaceIndex > 0 && spaceIndex < this.CHILD_OVERLAP / 2) {
-      return overlapText.slice(spaceIndex + 1);
-    }
-
-    return overlapText;
   }
 
   /**

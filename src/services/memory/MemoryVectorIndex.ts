@@ -19,6 +19,12 @@ import type { Chunk, SearchResult } from '../../types';
 import type { LongTermFactCategory } from './types';
 import { getLogger } from '@services/logger';
 import { ragIndexCoordinator } from '../rag/RagIndexCoordinator';
+import {
+  encodeEmbeddingInputs,
+  withEmbeddingAggregationMetadata,
+  type EmbeddingInputResult,
+} from '../rag/EmbeddingInputPlanner';
+import type { ResolvedEmbeddingRoute } from '../rag/RagConnectionConfig';
 
 const logger = getLogger('MemoryVectorIndex');
 
@@ -77,6 +83,19 @@ const FACT_DOC_PREFIX = 'memory_fact_';
 /** 摘要 documentId 前缀 */
 const SUMMARY_DOC_PREFIX = 'memory_summary_';
 
+async function encodeMemoryInput(
+  content: string,
+  route: ResolvedEmbeddingRoute
+): Promise<EmbeddingInputResult> {
+  const [result] = await encodeEmbeddingInputs([content], (expandedTexts) =>
+    embeddingService.encodeBatchWithRoute(expandedTexts, route, 'document')
+  );
+  if (!result) {
+    throw new Error('RAG_EMBEDDING_RESULT_COUNT_MISMATCH');
+  }
+  return result;
+}
+
 // ============================================================================
 // MemoryVectorIndex 类
 // ============================================================================
@@ -111,7 +130,7 @@ export class MemoryVectorIndex {
     try {
       // 生成 Embedding
       const embeddingRoute = embeddingService.getActiveRoute();
-      const embedding = await embeddingService.encodeWithRoute(content, embeddingRoute, 'document');
+      const embeddingResult = await encodeMemoryInput(content, embeddingRoute);
 
       // 构建 Chunk
       const chunk: Chunk = {
@@ -120,12 +139,15 @@ export class MemoryVectorIndex {
         documentId,
         chunkIndex: 0,
         content,
-        metadata: {
-          memoryType: 'fact',
-          memoryId: factId,
-          category,
-          indexedAt: Date.now(),
-        },
+        metadata: withEmbeddingAggregationMetadata(
+          {
+            memoryType: 'fact',
+            memoryId: factId,
+            category,
+            indexedAt: Date.now(),
+          },
+          embeddingResult.segmentCount
+        ),
         createdAt: Date.now(),
       };
 
@@ -133,7 +155,7 @@ export class MemoryVectorIndex {
       if (embeddingService.getActiveProfileId() !== embeddingRoute.profileId) {
         throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_INDEX');
       }
-      await this.vectorStore.insert(chunk, embedding, embeddingRoute.profileId);
+      await this.vectorStore.insert(chunk, embeddingResult.embedding, embeddingRoute.profileId);
 
       logger.trace(`[MemoryVectorIndex]  已索引事实: ${factId} (${category})`);
     } catch {
@@ -156,12 +178,9 @@ export class MemoryVectorIndex {
     const writerLease = await ragIndexCoordinator.acquireWriter();
 
     try {
-      // 先删除旧向量（upsert 语义），防止补索引或重复调用产生重复 chunk
-      await this.vectorStore.deleteByDocument(agentId, documentId);
-
       // 生成 Embedding
       const embeddingRoute = embeddingService.getActiveRoute();
-      const embedding = await embeddingService.encodeWithRoute(content, embeddingRoute, 'document');
+      const embeddingResult = await encodeMemoryInput(content, embeddingRoute);
 
       // 构建 Chunk
       const chunk: Chunk = {
@@ -170,11 +189,14 @@ export class MemoryVectorIndex {
         documentId,
         chunkIndex: 0,
         content,
-        metadata: {
-          memoryType: 'summary',
-          memoryId: summaryId,
-          indexedAt: Date.now(),
-        },
+        metadata: withEmbeddingAggregationMetadata(
+          {
+            memoryType: 'summary',
+            memoryId: summaryId,
+            indexedAt: Date.now(),
+          },
+          embeddingResult.segmentCount
+        ),
         createdAt: Date.now(),
       };
 
@@ -182,7 +204,9 @@ export class MemoryVectorIndex {
       if (embeddingService.getActiveProfileId() !== embeddingRoute.profileId) {
         throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_INDEX');
       }
-      await this.vectorStore.insert(chunk, embedding, embeddingRoute.profileId);
+      // 仅在新向量已经生成且 profile 仍有效后替换旧记录，避免远端失败先删掉可用索引。
+      await this.vectorStore.deleteByDocument(agentId, documentId);
+      await this.vectorStore.insert(chunk, embeddingResult.embedding, embeddingRoute.profileId);
 
       logger.trace(`[MemoryVectorIndex]  已索引摘要: ${summaryId}`);
     } catch (error) {

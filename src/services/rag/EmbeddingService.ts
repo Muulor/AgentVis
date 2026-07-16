@@ -303,8 +303,12 @@ export class EmbeddingService implements IEmbeddingService {
         batchStart += EMBEDDING_BATCH_SIZE
       ) {
         const batchTexts = uncachedTexts.slice(batchStart, batchStart + EMBEDDING_BATCH_SIZE);
-        const response = await this.callEmbeddingApi(route, batchTexts, purpose, signal);
-        this.assertValidResponse(response, batchTexts.length);
+        const response = await this.callEmbeddingApiWithAdaptiveBatching(
+          route,
+          batchTexts,
+          purpose,
+          signal
+        );
 
         for (let index = 0; index < batchTexts.length; index++) {
           const globalIndex = batchStart + index;
@@ -433,6 +437,59 @@ export class EmbeddingService implements IEmbeddingService {
       () => this.callWithRetry(route.protocol, lane, invokeOnce, purpose, signal),
       signal
     );
+  }
+
+  /**
+   * Some compatible providers reject an otherwise valid multi-item request with
+   * HTTP 400 when the aggregate batch exceeds an undocumented constraint. Split
+   * only that exact failure so retryable errors keep their normal backoff and a
+   * deterministic single-item rejection remains visible to the caller.
+   */
+  private async callEmbeddingApiWithAdaptiveBatching(
+    route: ResolvedEmbeddingRoute,
+    texts: string[],
+    purpose: EmbeddingPurpose,
+    signal?: AbortSignal
+  ): Promise<CloudEmbeddingResponse> {
+    try {
+      const response = await this.callEmbeddingApi(route, texts, purpose, signal);
+      this.assertValidResponse(response, texts.length);
+      return response;
+    } catch (error) {
+      if (this.isAbortError(error)) throw error;
+
+      const safeFailure = classifyEmbeddingError(error);
+      if (safeFailure.code !== 'HTTP_400' || texts.length <= 1) throw error;
+
+      this.throwIfAborted(signal);
+      logger.warn(
+        '[EmbeddingService] Splitting HTTP 400 embedding batch',
+        this.getSafeBatchMetrics(texts)
+      );
+
+      const splitIndex = Math.ceil(texts.length / 2);
+      const left = await this.callEmbeddingApiWithAdaptiveBatching(
+        route,
+        texts.slice(0, splitIndex),
+        purpose,
+        signal
+      );
+      this.throwIfAborted(signal);
+      const right = await this.callEmbeddingApiWithAdaptiveBatching(
+        route,
+        texts.slice(splitIndex),
+        purpose,
+        signal
+      );
+
+      const response = {
+        embeddings: [...left.embeddings, ...right.embeddings],
+        dimension: left.dimension,
+        model: left.model,
+      };
+      this.assertValidResponse(response, texts.length);
+      return response;
+    }
   }
 
   private async callWithRetry<T>(
@@ -625,6 +682,24 @@ export class EmbeddingService implements IEmbeddingService {
 
   private isAbortError(error: unknown): boolean {
     return error instanceof Error && error.name === 'AbortError';
+  }
+
+  private getSafeBatchMetrics(texts: string[]): {
+    itemCount: number;
+    totalUtf8Bytes: number;
+    maxItemUtf8Bytes: number;
+  } {
+    const encoder = new TextEncoder();
+    let totalUtf8Bytes = 0;
+    let maxItemUtf8Bytes = 0;
+
+    for (const text of texts) {
+      const byteLength = encoder.encode(text).byteLength;
+      totalUtf8Bytes += byteLength;
+      maxItemUtf8Bytes = Math.max(maxItemUtf8Bytes, byteLength);
+    }
+
+    return { itemCount: texts.length, totalUtf8Bytes, maxItemUtf8Bytes };
   }
 
   private assertUsableRoute(route: ResolvedEmbeddingRoute): void {

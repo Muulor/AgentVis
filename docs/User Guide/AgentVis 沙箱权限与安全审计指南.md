@@ -343,7 +343,8 @@ Script 技能可以在技能定义中声明更明确的执行要求，例如：
 - 远程端点只允许 HTTPS，HTTP 仅允许回环地址；客户端不跟随任何重定向，Rust 网络硬超时为 15 秒。这些限制降低误配和 SSRF 风险，但不代表第三方服务本身可信。
 - 原生 Gemini 路由不接受用户自定义网络目标。Rust 只会把 `x-goog-api-key` 发送到精确 HTTPS 主机 `generativelanguage.googleapis.com`，并使用白名单模型 ID 构造 `v1beta` 批量接口路径；Key 不会进入 URL 或查询参数。自定义 Gemini 代理、Vertex AI、OAuth、多模态输入和异步 Batch job 不属于该路由的信任边界。
 - Google 说明，未付费 Gemini API 服务提交的内容可能用于改进产品并可能经过人工审核。AgentVis 会向量化知识库片段、记忆、技能描述及其他待语义比较文本，因此不要通过未付费层级处理敏感、机密或个人数据。付费服务条款不同，请自行核对当前的 [Gemini API 附加条款](https://ai.google.dev/gemini-api/terms)、[定价](https://ai.google.dev/gemini-api/docs/pricing)和[支持地区](https://ai.google.dev/gemini-api/docs/available-regions)。
-- 供应商错误响应正文和完整请求 URL 不会写入界面或日志；错误链路内部仅保留稳定类别/HTTP 状态，界面显示本地化的检查提示，避免 URL 查询参数、查询文本或候选内容被错误信息再次泄露。
+- 供应商错误响应正文和完整请求 URL 不会写入界面或日志；错误链路内部仅保留稳定类别/HTTP 状态。多条 Embedding 请求遇到 HTTP 400 时可自动二分隔离，但日志只记录条数、总 UTF-8 字节数和单条最大字节数，不记录文本、端点或凭据；界面显示本地化的检查提示，避免 URL 查询参数、查询文本或候选内容被错误信息再次泄露。
+- 知识库或记忆索引（包括索引重建）过程中，超过 6 KiB UTF-8 的最终 document-purpose Embedding 输入会被拆成带重叠的多个窗口并分次发送，再在本地聚合成一条逻辑向量。数据库保存的完整正文不会被截断，也不会增加额外逻辑记录，但同一段边界上下文可能随相邻窗口重复发送并增加 API 用量；仍应只选择你信任的数据处理服务。
 - 应用用户选择的 Embedding 模式、协议、端点、模型或输出维度变更前，AgentVis 会测试目标连接，并确认索引重建可能产生的 API 用量和内容发送。用户确认后提示框立即关闭，配置启用与索引重建在后台继续，设置窗口不再阻塞其他操作。Gemini 任务映射是 profile 内部的版本化策略，并非用户可选项；若应用更新调整策略版本，AgentVis 会形成新 profile，使下一次索引检查或 Embedding profile 激活重建向量，避免混用不兼容空间。重建按 Agent 事务执行；部分失败时新 profile 继续隔离旧向量，未迁移 Agent 暂时降级到本地 BM25，并可稍后重试。
 - 这是 AgentVis 自身的云模型调用，不应把 Agent 沙箱模式或命令 broker 当作对第三方 RAG 端点的信任替代。配置端点时仍需自行核对域名、服务商和数据处理条款。
 

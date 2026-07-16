@@ -67,17 +67,19 @@ src-tauri/src/db/vector_repo.rs           # chunk_embeddings 表读写与 cosine
 
 `DocumentChunker` 负责把原始文档切成适合索引的 chunk。当前实现要注意两点：
 
-- **Markdown** 走 Parent-Child 分块：按 H1~H6 标题解析章节，章节内容生成 Parent，章节内部再按句子聚合成 Child。
+- **Markdown** 走 Parent-Child 分块：按 H1~H6 标题解析章节，章节内容生成 Parent，章节内部再按自然边界聚合成 Child。
 - **非 Markdown**（纯文本、代码、JSON 等）走扁平分块：不会生成 Parent，`parentChunks` 为空，`childChunks` 就是实际扁平 chunks。
+
+所有 Child/扁平 chunk 的正文都满足统一硬上限：优先在换行、标点或空白处切分，不存在自然边界时按 Unicode 安全边界强制切分，并保留最多 50 字符重叠。大型 class/function、超长单行 JSON 和无标点长句都不能再绕过 `chunkSize`。Markdown Parent 仍保留完整章节，因为它只用于层级上下文恢复，不直接写入向量库。metadata 增强完成后还会经过独立的最终输入规划，因此超长标题或章节路径也不能重新制造超限远端请求。
 
 关键参数：
 
 | 参数                                   | 当前值   | 说明                                 |
 | -------------------------------------- | -------- | ------------------------------------ |
 | `PARENT_MIN_SIZE`                      | 200 字符 | Markdown 章节短于该值时不记录 Parent |
-| `CHILD_SIZE`                           | 500 字符 | Markdown Child 目标尺寸              |
+| `CHILD_SIZE`                           | 500 字符 | Markdown Child 上限                  |
 | `CHILD_OVERLAP`                        | 50 字符  | Child 间重叠窗口                     |
-| `DEFAULT_CHUNKING_CONFIG.chunkSize`    | 500 字符 | 文本/扁平分块目标尺寸                |
+| `DEFAULT_CHUNKING_CONFIG.chunkSize`    | 500 字符 | 所有 Child/扁平 chunk 正文的硬上限   |
 | `DEFAULT_CHUNKING_CONFIG.minChunkSize` | 100 字符 | 最小 chunk 尺寸                      |
 
 Markdown Child 会携带 `parentChunkId`、`sectionPath` 等元数据。当前 `RagService.indexDocument()` 实际写入向量库的是 **Document Overview + Child chunks**，Parent chunk 本身不作为普通向量条目持久化。检索后如需连续上下文，由 `HybridRetriever` 使用缓存中的同 Parent sibling chunks 做 `Parent Context Restore`。
@@ -125,7 +127,9 @@ Gitee AI fallback 已移除；系统不会在不同 Embedding 模型之间自动
 
 每次 `encode` / `encodeBatch` 会固定一次不可变路由快照。缓存键与数据库行都带 Embedding profile。为保持向后兼容，现有 OpenAI 兼容 profile 仍由协议、规范化端点和模型 ID 组成；原生 Gemini profile 则单独包含固定协议/API 版本、模型、输出维度和任务策略版本。应用用户选择的模式、协议、端点、模型或维度变更前，设置页会先测试目标连接并确认潜在 API 用量与内容发送；用户确认后提示框立即关闭，新 profile 启用与按 Agent 重建已有向量会在后台继续。Gemini 任务映射不是用户可配置项，而是 profile 内部的版本化策略；若应用更新调整策略版本，就会形成新 profile，并在下一次索引检查或 Embedding profile 激活时重建向量，避免混用不兼容空间。部分重建失败时，新 profile 仍保持启用，旧向量会被过滤，未迁移 Agent 暂时退回 BM25，并可幂等重试重建。
 
-同一 Embedding profile 的普通请求会在单个 `EmbeddingService` 内串行执行，限流冷却不会阻塞其他 profile。Gemini 请求起点至少间隔 1 秒；OpenAI-compatible 不预设固定速率，而是在遇到 429、可恢复的 5xx 或网络超时后自适应退避。两类协议都使用带随机抖动的指数退避；OpenAI-compatible 最多重试 6 次以覆盖常见的一分钟限流窗口，并优先遵守经过解析和限幅的 `Retry-After`。连接测试保持单次调用，以便快速暴露当前状态。具体 RPM/TPM/RPD 由用户的供应商与账户决定，代码不会把总余额误当作分钟速率额度，日额度耗尽后仍需等待配额恢复。重建过程每 25 个 chunk 成功后立即通过原子批量更新建立持久化检查点，因此后续失败只重试未完成片段。Agent 知识库设置只持久化完成索引的文件路径，并会用本地 `documentId` 对账历史状态；失败文件显示错误并可再次保存重试，不再伪装为绿色成功。
+同一 Embedding profile 的普通请求会在单个 `EmbeddingService` 内串行执行，限流冷却不会阻塞其他 profile。Gemini 请求起点至少间隔 1 秒；OpenAI-compatible 不预设固定速率，而是在遇到 429、可恢复的 5xx 或网络超时后自适应退避。两类协议都使用带随机抖动的指数退避；OpenAI-compatible 最多重试 6 次以覆盖常见的一分钟限流窗口，并优先遵守经过解析和限幅的 `Retry-After`。HTTP 400 仍属于不可退避的客户端错误；当多条请求返回 400 时，`EmbeddingService` 会递归二分批次以隔离供应商未公开的批量限制或单条坏输入，单条仍失败时立即返回错误。二分诊断只记录条数和 UTF-8 字节统计，不记录文本、端点、响应正文或凭据。连接测试保持单次调用，以便快速暴露当前状态。具体 RPM/TPM/RPD 由用户的供应商与账户决定，代码不会把总余额误当作分钟速率额度，日额度耗尽后仍需等待配额恢复。重建过程每 25 个原始 chunk 成功后立即通过原子批量更新建立持久化检查点，因此后续失败只重试未完成片段。Agent 知识库设置只持久化完成索引的文件路径，并会用本地 `documentId` 对账历史状态；失败文件显示错误并可再次保存重试，不再伪装为绿色成功。
+
+所有 document-purpose 索引写入都会在 metadata 增强后规划最终 Embedding 文本，包括新知识库的 Overview/Child、新写入的记忆 fact/summary，以及索引重建处理的已有记录。最终输入超过 6 KiB UTF-8 时，会被切成最多 6 KiB、重叠 512 B 的 Unicode 安全窗口。每个窗口向量先做 L2 归一化，再按该窗口新增的非重叠 UTF-8 字节数加权平均并再次归一化，最终仍以原 chunk 或 memory ID 持久化一条逻辑向量；数据库保存的完整正文不会被截断，SQLite/BM25 记录数不会膨胀，重叠内容也不会被重复计权。metadata 会记录 `embeddingAggregationVersion` 与 `embeddingSegmentCount`，因此聚合标记缺失或窗口数不匹配的已有超长向量会在“检查并重建索引”时迁移。正常单窗口输入保持供应商返回的原向量，不做额外归一化。相邻窗口可能重复发送边界上下文，因此会增加一定供应商用量。
 
 OpenAI 兼容 Embedding、原生 Gemini Embeddings 与 Reranker 使用不同的用途级凭据槽，测试或切换协议不会覆盖另一协议的 Key。OpenAI 兼容 Embedding 与 Reranker 的槽内记录还绑定端点 origin；同一 origin 可跨模型或接口路径复用 Key，origin 变化后必须重新保存，后端不会把旧 Key 发送到新端点。旧版未绑定端点的自定义凭据也必须重新保存一次。API Key 在字段旁“保存”时立即写入系统凭据管理器；底部“保存并应用”只应用非敏感端点、模型和维度配置。远程自定义端点必须使用 HTTPS，仅回环地址允许 HTTP；不要把密钥放进 URL 或查询参数。原生 Gemini 路由会固定 Google 精确主机，使用白名单模型 ID 构造路径，只通过 `x-goog-api-key` 发送凭据，并禁止重定向。Reranker 明确支持 Jina/Cohere 与 Voyage 两类协议，不从任一 Embedding 协议推断。
 
@@ -493,16 +497,17 @@ Hub @提及模式下：
 
 | 参数                          | 值                            | 说明                                                                                     |
 | ----------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------- |
-| Markdown Child Chunk 大小     | 500 字符                      | `DocumentChunker.CHILD_SIZE`                                                             |
+| Markdown Child Chunk 上限     | 500 字符                      | `DocumentChunker.CHILD_SIZE`                                                             |
 | Parent 最小尺寸               | 200 字符                      | 短于该值不记录 Parent                                                                    |
 | Child 重叠窗口                | 50 字符                       | `DocumentChunker.CHILD_OVERLAP`                                                          |
-| 默认文本 chunkSize            | 500 字符                      | `DEFAULT_CHUNKING_CONFIG.chunkSize`                                                      |
+| 默认 Child/扁平正文硬上限      | 500 字符                      | `DEFAULT_CHUNKING_CONFIG.chunkSize`                                                      |
 | 默认最小 chunk                | 100 字符                      | `DEFAULT_CHUNKING_CONFIG.minChunkSize`                                                   |
 | Embedding 推荐模型            | `BAAI/bge-m3`                 | SiliconFlow 中国大陆端点；用户可切换为自定义 OpenAI 兼容端点或原生 Gemini                |
 | 原生 Gemini 模型              | `gemini-embedding-2` / `-001` | 仅文本；固定 Google Developer API 端点；输出维度 768、1536 或 3072                       |
 | Embedding profile             | 路由相关语义指纹              | OpenAI 保持原协议+端点+模型指纹；Gemini 增加 API/模型/维度/任务策略版本                  |
 | Embedding 缓存                | 1000 条 LRU                   | `EmbeddingService`                                                                       |
 | Embedding 批大小              | 25 条                         | `EMBEDDING_BATCH_SIZE`                                                                   |
+| 最终索引输入窗口 / 重叠       | 6 KiB / 512 B                 | 超长知识库、记忆和重建 document-purpose 输入统一启用                                    |
 | Embedding 超时                | Rust 15 秒 / renderer 18 秒   | 网络硬超时 / IPC 兜底                                                                    |
 | BM25 k1                       | 1.2                           | 词频饱和控制                                                                             |
 | BM25 b                        | 0.75                          | 文档长度归一化                                                                           |
