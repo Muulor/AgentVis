@@ -101,7 +101,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
     DEFAULT_SAFETY_FOOTER_BODY_TEXT
   );
 
-  // 精准命中技能状态
+  // 绑定技能状态
   const [pinnedSkillsEnabled, setPinnedSkillsEnabled] = useState(false);
   const [pinnedSkillNames, setPinnedSkillNames] = useState<string[]>([]);
   // 从 runtimeStore 获取已安装的外部技能列表
@@ -232,7 +232,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
       // 重置多选模式
       setIsSelectMode(false);
       setSelectedPaths(new Set());
-      // 初始化精准命中技能状态
+      // 初始化绑定技能状态
       const ps = agent.pinnedSkills;
       if (ps) {
         try {
@@ -328,7 +328,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
         request.sa_rules_file_path = '';
       }
 
-      // 精准命中技能：启用且有选中技能则存储 JSON 数组，否则清除
+      // 绑定技能：启用且有选中技能则存储 JSON 数组，否则清除
       if (pinnedSkillsEnabled && boundedPinnedSkillNames.length > 0) {
         request.pinned_skills = JSON.stringify(boundedPinnedSkillNames);
       } else if (agent.pinnedSkills) {
@@ -1350,7 +1350,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
           {/* 技能标签页 */}
           {activeTab === 'skills' && (
             <div className={styles.formGroup}>
-              {/* 精准命中开关 */}
+              {/* 绑定技能模式开关 */}
               <div className={styles.toggleRow}>
                 <div className={styles.toggleInfo}>
                   <span className={styles.toggleLabel}>{t('agent.settings.pinnedMode')}</span>

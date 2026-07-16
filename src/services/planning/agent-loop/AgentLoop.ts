@@ -370,7 +370,7 @@ export class AgentLoop {
       getRAGEvidence: (_query: string) => Promise.resolve(this.extractRAGEvidenceFromSession()),
       // Guide 技能语义检索：懒初始化 SkillRetriever，按意图 Top-K 检索
       getExternalGuideSkills: async (query: string): Promise<ExternalGuideSkillInfo[]> => {
-        // 精准命中模式：跳过语义检索，直接按名称加载绑定技能
+        // 绑定技能：跳过语义检索，直接按名称加载绑定技能
         if (this.config.pinnedSkills?.length) {
           const guideSkills = skillLoader.getExternalGuideSkills();
           const pinned = this.config.pinnedSkills
@@ -384,7 +384,7 @@ export class AgentLoop {
               scriptFiles: s.scriptFiles,
               resourceFiles: s.resourceFiles,
             }));
-          logger.debug('[AgentLoop] 精准命中模式：直接加载绑定技能', {
+          logger.debug('[AgentLoop] 绑定技能：直接加载绑定技能', {
             requested: this.config.pinnedSkills,
             loaded: pinned.map((s) => s.name),
           });
@@ -436,7 +436,7 @@ export class AgentLoop {
       // 已安装技能目录：静态返回所有启用的 Guide 技能的 name + description
       // 禁用的技能不注入 MB 上下文，减轻上下文压力
       getInstalledSkillCatalog: (): Array<{ name: string; description: string }> => {
-        // 精准命中模式：MB 不需要全量技能目录，直接返回空
+        // 绑定技能：MB 不需要全量技能目录，直接返回空
         if (this.config.pinnedSkills?.length) {
           return [];
         }
@@ -498,7 +498,7 @@ export class AgentLoop {
    * - 同时重置 Promise 锁和正式缓存（skillRetriever），使下次请求可重试完整 embedding 初始化
    */
   private async ensureSkillRetriever(): Promise<SkillRetriever | null> {
-    // 精准命中模式不需要初始化 SkillRetriever（节省嵌入计算开销）
+    // 绑定技能不需要初始化 SkillRetriever（节省嵌入计算开销）
     if (this.config.pinnedSkills?.length) {
       return null;
     }

@@ -458,7 +458,7 @@ export interface UsePlanningModeOptions {
     modelProvider?: string;
     modelName?: string;
     reasoningPreset?: ReasoningPreset;
-    /** 精准命中技能（JSON 数组字符串，如 '["skill1","skill2"]'） */
+    /** 绑定技能（JSON 数组字符串，如 '["skill1","skill2"]'） */
     pinnedSkills?: string;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
     visualEnhancementEnabled?: boolean;
@@ -483,7 +483,7 @@ export interface ExecutePlanningOptions {
     modelProvider?: string;
     modelName?: string;
     reasoningPreset?: ReasoningPreset;
-    /** 精准命中技能（JSON 数组字符串） */
+    /** 绑定技能（JSON 数组字符串） */
     pinnedSkills?: string;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
     visualEnhancementEnabled?: boolean;
@@ -679,10 +679,10 @@ async function getAgentWorkdir(hubName: string, agentName: string): Promise<stri
 }
 
 /**
- * 安全解析精准命中技能 JSON 字符串为技能名称数组
+ * 安全解析绑定技能 JSON 字符串为技能名称数组
  *
  * 输入 '["skill1","skill2"]' 或 undefined/null
- * 返回 string[] 或 undefined（无精准命中配置时）
+ * 返回 string[] 或 undefined（无绑定技能配置时）
  */
 function parsePinnedSkills(raw: string | null | undefined): string[] | undefined {
   if (!raw) return undefined;
@@ -1205,7 +1205,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           contextId: contextId,
           // Hub @提及模式禁用 RAG 检索（与 Chat 模式一致，减少上下文压力）
           enableRag: contextType === 'agent',
-          // 精准命中技能：解析 JSON 数组字符串为技能名称数组
+          // 绑定技能：解析 JSON 数组字符串为技能名称数组
           pinnedSkills: parsePinnedSkills(effectiveAgentConfig.pinnedSkills),
           // Agent 头像（身份形象感知注入）
           agentAvatar: agentAvatarBase64,

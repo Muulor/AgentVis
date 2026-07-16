@@ -76,7 +76,7 @@ export interface AgentServiceConfig {
    */
   enableRag?: boolean;
   /**
-   * 精准命中技能列表
+   * 绑定技能列表
    *
    * 配置后跳过语义检索，直接按名称加载绑定技能的 fullContent。
    * 同时 MB 不加载 installedSkillCatalog，全局技能开关对此 Agent 无效。
@@ -577,7 +577,7 @@ export class AgentService {
           imageAttachments: options.imageAttachments,
           // 用户上传的附件路径清单，供 SA 通过 TaskContext 直接读取
           attachmentReferences: options.attachmentReferences,
-          // 精准命中技能：跳过语义检索，直接加载绑定技能
+          // 绑定技能：跳过语义检索，直接加载绑定技能
           pinnedSkills: this.config.pinnedSkills,
           // Agent 头像（身份形象感知注入）
           agentAvatar: this.config.agentAvatar,
@@ -903,7 +903,7 @@ export function getOrCreateAgentService(config: AgentServiceConfig): AgentServic
       cachedConfig.baseUrl !== config.baseUrl ||
       cachedConfig.mbAgentRules !== config.mbAgentRules ||
       cachedConfig.saAgentRules !== config.saAgentRules ||
-      // 精准命中技能变化检测（绑定技能变化需要重建 AgentLoop 以重新初始化注入逻辑）
+      // 绑定技能变化检测（绑定技能变化需要重建 AgentLoop 以重新初始化注入逻辑）
       JSON.stringify(cachedConfig.pinnedSkills) !== JSON.stringify(config.pinnedSkills) ||
       // per-agent 决策预算变化需重建（当前 loop 已完成时下次自然生效）
       cachedConfig.mbDecisionBudget !== config.mbDecisionBudget ||

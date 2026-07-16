@@ -781,7 +781,7 @@
   position: absolute;
 }
 
-/* ==================== 精准命中技能列表 ==================== */
+/* ==================== 绑定技能列表 ==================== */
 .pinnedSkillList {
   display: flex;
   flex-direction: column;

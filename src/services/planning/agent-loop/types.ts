@@ -182,7 +182,7 @@ export interface AgentLoopConfig {
    */
   agentAvatar?: string;
   /**
-   * 精准命中技能列表
+   * 绑定技能列表
    *
    * 配置后跳过语义检索，直接按名称加载绑定技能的 fullContent。
    * 同时 MB 不加载 installedSkillCatalog，全局技能开关对此 Agent 无效。

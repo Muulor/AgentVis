@@ -244,7 +244,7 @@ impl AgentRepository {
             .or(agent.visual_enhancement_enabled);
         // pinned_skills: 空字符串清除，Some 非空设置，None 保持原值
         let new_pinned_skills = match &update.pinned_skills {
-            Some(s) if s.is_empty() => None, // 空字符串清除精准命中
+            Some(s) if s.is_empty() => None, // 空字符串清除绑定技能
             Some(s) => Some(s.clone()),
             None => agent.pinned_skills,
         };

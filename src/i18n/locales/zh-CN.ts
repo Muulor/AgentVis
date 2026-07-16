@@ -204,7 +204,7 @@ export const zhCN = {
       knowledgeIndexFailedStatus: '向量索引缺失或失败，请再次保存重试',
       knowledgeIndexFailed:
         '{count} 个文件尚未成功建立向量索引，当前不会参与知识库检索。请检查 Embedding 连接或服务限额，然后再次保存重试。',
-      pinnedMode: '精准命中模式',
+      pinnedMode: '绑定技能模式',
       pinnedHint: '绑定 1-{max} 个技能直接注入上下文，忽略其他技能的检索与注入',
       pinnedTip: '启用后，全局技能开关对此 Agent 无效（仅在 Task 模式生效）。',
       selectedSkills: '已选 {count}/{max} 个技能',

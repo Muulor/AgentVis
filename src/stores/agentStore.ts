@@ -25,7 +25,7 @@ interface Agent {
   knowledgePaths: string | null; // 对应Rust的knowledge_paths (JSON数组)
   autoIndexDeliverables?: boolean | null; // 对应Rust的auto_index_deliverables，交付物自动索引开关
   visualEnhancementEnabled?: boolean | null; // 对应Rust的visual_enhancement_enabled，Planning最终回复可视化增强开关
-  pinnedSkills?: string | null; // 对应Rust的pinned_skills，精准命中技能列表（JSON数组）
+  pinnedSkills?: string | null; // 对应Rust的pinned_skills，绑定技能列表（JSON数组）
   /** MB 最大决策轮次，null 时使用全局默认值（LOOP_GOVERNOR_INITIAL_BUDGET） */
   planningLoopBudget?: number | null; // 对应Rust的planning_loop_budget
   /** 用户关联的外部项目路径（用户在授权弹窗确认后 Agent 具有全权限），null 表示未关联 */

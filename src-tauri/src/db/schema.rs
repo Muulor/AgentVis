@@ -284,7 +284,7 @@ pub async fn initialize_schema(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
     }
 
     // 数据库迁移：为现有 agents 表添加 pinned_skills 列
-    // 精准命中技能列表（JSON 数组），绑定到特定 Agent 的技能
+    // 绑定技能列表（JSON 数组），绑定到特定 Agent 的技能
     let pinned_skills_columns: Vec<(String,)> =
         sqlx::query_as("SELECT name FROM pragma_table_info('agents') WHERE name = 'pinned_skills'")
             .fetch_all(pool)
