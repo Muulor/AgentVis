@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { Buffer } from 'node:buffer';
 import {
   reportRendererHealthSnapshot,
   setRendererHealthStage,
@@ -325,6 +326,9 @@ describe('WorkspaceImportService', () => {
     bytes.forEach((_, index) => {
       bytes[index] = index % 251;
     });
+    const btoaSpy = vi
+      .spyOn(globalThis, 'btoa')
+      .mockImplementation((binary) => Buffer.from(binary, 'latin1').toString('base64'));
     const received: Uint8Array[] = [];
     let receivedBytes = 0;
     invokeMock.mockImplementation(async (command, args) => {
@@ -338,7 +342,7 @@ describe('WorkspaceImportService', () => {
       }
       if (command === 'workspace_import_append_chunk') {
         const encoded = (args as { base64Data: string }).base64Data;
-        const decoded = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+        const decoded = Buffer.from(encoded, 'base64');
         received.push(decoded);
         receivedBytes += decoded.length;
         return {
@@ -358,7 +362,7 @@ describe('WorkspaceImportService', () => {
       [source('large.bin', bytes)],
       { hubName: 'hub', agentName: 'agent', rootDir: null, currentRelativePath: '' },
       { onProgress: () => undefined, signal: activeSignal() }
-    );
+    ).finally(() => btoaSpy.mockRestore());
 
     expect(result.importedFiles).toBe(1);
     expect(received).toHaveLength(2);
@@ -369,7 +373,7 @@ describe('WorkspaceImportService', () => {
       reconstructed.set(chunk, offset);
       offset += chunk.length;
     }
-    expect(reconstructed).toEqual(bytes);
+    expect(Buffer.from(reconstructed).equals(bytes)).toBe(true);
     expect(invokeMock).not.toHaveBeenCalledWith('workspace_import_cancel', expect.anything());
   }, 10_000);
 
