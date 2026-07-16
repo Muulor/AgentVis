@@ -93,8 +93,9 @@ agent/
 ├── AgentContextMenu.module.css   # 右键菜单样式
 ├── AgentCreateModal.tsx          # 创建智能体弹窗
 ├── AgentCreateModal.module.css   # 创建弹窗样式
-├── AgentModelSelector.tsx        # 模型选择器组件
-├── AgentModelSelector.module.css # 模型选择器样式
+├── AgentModelSelector.tsx        # Agent 模型选择器（路由能力约束的 reasoning preset 二级菜单）
+├── AgentModelSelector.helpers.ts # 模型切换与推理档位选择的纯逻辑
+├── AgentModelSelector.module.css # 模型与 reasoning preset 菜单样式
 ├── AgentNavItem.tsx              # 智能体导航项
 ├── AgentNavItem.module.css       # 导航项样式
 ├── AgentSettingsModal.tsx        # 智能体设置弹窗（基础/模型/知识库/定时任务 Tab）
@@ -483,10 +484,11 @@ update/
 config/
 ├── modelRegistry.ts              # 模型/供应商注册表（唯一数据源）
 │                                 # - 内置供应商与模型定义
+│                                 # - provider/model 路由级 reasoning preset 能力与无效值归一化
 │                                 # - 用户自定义模型加载/保存/导入/导出/重置
 │                                 # - 供 UI 组件和服务层统一查询的函数接口
 └── 📁 __tests__/
-    └── modelRegistry.test.ts     # provider/model 推理预算路由完整性测试
+    └── modelRegistry.test.ts     # provider/model 推理预算与 reasoning preset 路由完整性测试
 ```
 
 > 集中管理所有 AI 供应商和模型配置，消除各组件中的硬编码重复。  
@@ -1124,7 +1126,7 @@ src-tauri/
 ```
 commands/
 ├── mod.rs                        # 模块入口
-├── agent.rs                      # 智能体相关命令
+├── agent.rs                      # 智能体命令（含 per-Agent reasoning preset IPC）
 ├── hub.rs                        # Hub 相关命令
 ├── desktop_notification.rs       # Windows WinRT 任务通知、动作按钮与窗口激活事件
 ├── system_tray.rs                # 原生 Close→隐藏、retained ACK、Exit watchdog、共享恢复与单实例激活
@@ -1138,12 +1140,12 @@ commands/
 ├── memory.rs                     # 记忆系统命令
 ├── memory_trigger.rs             # 记忆触发命令
 ├── rag.rs                        # RAG 检索命令
-├── llm.rs                        # LLM 调用命令
+├── llm.rs                        # LLM 调用命令（绑定 provider route 并透传语义推理档位）
 ├── settings.rs                   # 设置相关命令
 ├── renderer_health.rs            # Renderer health diagnostics
 ├── snapshot.rs                   # 快照管理命令
 ├── diff_record.rs                # 差异记录命令
-├── data_management.rs            # 数据导入导出命令
+├── data_management.rs            # 数据导入导出命令（Agent reasoning preset 备份兼容）
 ├── document_parser.rs            # 文档解析命令
 ├── cloud_embedding.rs            # SiliconFlow、自定义 OpenAI/Reranker 与原生 Gemini 嵌入命令
 ├── security_settings.rs          # 安全设置相关
@@ -1213,10 +1215,10 @@ src-tauri/
 ```
 db/
 ├── mod.rs                        # 模块入口与连接管理
-├── schema.rs                     # 数据库表结构定义
-├── models.rs                     # 数据模型定义
+├── schema.rs                     # 数据库表结构定义（含 Agent reasoning_preset 迁移）
+├── models.rs                     # 数据模型定义（含 Agent reasoning_preset）
 ├── hub_repo.rs                   # Hub 数据仓库
-├── agent_repo.rs                 # 智能体数据仓库
+├── agent_repo.rs                 # 智能体数据仓库（推理档位白名单与持久化）
 ├── message_repo.rs               # 消息数据仓库
 ├── file_repo.rs                  # 文件数据仓库
 ├── memory_repo.rs                # 记忆数据仓库
@@ -1232,13 +1234,14 @@ db/
 ```
 llm/
 ├── mod.rs                        # 模块入口
-├── types.rs                      # LLM 类型、默认输出预算与 tool-call finish reason
+├── types.rs                      # LLM 类型、语义推理档位、默认输出预算与 tool-call finish reason
 ├── http_client.rs                # HTTP 客户端（连接池）
 ├── schema_compat.rs
 ├── json_repair.rs                # 流式/截断 JSON 参数修复（上层须结合 finish reason 安全处置）
-├── gemini.rs                     # Google Gemini 适配器
-├── openai.rs                     # OpenAI 适配器（ZhipuAI/火山引擎复用）
-└── anthropic.rs                  # Anthropic Claude 适配器（百炼/Minimax 复用）
+├── reasoning.rs                  # 路由级 reasoning preset 能力解析与供应商语义映射
+├── gemini.rs                     # Google Gemini 适配器（thinkingLevel 映射）
+├── openai.rs                     # OpenAI 适配器（Responses 与兼容路由推理参数映射）
+└── anthropic.rs                  # Anthropic Claude Adaptive Thinking 与 MiniMax M3 thinking 开关映射
 ```
 
 ### 📁 src-tauri/src/crypto/ - 加密模块

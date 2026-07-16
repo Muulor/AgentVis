@@ -4,7 +4,7 @@ import { useHubStore } from '@stores/hubStore';
 import { useAgentStore } from '@stores/agentStore';
 import { useSettingsStore } from '@stores/settingsStore';
 import { Select } from '@components/ui';
-import { getProviders, getModelsByProvider } from '@/config/modelRegistry';
+import { getProviders, getModelsByProvider, type ReasoningPreset } from '@/config/modelRegistry';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './AgentCreateModal.module.css';
@@ -22,6 +22,7 @@ interface Agent {
   avatarColor: string | null;
   modelProvider: string | null;
   modelName: string | null;
+  reasoningPreset: ReasoningPreset | null;
   mbRulesFilePath: string | null;
   saRulesFilePath: string | null;
   mbRules: string | null;

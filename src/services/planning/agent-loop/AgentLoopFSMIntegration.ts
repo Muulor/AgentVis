@@ -65,7 +65,7 @@ import {
 } from './handlers';
 import { formatAgentLoopFailureMessage } from './ErrorObservationFormatter';
 import { getLogger } from '@services/logger';
-import { getDefaultModelIdForProvider } from '@/config/modelRegistry';
+import { getDefaultModelIdForProvider, type ReasoningPreset } from '@/config/modelRegistry';
 import { translate } from '@/i18n';
 
 const logger = getLogger('AgentLoopFSMIntegration');
@@ -107,6 +107,8 @@ export interface FSMIntegrationConfig {
   modelId?: string;
   /** LLM 提供商 ID */
   providerId?: string;
+  /** AgentVis 统一推理档位。 */
+  reasoningPreset?: ReasoningPreset;
   /** 自定义 API 基址 URL（用于 local 代理） */
   baseUrl?: string;
   /** 工作目录（用于 SubAgent 执行工具时的根目录） */
@@ -490,6 +492,7 @@ export class AgentLoopFSMIntegration {
           this.config.modelId ??
           getDefaultModelIdForProvider(this.config.providerId ?? DEFAULT_PROVIDER),
         baseUrl: this.config.baseUrl,
+        reasoningPreset: this.config.reasoningPreset,
         workdir: effectiveWorkdir,
         sandboxMode: this.config.sandboxMode ?? 'LocalAudit',
         // SA 专属规则注入 SubAgent prompt

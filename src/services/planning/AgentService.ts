@@ -32,6 +32,7 @@ import type { GovernorSnapshot } from './agent-loop/LoopGovernor';
 import type { ProgressItemData } from '@/types/message';
 import { getLogger } from '@services/logger';
 import { imageCompressionService } from '@services/attachment/ImageCompressionService';
+import type { ReasoningPreset } from '@/config/modelRegistry';
 
 const logger = getLogger('AgentService');
 const CANCEL_FORCE_UNLOCK_MS = 10000;
@@ -54,6 +55,8 @@ export interface AgentServiceConfig {
   providerId?: string;
   /** 模型 ID */
   modelId?: string;
+  /** AgentVis 统一推理档位，由具体供应商适配器解析。 */
+  reasoningPreset?: ReasoningPreset;
   /** 工作目录 */
   workdir?: string;
   /** 自定义 API 基址 URL（用于 Local 代理） */
@@ -567,6 +570,7 @@ export class AgentService {
           saAgentRules: this.config.saAgentRules,
           providerId: this.config.providerId,
           modelId: this.config.modelId,
+          reasoningPreset: this.config.reasoningPreset,
           workdir: this.config.workdir,
           baseUrl: this.config.baseUrl,
           // 用户上传的图片 base64 数据，仅首轮 LLM 调用注入
@@ -895,6 +899,7 @@ export function getOrCreateAgentService(config: AgentServiceConfig): AgentServic
     const configChanged =
       cachedConfig.providerId !== config.providerId ||
       cachedConfig.modelId !== config.modelId ||
+      cachedConfig.reasoningPreset !== config.reasoningPreset ||
       cachedConfig.baseUrl !== config.baseUrl ||
       cachedConfig.mbAgentRules !== config.mbAgentRules ||
       cachedConfig.saAgentRules !== config.saAgentRules ||

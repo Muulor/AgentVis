@@ -89,6 +89,10 @@ export const enUS = {
   agent: {
     selectAgent: 'Select an Agent',
     selectModel: 'Select model',
+    reasoningEffort: 'Reasoning effort',
+    reasoningEffortFor: 'Reasoning effort for {model}',
+    selectReasoningEffortFor: 'Select reasoning effort for {model}',
+    reasoningEffortHint: 'Higher effort can use more tokens and take longer.',
     userLabel: 'User',
     modelNotConfigured: 'No model configured',
     hasEnabledCron: 'Has enabled scheduled tasks',

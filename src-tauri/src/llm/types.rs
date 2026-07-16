@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::reasoning::{ReasoningPreset, ReasoningRoute};
+
 /// serde 默认值辅助：返回 true（用于 supports_vision 等默认启用的布尔字段）
 fn default_true() -> bool {
     true
@@ -142,6 +144,9 @@ pub struct ChatRequest {
     pub temperature: Option<f32>,
     /// 最大生成 token 数
     pub max_tokens: Option<u32>,
+    /// 供应商无关的推理强度；缺省/Recommended 保持现有行为。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<ReasoningPreset>,
     /// 是否使用流式响应
     pub stream: bool,
     /// 响应输出类型（如 ["Text", "Image"] 或 ["Image"]），用于图像生成模型
@@ -157,6 +162,7 @@ impl Default for ChatRequest {
             model: None,
             temperature: Some(0.7),
             max_tokens: Some(DEFAULT_LLM_MAX_TOKENS),
+            reasoning_preset: None,
             stream: false,
             response_modalities: None,
             image_config: None,
@@ -224,6 +230,9 @@ pub struct ProviderConfig {
     /// 避免 image_url 注入导致 API 400 Bad Request。
     #[serde(default = "default_true")]
     pub supports_vision: bool,
+    /// 已验证的推理参数路由。兼容层和聚合器必须显式使用 Unknown。
+    #[serde(default)]
+    pub reasoning_route: ReasoningRoute,
 }
 
 impl ProviderConfig {
@@ -237,6 +246,7 @@ impl ProviderConfig {
             supports_stream_usage: false,
             custom_headers: HashMap::new(),
             supports_vision: true,
+            reasoning_route: ReasoningRoute::Auto,
         }
     }
 
@@ -272,6 +282,12 @@ impl ProviderConfig {
     /// 调用后请求体中的 image_url content part 将被自动剥离
     pub fn without_vision(mut self) -> Self {
         self.supports_vision = false;
+        self
+    }
+
+    /// 绑定到已验证的供应商路由，防止按模型名跨路由继承推理参数。
+    pub fn with_reasoning_route(mut self, route: ReasoningRoute) -> Self {
+        self.reasoning_route = route;
         self
     }
 }
@@ -362,6 +378,9 @@ pub struct ToolChatRequest {
     pub temperature: Option<f32>,
     /// 最大生成 token 数
     pub max_tokens: Option<u32>,
+    /// 供应商无关的推理强度；缺省/Recommended 保持现有行为。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_preset: Option<ReasoningPreset>,
     /// 自定义 API 基址 URL（用于 Local 代理）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
@@ -399,7 +418,8 @@ pub struct ToolChatResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::ToolChatResponse;
+    use super::{ToolChatRequest, ToolChatResponse};
+    use crate::llm::ReasoningPreset;
 
     #[test]
     fn tool_chat_response_serializes_finish_reason_as_camel_case() {
@@ -418,5 +438,16 @@ mod tests {
 
         assert_eq!(value["finishReason"], "max_tokens");
         assert!(value.get("finish_reason").is_none());
+    }
+
+    #[test]
+    fn tool_chat_request_deserializes_camel_case_reasoning_preset() {
+        let request: ToolChatRequest = serde_json::from_value(serde_json::json!({
+            "messages": [],
+            "reasoningPreset": "xhigh"
+        }))
+        .expect("deserialize tool chat request");
+
+        assert_eq!(request.reasoning_preset, Some(ReasoningPreset::Xhigh));
     }
 }

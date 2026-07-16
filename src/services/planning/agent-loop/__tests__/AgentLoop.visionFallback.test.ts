@@ -1781,7 +1781,10 @@ describe('AgentLoop MB vision fallback', () => {
       });
 
     const session = createSession([{ role: 'user', content: 'current task' }]);
-    const loop = new AgentLoop({ providerId: 'openai', modelId: 'gpt-5.4' }, session);
+    const loop = new AgentLoop(
+      { providerId: 'openai', modelId: 'gpt-5.4', reasoningPreset: 'high' },
+      session
+    );
     const llmService = (
       loop as unknown as {
         createLLMService: () => { generate: (prompt: string) => Promise<string> };
@@ -1792,13 +1795,16 @@ describe('AgentLoop MB vision fallback', () => {
     const requests = vi
       .mocked(invoke)
       .mock.calls.filter(([command]) => command === 'llm_chat_with_tools')
-      .map(([, args]) => (args as { request: { maxTokens: number } }).request);
+      .map(
+        ([, args]) => (args as { request: { maxTokens: number; reasoningPreset?: string } }).request
+      );
 
     expect(result).toContain('"decision":"RESPOND_TO_USER"');
     expect(requests.map(({ maxTokens }) => maxTokens)).toEqual([
       PLANNING_CONSTANTS.MASTER_BRAIN_REASONING_TRANSPORT_MAX_TOKENS,
       PLANNING_CONSTANTS.MASTER_BRAIN_DEFAULT_TRANSPORT_MAX_TOKENS,
     ]);
+    expect(requests.map(({ reasoningPreset }) => reasoningPreset)).toEqual(['high', 'high']);
   });
 
   it('rejects a non-stream MB decision marked as token-truncated', async () => {
@@ -1986,6 +1992,7 @@ describe('AgentLoop MB vision fallback', () => {
       | ReturnType<typeof useStatusStore.getState>['contextPressureByAgent'][string]
       | undefined;
     let streamHandler: StreamHandler | undefined;
+    let streamRequest: { reasoning_preset?: string } | undefined;
 
     vi.mocked(listen).mockImplementation(((_eventName: string, handler: StreamHandler) => {
       streamHandler = handler;
@@ -1994,7 +2001,11 @@ describe('AgentLoop MB vision fallback', () => {
     vi.mocked(invoke).mockImplementation((async (command: string, args: unknown) => {
       if (command !== 'llm_chat_stream') return undefined;
       activeAtInvoke = useStatusStore.getState().getContextPressure(contextId) ?? undefined;
-      const { sessionId } = args as { sessionId: string };
+      const { sessionId, request } = args as {
+        sessionId: string;
+        request: { reasoning_preset?: string };
+      };
+      streamRequest = request;
       queueMicrotask(() => {
         streamHandler?.({
           payload: {
@@ -2017,6 +2028,7 @@ describe('AgentLoop MB vision fallback', () => {
         tokenContextId: contextId,
         providerId: 'gemini',
         modelId: 'gemini-2.5-pro',
+        reasoningPreset: 'high',
       },
       createSession([{ role: 'user', content: 'current task' }])
     );
@@ -2033,6 +2045,7 @@ describe('AgentLoop MB vision fallback', () => {
 
     await llmService.generate('system prompt', { onStreamDelta: vi.fn() });
 
+    expect(streamRequest?.reasoning_preset).toBe('high');
     expect(activeAtInvoke).toMatchObject({
       phase: 'active',
       purpose: 'master-brain',
@@ -2057,10 +2070,12 @@ describe('AgentLoop MB vision fallback', () => {
     let activeAtInvoke:
       | ReturnType<typeof useStatusStore.getState>['contextPressureByAgent'][string]
       | undefined;
+    let checkpointRequest: { reasoningPreset?: string } | undefined;
 
-    vi.mocked(invoke).mockImplementation((async (command: string) => {
+    vi.mocked(invoke).mockImplementation((async (command: string, args: unknown) => {
       if (command !== 'llm_chat_with_tools') return undefined;
       activeAtInvoke = useStatusStore.getState().getContextPressure(contextId) ?? undefined;
+      checkpointRequest = (args as { request: { reasoningPreset?: string } }).request;
       return {
         type: 'text',
         content: '{"type":"EXTEND_BUDGET","additionalIterations":1,"reason":"continue"}',
@@ -2075,6 +2090,7 @@ describe('AgentLoop MB vision fallback', () => {
         tokenContextId: contextId,
         providerId: 'openai',
         modelId: 'gpt-5.4',
+        reasoningPreset: 'high',
       },
       createSession([])
     );
@@ -2094,6 +2110,7 @@ describe('AgentLoop MB vision fallback', () => {
       taskContext: 'checkpoint task context',
     });
 
+    expect(checkpointRequest?.reasoningPreset).toBe('high');
     expect(activeAtInvoke).toMatchObject({
       phase: 'active',
       purpose: 'checkpoint',

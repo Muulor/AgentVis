@@ -59,6 +59,7 @@ pub struct AgentItem {
     pub avatar: Option<String>,
     pub model_provider: Option<String>,
     pub model_name: Option<String>,
+    pub reasoning_preset: Option<String>,
     pub mb_rules_file_path: Option<String>,
     pub sa_rules_file_path: Option<String>,
     pub mb_rules: Option<String>,
@@ -100,6 +101,7 @@ impl From<Agent> for AgentItem {
             avatar: agent.avatar,
             model_provider: agent.model_provider,
             model_name: agent.model_name,
+            reasoning_preset: agent.reasoning_preset,
             mb_rules_file_path: agent.mb_rules_file_path,
             sa_rules_file_path: agent.sa_rules_file_path,
             mb_rules: agent.mb_rules,
@@ -137,6 +139,7 @@ pub struct UpdateAgentRequest {
     pub avatar: Option<String>,
     pub model_provider: Option<String>,
     pub model_name: Option<String>,
+    pub reasoning_preset: Option<String>, // recommended/none/minimal/low/medium/high/xhigh/max
     pub mb_rules_file_path: Option<String>,
     pub sa_rules_file_path: Option<String>,
     pub mb_rules: Option<String>,
@@ -264,6 +267,7 @@ pub async fn agent_update(
         avatar: request.avatar,
         model_provider: request.model_provider,
         model_name: request.model_name,
+        reasoning_preset: request.reasoning_preset,
         mb_rules_file_path: request.mb_rules_file_path,
         sa_rules_file_path: request.sa_rules_file_path,
         mb_rules: request.mb_rules,
@@ -490,5 +494,16 @@ mod tests {
             build_latest_message_preview(&long_message).as_deref(),
             Some(expected_truncated.as_str())
         );
+    }
+
+    #[test]
+    fn agent_item_serializes_reasoning_preset_as_camel_case() {
+        let mut agent = Agent::new("hub-id", "Agent");
+        agent.reasoning_preset = Some("high".to_string());
+
+        let value = serde_json::to_value(AgentItem::from(agent)).unwrap();
+
+        assert_eq!(value["reasoningPreset"], "high");
+        assert!(value.get("reasoning_preset").is_none());
     }
 }

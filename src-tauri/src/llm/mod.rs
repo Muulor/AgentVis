@@ -7,6 +7,7 @@ pub mod gemini;
 pub mod http_client;
 pub mod json_repair;
 pub mod openai;
+pub mod reasoning;
 mod schema_compat;
 pub mod types;
 
@@ -18,6 +19,7 @@ use std::sync::Arc;
 pub use anthropic::AnthropicAdapter;
 pub use gemini::GeminiAdapter;
 pub use openai::OpenAIAdapter;
+pub use reasoning::{ReasoningPreset, ReasoningRoute};
 pub use types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ImageAttachment, ProviderConfig, StreamChunk,
 };

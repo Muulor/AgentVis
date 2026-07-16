@@ -17,7 +17,7 @@ import {
   type ToolExecutionResult,
   type VisionFallbackMode,
 } from '../callers/SubAgentLLMCaller';
-import { getContextWindowSize } from '@/config/modelRegistry';
+import { getContextWindowSize, type ReasoningPreset } from '@/config/modelRegistry';
 import type { AgentSession } from '../AgentSession';
 import type { AgentLoopCallbacks } from '../types';
 import type {
@@ -61,6 +61,7 @@ interface ToolExecuteOptions {
 export interface SubAgentDispatcherConfig {
   providerId: string;
   modelId: string;
+  reasoningPreset?: ReasoningPreset;
   baseUrl?: string;
   workdir?: string;
   /** 当前 Agent 的沙箱模式，用于 Sub-Agent prompt 与工具 observation 的运行时感知 */
@@ -166,6 +167,7 @@ export class SubAgentDispatcher {
       {
         providerId: config.providerId,
         modelId: config.modelId,
+        reasoningPreset: config.reasoningPreset,
         baseUrl: config.baseUrl,
         subAgentSafetyFooterEnabled: config.subAgentSafetyFooterEnabled,
         subAgentSafetyFooterText: config.subAgentSafetyFooterText,

@@ -83,6 +83,10 @@ export const zhCN = {
   agent: {
     selectAgent: '请选择一个 Agent',
     selectModel: '选择模型',
+    reasoningEffort: '推理档位',
+    reasoningEffortFor: '{model} 的推理档位',
+    selectReasoningEffortFor: '选择 {model} 的推理档位',
+    reasoningEffortHint: '更高档位可能消耗更多 Token，并增加响应时间。',
     userLabel: '用户',
     modelNotConfigured: '未配置模型',
     hasEnabledCron: '有启用的定时任务',

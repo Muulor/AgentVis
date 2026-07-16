@@ -18,7 +18,10 @@ use crate::llm::http_client::{
     get_client, get_streaming_client, stream_idle_timeout, stream_start_timeout,
 };
 use crate::llm::{AnthropicAdapter, GeminiAdapter, OpenAIAdapter};
-use crate::llm::{ChatMessage, ChatRequest, ChatRole, LlmProvider, ProviderConfig};
+use crate::llm::{
+    ChatMessage, ChatRequest, ChatRole, LlmProvider, ProviderConfig, ReasoningPreset,
+    ReasoningRoute,
+};
 use crate::AppState;
 
 // ==================== 取消信号存储 ====================
@@ -65,6 +68,21 @@ fn apply_model_vision_support(
     } else {
         config
     }
+}
+
+fn apply_reasoning_route(config: ProviderConfig, provider_id: &str) -> ProviderConfig {
+    config.with_reasoning_route(ReasoningRoute::for_provider_id(provider_id))
+}
+
+fn provider_config(
+    api_key: String,
+    supports_vision: Option<bool>,
+    provider_id: &str,
+) -> ProviderConfig {
+    apply_reasoning_route(
+        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision),
+        provider_id,
+    )
 }
 
 fn register_cancel_sender(
@@ -204,6 +222,9 @@ pub struct ChatRequestDto {
     pub model: Option<String>,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
+    /// 推理强度语义档位；snake_case 与前端普通聊天请求保持一致。
+    #[serde(default)]
+    pub reasoning_preset: Option<ReasoningPreset>,
     /// 自定义 API 基址 URL（用于 Local 代理）
     pub base_url: Option<String>,
     /// 当前模型是否支持视觉输入。false 时后端会剥离 image_url 负载。
@@ -864,13 +885,14 @@ pub async fn llm_chat(
     request: ChatRequestDto,
 ) -> CommandResult<ChatResponseDto> {
     let api_key = get_api_key(&request.provider)?;
-    let config = apply_model_vision_support(ProviderConfig::new(api_key), request.supports_vision);
+    let config = provider_config(api_key, request.supports_vision, &request.provider);
 
     let chat_request = ChatRequest {
         messages: convert_messages(request.messages),
         model: request.model,
         temperature: request.temperature,
         max_tokens: request.max_tokens,
+        reasoning_preset: request.reasoning_preset,
         stream: false,
         response_modalities: request.response_modalities,
         image_config: request
@@ -1078,8 +1100,7 @@ pub async fn llm_chat_stream(
         request.provider.as_str(),
         "openai" | "openrouter" | "deepseek"
     );
-    let mut config =
-        apply_model_vision_support(ProviderConfig::new(api_key), request.supports_vision);
+    let mut config = provider_config(api_key, request.supports_vision, &request.provider);
     config.supports_stream_usage = supports_stream_usage;
 
     let chat_request = ChatRequest {
@@ -1087,6 +1108,7 @@ pub async fn llm_chat_stream(
         model: request.model,
         temperature: request.temperature,
         max_tokens: request.max_tokens,
+        reasoning_preset: request.reasoning_preset,
         stream: true,
         // 图像生成参数透传
         response_modalities: request.response_modalities,
@@ -1752,7 +1774,7 @@ pub async fn llm_chat_with_tools(
     let result: CommandResult<ToolChatResponse> = match provider {
         "gemini" => {
             let api_key = get_api_key("gemini")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision);
+            let config = provider_config(api_key, supports_vision, provider);
             let adapter = GeminiAdapter::new(config);
             dispatch_with_cancel(
                 adapter.chat_stream_with_tools(
@@ -1768,8 +1790,7 @@ pub async fn llm_chat_with_tools(
         }
         "openai" => {
             let api_key = get_api_key("openai")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
-                .with_stream_usage();
+            let config = provider_config(api_key, supports_vision, provider).with_stream_usage();
             let adapter = OpenAIAdapter::new(config);
             // 使用流式模式避免大 payload 超时
             dispatch_with_cancel(
@@ -1786,7 +1807,7 @@ pub async fn llm_chat_with_tools(
         }
         "anthropic" => {
             let api_key = get_api_key("anthropic")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision);
+            let config = provider_config(api_key, supports_vision, provider);
             let adapter = AnthropicAdapter::new(config);
             dispatch_with_cancel(
                 adapter.chat_stream_with_tools(
@@ -1818,8 +1839,7 @@ pub async fn llm_chat_with_tools(
             match protocol {
                 "anthropic" => {
                     let config =
-                        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
-                            .with_base_url(base_url);
+                        provider_config(api_key, supports_vision, provider).with_base_url(base_url);
                     let adapter = AnthropicAdapter::new(config);
                     dispatch_with_cancel(
                         adapter.chat_stream_with_tools(
@@ -1834,9 +1854,8 @@ pub async fn llm_chat_with_tools(
                     .await
                 }
                 "openai" => {
-                    let config =
-                        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
-                            .with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
+                    let config = provider_config(api_key, supports_vision, provider)
+                        .with_base_url(format!("{}/v1", base_url.trim_end_matches("/v1")));
                     let adapter = OpenAIAdapter::new(config);
                     dispatch_with_cancel(
                         adapter.chat_stream_with_tools(
@@ -1853,8 +1872,7 @@ pub async fn llm_chat_with_tools(
                 _ => {
                     // 默认 Gemini 协议
                     let config =
-                        apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
-                            .with_base_url(base_url);
+                        provider_config(api_key, supports_vision, provider).with_base_url(base_url);
                     let adapter = GeminiAdapter::new(config);
                     dispatch_with_cancel(
                         adapter.chat_stream_with_tools(
@@ -1873,7 +1891,7 @@ pub async fn llm_chat_with_tools(
         "zhipu" => {
             // 智谱使用 OpenAI 兼容协议（流式模式）
             let api_key = get_api_key("zhipu")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://open.bigmodel.cn/api/paas/v4");
             let adapter = OpenAIAdapter::new(config);
             dispatch_with_cancel(
@@ -1891,7 +1909,7 @@ pub async fn llm_chat_with_tools(
         "deepseek" => {
             // DeepSeek 使用 OpenAI 兼容协议
             let api_key = get_api_key("deepseek")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://api.deepseek.com");
             let adapter = OpenAIAdapter::new(config);
             dispatch_with_cancel(
@@ -1909,7 +1927,7 @@ pub async fn llm_chat_with_tools(
         "agnes" => {
             // Agnes AI 使用 OpenAI 兼容协议；Agnes-2.0-Flash 是 text/agentic 模型
             let api_key = get_api_key("agnes")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://apihub.agnes-ai.com/v1")
                 .with_model("agnes-2.0-flash");
             let adapter = OpenAIAdapter::new(config);
@@ -1928,7 +1946,7 @@ pub async fn llm_chat_with_tools(
         "stepfun" => {
             // StepFun Step Plan 使用 OpenAI 兼容协议，专属路径为 /step_plan/v1
             let api_key = get_api_key("stepfun")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://api.stepfun.com/step_plan/v1")
                 .with_model("step-3.7-flash");
             let adapter = OpenAIAdapter::new(config);
@@ -1947,7 +1965,7 @@ pub async fn llm_chat_with_tools(
         "xiaomi-mimo" => {
             // Xiaomi MiMo Token Plan 使用 OpenAI 兼容协议
             let api_key = get_api_key("xiaomi-mimo")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://token-plan-cn.xiaomimimo.com/v1");
             let adapter = OpenAIAdapter::new(config);
             dispatch_with_cancel(
@@ -1966,7 +1984,7 @@ pub async fn llm_chat_with_tools(
             // ZhipuAI Coding Plan 专属 endpoint，与普通 zhipu 共享 API Key
             // 但走 /coding/paas/v4 路径，享受编码套餐独立配额
             let api_key = get_api_key("zhipu-coding")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://open.bigmodel.cn/api/coding/paas/v4");
             let adapter = OpenAIAdapter::new(config);
             dispatch_with_cancel(
@@ -1984,7 +2002,7 @@ pub async fn llm_chat_with_tools(
         "volcengine" => {
             // 火山引擎 Coding Plan 使用 OpenAI 兼容协议（流式模式，解决大 payload 超时）
             let api_key = get_api_key("volcengine")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://ark.cn-beijing.volces.com/api/coding/v3");
             let adapter = OpenAIAdapter::new(config);
             dispatch_with_cancel(
@@ -2002,7 +2020,7 @@ pub async fn llm_chat_with_tools(
         "minimax" => {
             // Minimax Anthropic 兼容协议
             let api_key = get_api_key("minimax")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://api.minimaxi.com/anthropic/v1");
             let adapter = AnthropicAdapter::new(config);
             dispatch_with_cancel(
@@ -2020,7 +2038,7 @@ pub async fn llm_chat_with_tools(
         "openrouter" => {
             // OpenRouter 使用 OpenAI 兼容协议，支持路由到多个厂商模型
             let api_key = get_api_key("openrouter")?;
-            let config = apply_model_vision_support(ProviderConfig::new(api_key), supports_vision)
+            let config = provider_config(api_key, supports_vision, provider)
                 .with_base_url("https://openrouter.ai/api/v1")
                 .with_stream_usage();
             let adapter = OpenAIAdapter::new(config);
@@ -2502,6 +2520,18 @@ pub async fn zhipu_image_generate(
 mod command_tests {
     use super::*;
     use crate::llm::types::ToolCall;
+
+    #[test]
+    fn chat_request_dto_deserializes_snake_case_reasoning_preset() {
+        let request: ChatRequestDto = serde_json::from_value(serde_json::json!({
+            "provider": "openai",
+            "messages": [],
+            "reasoning_preset": "high"
+        }))
+        .expect("deserialize chat request DTO");
+
+        assert_eq!(request.reasoning_preset, Some(ReasoningPreset::High));
+    }
 
     #[test]
     fn attempt_scoped_cancel_keeps_other_session_registrations_alive() {

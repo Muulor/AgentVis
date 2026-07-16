@@ -19,7 +19,7 @@ import { PLANNING_CONSTANTS } from '../../PlanningConstants';
 import type { AccumulatedMessage } from '../../sub-agents/types';
 import { getLogger } from '@services/logger';
 import { normalizeSafetyFooterText } from '../../sub-agents/SubAgentSafetyFooter';
-import { modelSupportsVision } from '@/config/modelRegistry';
+import { modelSupportsVision, type ReasoningPreset } from '@/config/modelRegistry';
 import { translate } from '@/i18n';
 import {
   getLlmTokenPolicy,
@@ -142,6 +142,7 @@ export type VisionFallbackMode = 'none' | 'strip-unmarked' | 'strip-all';
 export interface SubAgentLLMCallerConfig {
   providerId: string;
   modelId: string;
+  reasoningPreset?: ReasoningPreset;
   baseUrl?: string;
   /** 是否在每步 Sub-Agent LLM 调用尾部追加 Safety Footer。默认关闭。 */
   subAgentSafetyFooterEnabled?: boolean;
@@ -585,6 +586,7 @@ export class SubAgentLLMCallerFactory {
             messages: messagesForCall,
             modelId,
             providerId,
+            reasoningPreset: this.config.reasoningPreset,
             baseUrl,
             supportsVision: modelSupportsVision(modelId, providerId),
             tools: toolsPayload,

@@ -34,6 +34,24 @@ export interface ProviderDefinition {
 }
 
 /**
+ * AgentVis 的统一推理档位语义。
+ *
+ * UI 直接展示这些英文 token；具体供应商参数由 Rust 路由适配器解析。
+ */
+export const REASONING_PRESETS = [
+  'recommended',
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
+
+export type ReasoningPreset = (typeof REASONING_PRESETS)[number];
+
+/**
  * 模型定义
  *
  * 模型属于某个供应商，包含显示名称和上下文窗口大小等信息。
@@ -549,6 +567,8 @@ const SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES = [
   ['deepseek', 'deepseek-v4-flash'],
   ['xiaomi-mimo', 'mimo-v2.5'],
   ['xiaomi-mimo', 'mimo-v2.5-pro'],
+  ['minimax', 'MiniMax-M3'],
+  ['zhipu-coding', 'GLM-5.1'],
   ['zhipu-coding', 'glm-5.2'],
   ['volcengine', 'deepseek-v4-flash'],
   ['volcengine', 'deepseek-v4-pro'],
@@ -561,6 +581,66 @@ const SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES = [
 function getModelRouteKey(providerId: string, modelId: string): string {
   return `${providerId.trim().toLowerCase()}::${modelId.trim().toLowerCase()}`;
 }
+
+/**
+ * 可复用的推理档位集合。
+ *
+ * 这里只声明已验证为有效且行为互不重复的档位。聚合路由、本地路由、用户自定义路由，
+ * 以及尚未验证的供应商路由都会回退为 recommended-only。
+ */
+const REASONING_PRESET_PROFILES = {
+  recommendedOnly: ['recommended'],
+  openAiXhigh: ['recommended', 'none', 'low', 'medium', 'high', 'xhigh'],
+  openAiMax: ['recommended', 'none', 'low', 'medium', 'high', 'xhigh', 'max'],
+  anthropicAdaptive: ['recommended', 'low', 'medium', 'high', 'xhigh', 'max'],
+  anthropicSonnet46: ['recommended', 'low', 'medium', 'high', 'max'],
+  geminiFlash: ['recommended', 'minimal', 'low', 'medium', 'high'],
+  geminiPro: ['recommended', 'low', 'medium', 'high'],
+  stepFun: ['recommended', 'low', 'medium', 'high'],
+  toggle: ['recommended', 'none'],
+  toggleHigh: ['recommended', 'none', 'high'],
+  highMax: ['recommended', 'none', 'high', 'max'],
+} as const satisfies Record<string, readonly ReasoningPreset[]>;
+
+type ReasoningPresetProfileId = keyof typeof REASONING_PRESET_PROFILES;
+
+/**
+ * 推理能力必须绑定实际 provider/model 路由，不能只按模型 ID 推断。
+ */
+const REASONING_PRESET_MODEL_ROUTES = [
+  ['openai', 'gpt-5.4', 'openAiXhigh'],
+  ['openai', 'gpt-5.4-mini', 'openAiXhigh'],
+  ['openai', 'gpt-5.4-nano', 'openAiXhigh'],
+  ['openai', 'gpt-5.5', 'openAiXhigh'],
+  ['openai', 'gpt-5.6-sol', 'openAiMax'],
+  ['openai', 'gpt-5.6-terra', 'openAiMax'],
+  ['openai', 'gpt-5.6-luna', 'openAiMax'],
+  ['anthropic', 'claude-sonnet-4-6', 'anthropicSonnet46'],
+  ['anthropic', 'claude-sonnet-5', 'anthropicAdaptive'],
+  ['anthropic', 'claude-opus-4-7', 'anthropicAdaptive'],
+  ['anthropic', 'claude-opus-4-8', 'anthropicAdaptive'],
+  ['anthropic', 'claude-fable-5', 'anthropicAdaptive'],
+  ['gemini', 'gemini-3-flash-preview', 'geminiFlash'],
+  ['gemini', 'gemini-3.1-pro-preview', 'geminiPro'],
+  ['gemini', 'gemini-3.5-flash', 'geminiFlash'],
+  ['stepfun', 'step-3.7-flash', 'stepFun'],
+  ['zhipu', 'glm-5.1', 'toggle'],
+  ['zhipu', 'glm-5.2', 'highMax'],
+  ['deepseek', 'deepseek-v4-pro', 'highMax'],
+  ['deepseek', 'deepseek-v4-flash', 'highMax'],
+  ['xiaomi-mimo', 'mimo-v2.5', 'toggleHigh'],
+  ['xiaomi-mimo', 'mimo-v2.5-pro', 'toggleHigh'],
+  ['minimax', 'MiniMax-M3', 'toggleHigh'],
+  ['zhipu-coding', 'GLM-5.1', 'toggle'],
+  ['zhipu-coding', 'GLM-5.2', 'highMax'],
+] as const satisfies ReadonlyArray<readonly [string, string, ReasoningPresetProfileId]>;
+
+const REASONING_PRESET_PROFILE_BY_MODEL_KEY = new Map<string, ReasoningPresetProfileId>(
+  REASONING_PRESET_MODEL_ROUTES.map(([providerId, modelId, profileId]) => [
+    getModelRouteKey(providerId, modelId),
+    profileId,
+  ])
+);
 
 const SHARED_REASONING_OUTPUT_BUDGET_MODEL_KEYS = new Set(
   SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES.map(([providerId, modelId]) =>
@@ -701,6 +781,47 @@ export function modelSupportsVision(modelId: string, providerId?: string): boole
     models.find((m) => m.id === modelId && (!providerId || m.providerId === providerId)) ??
     models.find((m) => m.id === modelId);
   return model?.supportsVision === true;
+}
+
+/**
+ * 返回指定供应商路由实际开放的推理档位。
+ *
+ * 未知、本地、聚合以及尚未验证的路由只返回 recommended，避免发送未经验证的参数。
+ */
+export function getSupportedReasoningPresets(
+  providerId: string,
+  modelId: string
+): readonly ReasoningPreset[] {
+  const profileId = REASONING_PRESET_PROFILE_BY_MODEL_KEY.get(
+    getModelRouteKey(providerId, modelId)
+  );
+  return profileId
+    ? REASONING_PRESET_PROFILES[profileId]
+    : REASONING_PRESET_PROFILES.recommendedOnly;
+}
+
+/** 将无效或当前路由不支持的持久化值安全重置为 recommended。 */
+export function normalizeReasoningPreset(
+  providerId: string,
+  modelId: string,
+  preset: unknown
+): ReasoningPreset {
+  if (typeof preset !== 'string') return 'recommended';
+  const supported = getSupportedReasoningPresets(providerId, modelId);
+  return supported.includes(preset as ReasoningPreset)
+    ? (preset as ReasoningPreset)
+    : 'recommended';
+}
+
+/** 返回推理档位注册中已无法解析到内置模型的路由，供注册表不变量测试使用。 */
+export function getUnregisteredReasoningPresetRoutes(): string[] {
+  const builtinKeys = new Set(
+    BUILTIN_MODELS.map((model) => getModelRouteKey(model.providerId, model.id))
+  );
+  return REASONING_PRESET_MODEL_ROUTES.flatMap(([providerId, modelId]) => {
+    const routeKey = getModelRouteKey(providerId, modelId);
+    return builtinKeys.has(routeKey) ? [] : [routeKey];
+  });
 }
 
 /**

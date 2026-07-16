@@ -4,6 +4,8 @@
  * 包含消息、上下文组装器等类型
  */
 
+import type { ReasoningPreset } from '@/config/modelRegistry';
+
 /** 消息角色 */
 export type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -56,6 +58,7 @@ export interface Agent {
   avatar?: string; // base64 编码的自定义头像
   modelProvider?: string;
   modelName?: string;
+  reasoningPreset?: ReasoningPreset;
   mbRulesFilePath?: string;
   saRulesFilePath?: string;
   mbRules?: string;

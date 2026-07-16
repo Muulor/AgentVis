@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ReasoningPreset } from '@/config/modelRegistry';
 
 export type AgentSandboxMode = 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
 
@@ -15,6 +16,7 @@ interface Agent {
   avatar?: string | null; // base64 编码的自定义头像
   modelProvider: string | null; // 对应Rust的model_provider
   modelName: string | null; // 对应Rust的model_name
+  reasoningPreset?: ReasoningPreset | null; // 对应Rust的reasoning_preset；旧数据缺失/null 等价于 recommended
   mbRulesFilePath: string | null; // 对应Rust的mb_rules_file_path，Master Brain 专属 rules
   saRulesFilePath: string | null; // 对应Rust的sa_rules_file_path，Sub-Agent 专属 rules
   mbRules: string | null; // 对应Rust的mb_rules，Master Agent 粘贴式 rules

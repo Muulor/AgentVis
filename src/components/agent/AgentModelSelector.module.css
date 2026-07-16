@@ -53,15 +53,18 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  min-width: 200px;
-  max-height: 320px;
+  z-index: 100;
+  animation: dropdownFadeIn 0.15s ease;
+}
+
+.providerMenu {
+  min-width: 280px;
+  max-height: 360px;
   overflow-y: auto;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-surface);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-  animation: dropdownFadeIn 0.15s ease;
 }
 
 @keyframes dropdownFadeIn {
@@ -125,22 +128,16 @@
 }
 
 /* 模型选项 */
-.modelOption {
+.modelRow {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
-  padding: 8px 12px 8px 24px;
   background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
   color: var(--color-text-secondary);
-  text-align: left;
   transition: all 0.1s ease;
 }
 
-.modelOption:hover {
+.modelRow:hover {
   background: var(--color-bg-tertiary);
   color: var(--color-text-primary);
 }
@@ -148,7 +145,142 @@
 .modelSelected {
   color: var(--color-primary);
   font-weight: 500;
+}
+
+.modelOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  padding: 8px 8px 8px 24px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: inherit;
+  text-align: left;
+}
+
+.modelSelected .modelOption {
   padding-left: 12px;
+}
+
+.modelOption:focus-visible,
+.reasoningButton:focus-visible,
+.reasoningOption:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.modelOptionName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.currentPreset {
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.reasoningButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  align-self: stretch;
+  min-width: 92px;
+  padding: 0 10px 0 6px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid transparent;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+}
+
+.reasoningButton:hover,
+.reasoningButtonOpen {
+  background: var(--color-bg-primary);
+  border-left-color: var(--color-border-subtle);
+  color: var(--color-text-primary);
+}
+
+.reasoningPanel {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 4px);
+  width: 190px;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.reasoningPanelHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+}
+
+.reasoningPanelHeader strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reasoningPanelHeader p {
+  margin: 4px 0 0;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.reasoningOptions {
+  padding: 4px 0;
+}
+
+.reasoningOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-align: left;
+}
+
+.reasoningOption:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.reasoningOptionSelected {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.reasoningCheck {
+  width: 12px;
+  flex-shrink: 0;
+  text-align: center;
 }
 
 .checkIcon {

@@ -39,7 +39,11 @@ import type { TaskAttachmentReference } from '@services/planning/sub-agents/type
 import { getLogger } from '@services/logger';
 import { useI18n, type TranslationKey, type TranslationParams } from '@/i18n';
 import { getQuoteContextContent, serializeQuotesForMessage } from '@utils/quoteContent';
-import { modelSupportsVision } from '@/config/modelRegistry';
+import {
+  modelSupportsVision,
+  normalizeReasoningPreset,
+  type ReasoningPreset,
+} from '@/config/modelRegistry';
 
 const logger = getLogger('usePlanningMode');
 const PLANNING_CHECKPOINT_FLUSH_INTERVAL_MS = 2000;
@@ -453,6 +457,7 @@ export interface UsePlanningModeOptions {
     saRules?: string;
     modelProvider?: string;
     modelName?: string;
+    reasoningPreset?: ReasoningPreset;
     /** 精准命中技能（JSON 数组字符串，如 '["skill1","skill2"]'） */
     pinnedSkills?: string;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
@@ -477,6 +482,7 @@ export interface ExecutePlanningOptions {
     saRules?: string;
     modelProvider?: string;
     modelName?: string;
+    reasoningPreset?: ReasoningPreset;
     /** 精准命中技能（JSON 数组字符串） */
     pinnedSkills?: string;
     sandboxMode?: 'LocalAudit' | 'OfflineIsolated' | 'ControlledNetwork';
@@ -790,6 +796,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 saRules: mentionedAgent.saRules,
                 modelProvider: mentionedAgent.modelProvider,
                 modelName: mentionedAgent.modelName,
+                reasoningPreset: mentionedAgent.reasoningPreset,
                 pinnedSkills: mentionedAgent.pinnedSkills,
                 sandboxMode: mentionedAgent.sandboxMode,
                 visualEnhancementEnabled: mentionedAgent.visualEnhancementEnabled,
@@ -1133,6 +1140,11 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
         const effectiveProvider = effectiveAgentConfig.modelProvider ?? defaultProvider;
         const effectiveModel = effectiveAgentConfig.modelName ?? defaultModel;
+        const effectiveReasoningPreset = normalizeReasoningPreset(
+          effectiveProvider,
+          effectiveModel,
+          effectiveAgentConfig.reasoningPreset
+        );
         const supportsVisionInput = modelSupportsVision(effectiveModel, effectiveProvider);
 
         // Agent 头像注入（从 agentStore 获取当前 Agent 的 avatar base64 数据）
@@ -1185,6 +1197,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           saAgentRules: agentRulesForService.saAgentRules,
           providerId: effectiveProvider,
           modelId: effectiveModel,
+          reasoningPreset: effectiveReasoningPreset,
           workdir,
           // Local 代理使用配置的 API URL
           baseUrl: effectiveProvider === 'local' ? localApiUrl : undefined,

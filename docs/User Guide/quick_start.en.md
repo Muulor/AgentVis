@@ -66,6 +66,12 @@ You can add models under an existing provider yourself, or provide the model nam
 
 For first-time use, choose a stable primary model with suitable response speed. After the basic workflow is running smoothly, configure different models for different Agents.
 
+When you switch models from the top of an Agent window, models with adjustable reasoning expose a second-level preset menu. Preset labels use the common provider-facing English tokens directly: `recommended`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Each model shows only the subset supported by its current provider route. `recommended` preserves AgentVis's existing recommended behavior for that route and is the compatibility default for both existing and new Agents.
+
+The reasoning preset is stored per Agent and applies to that Agent's Chat, Master Brain, Checkpoint, and Sub-Agent calls. Switching to a model that cannot use the current preset resets the selection to `recommended`. Higher presets generally increase latency and token consumption and do not improve every task. Custom compatible endpoints and routes whose capability cannot be verified expose only `recommended`; AgentVis does not send unverified reasoning parameters merely because they use the same model name.
+
+Several built-in routes need special handling. The GPT-5.4 family and GPT-5.5 expose `none`, `low`, `medium`, `high`, and `xhigh`, but not `minimal`; GPT-5.6 Sol, Terra, and Luna add `max`. Claude 4.6 Sonnet exposes `low`, `medium`, `high`, and `max`, but not `xhigh`. DeepSeek V4 translates `none` into its thinking-off switch instead of sending the invalid `reasoning_effort: "none"`, and duplicate alias levels are not shown. For MiniMax M3, `none` sends only `thinking.type=disabled`, while `high` sends `thinking.type=adaptive`; M2.x does not expose this switch. GLM-5.1 and GLM-5.2 on ZhipuAI Coding Plan use the same presets as their counterparts on the regular Zhipu route, while other Coding Plan models remain `recommended`-only. Step 3.7 Flash exposes `low`, `medium`, and `high`.
+
 ---
 
 ## 4. Configure Protected Paths, Trash Bin, and Data Backups

@@ -35,6 +35,7 @@ pub async fn initialize_schema(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
             avatar_color TEXT,
             model_provider TEXT,
             model_name TEXT,
+            reasoning_preset TEXT,
             mb_rules_file_path TEXT,
             sa_rules_file_path TEXT,
             mb_rules TEXT,
@@ -168,6 +169,21 @@ pub async fn initialize_schema(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
             .execute(pool)
             .await?;
         log::info!("数据库迁移: 已添加 agents.avatar 列");
+    }
+
+    // 数据库迁移：为现有 agents 表添加推理强度预设列
+    // NULL 保持向后兼容，并与 recommended 使用相同语义。
+    let reasoning_preset_columns: Vec<(String,)> = sqlx::query_as(
+        "SELECT name FROM pragma_table_info('agents') WHERE name = 'reasoning_preset'",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    if reasoning_preset_columns.is_empty() {
+        sqlx::query("ALTER TABLE agents ADD COLUMN reasoning_preset TEXT")
+            .execute(pool)
+            .await?;
+        log::info!("数据库迁移: 已添加 agents.reasoning_preset 列");
     }
 
     // 数据库迁移：为现有 agents 表添加 auto_index_deliverables 列
@@ -918,6 +934,62 @@ mod tests {
             table_names.contains(&"sandbox_audit_events"),
             "sandbox_audit_events 表未创建"
         );
+
+        let reasoning_preset_columns: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('agents') WHERE name = 'reasoning_preset'",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(reasoning_preset_columns.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_reasoning_preset_migration_for_legacy_agents_table() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+
+        sqlx::query(
+            r#"
+            CREATE TABLE agents (
+                id TEXT PRIMARY KEY NOT NULL,
+                hub_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                deleted_at INTEGER
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            r#"
+            INSERT INTO agents (id, hub_id, name, created_at, updated_at)
+            VALUES ('legacy-agent', 'legacy-hub', 'Legacy Agent', 1, 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        initialize_schema(&pool).await.unwrap();
+
+        let reasoning_preset_columns: Vec<(String,)> = sqlx::query_as(
+            "SELECT name FROM pragma_table_info('agents') WHERE name = 'reasoning_preset'",
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let legacy_reasoning_preset: (Option<String>,) =
+            sqlx::query_as("SELECT reasoning_preset FROM agents WHERE id = 'legacy-agent'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        assert_eq!(reasoning_preset_columns.len(), 1);
+        assert_eq!(legacy_reasoning_preset.0, None);
     }
 
     #[tokio::test]

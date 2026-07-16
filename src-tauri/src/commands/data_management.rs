@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager, State};
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
 
+use crate::db::agent_repo::is_valid_reasoning_preset;
 use crate::AppState;
 
 /// 数据统计信息
@@ -109,12 +110,43 @@ type AgentTupleV2 = (
     Option<i64>,
 );
 
+/// Agent 备份行（导出版本 1.3）
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+struct AgentBackupV3 {
+    id: String,
+    hub_id: String,
+    name: String,
+    avatar_color: Option<String>,
+    avatar: Option<String>,
+    model_provider: Option<String>,
+    model_name: Option<String>,
+    reasoning_preset: Option<String>,
+    mb_rules_file_path: Option<String>,
+    sa_rules_file_path: Option<String>,
+    mb_rules: Option<String>,
+    sa_rules: Option<String>,
+    chat_rules: Option<String>,
+    knowledge_paths: Option<String>,
+    created_at: i64,
+    updated_at: i64,
+    deleted_at: Option<i64>,
+}
+
 /// Agent 备份行，兼容旧版不含 Rules 文本列的导出数据
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum AgentBackupRow {
+    V3(AgentBackupV3),
     V2(AgentTupleV2),
     V1(AgentTupleV1),
+}
+
+fn normalize_imported_reasoning_preset(value: Option<&str>) -> Option<&str> {
+    match value {
+        Some(value) if is_valid_reasoning_preset(value) => Some(value),
+        _ => None,
+    }
 }
 
 /// Message 元组类型
@@ -395,13 +427,13 @@ pub async fn data_export(
             .await
             .map_err(|e| format!("Failed to query Hubs: {}", e))?;
 
-    let agent_rows: Vec<AgentTupleV2> = sqlx::query_as(
-        "SELECT id, hub_id, name, avatar_color, avatar, model_provider, model_name, mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, created_at, updated_at, deleted_at FROM agents",
+    let agent_rows: Vec<AgentBackupV3> = sqlx::query_as(
+        "SELECT id, hub_id, name, avatar_color, avatar, model_provider, model_name, reasoning_preset, mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, created_at, updated_at, deleted_at FROM agents",
     )
     .fetch_all(db.pool())
     .await
     .map_err(|e| format!("Failed to query Agents: {}", e))?;
-    let agents: Vec<AgentBackupRow> = agent_rows.into_iter().map(AgentBackupRow::V2).collect();
+    let agents: Vec<AgentBackupRow> = agent_rows.into_iter().map(AgentBackupRow::V3).collect();
 
     let messages: Vec<MessageTuple> = sqlx::query_as(
         "SELECT id, agent_id, role, content, metadata, created_at, deleted_at FROM messages",
@@ -527,7 +559,7 @@ pub async fn data_export(
 
     // 创建 manifest.json
     let manifest = ExportManifest {
-        version: "1.2".to_string(), // 版本升级以包含直接粘贴的 Agent Rules 文本
+        version: "1.3".to_string(), // 版本升级以包含 Agent reasoning preset
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         exported_at: chrono::Utc::now().timestamp_millis(),
         stats: ManifestStats {
@@ -586,10 +618,14 @@ fn read_import_data(import_path: &str) -> Result<ImportData, String> {
             .map_err(|e| format!("Failed to parse manifest.json: {}", e))?
     };
 
-    // 验证版本兼容性（支持 1.0、1.1 和 1.2）
-    if manifest.version != "1.0" && manifest.version != "1.1" && manifest.version != "1.2" {
+    // 验证版本兼容性（支持 1.0 至 1.3）
+    if manifest.version != "1.0"
+        && manifest.version != "1.1"
+        && manifest.version != "1.2"
+        && manifest.version != "1.3"
+    {
         return Err(format!(
-            "Unsupported export version: {}. Supported versions are 1.0, 1.1 and 1.2.",
+            "Unsupported export version: {}. Supported versions are 1.0, 1.1, 1.2 and 1.3.",
             manifest.version
         ));
     }
@@ -721,6 +757,7 @@ pub async fn data_import(
             let no_mb_rules: Option<String> = None;
             let no_sa_rules: Option<String> = None;
             let no_chat_rules: Option<String> = None;
+            let no_reasoning_preset: Option<String> = None;
             let (
                 id,
                 hub_id,
@@ -729,6 +766,7 @@ pub async fn data_import(
                 avatar,
                 model_provider,
                 model_name,
+                reasoning_preset,
                 mb_rules_file_path,
                 sa_rules_file_path,
                 mb_rules,
@@ -739,9 +777,43 @@ pub async fn data_import(
                 updated_at,
                 deleted_at,
             ) = match agent {
+                AgentBackupRow::V3(row) => (
+                    &row.id,
+                    &row.hub_id,
+                    &row.name,
+                    &row.avatar_color,
+                    &row.avatar,
+                    &row.model_provider,
+                    &row.model_name,
+                    &row.reasoning_preset,
+                    &row.mb_rules_file_path,
+                    &row.sa_rules_file_path,
+                    &row.mb_rules,
+                    &row.sa_rules,
+                    &row.chat_rules,
+                    &row.knowledge_paths,
+                    row.created_at,
+                    row.updated_at,
+                    row.deleted_at,
+                ),
                 AgentBackupRow::V2(row) => (
-                    &row.0, &row.1, &row.2, &row.3, &row.4, &row.5, &row.6, &row.7, &row.8, &row.9,
-                    &row.10, &row.11, &row.12, row.13, row.14, row.15,
+                    &row.0,
+                    &row.1,
+                    &row.2,
+                    &row.3,
+                    &row.4,
+                    &row.5,
+                    &row.6,
+                    &no_reasoning_preset,
+                    &row.7,
+                    &row.8,
+                    &row.9,
+                    &row.10,
+                    &row.11,
+                    &row.12,
+                    row.13,
+                    row.14,
+                    row.15,
                 ),
                 AgentBackupRow::V1(row) => (
                     &row.0,
@@ -751,6 +823,7 @@ pub async fn data_import(
                     &row.4,
                     &row.5,
                     &row.6,
+                    &no_reasoning_preset,
                     &row.7,
                     &row.8,
                     &no_mb_rules,
@@ -762,9 +835,19 @@ pub async fn data_import(
                     row.12,
                 ),
             };
+            let raw_reasoning_preset = reasoning_preset.as_deref();
+            let reasoning_preset = normalize_imported_reasoning_preset(raw_reasoning_preset);
+            if let Some(invalid) = raw_reasoning_preset
+                .filter(|value| !value.is_empty() && !is_valid_reasoning_preset(value))
+            {
+                warnings.push(format!(
+                    "Agent #{} reasoning preset '{}' is invalid and was reset to recommended.",
+                    idx, invalid
+                ));
+            }
 
             let result = sqlx::query(
-                "INSERT OR IGNORE INTO agents (id, hub_id, name, avatar_color, avatar, model_provider, model_name, mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO agents (id, hub_id, name, avatar_color, avatar, model_provider, model_name, reasoning_preset, mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(id)
             .bind(hub_id)
@@ -773,6 +856,7 @@ pub async fn data_import(
             .bind(avatar)
             .bind(model_provider)
             .bind(model_name)
+            .bind(reasoning_preset)
             .bind(mb_rules_file_path)
             .bind(sa_rules_file_path)
             .bind(mb_rules)
@@ -1018,4 +1102,88 @@ pub async fn data_import(
         imported_diff_records,
         warnings,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_backup_v3_round_trip_preserves_reasoning_preset() {
+        let row = AgentBackupRow::V3(AgentBackupV3 {
+            id: "agent-id".to_string(),
+            hub_id: "hub-id".to_string(),
+            name: "Agent".to_string(),
+            avatar_color: None,
+            avatar: None,
+            model_provider: Some("openai".to_string()),
+            model_name: Some("gpt-5".to_string()),
+            reasoning_preset: Some("high".to_string()),
+            mb_rules_file_path: None,
+            sa_rules_file_path: None,
+            mb_rules: None,
+            sa_rules: None,
+            chat_rules: None,
+            knowledge_paths: None,
+            created_at: 1,
+            updated_at: 2,
+            deleted_at: None,
+        });
+
+        let json = serde_json::to_value(&row).unwrap();
+        assert_eq!(json["reasoningPreset"], "high");
+
+        let decoded: AgentBackupRow = serde_json::from_value(json).unwrap();
+        match decoded {
+            AgentBackupRow::V3(row) => {
+                assert_eq!(row.reasoning_preset.as_deref(), Some("high"));
+            }
+            AgentBackupRow::V2(_) | AgentBackupRow::V1(_) => {
+                panic!("version 1.3 backup should deserialize as V3")
+            }
+        }
+    }
+
+    #[test]
+    fn imported_reasoning_preset_is_whitelisted() {
+        for preset in [
+            "recommended",
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+        ] {
+            assert_eq!(
+                normalize_imported_reasoning_preset(Some(preset)),
+                Some(preset)
+            );
+        }
+
+        assert_eq!(normalize_imported_reasoning_preset(None), None);
+        assert_eq!(normalize_imported_reasoning_preset(Some("")), None);
+        assert_eq!(normalize_imported_reasoning_preset(Some("HIGH")), None);
+        assert_eq!(normalize_imported_reasoning_preset(Some("invalid")), None);
+    }
+
+    #[test]
+    fn legacy_agent_backup_rows_remain_compatible() {
+        let json = serde_json::json!([
+            "agent-id", "hub-id", "Agent", null, null, "openai", "gpt-5", null, null, null, null,
+            null, null, 1, 2, null
+        ]);
+
+        let decoded: AgentBackupRow = serde_json::from_value(json).unwrap();
+        match decoded {
+            AgentBackupRow::V2(row) => {
+                assert_eq!(row.0, "agent-id");
+                assert_eq!(row.5.as_deref(), Some("openai"));
+            }
+            AgentBackupRow::V3(_) | AgentBackupRow::V1(_) => {
+                panic!("version 1.2 backup should deserialize as V2")
+            }
+        }
+    }
 }

@@ -326,6 +326,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
             saRules: targetAgent.saRules ?? undefined,
             modelProvider: targetAgent.modelProvider ?? undefined,
             modelName: targetAgent.modelName ?? undefined,
+            reasoningPreset: targetAgent.reasoningPreset ?? undefined,
             pinnedSkills: targetAgent.pinnedSkills ?? undefined,
             sandboxMode: targetAgent.sandboxMode ?? undefined,
             visualEnhancementEnabled: targetAgent.visualEnhancementEnabled ?? undefined,
@@ -353,6 +354,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
             chatRules: targetAgent.chatRules ?? undefined,
             modelProvider: targetAgent.modelProvider ?? undefined,
             modelName: targetAgent.modelName ?? undefined,
+            reasoningPreset: targetAgent.reasoningPreset ?? undefined,
           },
           userMessageMeta: widgetMeta,
         })
@@ -586,6 +588,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
             saRules: agent.saRules ?? undefined,
             modelProvider: agent.modelProvider ?? undefined,
             modelName: agent.modelName ?? undefined,
+            reasoningPreset: agent.reasoningPreset ?? undefined,
             pinnedSkills: agent.pinnedSkills ?? undefined,
             sandboxMode: agent.sandboxMode ?? undefined,
             visualEnhancementEnabled: agent.visualEnhancementEnabled ?? undefined,
@@ -613,6 +616,7 @@ export function HubChatView({ setupChecklistState }: HubChatViewProps) {
             chatRules: agent.chatRules ?? undefined,
             modelProvider: agent.modelProvider ?? undefined,
             modelName: agent.modelName ?? undefined,
+            reasoningPreset: agent.reasoningPreset ?? undefined,
           },
         });
       }

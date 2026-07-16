@@ -8,6 +8,13 @@ use sqlx::{Pool, Sqlite};
 use super::models::{Agent, AgentUpdate};
 use crate::error::{AppError, AppResult};
 
+pub(crate) fn is_valid_reasoning_preset(value: &str) -> bool {
+    matches!(
+        value,
+        "recommended" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+    )
+}
+
 /// Agent Repository - 管理 Agent 数据访问
 pub struct AgentRepository {
     pool: Pool<Sqlite>,
@@ -45,9 +52,9 @@ impl AgentRepository {
 
         sqlx::query(
             r#"
-            INSERT INTO agents (id, hub_id, name, sort_order, avatar_color, avatar, model_provider, model_name,
+            INSERT INTO agents (id, hub_id, name, sort_order, avatar_color, avatar, model_provider, model_name, reasoning_preset,
                                mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&agent.id)
@@ -58,6 +65,7 @@ impl AgentRepository {
         .bind(&agent.avatar)
         .bind(&agent.model_provider)
         .bind(&agent.model_name)
+        .bind(&agent.reasoning_preset)
         .bind(&agent.mb_rules_file_path)
         .bind(&agent.sa_rules_file_path)
         .bind(&agent.mb_rules)
@@ -92,7 +100,7 @@ impl AgentRepository {
     pub async fn get(&self, id: &str) -> AppResult<Option<Agent>> {
         let agent: Option<Agent> = sqlx::query_as(
             r#"
-            SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name,
+            SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name, reasoning_preset,
                    mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
             FROM agents
             WHERE id = ? AND deleted_at IS NULL
@@ -116,7 +124,7 @@ impl AgentRepository {
     pub async fn list_by_hub(&self, hub_id: &str) -> AppResult<Vec<Agent>> {
         let agents: Vec<Agent> = sqlx::query_as(
             r#"
-            SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name,
+            SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name, reasoning_preset,
                    mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
             FROM agents
             WHERE hub_id = ? AND deleted_at IS NULL
@@ -138,7 +146,7 @@ impl AgentRepository {
     pub async fn list_all(&self) -> AppResult<Vec<Agent>> {
         let agents: Vec<Agent> = sqlx::query_as(
             r#"
-            SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name,
+            SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name, reasoning_preset,
                    mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at
             FROM agents
             WHERE deleted_at IS NULL
@@ -190,6 +198,12 @@ impl AgentRepository {
             Some(s) if s.is_empty() => None,
             Some(s) => Some(s.clone()),
             None => agent.model_name,
+        };
+        let new_reasoning_preset = match &update.reasoning_preset {
+            Some(s) if s.is_empty() => None,
+            Some(s) if is_valid_reasoning_preset(s) => Some(s.clone()),
+            Some(_) => agent.reasoning_preset,
+            None => agent.reasoning_preset,
         };
         let new_mb_rules_file_path = match &update.mb_rules_file_path {
             Some(s) if s.is_empty() => None, // 空字符串清除 MB rules
@@ -270,7 +284,7 @@ impl AgentRepository {
         sqlx::query(
             r#"
             UPDATE agents 
-            SET name = ?, avatar_color = ?, avatar = ?, model_provider = ?, model_name = ?,
+            SET name = ?, avatar_color = ?, avatar = ?, model_provider = ?, model_name = ?, reasoning_preset = ?,
                 mb_rules_file_path = ?, sa_rules_file_path = ?, mb_rules = ?, sa_rules = ?, chat_rules = ?, knowledge_paths = ?, auto_index_deliverables = ?, visual_enhancement_enabled = ?, pinned_skills = ?, planning_loop_budget = ?, project_path = ?, sandbox_mode = ?, sub_agent_safety_footer_enabled = ?, sub_agent_safety_footer_text = ?, updated_at = ?
             WHERE id = ? AND deleted_at IS NULL
             "#,
@@ -280,6 +294,7 @@ impl AgentRepository {
         .bind(&new_avatar)
         .bind(&new_model_provider)
         .bind(&new_model_name)
+        .bind(&new_reasoning_preset)
         .bind(&new_mb_rules_file_path)
         .bind(&new_sa_rules_file_path)
         .bind(&new_mb_rules)
@@ -349,7 +364,7 @@ impl AgentRepository {
     pub async fn cascade_delete(&self, id: &str) -> AppResult<()> {
         // 先验证 Agent 存在
         let existing: Option<Agent> = sqlx::query_as(
-            "SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name, \
+            "SELECT id, hub_id, name, COALESCE(sort_order, 0) AS sort_order, avatar_color, avatar, model_provider, model_name, reasoning_preset, \
                     mb_rules_file_path, sa_rules_file_path, mb_rules, sa_rules, chat_rules, knowledge_paths, auto_index_deliverables, visual_enhancement_enabled, pinned_skills, planning_loop_budget, project_path, sandbox_mode, sub_agent_safety_footer_enabled, sub_agent_safety_footer_text, created_at, updated_at, deleted_at \
              FROM agents WHERE id = ?"
         )
@@ -515,6 +530,51 @@ mod tests {
 
         assert_eq!(updated.name, "新名称");
         assert_eq!(updated.model_provider, Some("openai".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_update_agent_reasoning_preset() {
+        let (hub_repo, agent_repo) = setup_test_db().await;
+
+        let hub = hub_repo.create("测试 Hub").await.unwrap();
+        let agent = agent_repo.create(&hub.id, "推理 Agent").await.unwrap();
+        assert_eq!(agent.reasoning_preset, None);
+
+        let updated = agent_repo
+            .update(
+                &agent.id,
+                AgentUpdate {
+                    reasoning_preset: Some("high".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(updated.reasoning_preset.as_deref(), Some("high"));
+
+        let unchanged = agent_repo
+            .update(
+                &agent.id,
+                AgentUpdate {
+                    reasoning_preset: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(unchanged.reasoning_preset.as_deref(), Some("high"));
+
+        let cleared = agent_repo
+            .update(
+                &agent.id,
+                AgentUpdate {
+                    reasoning_preset: Some(String::new()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(cleared.reasoning_preset, None);
     }
 
     #[tokio::test]

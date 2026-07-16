@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentService } from '../AgentService';
+import { AgentService, clearAllAgentServices, getOrCreateAgentService } from '../AgentService';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -19,6 +19,26 @@ vi.mock('@services/logger', () => ({
 }));
 
 describe('AgentService', () => {
+  it('推理档位变化时重建缓存服务', () => {
+    clearAllAgentServices();
+    const recommended = getOrCreateAgentService({
+      agentId: 'reasoning-agent',
+      reasoningPreset: 'recommended',
+    });
+    const sameConfig = getOrCreateAgentService({
+      agentId: 'reasoning-agent',
+      reasoningPreset: 'recommended',
+    });
+    const high = getOrCreateAgentService({
+      agentId: 'reasoning-agent',
+      reasoningPreset: 'high',
+    });
+
+    expect(sameConfig).toBe(recommended);
+    expect(high).not.toBe(recommended);
+    clearAllAgentServices();
+  });
+
   it('同步已存在 Session 的历史消息增强内容', () => {
     const service = new AgentService({ agentId: 'agent-1' });
     service.loadChatHistory([

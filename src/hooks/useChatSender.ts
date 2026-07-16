@@ -40,7 +40,11 @@ import {
 } from './chatAttachmentContext';
 import { selectChatHistoryMessages } from './useChatSenderContext';
 import { serializeQuotesForMessage } from '@utils/quoteContent';
-import { modelSupportsVision } from '@/config/modelRegistry';
+import {
+  modelSupportsVision,
+  normalizeReasoningPreset,
+  type ReasoningPreset,
+} from '@/config/modelRegistry';
 import { LLM_TOKEN_POLICIES } from '@services/llm/LlmTokenPolicy';
 import {
   estimateGeneratedTokens,
@@ -72,6 +76,7 @@ export interface UseChatSenderOptions {
     chatRules?: string;
     modelProvider?: string;
     modelName?: string;
+    reasoningPreset?: ReasoningPreset;
   };
   /** 是否启用记忆系统（默认 agent=true, hub=true） */
   enableMemory?: boolean;
@@ -100,6 +105,7 @@ export interface SendMessageOptions {
     chatRules?: string;
     modelProvider?: string;
     modelName?: string;
+    reasoningPreset?: ReasoningPreset;
   };
   /**
    * 跳过用户消息创建（Hub 模式用）
@@ -457,21 +463,30 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         // 2.1 获取有效的 Provider/Model
         let effectiveProvider: string;
         let effectiveModel: string;
+        let selectedReasoningPreset: ReasoningPreset | undefined;
         let agentName: string;
 
         if (contextType === 'agent' && agentConfig) {
           effectiveProvider = agentConfig.modelProvider ?? defaultProvider;
           effectiveModel = agentConfig.modelName ?? defaultModel;
+          selectedReasoningPreset = agentConfig.reasoningPreset;
           agentName = agentConfig.name;
         } else if (contextType === 'hub' && mentionedAgent) {
           effectiveProvider = mentionedAgent.modelProvider ?? defaultProvider;
           effectiveModel = mentionedAgent.modelName ?? defaultModel;
+          selectedReasoningPreset = mentionedAgent.reasoningPreset;
           agentName = mentionedAgent.name;
         } else {
           effectiveProvider = defaultProvider;
           effectiveModel = defaultModel;
+          selectedReasoningPreset = undefined;
           agentName = 'Assistant';
         }
+        const effectiveReasoningPreset = normalizeReasoningPreset(
+          effectiveProvider,
+          effectiveModel,
+          selectedReasoningPreset
+        );
         const supportsVisionInput = modelSupportsVision(effectiveModel, effectiveProvider);
 
         // 2.2 构建身份层 (Layer 1) — Character Grounding 人格锚定
@@ -1085,6 +1100,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             request: {
               provider: effectiveProvider,
               model: effectiveModel,
+              reasoning_preset: effectiveReasoningPreset,
               messages,
               temperature: 1,
               max_tokens: isImageModel

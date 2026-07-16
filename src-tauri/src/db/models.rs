@@ -44,17 +44,18 @@ pub struct Agent {
     pub avatar: Option<String>, // base64 编码的自定义头像
     pub model_provider: Option<String>,
     pub model_name: Option<String>,
+    pub reasoning_preset: Option<String>, // NULL 与 recommended 使用相同语义
     pub mb_rules_file_path: Option<String>, // Master Brain 专属 rules 文件路径
     pub sa_rules_file_path: Option<String>, // Sub-Agent 专属 rules 文件路径
-    pub mb_rules: Option<String>,           // Master Brain 专属 rules 文本
-    pub sa_rules: Option<String>,           // Sub-Agent 专属 rules 文本
-    pub chat_rules: Option<String>,         // Chat 模式专属 rules 文本
-    pub knowledge_paths: Option<String>,    // JSON 数组存储多个文件路径
+    pub mb_rules: Option<String>,         // Master Brain 专属 rules 文本
+    pub sa_rules: Option<String>,         // Sub-Agent 专属 rules 文本
+    pub chat_rules: Option<String>,       // Chat 模式专属 rules 文本
+    pub knowledge_paths: Option<String>,  // JSON 数组存储多个文件路径
     pub auto_index_deliverables: Option<bool>, // 交付物是否自动索引到知识库，默认 true
     pub visual_enhancement_enabled: Option<bool>, // Planning 最终回复是否启用可视化增强，默认 true
-    pub pinned_skills: Option<String>,      // 精准命中技能列表（JSON 数组）
-    pub planning_loop_budget: Option<i32>,  // MB 最大决策轮次，NULL 时使用全局默认值
-    pub project_path: Option<String>,       // 用户关联的外部项目路径（用户授权后 Agent 具有全权限）
+    pub pinned_skills: Option<String>,    // 精准命中技能列表（JSON 数组）
+    pub planning_loop_budget: Option<i32>, // MB 最大决策轮次，NULL 时使用全局默认值
+    pub project_path: Option<String>,     // 用户关联的外部项目路径（用户授权后 Agent 具有全权限）
     pub sandbox_mode: Option<String>, // 用户可见的三档沙箱权限：LocalAudit / OfflineIsolated / ControlledNetwork
     pub sub_agent_safety_footer_enabled: Option<bool>, // Sub-Agent 每步 Safety Footer 实验开关
     pub sub_agent_safety_footer_text: Option<String>, // Sub-Agent Safety Footer 自定义提示词
@@ -76,6 +77,7 @@ impl Agent {
             avatar: None,
             model_provider: None,
             model_name: None,
+            reasoning_preset: None,
             mb_rules_file_path: None,
             sa_rules_file_path: None,
             mb_rules: None,
@@ -295,6 +297,7 @@ pub struct AgentUpdate {
     pub avatar: Option<String>, // base64 编码的自定义头像
     pub model_provider: Option<String>,
     pub model_name: Option<String>,
+    pub reasoning_preset: Option<String>, // 空字符串清除为 NULL，None 保持原值
     pub mb_rules_file_path: Option<String>,
     pub sa_rules_file_path: Option<String>,
     pub mb_rules: Option<String>,

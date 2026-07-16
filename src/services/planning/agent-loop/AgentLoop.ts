@@ -198,6 +198,7 @@ const DEFAULT_CONFIG: Required<
     | 'saAgentRules'
     | 'providerId'
     | 'modelId'
+    | 'reasoningPreset'
     | 'workdir'
     | 'baseUrl'
     | 'imageAttachments'
@@ -337,6 +338,7 @@ export class AgentLoop {
       // SubAgent LLM 调用需要使用相同的 provider 配置
       modelId: this.config.modelId,
       providerId: this.config.providerId,
+      reasoningPreset: this.config.reasoningPreset,
       baseUrl: this.config.baseUrl,
       // 工作目录，用于 SubAgent 执行工具时的根目录
       workdir: this.config.workdir,
@@ -700,6 +702,7 @@ export class AgentLoop {
                       messages: this.sanitizeMessagesForIpc(messages),
                       modelId: this.config.modelId,
                       providerId: this.config.providerId,
+                      reasoningPreset: this.config.reasoningPreset,
                       baseUrl: this.config.baseUrl,
                       supportsVision: modelSupportsVision(
                         this.config.modelId ?? '',
@@ -1288,6 +1291,7 @@ export class AgentLoop {
                       messages: this.sanitizeMessagesForIpc(messagesForCall),
                       modelId: this.config.modelId,
                       providerId: this.config.providerId,
+                      reasoningPreset: this.config.reasoningPreset,
                       baseUrl: this.config.baseUrl,
                       supportsVision: modelSupportsVision(
                         this.config.modelId ?? '',
@@ -2492,6 +2496,7 @@ export class AgentLoop {
           const request: Record<string, unknown> = {
             provider: this.config.providerId ?? 'gemini',
             model: this.config.modelId,
+            reasoning_preset: this.config.reasoningPreset,
             supports_vision: modelSupportsVision(this.config.modelId ?? '', this.config.providerId),
             messages: sanitizedMessages.map((m) => ({
               role: m.role,

@@ -6,6 +6,7 @@ use super::http_client::{
     format_stream_idle_timeout, get_client, get_streaming_client, stream_idle_timeout,
     stream_start_timeout, StreamIdleDiagnostics,
 };
+use super::reasoning::{resolve_reasoning, ReasoningRoute, ResolvedReasoning};
 use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
 use async_trait::async_trait;
 use futures::stream::Stream;
@@ -46,6 +47,30 @@ fn build_anthropic_tool_input_schema(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::types::{ToolChatMessage, ToolChatRequest, ToolChatRole};
+    use crate::llm::ReasoningPreset;
+
+    fn tool_request(model: &str, preset: Option<ReasoningPreset>) -> ToolChatRequest {
+        ToolChatRequest {
+            messages: vec![ToolChatMessage {
+                role: ToolChatRole::User,
+                content: "think carefully".to_string(),
+                images: None,
+                tool_calls: None,
+                tool_call_id: None,
+                tool_name: None,
+                reasoning_content: None,
+            }],
+            model_id: Some(model.to_string()),
+            provider_id: Some("anthropic".to_string()),
+            supports_vision: None,
+            tools: None,
+            temperature: Some(0.7),
+            max_tokens: Some(4096),
+            reasoning_preset: preset,
+            base_url: None,
+        }
+    }
 
     #[test]
     fn test_tool_input_schema_removes_top_level_composition_keywords() {
@@ -170,6 +195,48 @@ mod tests {
     }
 
     #[test]
+    fn native_adaptive_effort_applies_to_plain_and_tool_bodies() {
+        let adapter = AnthropicAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("think carefully")],
+            model: Some("claude-sonnet-5".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Xhigh),
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(adapter.build_request_body(&request)).unwrap();
+        let (tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("claude-opus-4-8", Some(ReasoningPreset::Max)));
+
+        assert_eq!(value["thinking"]["type"], "adaptive");
+        assert_eq!(value["output_config"]["effort"], "xhigh");
+        assert!(value.get("temperature").is_none());
+        assert_eq!(tool_body["thinking"]["type"], "adaptive");
+        assert_eq!(tool_body["output_config"]["effort"], "max");
+        assert!(tool_body.get("temperature").is_none());
+    }
+
+    #[test]
+    fn sonnet_46_never_serializes_unsupported_xhigh_effort() {
+        let adapter = AnthropicAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("think carefully")],
+            model: Some("claude-sonnet-4-6".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Xhigh),
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(adapter.build_request_body(&request)).unwrap();
+        let (tool_body, _, _) = adapter.build_tool_request_body(&tool_request(
+            "claude-4.6-sonnet",
+            Some(ReasoningPreset::Xhigh),
+        ));
+
+        assert_eq!(value["output_config"]["effort"], "high");
+        assert_eq!(tool_body["output_config"]["effort"], "high");
+    }
+
+    #[test]
     fn compatible_gateway_request_does_not_enable_native_thinking() {
         let adapter = AnthropicAdapter::new(
             ProviderConfig::new("test-key").with_base_url("https://example.com/v1"),
@@ -177,6 +244,7 @@ mod tests {
         let request = ChatRequest {
             messages: vec![ChatMessage::user("think carefully")],
             model: Some("claude-opus-4-8".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Max),
             ..Default::default()
         };
 
@@ -187,6 +255,61 @@ mod tests {
         assert!(value.get("output_config").is_none());
         let temperature = value["temperature"].as_f64().expect("temperature number");
         assert!((temperature - 0.7).abs() < 0.0001);
+
+        let (tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("claude-opus-4-8", Some(ReasoningPreset::Max)));
+        assert!(tool_body.get("thinking").is_none());
+        assert!(tool_body.get("output_config").is_none());
+        assert!(tool_body.get("temperature").is_some());
+    }
+
+    #[test]
+    fn minimax_m3_toggle_applies_without_claude_effort_fields() {
+        let adapter = AnthropicAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://api.minimaxi.com/anthropic/v1")
+                .with_reasoning_route(ReasoningRoute::MiniMaxMessages),
+        );
+        let disabled = ChatRequest {
+            messages: vec![ChatMessage::user("answer directly")],
+            model: Some("MiniMax-M3".to_string()),
+            reasoning_preset: Some(ReasoningPreset::None),
+            ..Default::default()
+        };
+        let adaptive = ChatRequest {
+            reasoning_preset: Some(ReasoningPreset::High),
+            ..disabled.clone()
+        };
+        let m2_disabled = ChatRequest {
+            model: Some("MiniMax-M2.7".to_string()),
+            ..disabled.clone()
+        };
+
+        let disabled_body = serde_json::to_value(adapter.build_request_body(&disabled)).unwrap();
+        let adaptive_body = serde_json::to_value(adapter.build_request_body(&adaptive)).unwrap();
+        let m2_body = serde_json::to_value(adapter.build_request_body(&m2_disabled)).unwrap();
+        let (disabled_tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("MiniMax-M3", Some(ReasoningPreset::None)));
+        let (adaptive_tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("MiniMax-M3", Some(ReasoningPreset::High)));
+
+        assert_eq!(disabled_body["thinking"]["type"], "disabled");
+        assert!(disabled_body["thinking"].get("display").is_none());
+        assert!(disabled_body.get("output_config").is_none());
+        assert!(disabled_body.get("temperature").is_some());
+        assert_eq!(disabled_tool_body["thinking"]["type"], "disabled");
+        assert!(disabled_tool_body.get("output_config").is_none());
+        assert!(disabled_tool_body.get("temperature").is_some());
+
+        assert_eq!(adaptive_body["thinking"]["type"], "adaptive");
+        assert!(adaptive_body.get("output_config").is_none());
+        assert!(adaptive_body.get("temperature").is_none());
+        assert_eq!(adaptive_tool_body["thinking"]["type"], "adaptive");
+        assert!(adaptive_tool_body.get("output_config").is_none());
+        assert!(adaptive_tool_body.get("temperature").is_none());
+
+        assert!(m2_body.get("thinking").is_none());
+        assert!(m2_body.get("output_config").is_none());
     }
 
     #[test]
@@ -253,50 +376,49 @@ impl AnthropicAdapter {
         }
     }
 
+    fn reasoning_route(&self) -> ReasoningRoute {
+        let fallback = if self.is_native_api() {
+            ReasoningRoute::NativeAnthropicMessages
+        } else {
+            ReasoningRoute::Unknown
+        };
+        self.config.reasoning_route.resolve_auto(fallback)
+    }
+
+    #[cfg(test)]
     fn model_uses_adaptive_thinking(model: &str) -> bool {
-        let model = model.to_ascii_lowercase().replace('.', "-");
-        if !model.contains("claude") {
-            return false;
-        }
-
-        const OPUS_VERSIONS: &[&str] = &["4-5", "4-6", "4-7", "4-8"];
-        const SONNET_VERSIONS: &[&str] = &["4-5", "4-6", "5"];
-
-        OPUS_VERSIONS
-            .iter()
-            .any(|version| Self::model_matches_family_version(&model, "opus", version))
-            || SONNET_VERSIONS
-                .iter()
-                .any(|version| Self::model_matches_family_version(&model, "sonnet", version))
-            || Self::model_matches_family_version(&model, "fable", "5")
+        super::reasoning::anthropic_model_uses_adaptive_thinking(model)
     }
 
-    fn model_matches_family_version(model: &str, family: &str, version: &str) -> bool {
-        model.contains(&format!("{family}-{version}"))
-            || model.contains(&format!("{version}-{family}"))
-    }
-
-    fn thinking_config_for_model(
+    fn reasoning_config_for_model(
         &self,
         model: &str,
         max_tokens: u32,
-    ) -> Option<AnthropicThinkingConfig> {
-        if self.is_native_api() && max_tokens >= 1024 && Self::model_uses_adaptive_thinking(model) {
-            Some(AnthropicThinkingConfig {
-                thinking_type: "adaptive".to_string(),
-                display: Some("summarized".to_string()),
-            })
-        } else {
-            None
+        preset: Option<super::reasoning::ReasoningPreset>,
+    ) -> (
+        Option<AnthropicThinkingConfig>,
+        Option<AnthropicOutputConfig>,
+    ) {
+        match resolve_reasoning(self.reasoning_route(), model, preset) {
+            ResolvedReasoning::AnthropicAdaptive { .. } if max_tokens < 1024 => (None, None),
+            ResolvedReasoning::AnthropicAdaptive { effort } => (
+                Some(AnthropicThinkingConfig {
+                    thinking_type: "adaptive".to_string(),
+                    display: Some("summarized".to_string()),
+                }),
+                Some(AnthropicOutputConfig {
+                    effort: effort.to_string(),
+                }),
+            ),
+            ResolvedReasoning::ThinkingToggle { enabled } => (
+                Some(AnthropicThinkingConfig {
+                    thinking_type: if enabled { "adaptive" } else { "disabled" }.to_string(),
+                    display: None,
+                }),
+                None,
+            ),
+            _ => (None, None),
         }
-    }
-
-    fn output_config_for_thinking(
-        thinking: &Option<AnthropicThinkingConfig>,
-    ) -> Option<AnthropicOutputConfig> {
-        thinking.as_ref().map(|_| AnthropicOutputConfig {
-            effort: "high".to_string(),
-        })
     }
 
     /// 构建Request body
@@ -305,9 +427,12 @@ impl AnthropicAdapter {
         let max_tokens = request
             .max_tokens
             .unwrap_or(super::types::DEFAULT_LLM_MAX_TOKENS);
-        let thinking = self.thinking_config_for_model(&model, max_tokens);
-        let output_config = Self::output_config_for_thinking(&thinking);
-        let temperature = if thinking.is_some() {
+        let (thinking, output_config) =
+            self.reasoning_config_for_model(&model, max_tokens, request.reasoning_preset);
+        let temperature = if thinking
+            .as_ref()
+            .is_some_and(|config| config.thinking_type == "adaptive")
+        {
             None
         } else {
             request.temperature
@@ -618,14 +743,24 @@ impl AnthropicAdapter {
             body["tools"] = serde_json::Value::Array(tools_val);
             body["tool_choice"] = serde_json::json!({"type": "auto"});
         }
-        let thinking = self.thinking_config_for_model(&model, max_tokens);
+        let (thinking, output_config) =
+            self.reasoning_config_for_model(&model, max_tokens, request.reasoning_preset);
+        let suppress_temperature = thinking
+            .as_ref()
+            .is_some_and(|config| config.thinking_type == "adaptive");
         if let Some(thinking_config) = thinking {
             body["thinking"] = serde_json::to_value(thinking_config).unwrap_or_else(
                 |_| serde_json::json!({"type": "adaptive", "display": "summarized"}),
             );
-            body["output_config"] = serde_json::json!({"effort": "high"});
-        } else if let Some(temp) = request.temperature {
-            body["temperature"] = serde_json::json!(temp);
+            if let Some(output_config) = output_config {
+                body["output_config"] = serde_json::to_value(output_config)
+                    .unwrap_or_else(|_| serde_json::json!({"effort": "high"}));
+            }
+        }
+        if !suppress_temperature {
+            if let Some(temp) = request.temperature {
+                body["temperature"] = serde_json::json!(temp);
+            }
         }
 
         // 诊断日志：记录Request body大小

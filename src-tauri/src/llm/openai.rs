@@ -12,6 +12,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 
+use super::reasoning::{resolve_reasoning, ReasoningRoute, ResolvedReasoning};
 use super::schema_compat::sanitize_tool_schema_for_compatible_gateway;
 use super::types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, ReasoningTraceCallback,
@@ -93,6 +94,41 @@ fn model_uses_openai_responses_reasoning(model: &str) -> bool {
     model.to_ascii_lowercase().starts_with("gpt-5")
 }
 
+fn openai_chat_reasoning_fields(
+    reasoning: ResolvedReasoning,
+    preset: Option<super::reasoning::ReasoningPreset>,
+) -> (Option<OpenAIThinkingConfig>, Option<String>) {
+    match reasoning {
+        ResolvedReasoning::OpenAiResponses { effort } if matches!(preset, Some(value) if value != super::reasoning::ReasoningPreset::Recommended) => {
+            (None, Some(effort.to_string()))
+        }
+        ResolvedReasoning::OpenAiCompatibleEffort { effort } => (None, Some(effort.to_string())),
+        ResolvedReasoning::CompatibleThinking { enabled, effort } => (
+            Some(OpenAIThinkingConfig::new(enabled)),
+            effort.map(str::to_string),
+        ),
+        ResolvedReasoning::ThinkingToggle { enabled } => {
+            (Some(OpenAIThinkingConfig::new(enabled)), None)
+        }
+        _ => (None, None),
+    }
+}
+
+fn apply_openai_chat_reasoning(
+    body: &mut serde_json::Value,
+    reasoning: ResolvedReasoning,
+    preset: Option<super::reasoning::ReasoningPreset>,
+) {
+    let (thinking, effort) = openai_chat_reasoning_fields(reasoning, preset);
+    if let Some(thinking) = thinking {
+        body["thinking"] = serde_json::to_value(thinking)
+            .unwrap_or_else(|_| serde_json::json!({ "type": "enabled" }));
+    }
+    if let Some(effort) = effort {
+        body["reasoning_effort"] = serde_json::Value::String(effort);
+    }
+}
+
 /// OpenAI 适配器
 ///
 /// 使用全局共享 HTTP Client，复用连接池
@@ -151,7 +187,17 @@ impl OpenAIAdapter {
     }
 
     fn should_use_responses_reasoning(&self, model: &str) -> bool {
-        is_native_openai_base_url(self.base_url()) && model_uses_openai_responses_reasoning(model)
+        self.reasoning_route() == ReasoningRoute::NativeOpenAiResponses
+            && model_uses_openai_responses_reasoning(model)
+    }
+
+    fn reasoning_route(&self) -> ReasoningRoute {
+        let fallback = if is_native_openai_base_url(self.base_url()) {
+            ReasoningRoute::NativeOpenAiResponses
+        } else {
+            ReasoningRoute::Unknown
+        };
+        self.config.reasoning_route.resolve_auto(fallback)
     }
 
     fn responses_message_value(
@@ -202,6 +248,11 @@ impl OpenAIAdapter {
 
     fn build_responses_chat_request_body(&self, request: &ChatRequest) -> serde_json::Value {
         let model = self.get_model(request.model.as_deref());
+        let reasoning = resolve_reasoning(self.reasoning_route(), &model, request.reasoning_preset);
+        let effort = match reasoning {
+            ResolvedReasoning::OpenAiResponses { effort } => effort,
+            _ => "medium",
+        };
         let input: Vec<serde_json::Value> = request
             .messages
             .iter()
@@ -220,7 +271,7 @@ impl OpenAIAdapter {
             "stream": request.stream,
             "store": false,
             "reasoning": {
-                "effort": "medium",
+                "effort": effort,
                 "summary": "auto"
             }
         });
@@ -305,6 +356,9 @@ impl OpenAIAdapter {
             image_size: cfg.image_size.clone(),
         });
         let model = self.get_model(request.model.as_deref());
+        let reasoning = resolve_reasoning(self.reasoning_route(), &model, request.reasoning_preset);
+        let (thinking, reasoning_effort) =
+            openai_chat_reasoning_fields(reasoning, request.reasoning_preset);
         let (max_tokens, max_completion_tokens) =
             if self.max_tokens_request_field(&model) == "max_completion_tokens" {
                 (None, request.max_tokens)
@@ -322,6 +376,8 @@ impl OpenAIAdapter {
             stream_options: None,
             modalities,
             image_config,
+            thinking,
+            reasoning_effort,
         }
     }
 
@@ -606,6 +662,11 @@ impl OpenAIAdapter {
         if let Some(max_tokens) = request.max_tokens {
             body[self.max_tokens_request_field(&model)] = serde_json::json!(max_tokens);
         }
+        apply_openai_chat_reasoning(
+            &mut body,
+            resolve_reasoning(self.reasoning_route(), &model, request.reasoning_preset),
+            request.reasoning_preset,
+        );
 
         // 诊断日志：记录请求体大小
         let body_str = serde_json::to_string(&body).unwrap_or_default();
@@ -638,6 +699,11 @@ impl OpenAIAdapter {
         use super::types::ToolChatRole;
 
         let model = self.get_model(request.model_id.as_deref());
+        let reasoning = resolve_reasoning(self.reasoning_route(), &model, request.reasoning_preset);
+        let effort = match reasoning {
+            ResolvedReasoning::OpenAiResponses { effort } => effort,
+            _ => "medium",
+        };
         let mut input: Vec<serde_json::Value> = Vec::new();
 
         let mut valid_call_ids: std::collections::HashSet<String> =
@@ -770,7 +836,7 @@ impl OpenAIAdapter {
             "stream": true,
             "store": false,
             "reasoning": {
-                "effort": "medium",
+                "effort": effort,
                 "summary": "auto"
             }
         });
@@ -1882,6 +1948,24 @@ struct OpenAIRequest {
     /// OpenRouter 图像生成配置（宽高比、分辨率等）
     #[serde(skip_serializing_if = "Option::is_none")]
     image_config: Option<OpenAIImageConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking: Option<OpenAIThinkingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAIThinkingConfig {
+    #[serde(rename = "type")]
+    thinking_type: &'static str,
+}
+
+impl OpenAIThinkingConfig {
+    fn new(enabled: bool) -> Self {
+        Self {
+            thinking_type: if enabled { "enabled" } else { "disabled" },
+        }
+    }
 }
 
 /// 流式请求选项
@@ -2638,6 +2722,29 @@ impl ResponsesToolCallAccumulator {
 mod tests {
     use super::*;
     use crate::llm::types::{ToolChatMessage, ToolChatRequest, ToolChatRole};
+    use crate::llm::{ReasoningPreset, ReasoningRoute};
+
+    fn tool_request(model: &str, preset: Option<ReasoningPreset>) -> ToolChatRequest {
+        ToolChatRequest {
+            messages: vec![ToolChatMessage {
+                role: ToolChatRole::User,
+                content: "Hi".to_string(),
+                images: None,
+                tool_calls: None,
+                tool_call_id: None,
+                tool_name: None,
+                reasoning_content: None,
+            }],
+            model_id: Some(model.to_string()),
+            provider_id: None,
+            supports_vision: None,
+            tools: None,
+            temperature: Some(0.7),
+            max_tokens: Some(456),
+            reasoning_preset: preset,
+            base_url: None,
+        }
+    }
 
     #[test]
     fn test_tool_parameters_schema_removes_top_level_composition_keywords() {
@@ -2730,6 +2837,237 @@ mod tests {
         assert_eq!(body["max_output_tokens"], serde_json::json!(123));
         assert_eq!(body["reasoning"]["effort"], serde_json::json!("medium"));
         assert_eq!(body["reasoning"]["summary"], serde_json::json!("auto"));
+    }
+
+    #[test]
+    fn native_openai_responses_uses_verified_requested_effort() {
+        let adapter = OpenAIAdapter::new(ProviderConfig::new("test-key"));
+        let gpt_55 = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("gpt-5.5".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Max),
+            ..Default::default()
+        };
+        let gpt_54_minimal = ChatRequest {
+            model: Some("gpt-5.4".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Minimal),
+            ..gpt_55.clone()
+        };
+        let gpt_54_xhigh = ChatRequest {
+            reasoning_preset: Some(ReasoningPreset::Xhigh),
+            ..gpt_54_minimal.clone()
+        };
+        let gpt_56_max = ChatRequest {
+            model: Some("gpt-5.6-sol".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Max),
+            ..gpt_55.clone()
+        };
+
+        let gpt_55_body = adapter.build_responses_chat_request_body(&gpt_55);
+        let gpt_54_minimal_body = adapter.build_responses_chat_request_body(&gpt_54_minimal);
+        let gpt_54_xhigh_body = adapter.build_responses_chat_request_body(&gpt_54_xhigh);
+        let gpt_56_max_body = adapter.build_responses_chat_request_body(&gpt_56_max);
+
+        assert_eq!(gpt_55_body["reasoning"]["effort"], "xhigh");
+        assert_eq!(gpt_54_minimal_body["reasoning"]["effort"], "low");
+        assert_eq!(gpt_54_xhigh_body["reasoning"]["effort"], "xhigh");
+        assert_eq!(gpt_56_max_body["reasoning"]["effort"], "max");
+    }
+
+    #[test]
+    fn native_openai_chat_builders_only_emit_explicit_requested_effort() {
+        let adapter = OpenAIAdapter::new(ProviderConfig::new("test-key"));
+        let explicit = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("gpt-5.4-mini".to_string()),
+            reasoning_preset: Some(ReasoningPreset::High),
+            ..Default::default()
+        };
+        let recommended = ChatRequest {
+            reasoning_preset: Some(ReasoningPreset::Recommended),
+            ..explicit.clone()
+        };
+        let gpt_56 = ChatRequest {
+            model: Some("gpt-5.6-luna".to_string()),
+            reasoning_preset: Some(ReasoningPreset::High),
+            ..explicit.clone()
+        };
+        let unverified = ChatRequest {
+            model: Some("gpt-5.7".to_string()),
+            ..gpt_56.clone()
+        };
+
+        let explicit_body = serde_json::to_value(adapter.build_request_body(&explicit)).unwrap();
+        let recommended_body =
+            serde_json::to_value(adapter.build_request_body(&recommended)).unwrap();
+        let gpt_56_body = serde_json::to_value(adapter.build_request_body(&gpt_56)).unwrap();
+        let unverified_body =
+            serde_json::to_value(adapter.build_request_body(&unverified)).unwrap();
+        let unverified_responses_body = adapter.build_responses_chat_request_body(&unverified);
+        let (tool_body, _, _) =
+            adapter.build_tool_request_body(&tool_request("gpt-5.5", Some(ReasoningPreset::Xhigh)));
+
+        assert_eq!(explicit_body["reasoning_effort"], "high");
+        assert!(recommended_body.get("reasoning_effort").is_none());
+        assert_eq!(gpt_56_body["reasoning_effort"], "high");
+        assert!(unverified_body.get("reasoning_effort").is_none());
+        assert_eq!(unverified_responses_body["reasoning"]["effort"], "medium");
+        assert_eq!(tool_body["reasoning_effort"], "xhigh");
+        assert!(tool_body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn compatible_reasoning_profiles_apply_to_plain_and_tool_bodies() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://api.deepseek.com")
+                .with_reasoning_route(ReasoningRoute::DeepSeekChat),
+        );
+        let plain_request = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("deepseek-v4-pro".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Max),
+            ..Default::default()
+        };
+
+        let plain_body = serde_json::to_value(adapter.build_request_body(&plain_request)).unwrap();
+        let disabled_request = ChatRequest {
+            reasoning_preset: Some(ReasoningPreset::None),
+            ..plain_request.clone()
+        };
+        let disabled_body =
+            serde_json::to_value(adapter.build_request_body(&disabled_request)).unwrap();
+        let (tool_body, _, _) = adapter.build_tool_request_body(&tool_request(
+            "deepseek-v4-flash",
+            Some(ReasoningPreset::High),
+        ));
+        let (disabled_tool_body, _, _) = adapter.build_tool_request_body(&tool_request(
+            "deepseek-v4-flash",
+            Some(ReasoningPreset::None),
+        ));
+
+        assert_eq!(plain_body["thinking"]["type"], "enabled");
+        assert_eq!(plain_body["reasoning_effort"], "max");
+        assert_eq!(disabled_body["thinking"]["type"], "disabled");
+        assert!(disabled_body.get("reasoning_effort").is_none());
+        assert_eq!(tool_body["thinking"]["type"], "enabled");
+        assert_eq!(tool_body["reasoning_effort"], "high");
+        assert_eq!(disabled_tool_body["thinking"]["type"], "disabled");
+        assert!(disabled_tool_body.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn stepfun_chat_emits_only_its_three_verified_effort_levels() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://api.stepfun.com/step_plan/v1")
+                .with_reasoning_route(ReasoningRoute::StepFunChat),
+        );
+        let plain_request = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("step-3.7-flash".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Medium),
+            ..Default::default()
+        };
+
+        let plain_body = serde_json::to_value(adapter.build_request_body(&plain_request)).unwrap();
+        let (tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("step-3.7-flash", Some(ReasoningPreset::Max)));
+
+        assert_eq!(plain_body["reasoning_effort"], "medium");
+        assert!(plain_body.get("thinking").is_none());
+        assert_eq!(tool_body["reasoning_effort"], "high");
+        assert!(tool_body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn zhipu_effort_and_toggle_models_emit_only_verified_fields() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://open.bigmodel.cn/api/paas/v4")
+                .with_reasoning_route(ReasoningRoute::ZhipuChat),
+        );
+        let glm_51 = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("GLM-5.1".to_string()),
+            reasoning_preset: Some(ReasoningPreset::None),
+            ..Default::default()
+        };
+        let glm_52 = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("glm-5.2".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Xhigh),
+            ..Default::default()
+        };
+
+        let glm_51_body = serde_json::to_value(adapter.build_request_body(&glm_51)).unwrap();
+        let glm_52_body = serde_json::to_value(adapter.build_request_body(&glm_52)).unwrap();
+
+        assert_eq!(glm_51_body["thinking"]["type"], "disabled");
+        assert!(glm_51_body.get("reasoning_effort").is_none());
+        assert_eq!(glm_52_body["thinking"]["type"], "enabled");
+        assert_eq!(glm_52_body["reasoning_effort"], "max");
+    }
+
+    #[test]
+    fn mimo_chat_maps_semantic_effort_to_a_thinking_toggle() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://token-plan-cn.xiaomimimo.com/v1")
+                .with_reasoning_route(ReasoningRoute::MimoChat),
+        );
+        let enabled = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("mimo-v2.5-pro".to_string()),
+            reasoning_preset: Some(ReasoningPreset::High),
+            ..Default::default()
+        };
+        let disabled = ChatRequest {
+            reasoning_preset: Some(ReasoningPreset::None),
+            ..enabled.clone()
+        };
+
+        let enabled_body = serde_json::to_value(adapter.build_request_body(&enabled)).unwrap();
+        let disabled_body = serde_json::to_value(adapter.build_request_body(&disabled)).unwrap();
+
+        assert_eq!(enabled_body["thinking"]["type"], "enabled");
+        assert_eq!(disabled_body["thinking"]["type"], "disabled");
+        assert!(enabled_body.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn unknown_compatible_routes_never_leak_reasoning_parameters() {
+        for (base_url, model) in [
+            ("https://openrouter.ai/api/v1", "openai/gpt-5.5"),
+            ("http://127.0.0.1:8050/v1", "glm-5.2"),
+            (
+                "https://ark.cn-beijing.volces.com/api/coding/v3",
+                "deepseek-v4-pro",
+            ),
+            ("https://api.stepfun.com/step_plan/v1", "step-3.7-flash"),
+            ("https://apihub.agnes-ai.com/v1", "agnes-2.0-flash"),
+            ("https://open.bigmodel.cn/api/coding/paas/v4", "GLM-5.2"),
+        ] {
+            let adapter = OpenAIAdapter::new(
+                ProviderConfig::new("test-key")
+                    .with_base_url(base_url)
+                    .with_reasoning_route(ReasoningRoute::Unknown),
+            );
+            let request = ChatRequest {
+                messages: vec![ChatMessage::user("Hi")],
+                model: Some(model.to_string()),
+                reasoning_preset: Some(ReasoningPreset::Max),
+                ..Default::default()
+            };
+
+            let body = serde_json::to_value(adapter.build_request_body(&request)).unwrap();
+
+            assert!(body.get("thinking").is_none(), "base_url={base_url}");
+            assert!(
+                body.get("reasoning_effort").is_none(),
+                "base_url={base_url}"
+            );
+        }
     }
 
     #[test]
@@ -2863,6 +3201,7 @@ mod tests {
             tools: None,
             temperature: None,
             max_tokens: Some(456),
+            reasoning_preset: None,
             base_url: None,
         };
 

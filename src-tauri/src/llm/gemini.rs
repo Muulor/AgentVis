@@ -10,6 +10,7 @@ use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
+use super::reasoning::{resolve_reasoning, ReasoningRoute, ResolvedReasoning};
 use super::types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ProviderConfig, ReasoningTraceCallback,
     ReasoningTraceProgress, StreamChunk, ToolCallProgressCallback, ToolCallStreamProgress,
@@ -55,6 +56,19 @@ impl GeminiAdapter {
         model.contains("gemini-2.5") || model.contains("gemini-3")
     }
 
+    fn reasoning_route(&self) -> ReasoningRoute {
+        let is_native = self.config.base_url.as_deref().map_or(true, |url| {
+            url.trim_end_matches('/')
+                .eq_ignore_ascii_case(DEFAULT_BASE_URL)
+        });
+        let fallback = if is_native {
+            ReasoningRoute::NativeGeminiGenerateContent
+        } else {
+            ReasoningRoute::Unknown
+        };
+        self.config.reasoning_route.resolve_auto(fallback)
+    }
+
     fn request_wants_image_output(response_modalities: &Option<Vec<String>>) -> bool {
         response_modalities
             .as_ref()
@@ -67,15 +81,26 @@ impl GeminiAdapter {
     }
 
     fn thinking_config_for_model(
+        &self,
         model: &str,
         response_modalities: &Option<Vec<String>>,
+        preset: Option<super::reasoning::ReasoningPreset>,
     ) -> Option<GeminiThinkingConfig> {
         if Self::model_supports_thought_summaries(model)
             && !Self::request_wants_image_output(response_modalities)
         {
-            Some(GeminiThinkingConfig {
-                include_thoughts: Some(true),
-            })
+            match resolve_reasoning(self.reasoning_route(), model, preset) {
+                ResolvedReasoning::GeminiThinking { level } => Some(GeminiThinkingConfig {
+                    include_thoughts: Some(true),
+                    thinking_level: level.map(str::to_string),
+                }),
+                ResolvedReasoning::Preserve
+                | ResolvedReasoning::OpenAiResponses { .. }
+                | ResolvedReasoning::OpenAiCompatibleEffort { .. }
+                | ResolvedReasoning::AnthropicAdaptive { .. }
+                | ResolvedReasoning::CompatibleThinking { .. }
+                | ResolvedReasoning::ThinkingToggle { .. } => None,
+            }
         } else {
             None
         }
@@ -167,7 +192,11 @@ impl GeminiAdapter {
                 aspect_ratio: cfg.aspect_ratio.clone(),
                 image_size: cfg.image_size.clone(),
             }),
-            thinking_config: Self::thinking_config_for_model(&model, &request.response_modalities),
+            thinking_config: self.thinking_config_for_model(
+                &model,
+                &request.response_modalities,
+                request.reasoning_preset,
+            ),
         };
 
         GeminiRequest {
@@ -462,7 +491,11 @@ impl GeminiAdapter {
             max_output_tokens: request.max_tokens,
             response_modalities: None, // Function Calling 不需要图像输出模态
             image_config: None,        // Function Calling 不需要图像配置
-            thinking_config: Self::thinking_config_for_model(&model, &None),
+            thinking_config: self.thinking_config_for_model(
+                &model,
+                &None,
+                request.reasoning_preset,
+            ),
         };
 
         let gemini_request = GeminiRequest {
@@ -1268,6 +1301,8 @@ struct GeminiGenerationConfig {
 struct GeminiThinkingConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     include_thoughts: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thinking_level: Option<String>,
 }
 
 /// Gemini 图像生成配置（宽高比、分辨率等）
@@ -1395,7 +1430,31 @@ struct GeminiFunctionResponseBlob {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::llm::types::{ToolChatMessage, ToolChatRequest, ToolChatRole};
+    use crate::llm::{ReasoningPreset, ReasoningRoute};
     use std::collections::HashMap;
+
+    fn tool_request(model: &str, preset: Option<ReasoningPreset>) -> ToolChatRequest {
+        ToolChatRequest {
+            messages: vec![ToolChatMessage {
+                role: ToolChatRole::User,
+                content: "hi".to_string(),
+                images: None,
+                tool_calls: None,
+                tool_call_id: None,
+                tool_name: None,
+                reasoning_content: None,
+            }],
+            model_id: Some(model.to_string()),
+            provider_id: Some("gemini".to_string()),
+            supports_vision: None,
+            tools: None,
+            temperature: Some(0.7),
+            max_tokens: Some(4096),
+            reasoning_preset: preset,
+            base_url: None,
+        }
+    }
 
     #[test]
     fn request_includes_thinking_config_for_thinking_models() {
@@ -1413,6 +1472,87 @@ mod tests {
             value["generationConfig"]["thinkingConfig"]["includeThoughts"],
             true
         );
+        assert!(value["generationConfig"]["thinkingConfig"]
+            .get("thinkingLevel")
+            .is_none());
+    }
+
+    #[test]
+    fn native_gemini_effort_applies_to_plain_and_tool_bodies() {
+        let adapter = GeminiAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("hi")],
+            model: Some("gemini-3.1-pro-preview".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Medium),
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(adapter.build_request_body(&request)).unwrap();
+        let (tool_body, _, _, _) = adapter.build_tool_request_body(&tool_request(
+            "gemini-3.5-flash",
+            Some(ReasoningPreset::Minimal),
+        ));
+        let tool_value = serde_json::to_value(tool_body).unwrap();
+
+        assert_eq!(
+            value["generationConfig"]["thinkingConfig"]["thinkingLevel"],
+            "medium"
+        );
+        assert_eq!(
+            tool_value["generationConfig"]["thinkingConfig"]["thinkingLevel"],
+            "minimal"
+        );
+        assert_eq!(
+            tool_value["generationConfig"]["thinkingConfig"]["includeThoughts"],
+            true
+        );
+    }
+
+    #[test]
+    fn native_gemini_25_recommended_preserves_thought_summaries_without_level() {
+        let adapter = GeminiAdapter::new(ProviderConfig::new("test-key"));
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("hi")],
+            model: Some("gemini-2.5-flash".to_string()),
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(adapter.build_request_body(&request)).unwrap();
+
+        assert_eq!(
+            value["generationConfig"]["thinkingConfig"]["includeThoughts"],
+            true
+        );
+        assert!(value["generationConfig"]["thinkingConfig"]
+            .get("thinkingLevel")
+            .is_none());
+    }
+
+    #[test]
+    fn compatible_gemini_gateway_never_leaks_thinking_config() {
+        let adapter = GeminiAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("http://127.0.0.1:8050")
+                .with_reasoning_route(ReasoningRoute::Unknown),
+        );
+        let request = ChatRequest {
+            messages: vec![ChatMessage::user("hi")],
+            model: Some("gemini-3.5-flash".to_string()),
+            reasoning_preset: Some(ReasoningPreset::High),
+            ..Default::default()
+        };
+
+        let value = serde_json::to_value(adapter.build_request_body(&request)).unwrap();
+        let (tool_body, _, _, _) = adapter.build_tool_request_body(&tool_request(
+            "gemini-3.1-pro-preview",
+            Some(ReasoningPreset::High),
+        ));
+        let tool_value = serde_json::to_value(tool_body).unwrap();
+
+        assert!(value["generationConfig"].get("thinkingConfig").is_none());
+        assert!(tool_value["generationConfig"]
+            .get("thinkingConfig")
+            .is_none());
     }
 
     #[test]

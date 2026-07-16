@@ -380,6 +380,7 @@ export function AgentChatView() {
           chatRules: currentAgent.chatRules ?? undefined,
           modelProvider: currentAgent.modelProvider ?? undefined,
           modelName: currentAgent.modelName ?? undefined,
+          reasoningPreset: currentAgent.reasoningPreset ?? undefined,
         }
       : undefined,
     enableMemory: true,
@@ -400,6 +401,7 @@ export function AgentChatView() {
           saRules: currentAgent.saRules ?? undefined,
           modelProvider: currentAgent.modelProvider ?? undefined,
           modelName: currentAgent.modelName ?? undefined,
+          reasoningPreset: currentAgent.reasoningPreset ?? undefined,
           pinnedSkills: currentAgent.pinnedSkills ?? undefined,
           sandboxMode: currentAgent.sandboxMode ?? undefined,
           visualEnhancementEnabled: currentAgent.visualEnhancementEnabled ?? undefined,
@@ -1154,17 +1156,31 @@ export function AgentChatView() {
             <AgentModelSelector
               provider={currentAgent.modelProvider}
               model={currentAgent.modelName}
-              onSelect={async (provider, model) => {
+              reasoningPreset={currentAgent.reasoningPreset}
+              onSelect={async (provider, model, reasoningPreset) => {
                 if (!currentAgentId) return;
                 // 更新 Store
-                updateAgent(currentAgentId, { modelProvider: provider, modelName: model });
+                updateAgent(currentAgentId, {
+                  modelProvider: provider,
+                  modelName: model,
+                  reasoningPreset,
+                });
                 // 持久化到后端
                 try {
                   await invoke('agent_update', {
                     id: currentAgentId,
-                    request: { model_provider: provider, model_name: model },
+                    request: {
+                      model_provider: provider,
+                      model_name: model,
+                      reasoning_preset: reasoningPreset,
+                    },
                   });
-                  logger.trace('[AgentChatView] 模型配置已保存:', provider, model);
+                  logger.trace(
+                    '[AgentChatView] 模型与推理档位配置已保存:',
+                    provider,
+                    model,
+                    reasoningPreset
+                  );
                 } catch (error) {
                   logger.error('[AgentChatView] 保存模型配置失败:', error);
                 }

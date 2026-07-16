@@ -8,6 +8,7 @@ import type { ToolCall, ToolResult } from '../tools/types';
 import type { SubAgentSpec, SubAgentOutput, TaskAttachmentReference } from '../sub-agents/types';
 import type { AgentServiceState } from '../fsm/types';
 import type { GovernorSnapshot } from './LoopGovernor';
+import type { ReasoningPreset } from '@/config/modelRegistry';
 
 // ==================== FSM 可视化类型 ====================
 
@@ -158,6 +159,8 @@ export interface AgentLoopConfig {
   providerId?: string;
   /** 模型 ID */
   modelId?: string;
+  /** AgentVis 统一推理档位。 */
+  reasoningPreset?: ReasoningPreset;
   /** 工作目录 */
   workdir?: string;
   /** 自定义 API 基址 URL（用于 Local 代理） */

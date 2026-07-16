@@ -10,6 +10,7 @@ import { useHubStore } from '@stores/hubStore';
 import { useAgentStore } from '@stores/agentStore';
 import { useChatStore } from '@stores/chatStore';
 import { useRuntimeStore } from '@stores/runtimeStore';
+import type { ReasoningPreset } from '@/config/modelRegistry';
 import { useWidgetStore } from '@stores/widgetStore';
 import { collectWidgetBubbleSubmissions } from '@stores/widgetSubmissionRecovery';
 import { getLogger } from '@services/logger';
@@ -61,6 +62,7 @@ interface AgentItem {
   avatarColor: string | null;
   modelProvider: string | null;
   modelName: string | null;
+  reasoningPreset: ReasoningPreset | null;
   mbRulesFilePath: string | null;
   saRulesFilePath: string | null;
   mbRules: string | null;

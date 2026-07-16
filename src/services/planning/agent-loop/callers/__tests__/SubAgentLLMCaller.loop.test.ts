@@ -148,6 +148,24 @@ describe('SubAgentLLMCaller Loop', () => {
       expect(response).toBeDefined();
     });
 
+    it('将 Agent 推理档位透传到工具调用请求', async () => {
+      const reasoningFactory = new SubAgentLLMCallerFactory(
+        {
+          providerId: 'openai',
+          modelId: 'gpt-5.4',
+          reasoningPreset: 'high',
+        },
+        mockExecuteTool
+      );
+
+      await reasoningFactory.create().callWithContext('System prompt', ['read'], []);
+
+      const payload = vi.mocked(invoke).mock.calls[0]?.[1] as {
+        request: { reasoningPreset?: string };
+      };
+      expect(payload.request.reasoningPreset).toBe('high');
+    });
+
     it('模型注册表标记不支持视觉时，应在首次调用前移除 images', async () => {
       const noVisionFactory = new SubAgentLLMCallerFactory(
         {
