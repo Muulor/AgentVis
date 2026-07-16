@@ -138,7 +138,7 @@ export const zhCN = {
       name: 'Agent 名称',
       loopBudget: '决策轮次',
       loopBudgetHint:
-        'Task 模式下，单次请求可调用 Master Agent 的最大决策轮次。默认值适用于大多数场景；超长链路的编程任务可适当提高。留空使用默认值（{max} 轮）。',
+        'Task 模式下，单次请求可调用 Master Brain 的最大决策轮次。默认值适用于大多数场景；超长链路的编程任务可适当提高。留空使用默认值（{max} 轮）。',
       increase: '增加',
       decrease: '减少',
       loopUnit: '轮',
@@ -146,7 +146,7 @@ export const zhCN = {
       resetDefault: '恢复默认',
       visualEnhancement: 'Task 可视化增强',
       visualEnhancementHint:
-        'Task 模式会先展示 Master Agent 的原始回复，再根据启发式指标判断是否在后台调用一次 LLM，将同一条消息增强为 ECharts、Mermaid 或交互组件。增强期间可以继续对话，也可以在消息底部单独停止增强；关闭后只保留原始回复。',
+        'Task 模式会先展示 Master Brain 的原始回复，再根据启发式指标判断是否在后台调用一次 LLM，将同一条消息增强为 ECharts、Mermaid 或交互组件。增强期间可以继续对话，也可以在消息底部单独停止增强；关闭后只保留原始回复。',
       sandboxMode: '沙箱权限',
       sandboxModes: {
         LocalAudit: {
@@ -169,9 +169,9 @@ export const zhCN = {
       subAgentSafetyFooterHint:
         '开启后，Sub-Agent 每步 LLM 调用都会在尾部注意力热区追加固定系统提醒。此功能可能改变 Agent 的执行偏好，适合作为任务纠偏与交付质量测试的实验性开关。',
       subAgentSafetyFooterPrompt: '系统提醒Prompt',
-      mbRulesLabel: 'Master Agent Rules',
+      mbRulesLabel: 'Master Brain Rules',
       mbRulesHint:
-        '决策层规则：影响 Master Agent 的任务分解、决策行为和回复风格（仅在 Task 模式生效）',
+        '决策层规则：影响 Master Brain 的任务分解、决策行为和回复风格（仅在 Task 模式生效）',
       saRulesLabel: 'Sub-Agent Rules',
       saRulesHint:
         '执行层规则：影响 Sub-Agent 的工具使用、代码风格等执行行为（仅在 Task 模式生效）',
@@ -183,7 +183,7 @@ export const zhCN = {
       clearSaRules: '清除 SA Rules',
       chatMode: 'Chat 模式',
       chatModeRulesHint:
-        '两份 Rules 会合并注入到对话上下文中，不区分 Master Agent 和 Sub-Agent 角色。',
+        '两份 Rules 会合并注入到对话上下文中，不区分 Master Brain 和 Sub-Agent 角色。',
       autoIndexDeliverables: '交付物自动同步',
       autoIndexHint:
         'Task 模式生成的文档类交付物会自动索引到知识库；关闭后，交付物仍会保存到本地，但不会被 RAG 检索。',

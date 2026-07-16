@@ -19,7 +19,7 @@ interface Agent {
   reasoningPreset?: ReasoningPreset | null; // 对应Rust的reasoning_preset；旧数据缺失/null 等价于 recommended
   mbRulesFilePath: string | null; // 对应Rust的mb_rules_file_path，Master Brain 专属 rules
   saRulesFilePath: string | null; // 对应Rust的sa_rules_file_path，Sub-Agent 专属 rules
-  mbRules: string | null; // 对应Rust的mb_rules，Master Agent 粘贴式 rules
+  mbRules: string | null; // 对应Rust的mb_rules，Master Brain 粘贴式 rules
   saRules: string | null; // 对应Rust的sa_rules，Sub-Agent 粘贴式 rules
   chatRules: string | null; // 对应Rust的chat_rules，Chat 模式专属 rules
   knowledgePaths: string | null; // 对应Rust的knowledge_paths (JSON数组)

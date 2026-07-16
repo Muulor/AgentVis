@@ -1,6 +1,6 @@
 {
   "name": "agentvis",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "AgentVis - Visual Agent Workspace",
   "type": "module",
   "scripts": {

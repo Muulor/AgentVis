@@ -183,4 +183,4 @@ During architecture design, proactively avoid the following anti-patterns:
 - File naming: `architecture.md` or `{Project Name}-architecture.md`
 - Use **Mermaid** syntax for the architecture overview diagram
 - The component inventory must include **implementation priority**
-- Write in the language requested by the master agent/user. If unspecified, follow the surrounding project documentation language.
+- Write in the language requested by the master brain/user. If unspecified, follow the surrounding project documentation language.

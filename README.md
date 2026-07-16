@@ -34,16 +34,10 @@ Inside a hub, you can mention Agents with different roles and ask them to brains
   <a href="docs/User%20Guide/IM%20Bot%20Configuration%20Guide.en.md">IM Bot Guide</a>
 </p>
 
-## Demo Video
+## Demo
 
 <p align="center">
-  <a href="https://agentvis.muulor.workers.dev/assets/Harness-demo.mp4">
-    <img src="public/demo-cover.png" alt="AgentVis demo video: Just Tell Your Agent" width="100%">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://agentvis.muulor.workers.dev/assets/Harness-demo.mp4">Click the cover to watch the demo</a>
+  <img src="public/demo.webp" alt="AgentVis" width="100%">
 </p>
 
 ## Core Capabilities

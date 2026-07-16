@@ -30,16 +30,10 @@ AgentVis 是一个从零构建的本地 AI Agent 运行平台。它把 Agent 的
   <a href="docs/User%20Guide/IM 机器人配置指南.md">IM使用指南</a>
 </p>
 
-## 演示视频
+## Demo
 
 <p align="center">
-  <a href="https://agentvis.muulor.workers.dev/assets/Harness-demo.mp4">
-    <img src="public/demo-cover.png" alt="AgentVis 演示视频：Just Tell Your Agent" width="100%">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://agentvis.muulor.workers.dev/assets/Harness-demo.mp4">点击封面观看演示视频</a>
+  <img src="public/demo.webp" alt="AgentVis" width="100%">
 </p>
 
 ## 核心能力

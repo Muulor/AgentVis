@@ -145,7 +145,7 @@ export const enUS = {
       name: 'Agent Name',
       loopBudget: 'Decision Rounds',
       loopBudgetHint:
-        'Maximum Master Agent decision rounds for a single request in Task mode. The default works for most cases; increase it for very long, multi-step programming tasks. Leave blank to use the default ({max} rounds).',
+        'Maximum Master Brain decision rounds for a single request in Task mode. The default works for most cases; increase it for very long, multi-step programming tasks. Leave blank to use the default ({max} rounds).',
       increase: 'Increase',
       decrease: 'Decrease',
       loopUnit: 'rounds',
@@ -153,7 +153,7 @@ export const enUS = {
       resetDefault: 'Reset Default',
       visualEnhancement: 'Task Visual Enhancement',
       visualEnhancementHint:
-        "Task mode shows the Master Agent's original response first, then uses heuristic signals to decide whether to enhance the same message in the background with ECharts, Mermaid, or interactive components. You can continue chatting or stop enhancement for that message independently. When disabled, only the original response is kept.",
+        "Task mode shows the Master Brain's original response first, then uses heuristic signals to decide whether to enhance the same message in the background with ECharts, Mermaid, or interactive components. You can continue chatting or stop enhancement for that message independently. When disabled, only the original response is kept.",
       sandboxMode: 'Sandbox Permission',
       sandboxModes: {
         LocalAudit: {
@@ -176,9 +176,9 @@ export const enUS = {
       subAgentSafetyFooterHint:
         'When enabled, every Sub-Agent LLM call appends a fixed system reminder to the tail attention hot zone. This may change the Agent execution preference and is intended as an experimental switch for task correction and delivery-quality testing.',
       subAgentSafetyFooterPrompt: 'System Reminder Prompt',
-      mbRulesLabel: 'Master Agent Rules',
+      mbRulesLabel: 'Master Brain Rules',
       mbRulesHint:
-        "Decision-layer rules that shape the Master Agent's task decomposition, decisions, and response style (Task mode only).",
+        "Decision-layer rules that shape the Master Brain's task decomposition, decisions, and response style (Task mode only).",
       saRulesLabel: 'Sub-Agent Rules',
       saRulesHint:
         'Execution-layer rules that shape Sub-Agent tool use, code style, and other execution behavior (Task mode only).',
@@ -191,7 +191,7 @@ export const enUS = {
       clearSaRules: 'Clear SA Rules',
       chatMode: 'Chat Mode',
       chatModeRulesHint:
-        'Both Rules files are merged into the chat context without separating Master Agent and Sub-Agent roles.',
+        'Both Rules files are merged into the chat context without separating Master Brain and Sub-Agent roles.',
       autoIndexDeliverables: 'Auto-sync Deliverables',
       autoIndexHint:
         'Document deliverables created in Task mode are automatically indexed into the knowledge base. When disabled, they are still saved locally but will not be retrieved by RAG.',
