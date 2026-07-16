@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getBM25Index } from '../BM25Index';
+import { ragIndexCoordinator } from '../RagIndexCoordinator';
 import { RagService } from '../RagService';
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -12,8 +13,17 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('../EmbeddingService', () => ({
   embeddingService: {
-    encode: encodeMock,
-    encodeBatch: encodeBatchMock,
+    getActiveRoute: () => ({
+      mode: 'siliconflow',
+      provider: 'siliconflow',
+      protocol: 'openai',
+      modelId: 'BAAI/bge-m3',
+      authMode: 'bearer',
+      profileId: 'rag-embedding:v1:siliconflow:BAAI/bge-m3',
+    }),
+    getActiveProfileId: () => 'rag-embedding:v1:siliconflow:BAAI/bge-m3',
+    encodeWithRoute: encodeMock,
+    encodeBatchWithRoute: encodeBatchMock,
   },
 }));
 
@@ -237,5 +247,31 @@ describe('RagService', () => {
     expect(childPayload?.params.content).toContain('AgentVis provides feature details');
     expect(childPayload?.params.content).not.toContain('Document: features_deep_dive.md');
     expect(childPayload?.params.metadata).toContain('features_deep_dive.md');
+  });
+
+  it('does not persist partial knowledge indexes when embedding is rate-limited', async () => {
+    const rateLimitError = new Error('RAG_GEMINI_EMBEDDING_HTTP_429');
+    const content = [
+      '# Large document',
+      'This document is long enough to produce an indexable child chunk for the failure-path test.',
+      'Embedding must finish before any SQLite or BM25 writes become visible.',
+    ].join('\n\n');
+    encodeBatchMock.mockRejectedValue(rateLimitError);
+
+    const service = new RagService();
+
+    await expect(
+      service.indexDocument('agent-1', 'rate-limited.md', content, {
+        fileName: 'rate-limited.md',
+        filePath: 'D:\\AgentVis\\rate-limited.md',
+        documentType: 'markdown',
+      })
+    ).rejects.toBe(rateLimitError);
+
+    expect(invokeMock).not.toHaveBeenCalledWith('rag_index_chunk', expect.anything());
+    expect(getBM25Index().getStats('agent-1').documentCount).toBe(0);
+
+    const writerLease = await ragIndexCoordinator.acquireWriter();
+    writerLease.release();
   });
 });

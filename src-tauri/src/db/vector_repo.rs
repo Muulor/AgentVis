@@ -8,6 +8,17 @@ use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 
+/// Profile assigned to vectors created before profile-aware metadata existed.
+pub const LEGACY_EMBEDDING_PROFILE_ID: &str = "rag-embedding:v1:siliconflow:BAAI/bge-m3";
+
+/// One item in an atomic embedding/profile migration.
+#[derive(Debug, Clone)]
+pub struct ChunkEmbeddingUpdate {
+    pub chunk_id: String,
+    pub embedding: Vec<f32>,
+    pub metadata_json: String,
+}
+
 /// 文档块实体
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct ChunkEmbedding {
@@ -246,6 +257,7 @@ impl VectorRepository {
         top_k: usize,
         threshold: f32,
         document_id_prefix: Option<&str>,
+        expected_embedding_profile_id: &str,
     ) -> AppResult<Vec<VectorSearchResult>> {
         // 根据是否有前缀过滤，选择不同的查询路径
         let chunks = match document_id_prefix {
@@ -272,8 +284,20 @@ impl VectorRepository {
 
         for chunk in chunks {
             if let Some(embedding_bytes) = &chunk.embedding {
+                if embedding_bytes.len() % std::mem::size_of::<f32>() != 0 {
+                    continue;
+                }
                 // 将字节数组转回 f32 向量
                 let stored_embedding = bytes_to_f32_vec(embedding_bytes);
+
+                if !metadata_matches_embedding(
+                    chunk.metadata_json.as_deref(),
+                    expected_embedding_profile_id,
+                    stored_embedding.len(),
+                    query_embedding.len(),
+                ) {
+                    continue;
+                }
 
                 // 计算余弦相似度
                 let similarity = cosine_similarity(query_embedding, &stored_embedding);
@@ -393,6 +417,197 @@ impl VectorRepository {
         .map_err(|e| AppError::Database(format!("Failed to query document_id list: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    /// List all Agents that currently own at least one persisted vector.
+    pub async fn list_vector_agent_ids(&self) -> AppResult<Vec<String>> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            r#"
+            SELECT DISTINCT agent_id
+            FROM chunk_embeddings
+            WHERE embedding IS NOT NULL
+            ORDER BY agent_id
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(format!("Failed to query vector agent list: {}", e)))?;
+
+        Ok(rows.into_iter().map(|row| row.0).collect())
+    }
+
+    /// Atomically replace a batch of chunk embeddings and their metadata.
+    ///
+    /// Every chunk must belong to `agent_id`. Any missing/duplicate chunk or
+    /// invalid vector/metadata aborts the whole transaction.
+    pub async fn batch_update_chunk_embeddings(
+        &self,
+        agent_id: &str,
+        updates: &[ChunkEmbeddingUpdate],
+    ) -> AppResult<u64> {
+        if agent_id.trim().is_empty() {
+            return Err(AppError::Database("Agent ID must not be empty".to_string()));
+        }
+        if updates.is_empty() {
+            return Ok(0);
+        }
+
+        let mut seen_ids = std::collections::HashSet::with_capacity(updates.len());
+        let mut expected_profile_id: Option<String> = None;
+        let expected_dimension = updates[0].embedding.len();
+        if expected_dimension == 0 {
+            return Err(AppError::Database(
+                "Embedding update contains an empty vector".to_string(),
+            ));
+        }
+
+        for update in updates {
+            if update.chunk_id.trim().is_empty() || !seen_ids.insert(update.chunk_id.as_str()) {
+                return Err(AppError::Database(
+                    "Embedding update contains an empty or duplicate chunk ID".to_string(),
+                ));
+            }
+            if update.embedding.len() != expected_dimension
+                || update.embedding.iter().any(|value| !value.is_finite())
+            {
+                return Err(AppError::Database(
+                    "Embedding update contains invalid or inconsistent vectors".to_string(),
+                ));
+            }
+            let metadata: serde_json::Value =
+                serde_json::from_str(&update.metadata_json).map_err(|_| {
+                    AppError::Database("Embedding update metadata is invalid".to_string())
+                })?;
+            let profile_id = metadata
+                .as_object()
+                .and_then(|object| object.get("embeddingProfileId"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(profile_id) = profile_id else {
+                return Err(AppError::Database(
+                    "Embedding update metadata must contain embeddingProfileId".to_string(),
+                ));
+            };
+            if profile_id.len() > 512 || profile_id.chars().any(char::is_control) {
+                return Err(AppError::Database(
+                    "Embedding update metadata contains an invalid embeddingProfileId".to_string(),
+                ));
+            }
+            match &expected_profile_id {
+                Some(expected) if expected != profile_id => {
+                    return Err(AppError::Database(
+                        "Embedding update batch contains multiple embedding profiles".to_string(),
+                    ));
+                }
+                None => expected_profile_id = Some(profile_id.to_string()),
+                Some(_) => {}
+            }
+            let metadata_dimension = metadata
+                .as_object()
+                .and_then(|object| object.get("embeddingDimension"))
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok());
+            if metadata_dimension != Some(update.embedding.len()) {
+                return Err(AppError::Database(
+                    "Embedding update metadata dimension does not match the vector".to_string(),
+                ));
+            }
+        }
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(format!("Failed to start vector update: {}", e)))?;
+
+        let mut rows_affected = 0_u64;
+        for update in updates {
+            let embedding_bytes: Vec<u8> = update
+                .embedding
+                .iter()
+                .flat_map(|value| value.to_le_bytes())
+                .collect();
+            let result = sqlx::query(
+                r#"
+                UPDATE chunk_embeddings
+                SET embedding = ?, metadata_json = ?
+                WHERE id = ? AND agent_id = ?
+                "#,
+            )
+            .bind(embedding_bytes)
+            .bind(&update.metadata_json)
+            .bind(&update.chunk_id)
+            .bind(agent_id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|e| AppError::Database(format!("Failed to update chunk embedding: {}", e)))?;
+
+            if result.rows_affected() != 1 {
+                return Err(AppError::Database(format!(
+                    "Chunk {} was not found for the selected Agent",
+                    update.chunk_id
+                )));
+            }
+            rows_affected += result.rows_affected();
+        }
+
+        transaction
+            .commit()
+            .await
+            .map_err(|e| AppError::Database(format!("Failed to commit vector update: {}", e)))?;
+        Ok(rows_affected)
+    }
+}
+
+fn metadata_matches_embedding(
+    metadata_json: Option<&str>,
+    expected_embedding_profile_id: &str,
+    stored_dimension: usize,
+    query_dimension: usize,
+) -> bool {
+    if stored_dimension == 0 || query_dimension == 0 || stored_dimension != query_dimension {
+        return false;
+    }
+
+    let metadata = match metadata_json {
+        Some(raw) => match serde_json::from_str::<serde_json::Value>(raw) {
+            Ok(serde_json::Value::Object(object)) => Some(object),
+            Ok(_) | Err(_) => return false,
+        },
+        None => None,
+    };
+
+    let profile_value = metadata
+        .as_ref()
+        .and_then(|object| object.get("embeddingProfileId"));
+    let is_legacy_row = match profile_value {
+        Some(serde_json::Value::String(profile_id)) => {
+            if profile_id != expected_embedding_profile_id {
+                return false;
+            }
+            false
+        }
+        Some(_) => return false,
+        None => {
+            if expected_embedding_profile_id != LEGACY_EMBEDDING_PROFILE_ID {
+                return false;
+            }
+            true
+        }
+    };
+
+    match metadata
+        .as_ref()
+        .and_then(|object| object.get("embeddingDimension"))
+    {
+        Some(value) => value
+            .as_u64()
+            .filter(|dimension| *dimension > 0)
+            .and_then(|dimension| usize::try_from(dimension).ok())
+            .map(|dimension| dimension == stored_dimension && dimension == query_dimension)
+            .unwrap_or(false),
+        None => is_legacy_row,
     }
 }
 
@@ -523,7 +738,7 @@ mod tests {
         // 搜索与 embedding1 相似的
         let query = vec![1.0, 0.0, 0.0, 0.0];
         let results = repo
-            .search_similar(&agent_id, &query, 2, 0.5, None)
+            .search_similar(&agent_id, &query, 2, 0.5, None, LEGACY_EMBEDDING_PROFILE_ID)
             .await
             .unwrap();
 
@@ -621,6 +836,251 @@ mod tests {
         assert_eq!(chunks[0].content, "Knowledge content");
         assert_eq!(chunks[1].id, "chunk-memory");
         assert_eq!(chunks[1].document_id, "memory_summary_1");
+    }
+
+    #[tokio::test]
+    async fn test_search_filters_embedding_profiles_and_preserves_legacy_vectors() {
+        let (repo, agent_id) = setup_test_db_with_agent().await;
+        let embedding = vec![1.0, 0.0];
+
+        repo.insert_chunk(
+            &agent_id,
+            "legacy-doc",
+            0,
+            "Legacy",
+            &embedding,
+            Some(r#"{"type":"text"}"#),
+            None,
+            Some("legacy-chunk"),
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "custom-doc",
+            0,
+            "Custom",
+            &embedding,
+            Some(
+                r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-a","embeddingDimension":2}"#,
+            ),
+            None,
+            Some("custom-chunk"),
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "invalid-doc",
+            0,
+            "Invalid profile type",
+            &embedding,
+            Some(r#"{"embeddingProfileId":42}"#),
+            None,
+            Some("invalid-chunk"),
+        )
+        .await
+        .unwrap();
+
+        let legacy = repo
+            .search_similar(
+                &agent_id,
+                &embedding,
+                10,
+                0.0,
+                None,
+                LEGACY_EMBEDDING_PROFILE_ID,
+            )
+            .await
+            .unwrap();
+        assert_eq!(legacy.len(), 1);
+        assert_eq!(legacy[0].chunk_id, "legacy-chunk");
+
+        let custom = repo
+            .search_similar(
+                &agent_id,
+                &embedding,
+                10,
+                0.0,
+                None,
+                "rag-embedding:v1:custom:model-a",
+            )
+            .await
+            .unwrap();
+        assert_eq!(custom.len(), 1);
+        assert_eq!(custom[0].chunk_id, "custom-chunk");
+    }
+
+    #[tokio::test]
+    async fn test_search_rejects_dimension_mismatches_even_with_negative_threshold() {
+        let (repo, agent_id) = setup_test_db_with_agent().await;
+        let profile_id = "rag-embedding:v1:custom:model-a";
+
+        repo.insert_chunk(
+            &agent_id,
+            "valid-doc",
+            0,
+            "Valid",
+            &[1.0, 0.0],
+            Some(
+                r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-a","embeddingDimension":2}"#,
+            ),
+            None,
+            Some("valid-chunk"),
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "wrong-vector-dimension",
+            0,
+            "Wrong vector dimension",
+            &[1.0, 0.0, 0.0],
+            Some(
+                r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-a","embeddingDimension":3}"#,
+            ),
+            None,
+            Some("wrong-vector-dimension"),
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "wrong-metadata-dimension",
+            0,
+            "Wrong metadata dimension",
+            &[1.0, 0.0],
+            Some(
+                r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-a","embeddingDimension":3}"#,
+            ),
+            None,
+            Some("wrong-metadata-dimension"),
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "invalid-metadata-dimension",
+            0,
+            "Invalid metadata dimension",
+            &[1.0, 0.0],
+            Some(
+                r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-a","embeddingDimension":0}"#,
+            ),
+            None,
+            Some("invalid-metadata-dimension"),
+        )
+        .await
+        .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "missing-metadata-dimension",
+            0,
+            "Missing custom metadata dimension",
+            &[1.0, 0.0],
+            Some(r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-a"}"#),
+            None,
+            Some("missing-metadata-dimension"),
+        )
+        .await
+        .unwrap();
+
+        let results = repo
+            .search_similar(&agent_id, &[1.0, 0.0], 10, -1.0, None, profile_id)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].chunk_id, "valid-chunk");
+    }
+
+    #[tokio::test]
+    async fn test_batch_embedding_update_is_atomic_and_lists_vector_agents() {
+        let (repo, agent_id) = setup_test_db_with_agent().await;
+        let first = repo
+            .insert_chunk(
+                &agent_id,
+                "doc",
+                0,
+                "First",
+                &[1.0, 0.0],
+                Some(r#"{"type":"text"}"#),
+                None,
+                Some("first"),
+            )
+            .await
+            .unwrap();
+        repo.insert_chunk(
+            &agent_id,
+            "doc",
+            1,
+            "Second",
+            &[0.0, 1.0],
+            Some(r#"{"type":"text"}"#),
+            None,
+            Some("second"),
+        )
+        .await
+        .unwrap();
+
+        let metadata =
+            r#"{"embeddingProfileId":"rag-embedding:v1:custom:model-b","embeddingDimension":3}"#;
+        let failed = repo
+            .batch_update_chunk_embeddings(
+                &agent_id,
+                &[
+                    ChunkEmbeddingUpdate {
+                        chunk_id: "first".to_string(),
+                        embedding: vec![0.5, 0.5, 0.0],
+                        metadata_json: metadata.to_string(),
+                    },
+                    ChunkEmbeddingUpdate {
+                        chunk_id: "missing".to_string(),
+                        embedding: vec![0.0, 0.5, 0.5],
+                        metadata_json: metadata.to_string(),
+                    },
+                ],
+            )
+            .await;
+        assert!(failed.is_err());
+
+        let unchanged = repo.get_by_id(&first.id).await.unwrap().unwrap();
+        assert_eq!(
+            bytes_to_f32_vec(unchanged.embedding.as_deref().unwrap()),
+            vec![1.0, 0.0]
+        );
+        assert_eq!(
+            unchanged.metadata_json,
+            Some(r#"{"type":"text"}"#.to_string())
+        );
+
+        let updated = repo
+            .batch_update_chunk_embeddings(
+                &agent_id,
+                &[
+                    ChunkEmbeddingUpdate {
+                        chunk_id: "first".to_string(),
+                        embedding: vec![0.5, 0.5, 0.0],
+                        metadata_json: metadata.to_string(),
+                    },
+                    ChunkEmbeddingUpdate {
+                        chunk_id: "second".to_string(),
+                        embedding: vec![0.0, 0.5, 0.5],
+                        metadata_json: metadata.to_string(),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        assert_eq!(updated, 2);
+
+        let first = repo.get_by_id("first").await.unwrap().unwrap();
+        assert_eq!(
+            bytes_to_f32_vec(first.embedding.as_deref().unwrap()),
+            vec![0.5, 0.5, 0.0]
+        );
+        assert_eq!(first.metadata_json, Some(metadata.to_string()));
+        assert_eq!(repo.list_vector_agent_ids().await.unwrap(), vec![agent_id]);
     }
 
     #[tokio::test]

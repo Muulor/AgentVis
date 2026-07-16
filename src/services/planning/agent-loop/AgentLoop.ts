@@ -402,8 +402,8 @@ export class AgentLoop {
             scriptFiles: r.skill.scriptFiles,
             resourceFiles: r.skill.resourceFiles,
           }));
-        } catch (error) {
-          logger.warn('[AgentLoop] Guide 技能检索失败，降级为空:', error);
+        } catch {
+          logger.warn('[AgentLoop] Guide 技能检索失败，降级为空');
           return [];
         }
       },
@@ -500,6 +500,12 @@ export class AgentLoop {
     if (this.config.pinnedSkills?.length) {
       return null;
     }
+    if (this.skillRetriever?.isProfileStale()) {
+      logger.info('[AgentLoop] Embedding profile changed; rebuilding SkillRetriever index');
+      this.skillRetriever.clear();
+      this.skillRetriever = null;
+      this.skillRetrieverInitPromise = null;
+    }
     if (this.skillRetriever) return this.skillRetriever;
 
     // 使用 Promise 锁避免并发初始化
@@ -561,8 +567,8 @@ export class AgentLoop {
         }
 
         this.skillRetriever = retriever;
-      } catch (error) {
-        logger.error('[AgentLoop] SkillRetriever 初始化失败:', error);
+      } catch {
+        logger.error('[AgentLoop] SkillRetriever 初始化失败');
       }
     })();
 

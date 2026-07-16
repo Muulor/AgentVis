@@ -121,11 +121,8 @@ export class MemorySummaryRetriever {
         topK: candidateTopK,
         threshold: options.threshold,
       });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.warn(
-        `[MemorySummaryRetriever] embedding 摘要召回失败，尝试 BM25 强锚点兜底: ${errorMessage}`
-      );
+    } catch {
+      logger.warn('[MemorySummaryRetriever] embedding 摘要召回失败，尝试 BM25 强锚点兜底');
     }
 
     const fused = this.fuseResults(allSummaries, embeddingResults, bm25Results, anchors, options);

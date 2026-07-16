@@ -18,6 +18,7 @@ import { getVectorStore, VectorStore } from '../rag/VectorStore';
 import type { Chunk, SearchResult } from '../../types';
 import type { LongTermFactCategory } from './types';
 import { getLogger } from '@services/logger';
+import { ragIndexCoordinator } from '../rag/RagIndexCoordinator';
 
 const logger = getLogger('MemoryVectorIndex');
 
@@ -105,10 +106,12 @@ export class MemoryVectorIndex {
     category: LongTermFactCategory
   ): Promise<void> {
     const documentId = `${FACT_DOC_PREFIX}${factId}`;
+    const writerLease = await ragIndexCoordinator.acquireWriter();
 
     try {
       // 生成 Embedding
-      const embedding = await embeddingService.encode(content);
+      const embeddingRoute = embeddingService.getActiveRoute();
+      const embedding = await embeddingService.encodeWithRoute(content, embeddingRoute, 'document');
 
       // 构建 Chunk
       const chunk: Chunk = {
@@ -127,12 +130,17 @@ export class MemoryVectorIndex {
       };
 
       // 存入向量库
-      await this.vectorStore.insert(chunk, embedding);
+      if (embeddingService.getActiveProfileId() !== embeddingRoute.profileId) {
+        throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_INDEX');
+      }
+      await this.vectorStore.insert(chunk, embedding, embeddingRoute.profileId);
 
       logger.trace(`[MemoryVectorIndex]  已索引事实: ${factId} (${category})`);
-    } catch (error) {
-      logger.error(`[MemoryVectorIndex]  索引事实失败: ${factId}`, error);
+    } catch {
+      logger.error(`[MemoryVectorIndex]  索引事实失败: ${factId}`);
       // 索引失败不阻塞主流程
+    } finally {
+      writerLease.release();
     }
   }
 
@@ -145,13 +153,15 @@ export class MemoryVectorIndex {
    */
   async indexSummary(agentId: string, summaryId: string, content: string): Promise<void> {
     const documentId = `${SUMMARY_DOC_PREFIX}${summaryId}`;
+    const writerLease = await ragIndexCoordinator.acquireWriter();
 
     try {
       // 先删除旧向量（upsert 语义），防止补索引或重复调用产生重复 chunk
       await this.vectorStore.deleteByDocument(agentId, documentId);
 
       // 生成 Embedding
-      const embedding = await embeddingService.encode(content);
+      const embeddingRoute = embeddingService.getActiveRoute();
+      const embedding = await embeddingService.encodeWithRoute(content, embeddingRoute, 'document');
 
       // 构建 Chunk
       const chunk: Chunk = {
@@ -169,13 +179,18 @@ export class MemoryVectorIndex {
       };
 
       // 存入向量库
-      await this.vectorStore.insert(chunk, embedding);
+      if (embeddingService.getActiveProfileId() !== embeddingRoute.profileId) {
+        throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_INDEX');
+      }
+      await this.vectorStore.insert(chunk, embedding, embeddingRoute.profileId);
 
       logger.trace(`[MemoryVectorIndex]  已索引摘要: ${summaryId}`);
     } catch (error) {
-      logger.error(`[MemoryVectorIndex]  索引摘要失败: ${summaryId}`, error);
+      logger.error(`[MemoryVectorIndex]  索引摘要失败: ${summaryId}`);
       // 重新抛出异常，让上层（saveSummary）能感知失败并加入重试队列
       throw error;
+    } finally {
+      writerLease.release();
     }
   }
 
@@ -187,12 +202,15 @@ export class MemoryVectorIndex {
    */
   async deleteFact(agentId: string, factId: string): Promise<void> {
     const documentId = `${FACT_DOC_PREFIX}${factId}`;
+    const writerLease = await ragIndexCoordinator.acquireWriter();
 
     try {
       await this.vectorStore.deleteByDocument(agentId, documentId);
       logger.trace(`[MemoryVectorIndex] 已删除事实索引: ${factId}`);
     } catch (error) {
       logger.warn(`[MemoryVectorIndex] 删除事实索引失败: ${factId}`, error);
+    } finally {
+      writerLease.release();
     }
   }
 
@@ -204,12 +222,15 @@ export class MemoryVectorIndex {
    */
   async deleteSummary(agentId: string, summaryId: string): Promise<void> {
     const documentId = `${SUMMARY_DOC_PREFIX}${summaryId}`;
+    const writerLease = await ragIndexCoordinator.acquireWriter();
 
     try {
       await this.vectorStore.deleteByDocument(agentId, documentId);
       logger.trace(`[MemoryVectorIndex] 已删除摘要索引: ${summaryId}`);
     } catch (error) {
       logger.warn(`[MemoryVectorIndex] 删除摘要索引失败: ${summaryId}`, error);
+    } finally {
+      writerLease.release();
     }
   }
 
@@ -238,7 +259,8 @@ export class MemoryVectorIndex {
 
     try {
       // 生成查询向量
-      const queryEmbedding = await embeddingService.encode(query);
+      const embeddingRoute = embeddingService.getActiveRoute();
+      const queryEmbedding = await embeddingService.encodeWithRoute(query, embeddingRoute, 'query');
 
       // 根据记忆类型构建 document_id 前缀，在 Rust 层精确过滤
       // 避免摘要、事实孤儿向量、知识库文档互相干扰
@@ -253,8 +275,9 @@ export class MemoryVectorIndex {
         agentId,
         queryEmbedding,
         topK * 2,
-        threshold,
-        documentIdPrefix
+        embeddingRoute.mode === 'custom' ? -1 : threshold,
+        documentIdPrefix,
+        embeddingRoute.profileId
       );
 
       logger.trace(
@@ -272,8 +295,8 @@ export class MemoryVectorIndex {
 
       // 限制返回数量
       return filtered.slice(0, topK);
-    } catch (error) {
-      logger.error('[MemoryVectorIndex] 语义检索失败:', error);
+    } catch {
+      logger.error('[MemoryVectorIndex] 语义检索失败');
       return [];
     }
   }

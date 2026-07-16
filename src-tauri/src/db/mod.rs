@@ -31,7 +31,9 @@ pub use models::{DiffRecord, DiffRecordCreateRequest, DiffRecordStatus};
 pub use models::{MemoryTriggerState, MemoryTriggerStateUpdate};
 pub use schema::{create_pool, initialize_schema};
 pub use snapshot_repo::SnapshotRepository;
-pub use vector_repo::{ChunkEmbedding, IndexStats, VectorRepository, VectorSearchResult};
+pub use vector_repo::{
+    ChunkEmbedding, ChunkEmbeddingUpdate, IndexStats, VectorRepository, VectorSearchResult,
+};
 
 use crate::error::{AppError, AppResult};
 use sqlx::{Pool, Sqlite};

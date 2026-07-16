@@ -1,17 +1,23 @@
 /**
- * RerankService - SiliconFlow 重排序服务
+ * RerankService - route-aware second-stage RAG ranking.
  *
- * 复用 SiliconFlow API Key 调用 bge-reranker-v2-m3，对 RAG 候选片段做二阶段排序。
+ * Built-in mode uses SiliconFlow. Custom mode supports explicit Jina/Cohere
+ * and Voyage profiles, or can disable reranking entirely.
  */
 
 import { invoke } from '@tauri-apps/api/core';
 import { getLogger } from '@services/logger';
+import {
+  resolveRagRerankerRoute,
+  SILICONFLOW_RERANKER_MODEL,
+  type ResolvedRerankerRoute,
+} from './RagConnectionConfig';
 
 const logger = getLogger('RerankService');
+/** Renderer IPC fallback; Rust enforces the actual 15-second network timeout. */
+const RERANK_TIMEOUT_MS = 18_000;
 
-const DEFAULT_PROVIDER = 'siliconflow';
-export const SILICONFLOW_RERANK_MODEL = 'BAAI/bge-reranker-v2-m3';
-const RERANK_TIMEOUT_MS = 15_000;
+export { SILICONFLOW_RERANKER_MODEL as SILICONFLOW_RERANK_MODEL };
 
 export interface RerankCandidate {
   id: string;
@@ -32,18 +38,37 @@ interface CloudRerankResponse {
   model: string;
 }
 
-interface RerankServiceOptions {
-  timeoutMs?: number;
+type InvokeFunction = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+
+export interface RerankConnectionTestResult {
+  resultCount: number;
+  model: string;
+  latencyMs: number;
 }
 
-/**
- * SiliconFlow Rerank 服务
- */
+export interface RerankServiceOptions {
+  timeoutMs?: number;
+  routeResolver?: () => ResolvedRerankerRoute;
+  invokeFn?: InvokeFunction;
+}
+
 export class RerankService {
-  private timeoutMs: number;
+  private readonly timeoutMs: number;
+  private readonly routeResolver: () => ResolvedRerankerRoute;
+  private readonly invokeFn: InvokeFunction;
 
   constructor(options: RerankServiceOptions = {}) {
     this.timeoutMs = options.timeoutMs ?? RERANK_TIMEOUT_MS;
+    this.routeResolver = options.routeResolver ?? resolveRagRerankerRoute;
+    this.invokeFn = options.invokeFn ?? (invoke as InvokeFunction);
+  }
+
+  getActiveRoute(): ResolvedRerankerRoute {
+    return this.routeResolver();
+  }
+
+  isEnabled(): boolean {
+    return this.getActiveRoute().enabled;
   }
 
   async rerank(
@@ -51,25 +76,100 @@ export class RerankService {
     candidates: RerankCandidate[],
     topN: number = candidates.length
   ): Promise<RerankResult[]> {
-    if (!query.trim() || candidates.length === 0 || topN <= 0) {
+    const route = this.getActiveRoute();
+    return this.rerankWithRoute(query, candidates, topN, route);
+  }
+
+  async rerankWithRoute(
+    query: string,
+    candidates: RerankCandidate[],
+    topN: number,
+    route: ResolvedRerankerRoute
+  ): Promise<RerankResult[]> {
+    if (!route.enabled || !query.trim() || candidates.length === 0 || topN <= 0) {
       return [];
     }
+    this.assertUsableRoute(route);
 
     const documents = candidates.map((candidate) => candidate.text);
-    const response = await this.callRerankApi(query, documents, Math.min(topN, candidates.length));
-    const seen = new Set<number>();
+    const response = await this.callRerankApi(
+      route,
+      query,
+      documents,
+      Math.min(topN, candidates.length),
+      'rerank'
+    );
+    return this.mapResults(response, candidates);
+  }
 
+  async testConnection(route: ResolvedRerankerRoute): Promise<RerankConnectionTestResult> {
+    this.assertUsableRoute({ ...route, enabled: true });
+    const startedAt = performance.now();
+    const response = await this.callRerankApi(
+      { ...route, enabled: true },
+      'AgentVis',
+      ['AgentVis desktop agent application', 'Unrelated weather forecast'],
+      2,
+      'test'
+    );
+    const candidates: RerankCandidate[] = [
+      { id: 'relevant', text: '' },
+      { id: 'unrelated', text: '' },
+    ];
+    const results = this.mapResults(response, candidates);
+    if (results.length === 0) throw new Error('RAG_RERANK_RESULT_INVALID');
+    return {
+      resultCount: results.length,
+      model: response.model,
+      latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+    };
+  }
+
+  private async callRerankApi(
+    route: ResolvedRerankerRoute,
+    query: string,
+    documents: string[],
+    topN: number,
+    purpose: 'rerank' | 'test'
+  ): Promise<CloudRerankResponse> {
+    const request = {
+      provider: route.provider,
+      model: route.modelId,
+      query,
+      documents,
+      topN,
+      endpointUrl: route.endpointUrl,
+      protocol: route.protocol,
+      authMode: route.authMode,
+      purpose,
+    };
+    logger.trace('[RerankService] Calling reranker:', {
+      provider: route.provider,
+      protocol: route.protocol,
+      model: route.modelId,
+      candidateCount: documents.length,
+      topN,
+    });
+
+    const apiCall = this.invokeFn('cloud_rerank_documents', {
+      request,
+    }) as Promise<CloudRerankResponse>;
+    return this.withTimeout(apiCall, route.provider);
+  }
+
+  private mapResults(response: CloudRerankResponse, candidates: RerankCandidate[]): RerankResult[] {
+    const seen = new Set<number>();
     return response.results
       .filter((result) => {
         if (
-          !Number.isFinite(result.index) ||
+          !Number.isInteger(result.index) ||
           result.index < 0 ||
           result.index >= candidates.length ||
+          !Number.isFinite(result.relevance_score) ||
           seen.has(result.index)
         ) {
           return false;
         }
-
         seen.add(result.index);
         return true;
       })
@@ -82,38 +182,26 @@ export class RerankService {
       .sort((a, b) => b.score - a.score);
   }
 
-  private callRerankApi(
-    query: string,
-    documents: string[],
-    topN: number
-  ): Promise<CloudRerankResponse> {
-    const apiCall = invoke<CloudRerankResponse>('cloud_rerank_documents', {
-      request: {
-        provider: DEFAULT_PROVIDER,
-        model: SILICONFLOW_RERANK_MODEL,
-        query,
-        documents,
-        topN,
-      },
-    });
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(
-          new Error(
-            `Rerank API request timed out (>${this.timeoutMs}ms, provider: ${DEFAULT_PROVIDER}).`
-          )
-        );
+  private async withTimeout<T>(promise: Promise<T>, provider: string): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`RAG_RERANK_TIMEOUT:${provider}:${this.timeoutMs}`));
       }, this.timeoutMs);
     });
 
-    logger.trace('[RerankService] 调用 SiliconFlow rerank:', {
-      model: SILICONFLOW_RERANK_MODEL,
-      candidateCount: documents.length,
-      topN,
-    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    }
+  }
 
-    return Promise.race([apiCall, timeoutPromise]);
+  private assertUsableRoute(route: ResolvedRerankerRoute): void {
+    if (!route.modelId) throw new Error('RAG_RERANK_ROUTE_INVALID');
+    if (route.provider === 'custom' && !route.endpointUrl) {
+      throw new Error('RAG_CUSTOM_RERANKER_CONFIG_INVALID');
+    }
   }
 }
 

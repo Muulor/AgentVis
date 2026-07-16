@@ -8,10 +8,15 @@ import { MemoryPanel } from '@components/memory';
 import { ConfirmDialog } from '@components/ui/ConfirmDialog';
 import { SelectionCheck, TextContextMenu, Tooltip, useTextContextMenu } from '@components/ui';
 import { getRagService } from '@services/rag';
+import { classifyEmbeddingError } from '@services/rag/EmbeddingService';
 import { PLANNING_CONSTANTS } from '@services/planning/PlanningConstants';
 import { imageCompressionService } from '@services/attachment';
 import { CronSettingsTab } from './CronSettingsTab';
 import { AvatarCropper } from './AvatarCropper';
+import {
+  getPersistedKnowledgeIndexStatuses,
+  getPersistedKnowledgePaths,
+} from './knowledgeIndexPersistence';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
@@ -119,6 +124,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
 
   // 追踪上一次的 isOpen 状态，用于判断是否是首次打开
   const prevIsOpenRef = useRef(false);
+  const initializedAgentIdRef = useRef<string | null>(null);
 
   // 初始化表单（从后端加载 Agent 数据，包括 rules 和 knowledge）
   useEffect(() => {
@@ -127,6 +133,12 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
     prevIsOpenRef.current = isOpen;
 
     if (isOpen && agent) {
+      // Store updates while the modal is open must not replace pending/error
+      // knowledge file state. Reinitialize only when opening or switching Agent.
+      if (wasOpen && initializedAgentIdRef.current === agent.id) {
+        return;
+      }
+      initializedAgentIdRef.current = agent.id;
       setName(agent.name);
       // 初始化头像
       setAvatar(agent.avatar ?? null);
@@ -161,12 +173,51 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
         try {
           const paths = JSON.parse(kp) as string[];
           setKnowledgePaths(paths);
-          // 已存在的文件标记为 indexed（它们在之前保存时已被索引）
-          const statusMap: Record<string, 'indexed'> = {};
+          // Persisted paths are configuration, not proof that vector indexing
+          // succeeded. Keep them pending until the local vector DB is checked.
+          const statusMap: Record<string, 'pending'> = {};
           paths.forEach((p) => {
-            statusMap[p] = 'indexed';
+            statusMap[p] = 'pending';
           });
           setFileIndexStatus(statusMap);
+
+          const initializedAgentId = agent.id;
+          void getRagService()
+            .listIndexedDocumentIds(initializedAgentId)
+            .then((indexedDocumentIds) => {
+              if (!prevIsOpenRef.current || initializedAgentIdRef.current !== initializedAgentId) {
+                return;
+              }
+
+              const reconciledStatuses = getPersistedKnowledgeIndexStatuses(
+                paths,
+                new Set(indexedDocumentIds)
+              );
+              setFileIndexStatus((current) => {
+                const next = { ...current };
+                paths.forEach((path) => {
+                  if (current[path] === 'pending') {
+                    next[path] = reconciledStatuses[path] ?? 'error';
+                  }
+                });
+                return next;
+              });
+            })
+            .catch((error: unknown) => {
+              logger.warn('[Knowledge] 校验已保存文件的向量索引失败:', error);
+              if (!prevIsOpenRef.current || initializedAgentIdRef.current !== initializedAgentId) {
+                return;
+              }
+              setFileIndexStatus((current) => {
+                const next = { ...current };
+                paths.forEach((path) => {
+                  if (current[path] === 'pending') {
+                    next[path] = 'error';
+                  }
+                });
+                return next;
+              });
+            });
         } catch {
           setKnowledgePaths([]);
           setFileIndexStatus({});
@@ -277,14 +328,6 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
         request.sa_rules_file_path = '';
       }
 
-      // 知识库路径：有值则设置 JSON，否则清除
-      if (knowledgePaths.length > 0) {
-        request.knowledge_paths = JSON.stringify(knowledgePaths);
-      } else if (agent.knowledgePaths) {
-        // 原来有值，现在清除
-        request.knowledge_paths = '';
-      }
-
       // 精准命中技能：启用且有选中技能则存储 JSON 数组，否则清除
       if (pinnedSkillsEnabled && boundedPinnedSkillNames.length > 0) {
         request.pinned_skills = JSON.stringify(boundedPinnedSkillNames);
@@ -335,11 +378,14 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
       }
 
       // 索引新增文件（带进度跟踪）
-      const addedPaths = knowledgePaths.filter((p) => !oldPaths.includes(p));
-      const totalToIndex = addedPaths.length;
+      const pathsToIndex = knowledgePaths.filter(
+        (path) => !oldPaths.includes(path) || fileIndexStatus[path] !== 'indexed'
+      );
+      const totalToIndex = pathsToIndex.length;
+      const failedPaths = new Set<string>();
 
-      for (let i = 0; i < addedPaths.length; i++) {
-        const path = addedPaths[i];
+      for (let i = 0; i < pathsToIndex.length; i++) {
+        const path = pathsToIndex[i];
         if (path === undefined || path.length === 0) continue;
         const fileName = path.split(/[/\\]/).pop() ?? '';
 
@@ -354,16 +400,41 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
             filePath: path,
             documentType: detectDocType(fileName),
           });
+          if (chunkCount === 0) {
+            throw new Error('KNOWLEDGE_DOCUMENT_HAS_NO_INDEXABLE_CHUNKS');
+          }
           logger.debug(`[Knowledge] 已索引: ${fileName} (${chunkCount} 个分块)`);
           setFileIndexStatus((prev) => ({ ...prev, [path]: 'indexed' }));
         } catch (err) {
+          failedPaths.add(path);
           setFileIndexStatus((prev) => ({ ...prev, [path]: 'error' }));
-          logger.error(`[Knowledge] 索引失败: ${path}`, err);
+          const failure = classifyEmbeddingError(err);
+          logger.error('[Knowledge] 索引失败', {
+            reason: failure.code,
+            category: failure.category,
+          });
+
+          // A storage failure after embedding may have written only part of a
+          // document. Remove it so an incomplete file cannot participate in RAG.
+          try {
+            await ragService.deleteDocumentIndex(agentId, path);
+          } catch (cleanupError) {
+            logger.warn(`[Knowledge] 索引失败后清理残留向量失败: ${path}`, cleanupError);
+          }
         }
       }
 
       // 清除进度状态
       setIndexingProgress(null);
+
+      // Only successfully indexed files belong to the persisted knowledge base.
+      // Failed paths remain in local modal state and are retried on the next save.
+      const persistedKnowledgePaths = getPersistedKnowledgePaths(knowledgePaths, failedPaths);
+      if (persistedKnowledgePaths.length > 0) {
+        request.knowledge_paths = JSON.stringify(persistedKnowledgePaths);
+      } else if (agent.knowledgePaths) {
+        request.knowledge_paths = '';
+      }
 
       // 调用 Tauri 命令更新
       await invoke('agent_update', {
@@ -380,7 +451,8 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
         mbRules: mbRules.trim() ? mbRules : null,
         saRules: saRules.trim() ? saRules : null,
         chatRules: chatRules.trim() ? chatRules : null,
-        knowledgePaths: knowledgePaths.length > 0 ? JSON.stringify(knowledgePaths) : null,
+        knowledgePaths:
+          persistedKnowledgePaths.length > 0 ? JSON.stringify(persistedKnowledgePaths) : null,
         pinnedSkills:
           pinnedSkillsEnabled && boundedPinnedSkillNames.length > 0
             ? JSON.stringify(boundedPinnedSkillNames)
@@ -393,7 +465,9 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
         subAgentSafetyFooterText: safetyFooterTextForSave,
       });
 
-      onClose();
+      if (failedPaths.size === 0) {
+        onClose();
+      }
     } catch (err) {
       logger.error('保存Agent设置失败:', err);
     } finally {
@@ -408,6 +482,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
     saRules,
     chatRules,
     knowledgePaths,
+    fileIndexStatus,
     pinnedSkillsEnabled,
     pinnedSkillNames,
     pinnedSkillsMaxCount,
@@ -427,12 +502,11 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
 
     setIsDeleting(true);
     try {
-      // 1. 删除向量索引（documentId 统一使用 filePath）
-      if (fileIndexStatus[pendingDeletePath] === 'indexed') {
-        const ragService = getRagService();
-        await ragService.deleteDocumentIndex(agentId, pendingDeletePath);
-        logger.debug(`[Knowledge] 已删除索引: ${pendingDeletePath}`);
-      }
+      // 1. 删除向量索引（documentId 统一使用 filePath）。错误状态也可能
+      // 留有一次失败写入的残量，因此删除不能依赖 UI 状态。
+      const ragService = getRagService();
+      await ragService.deleteDocumentIndex(agentId, pendingDeletePath);
+      logger.debug(`[Knowledge] 已删除索引: ${pendingDeletePath}`);
 
       // 2. 更新知识库路径列表
       const newPaths = knowledgePaths.filter((p) => p !== pendingDeletePath);
@@ -464,7 +538,7 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
       setDeleteKnowledgeConfirmOpen(false);
       setPendingDeletePath(null);
     }
-  }, [agentId, agent, pendingDeletePath, knowledgePaths, fileIndexStatus, updateAgent]);
+  }, [agentId, agent, pendingDeletePath, knowledgePaths, updateAgent]);
 
   // ===== 切换交付物自动同步开关（立即保存到后端）=====
   const handleToggleAutoIndex = useCallback(
@@ -516,19 +590,11 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
 
       // 逐个清理向量索引
       for (const path of pathsToDelete) {
-        const status = fileIndexStatus[path];
-        if (status === 'indexed') {
-          try {
-            await ragService.deleteDocumentIndex(agentId, path);
-            logger.debug(`[Knowledge:BatchDelete] ✅ 已调用删除索引: ${path}`);
-          } catch (err) {
-            logger.warn(`[Knowledge:BatchDelete] ❌ 删除索引异常: ${path}`, err);
-          }
-        } else {
-          // 关键诊断：如果 status 不是 'indexed'，说明 guard 跳过了删除
-          logger.warn(
-            `[Knowledge:BatchDelete] ⏭️ 跳过删除（status=${status ?? 'unknown'}）: ${path}`
-          );
+        try {
+          await ragService.deleteDocumentIndex(agentId, path);
+          logger.debug(`[Knowledge:BatchDelete] ✅ 已调用删除索引: ${path}`);
+        } catch (err) {
+          logger.warn(`[Knowledge:BatchDelete] ❌ 删除索引异常: ${path}`, err);
         }
       }
 
@@ -630,6 +696,10 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
   if (!isOpen || !agent) {
     return null;
   }
+
+  const failedKnowledgeFileCount = knowledgePaths.filter(
+    (path) => fileIndexStatus[path] === 'error'
+  ).length;
 
   return (
     <div className={styles.overlay}>
@@ -1151,57 +1221,67 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                           </label>
                         )}
                         {/* 状态图标 */}
-                        <span
-                          className={cx(
-                            styles.fileStatus,
-                            status === 'indexing'
-                              ? styles.statusIndexing
-                              : status === 'indexed'
-                                ? styles.statusIndexed
-                                : status === 'error'
-                                  ? styles.statusError
-                                  : styles.statusPending
-                          )}
+                        <Tooltip
+                          content={t('agent.settings.knowledgeIndexFailedStatus')}
+                          disabled={status !== 'error'}
                         >
-                          {status === 'indexing' ? (
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                            </svg>
-                          ) : status === 'indexed' ? (
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                          ) : status === 'error' ? (
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <path d="M15 9l-6 6M9 9l6 6" />
-                            </svg>
-                          ) : (
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <circle cx="12" cy="12" r="3" />
-                            </svg>
-                          )}
-                        </span>
+                          <span
+                            className={cx(
+                              styles.fileStatus,
+                              status === 'indexing'
+                                ? styles.statusIndexing
+                                : status === 'indexed'
+                                  ? styles.statusIndexed
+                                  : status === 'error'
+                                    ? styles.statusError
+                                    : styles.statusPending
+                            )}
+                            aria-label={
+                              status === 'error'
+                                ? t('agent.settings.knowledgeIndexFailedStatus')
+                                : undefined
+                            }
+                          >
+                            {status === 'indexing' ? (
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                              </svg>
+                            ) : status === 'indexed' ? (
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                            ) : status === 'error' ? (
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M15 9l-6 6M9 9l6 6" />
+                              </svg>
+                            ) : (
+                              <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                            )}
+                          </span>
+                        </Tooltip>
                         <span className={styles.fileName}>{path.split(/[/\\]/).pop()}</span>
                         {/* 非多选模式显示单个删除按钮 */}
                         {!isSelectMode && (
@@ -1255,6 +1335,13 @@ export function AgentSettingsModal({ isOpen, agentId, onClose }: AgentSettingsMo
                       total: indexingProgress.total,
                     })}
                   </span>
+                </div>
+              )}
+              {failedKnowledgeFileCount > 0 && (
+                <div className={styles.knowledgeIndexError} role="alert">
+                  {t('agent.settings.knowledgeIndexFailed', {
+                    count: failedKnowledgeFileCount,
+                  })}
                 </div>
               )}
             </div>

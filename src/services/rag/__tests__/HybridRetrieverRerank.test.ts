@@ -6,6 +6,10 @@ import { HybridRetriever } from '../HybridRetriever';
 const invokeMock = vi.hoisted(() => vi.fn());
 const encodeMock = vi.hoisted(() => vi.fn());
 const rerankMock = vi.hoisted(() => vi.fn());
+const routeState = vi.hoisted(() => ({
+  mode: 'siliconflow' as 'siliconflow' | 'custom',
+  rerankerEnabled: true,
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: invokeMock,
@@ -13,13 +17,35 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('../EmbeddingService', () => ({
   embeddingService: {
-    encode: encodeMock,
+    getActiveRoute: () => ({
+      mode: routeState.mode,
+      provider: routeState.mode === 'custom' ? 'custom' : 'siliconflow',
+      protocol: 'openai',
+      endpointUrl:
+        routeState.mode === 'custom' ? 'https://api.example.com/v1/embeddings' : undefined,
+      modelId: 'BAAI/bge-m3',
+      authMode: 'bearer',
+      profileId:
+        routeState.mode === 'custom'
+          ? 'rag-embedding:v1:custom:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+          : 'rag-embedding:v1:siliconflow:BAAI/bge-m3',
+    }),
+    encodeWithRoute: encodeMock,
   },
 }));
 
 vi.mock('../RerankService', () => ({
   rerankService: {
-    rerank: rerankMock,
+    getActiveRoute: () => ({
+      mode: routeState.mode,
+      enabled: routeState.rerankerEnabled,
+      provider: routeState.mode === 'custom' ? 'custom' : 'siliconflow',
+      protocol: 'jina_cohere',
+      endpointUrl: routeState.mode === 'custom' ? 'https://api.example.com/v1/rerank' : undefined,
+      modelId: 'BAAI/bge-reranker-v2-m3',
+      authMode: 'bearer',
+    }),
+    rerankWithRoute: rerankMock,
   },
 }));
 
@@ -73,6 +99,8 @@ describe('HybridRetriever rerank integration', () => {
     invokeMock.mockReset();
     encodeMock.mockReset();
     rerankMock.mockReset();
+    routeState.mode = 'siliconflow';
+    routeState.rerankerEnabled = true;
     getBM25Index().clearAgent('agent-rerank');
     encodeMock.mockResolvedValue([1, 0]);
   });
@@ -251,5 +279,131 @@ describe('HybridRetriever rerank integration', () => {
 
     expect(rerankMock).not.toHaveBeenCalled();
     expect(results.map((result) => result.chunk.id)).toEqual(['only']);
+  });
+
+  it('uses arbitrary custom rerank scores only for ordering when lexical grounding exists', async () => {
+    routeState.mode = 'custom';
+    const first = makeChunk({
+      id: 'custom-low',
+      parentId: 'custom-low-parent',
+      fileName: 'low.md',
+      content: 'alpha implementation reference',
+    });
+    const second = makeChunk({
+      id: 'custom-lower',
+      parentId: 'custom-lower-parent',
+      fileName: 'lower.md',
+      content: 'alpha implementation details',
+    });
+    mockVectorSearch([first, second], [0.01, 0.001]);
+    rerankMock.mockResolvedValue([
+      { id: second.id, index: 1, score: 0.002 },
+      { id: first.id, index: 0, score: 0.001 },
+    ]);
+
+    const results = await new HybridRetriever().retrieve('agent-rerank', 'alpha implementation', {
+      finalTopK: 2,
+    });
+
+    expect(results.map((result) => result.chunk.id)).toEqual([second.id, first.id]);
+  });
+
+  it('keeps custom selection stable when raw score magnitudes change but rank order does not', async () => {
+    routeState.mode = 'custom';
+    const chunks = [
+      makeChunk({
+        id: 'rank-first',
+        parentId: 'rank-first-parent',
+        fileName: 'first.md',
+        content: 'alpha implementation first',
+      }),
+      makeChunk({
+        id: 'rank-second',
+        parentId: 'rank-second-parent',
+        fileName: 'second.md',
+        content: 'alpha implementation second',
+      }),
+      makeChunk({
+        id: 'rank-third',
+        parentId: 'rank-third-parent',
+        fileName: 'third.md',
+        content: 'alpha implementation third',
+      }),
+    ];
+    mockVectorSearch(chunks);
+    rerankMock.mockResolvedValueOnce([
+      { id: 'rank-third', index: 2, score: 0.999999 },
+      { id: 'rank-second', index: 1, score: 0.000002 },
+      { id: 'rank-first', index: 0, score: 0.000001 },
+    ]);
+    const firstRun = await new HybridRetriever().retrieve('agent-rerank', 'alpha implementation', {
+      finalTopK: 2,
+    });
+
+    rerankMock.mockResolvedValueOnce([
+      { id: 'rank-third', index: 2, score: 0.51 },
+      { id: 'rank-second', index: 1, score: 0.5 },
+      { id: 'rank-first', index: 0, score: 0.49 },
+    ]);
+    const secondRun = await new HybridRetriever().retrieve('agent-rerank', 'alpha implementation', {
+      finalTopK: 2,
+    });
+
+    expect(firstRun.map((result) => result.chunk.id)).toEqual(['rank-third', 'rank-second']);
+    expect(secondRun.map((result) => result.chunk.id)).toEqual(
+      firstRun.map((result) => result.chunk.id)
+    );
+  });
+
+  it('does not let a high custom rerank score bypass lexical grounding', async () => {
+    routeState.mode = 'custom';
+    const first = makeChunk({
+      id: 'custom-ungrounded-a',
+      parentId: 'custom-ungrounded-a-parent',
+      fileName: 'a.md',
+      content: 'weather and rainfall only',
+    });
+    const second = makeChunk({
+      id: 'custom-ungrounded-b',
+      parentId: 'custom-ungrounded-b-parent',
+      fileName: 'b.md',
+      content: 'cooking instructions only',
+    });
+    mockVectorSearch([first, second], [0.99, 0.98]);
+    rerankMock.mockResolvedValue([
+      { id: first.id, index: 0, score: 0.999 },
+      { id: second.id, index: 1, score: 0.998 },
+    ]);
+
+    const results = await new HybridRetriever().retrieve('agent-rerank', 'zebra protocol', {
+      finalTopK: 2,
+      enableFinalRelevanceFilter: false,
+    });
+    expect(results).toEqual([]);
+  });
+
+  it('skips a disabled custom reranker and keeps the RRF path', async () => {
+    routeState.mode = 'custom';
+    routeState.rerankerEnabled = false;
+    const first = makeChunk({
+      id: 'custom-disabled-a',
+      parentId: 'custom-disabled-a-parent',
+      fileName: 'a.md',
+      content: 'alpha implementation reference',
+    });
+    const second = makeChunk({
+      id: 'custom-disabled-b',
+      parentId: 'custom-disabled-b-parent',
+      fileName: 'b.md',
+      content: 'alpha implementation details',
+    });
+    mockVectorSearch([first, second]);
+
+    const results = await new HybridRetriever().retrieve('agent-rerank', 'alpha implementation', {
+      finalTopK: 2,
+    });
+
+    expect(rerankMock).not.toHaveBeenCalled();
+    expect(results).toHaveLength(2);
   });
 });

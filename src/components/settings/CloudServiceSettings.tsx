@@ -1,8 +1,7 @@
 /**
  * CloudServiceSettings - 云端服务配置标签页
  *
- * 配置记忆系统 LLM、Embedding 向量化、网络搜索使用的云端服务
- * 包括记忆系统 LLM（通用 Provider/Model）、SiliconFlow Embedding、Tavily
+ * 配置记忆系统 LLM、RAG 模型连接、网络搜索使用的云端服务。
  */
 
 import { useState, useEffect } from 'react';
@@ -19,22 +18,12 @@ import { getLogger } from '@services/logger';
 import { openExternalUrl } from '@services/navigation/externalUrl';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
+import { RagModelSettings } from './RagModelSettings';
 
 const logger = getLogger('CloudServiceSettings');
 
-/** SiliconFlow Embedding 固定模型（免费，1024 维，8K 上下文） */
-const SILICONFLOW_EMBEDDING_MODEL = 'BAAI/bge-m3';
-
-/** SiliconFlow Reranker 固定模型（免费，8K 上下文） */
-const SILICONFLOW_RERANK_MODEL = 'BAAI/bge-reranker-v2-m3';
-
-/** Gitee AI Embedding 模型（同一 bge-m3，免费，作为 SiliconFlow 的 fallback） */
-const GITEEAI_EMBEDDING_MODEL = 'bge-m3';
-
 /** 各服务商 API Key 获取页面 */
 const PROVIDER_URLS = {
-  siliconflow: 'https://cloud.siliconflow.cn/account/ak',
-  giteeai: 'https://ai.gitee.com/dashboard/settings/tokens',
   tavily: 'https://app.tavily.com/home',
   github: 'https://github.com/settings/tokens',
   context7: 'https://context7.com/dashboard',
@@ -98,22 +87,6 @@ export function CloudServiceSettings() {
   const [imageGenerationUrlInput, setImageGenerationUrlInput] = useState('');
   const [imageGenerationUrlDirty, setImageGenerationUrlDirty] = useState(false);
 
-  // SiliconFlow Embedding 配置
-  const [siliconflowApiKey, setSiliconflowApiKey] = useState('');
-  const [siliconflowConfigured, setSiliconflowConfigured] = useState(false);
-  const [siliconflowTesting, setSiliconflowTesting] = useState(false);
-  const [siliconflowTestResult, setSiliconflowTestResult] = useState<'success' | 'error' | null>(
-    null
-  );
-  const [siliconflowVisible, setSiliconflowVisible] = useState(false);
-
-  // Gitee AI Embedding 配置（SiliconFlow 的 fallback）
-  const [giteeaiApiKey, setGiteeaiApiKey] = useState('');
-  const [giteeaiConfigured, setGiteeaiConfigured] = useState(false);
-  const [giteeaiTesting, setGiteeaiTesting] = useState(false);
-  const [giteeaiTestResult, setGiteeaiTestResult] = useState<'success' | 'error' | null>(null);
-  const [giteeaiVisible, setGiteeaiVisible] = useState(false);
-
   // Tavily 配置
   const [tavilyApiKey, setTavilyApiKey] = useState('');
   const [tavilyConfigured, setTavilyConfigured] = useState(false);
@@ -151,14 +124,6 @@ export function CloudServiceSettings() {
       // 加载图像生成服务状态
       const imageGenerationStatus = await invoke<boolean>('get_image_generation_api_key_status');
       setImageGenerationConfigured(imageGenerationStatus);
-
-      // 加载 SiliconFlow 状态
-      const siliconflowStatus = await invoke<boolean>('get_siliconflow_api_key_status');
-      setSiliconflowConfigured(siliconflowStatus);
-
-      // 加载 Gitee AI 状态
-      const giteeaiStatus = await invoke<boolean>('get_giteeai_api_key_status');
-      setGiteeaiConfigured(giteeaiStatus);
 
       // 加载 Tavily 状态
       const tavilyStatus = await invoke<boolean>('get_tavily_api_key_status');
@@ -230,112 +195,6 @@ export function CloudServiceSettings() {
   };
 
   // ============================================================================
-  // SiliconFlow API Key 管理
-  // ============================================================================
-
-  const handleSaveSiliconflow = async () => {
-    if (!siliconflowApiKey.trim()) {
-      toast({ title: t('settings.cloud.enterApiKey'), type: 'warning' });
-      return;
-    }
-    try {
-      await invoke('set_siliconflow_api_key', { apiKey: siliconflowApiKey.trim() });
-      setSiliconflowConfigured(true);
-      setSiliconflowApiKey('');
-      notifySetupStatusChanged();
-      toast({
-        title: t('settings.cloud.providerKeySaved', { provider: 'SiliconFlow' }),
-        type: 'success',
-      });
-    } catch (error) {
-      toast({ title: t('settings.cloud.saveFailed'), description: String(error), type: 'error' });
-    }
-  };
-
-  const handleTestSiliconflow = async () => {
-    setSiliconflowTesting(true);
-    setSiliconflowTestResult(null);
-    try {
-      // 通过实际调用 Embedding API 验证 Key 有效性
-      await invoke('cloud_embedding_encode', {
-        request: { texts: ['test'], provider: 'siliconflow', model: SILICONFLOW_EMBEDDING_MODEL },
-      });
-      await invoke('cloud_rerank_documents', {
-        request: {
-          provider: 'siliconflow',
-          model: SILICONFLOW_RERANK_MODEL,
-          query: 'test',
-          documents: ['test document', 'other document'],
-          topN: 2,
-        },
-      });
-      setSiliconflowTestResult('success');
-      toast({
-        title: t('settings.cloud.providerConnectSuccess', { provider: 'SiliconFlow' }),
-        type: 'success',
-      });
-    } catch (error) {
-      logger.error('[CloudServiceSettings] SiliconFlow 测试失败:', error);
-      setSiliconflowTestResult('error');
-      toast({
-        title: t('settings.cloud.connectionFailed'),
-        description: String(error),
-        type: 'error',
-      });
-    } finally {
-      setSiliconflowTesting(false);
-    }
-  };
-
-  // ============================================================================
-  // Gitee AI API Key 管理（Embedding Fallback）
-  // ============================================================================
-
-  const handleSaveGiteeai = async () => {
-    if (!giteeaiApiKey.trim()) {
-      toast({ title: t('settings.cloud.enterApiKey'), type: 'warning' });
-      return;
-    }
-    try {
-      await invoke('set_giteeai_api_key', { apiKey: giteeaiApiKey.trim() });
-      setGiteeaiConfigured(true);
-      setGiteeaiApiKey('');
-      notifySetupStatusChanged();
-      toast({
-        title: t('settings.cloud.providerKeySaved', { provider: 'Gitee AI' }),
-        type: 'success',
-      });
-    } catch (error) {
-      toast({ title: t('settings.cloud.saveFailed'), description: String(error), type: 'error' });
-    }
-  };
-
-  const handleTestGiteeai = async () => {
-    setGiteeaiTesting(true);
-    setGiteeaiTestResult(null);
-    try {
-      await invoke('cloud_embedding_encode', {
-        request: { texts: ['test'], provider: 'giteeai', model: GITEEAI_EMBEDDING_MODEL },
-      });
-      setGiteeaiTestResult('success');
-      toast({
-        title: t('settings.cloud.providerConnectSuccess', { provider: 'Gitee AI' }),
-        type: 'success',
-      });
-    } catch (error) {
-      logger.error('[CloudServiceSettings] Gitee AI 测试失败:', error);
-      setGiteeaiTestResult('error');
-      toast({
-        title: t('settings.cloud.connectionFailed'),
-        description: String(error),
-        type: 'error',
-      });
-    } finally {
-      setGiteeaiTesting(false);
-    }
-  };
-
-  // ============================================================================
   // Tavily API Key 管理
   // ============================================================================
 
@@ -388,8 +247,7 @@ export function CloudServiceSettings() {
   /**
    * 删除指定提供商的 API Key
    *
-   * 复用 settings_delete_api_key 命令，该命令支持任意 provider 名称，
-   * 因为 SiliconFlow / Gitee AI / Tavily 都存储在同一个 WindowsKeystore 中。
+   * 复用 settings_delete_api_key 命令；当前调用方的云服务凭据均存储在同一 keystore 中。
    */
   // ============================================================================
   // GitHub Token
@@ -552,207 +410,7 @@ export function CloudServiceSettings() {
         </div>
       </section>
 
-      {/* SiliconFlow Embedding 配置 */}
-      <section className={styles.serviceSection}>
-        <div className={styles.serviceHeader}>
-          <h3 className={styles.serviceName}>{t('settings.cloud.siliconflowTitle')}</h3>
-          <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
-            <button
-              className={styles.externalLinkButton}
-              onClick={() => {
-                void openExternalUrl(PROVIDER_URLS.siliconflow);
-              }}
-              aria-label={t('settings.cloud.getApiKeyTitle')}
-            >
-              <ExternalLink size={14} />
-            </button>
-          </Tooltip>
-          <span className={styles.requiredBadge}>{t('common.required')}</span>
-          {siliconflowConfigured && (
-            <span className={styles.configuredBadge}>{t('common.configured')}</span>
-          )}
-        </div>
-
-        <p className={styles.serviceDesc}>
-          {t('settings.cloud.siliconflowDesc', {
-            embeddingModel: SILICONFLOW_EMBEDDING_MODEL,
-            rerankerModel: SILICONFLOW_RERANK_MODEL,
-          })}
-        </p>
-
-        <div className={styles.fieldGroup}>
-          <label className={styles.label}>{t('settings.cloud.apiKey')}</label>
-          <div className={styles.inputRow}>
-            <div className={styles.inputWrapper}>
-              <input
-                type={siliconflowVisible ? 'text' : 'password'}
-                className={styles.input}
-                placeholder={
-                  siliconflowConfigured
-                    ? '••••••••••••'
-                    : t('settings.cloud.inputProviderApiKey', { provider: 'SiliconFlow' })
-                }
-                value={siliconflowApiKey}
-                onChange={(e) => setSiliconflowApiKey(e.target.value)}
-                autoComplete="off"
-              />
-              <button
-                className={styles.visibilityButton}
-                onClick={() => setSiliconflowVisible(!siliconflowVisible)}
-              >
-                {siliconflowVisible ? <EyeOpenIcon /> : <EyeClosedIcon />}
-              </button>
-            </div>
-            {siliconflowApiKey.trim() && (
-              <button className={styles.saveButton} onClick={handleSaveSiliconflow}>
-                {t('common.save')}
-              </button>
-            )}
-            <button
-              className={cx(
-                styles.testButton,
-                siliconflowTestResult === 'success' && styles.testSuccess,
-                siliconflowTestResult === 'error' && styles.testError
-              )}
-              onClick={handleTestSiliconflow}
-              disabled={!siliconflowConfigured || siliconflowTesting}
-            >
-              {siliconflowTesting
-                ? t('common.testing')
-                : siliconflowTestResult === 'success'
-                  ? `✓ ${t('common.test')}`
-                  : siliconflowTestResult === 'error'
-                    ? `✗ ${t('common.test')}`
-                    : t('common.test')}
-            </button>
-            {siliconflowConfigured && (
-              <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
-                <button
-                  className={styles.deleteButton}
-                  onClick={() =>
-                    handleDeleteApiKey(
-                      'siliconflow',
-                      'SiliconFlow',
-                      setSiliconflowConfigured,
-                      setSiliconflowTestResult
-                    )
-                  }
-                  aria-label={t('settings.cloud.deleteApiKeyTitle')}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </Tooltip>
-            )}
-          </div>
-        </div>
-
-        <div className={styles.fieldGroup}>
-          <label className={styles.label}>{t('settings.cloud.embeddingModel')}</label>
-          <input
-            type="text"
-            className={styles.input}
-            value={SILICONFLOW_EMBEDDING_MODEL}
-            disabled
-          />
-        </div>
-
-        <div className={styles.fieldGroup}>
-          <label className={styles.label}>{t('settings.cloud.rerankerModel')}</label>
-          <input type="text" className={styles.input} value={SILICONFLOW_RERANK_MODEL} disabled />
-        </div>
-      </section>
-
-      {/* Gitee AI Embedding 配置（Fallback） */}
-      <section className={styles.serviceSection}>
-        <div className={styles.serviceHeader}>
-          <h3 className={styles.serviceName}>Gitee AI (Embedding Fallback)</h3>
-          <Tooltip content={t('settings.cloud.getApiKeyTitle')}>
-            <button
-              className={styles.externalLinkButton}
-              onClick={() => {
-                void openExternalUrl(PROVIDER_URLS.giteeai);
-              }}
-              aria-label={t('settings.cloud.getApiKeyTitle')}
-            >
-              <ExternalLink size={14} />
-            </button>
-          </Tooltip>
-          <span className={styles.optionalBadge}>{t('common.optional')}</span>
-          {giteeaiConfigured && (
-            <span className={styles.configuredBadge}>{t('common.configured')}</span>
-          )}
-        </div>
-
-        <p className={styles.serviceDesc}>
-          {t('settings.cloud.giteeaiDesc', { model: GITEEAI_EMBEDDING_MODEL })}
-        </p>
-
-        <div className={styles.fieldGroup}>
-          <label className={styles.label}>{t('settings.cloud.apiKey')}</label>
-          <div className={styles.inputRow}>
-            <div className={styles.inputWrapper}>
-              <input
-                type={giteeaiVisible ? 'text' : 'password'}
-                className={styles.input}
-                placeholder={
-                  giteeaiConfigured
-                    ? '••••••••••••'
-                    : t('settings.cloud.inputProviderApiKey', { provider: 'Gitee AI' })
-                }
-                value={giteeaiApiKey}
-                onChange={(e) => setGiteeaiApiKey(e.target.value)}
-                autoComplete="off"
-              />
-              <button
-                className={styles.visibilityButton}
-                onClick={() => setGiteeaiVisible(!giteeaiVisible)}
-              >
-                {giteeaiVisible ? <EyeOpenIcon /> : <EyeClosedIcon />}
-              </button>
-            </div>
-            {giteeaiApiKey.trim() && (
-              <button className={styles.saveButton} onClick={handleSaveGiteeai}>
-                {t('common.save')}
-              </button>
-            )}
-            <button
-              className={cx(
-                styles.testButton,
-                giteeaiTestResult === 'success' && styles.testSuccess,
-                giteeaiTestResult === 'error' && styles.testError
-              )}
-              onClick={handleTestGiteeai}
-              disabled={!giteeaiConfigured || giteeaiTesting}
-            >
-              {giteeaiTesting
-                ? t('common.testing')
-                : giteeaiTestResult === 'success'
-                  ? `✓ ${t('common.test')}`
-                  : giteeaiTestResult === 'error'
-                    ? `✗ ${t('common.test')}`
-                    : t('common.test')}
-            </button>
-            {giteeaiConfigured && (
-              <Tooltip content={t('settings.cloud.deleteApiKeyTitle')}>
-                <button
-                  className={styles.deleteButton}
-                  onClick={() =>
-                    handleDeleteApiKey(
-                      'giteeai',
-                      'Gitee AI',
-                      setGiteeaiConfigured,
-                      setGiteeaiTestResult
-                    )
-                  }
-                  aria-label={t('settings.cloud.deleteApiKeyTitle')}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </Tooltip>
-            )}
-          </div>
-        </div>
-      </section>
+      <RagModelSettings />
 
       {/* Tavily 配置 */}
       <section className={styles.serviceSection}>

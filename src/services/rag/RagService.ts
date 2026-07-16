@@ -23,6 +23,7 @@ import { getBM25Index } from './BM25Index';
 import { buildBm25IndexText, buildEmbeddingIndexText } from './RagQueryPreprocessor';
 import { createDocumentOverviewChunk } from './DocumentOverviewBuilder';
 import { getLogger } from '@services/logger';
+import { ragIndexCoordinator } from './RagIndexCoordinator';
 
 const logger = getLogger('RagService');
 
@@ -169,43 +170,56 @@ export class RagService {
         content: chunk.content,
       })
     );
-    const embeddings = await embeddingService.encodeBatch(texts);
+    const writerLease = await ragIndexCoordinator.acquireWriter();
+    try {
+      const embeddingRoute = embeddingService.getActiveRoute();
+      const embeddings = await embeddingService.encodeBatchWithRoute(
+        texts,
+        embeddingRoute,
+        'document'
+      );
 
-    // 第三步：存储到向量数据库 + BM25 索引
-    const bm25Index = getBM25Index();
+      // 第三步：存储到向量数据库 + BM25 索引
+      const bm25Index = getBM25Index();
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const embedding = embeddings[i];
-      if (!chunk || !embedding) continue;
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const embedding = embeddings[i];
+        if (!chunk || !embedding) continue;
+        if (embeddingService.getActiveProfileId() !== embeddingRoute.profileId) {
+          throw new Error('RAG_ACTIVE_EMBEDDING_PROFILE_CHANGED_DURING_INDEX');
+        }
 
-      // 向量存储
-      await this.vectorStore.insert(chunk, embedding);
+        // 向量存储
+        await this.vectorStore.insert(chunk, embedding, embeddingRoute.profileId);
 
-      // BM25 索引使用元数据增强文本，便于文件名/路径/章节标题类 query 命中。
-      // 向量检索和最终注入仍使用 chunk.content，避免元数据污染语义上下文。
-      const bm25Text = buildBm25IndexText({
-        fileName: chunk.metadata.fileName,
-        filePath: chunk.metadata.filePath,
-        sectionPath: chunk.metadata.sectionPath,
-        heading: chunk.metadata.heading,
-        content: chunk.content,
-      });
-      bm25Index.addDocument(agentId, chunk.id, bm25Text, documentId);
+        // BM25 索引使用元数据增强文本，便于文件名/路径/章节标题类 query 命中。
+        // 向量检索和最终注入仍使用 chunk.content，避免元数据污染语义上下文。
+        const bm25Text = buildBm25IndexText({
+          fileName: chunk.metadata.fileName,
+          filePath: chunk.metadata.filePath,
+          sectionPath: chunk.metadata.sectionPath,
+          heading: chunk.metadata.heading,
+          content: chunk.content,
+        });
+        bm25Index.addDocument(agentId, chunk.id, bm25Text, documentId);
 
-      if (onProgress) {
-        onProgress(i + 1, chunks.length);
+        if (onProgress) {
+          onProgress(i + 1, chunks.length);
+        }
       }
+
+      logger.trace('[RagService] 索引完成:', {
+        agentId,
+        documentId,
+        chunkCount: chunks.length,
+        bm25Stats: bm25Index.getStats(agentId),
+      });
+
+      return chunks.length;
+    } finally {
+      writerLease.release();
     }
-
-    logger.trace('[RagService] 索引完成:', {
-      agentId,
-      documentId,
-      chunkCount: chunks.length,
-      bm25Stats: bm25Index.getStats(agentId),
-    });
-
-    return chunks.length;
   }
 
   /**
@@ -258,12 +272,15 @@ export class RagService {
       logger.trace('[RagService] Hybrid 检索结果数量:', results.length);
     } else {
       // 使用传统向量检索
-      const queryEmbedding = await embeddingService.encode(query);
+      const embeddingRoute = embeddingService.getActiveRoute();
+      const queryEmbedding = await embeddingService.encodeWithRoute(query, embeddingRoute, 'query');
       results = await this.vectorStore.search(
         agentId,
         queryEmbedding,
         options?.topK ?? 5,
-        options?.threshold ?? 0.4
+        embeddingRoute.mode === 'custom' ? -1 : (options?.threshold ?? 0.4),
+        undefined,
+        embeddingRoute.profileId
       );
       logger.trace(
         '[RagService] Vector 检索结果数量:',
@@ -316,20 +333,24 @@ export class RagService {
    */
   async deleteDocumentIndex(agentId: string, documentId: string): Promise<void> {
     logger.trace('[RagService] deleteDocumentIndex 开始:', { agentId, documentId });
+    const writerLease = await ragIndexCoordinator.acquireWriter();
+    try {
+      const deletedCount = await this.vectorStore.deleteByDocument(agentId, documentId);
 
-    const deletedCount = await this.vectorStore.deleteByDocument(agentId, documentId);
+      // file_write / deliverable indexing 会在索引前幂等清理旧向量。
+      // 新文件或首次索引时没有旧向量是正常情况，保留 trace 供深度排查即可。
+      if (deletedCount === 0) {
+        logger.trace('[RagService] deleteDocumentIndex 未找到旧向量数据:', {
+          agentId,
+          documentId,
+        });
+      }
 
-    // file_write / deliverable indexing 会在索引前幂等清理旧向量。
-    // 新文件或首次索引时没有旧向量是正常情况，保留 trace 供深度排查即可。
-    if (deletedCount === 0) {
-      logger.trace('[RagService] deleteDocumentIndex 未找到旧向量数据:', {
-        agentId,
-        documentId,
-      });
+      // 清除 BM25 索引中属于该文档的所有块
+      getBM25Index().removeByDocumentId(agentId, documentId);
+    } finally {
+      writerLease.release();
     }
-
-    // 清除 BM25 索引中属于该文档的所有块
-    getBM25Index().removeByDocumentId(agentId, documentId);
   }
 
   /**
@@ -338,9 +359,14 @@ export class RagService {
    * @param agentId - Agent ID
    */
   async deleteAgentIndex(agentId: string): Promise<void> {
-    await this.vectorStore.deleteByAgent(agentId);
-    getBM25Index().clearAgent(agentId);
-    this.bm25RebuildAttemptedAgents.delete(agentId);
+    const writerLease = await ragIndexCoordinator.acquireWriter();
+    try {
+      await this.vectorStore.deleteByAgent(agentId);
+      getBM25Index().clearAgent(agentId);
+      this.bm25RebuildAttemptedAgents.delete(agentId);
+    } finally {
+      writerLease.release();
+    }
   }
 
   /**

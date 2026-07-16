@@ -99,6 +99,7 @@ agent/
 ├── AgentNavItem.module.css       # 导航项样式
 ├── AgentSettingsModal.tsx        # 智能体设置弹窗（基础/模型/知识库/定时任务 Tab）
 ├── AgentSettingsModal.module.css # 设置弹窗样式
+├── knowledgeIndexPersistence.ts  # 知识库路径与实际向量索引状态对账、失败路径持久化过滤
 ├── AvatarCropper.tsx             # 圆形头像裁剪器（Canvas 拖拽+缩放+圆形遮罩+导出 WebP）
 ├── AvatarCropper.module.css      # 头像裁剪器样式
 ├── CronSettingsTab.tsx           # 定时任务设置 Tab（频率驱动调度 UI + 高级 Cron 模式）
@@ -325,6 +326,7 @@ memory/
 ```
 onboarding/
 ├── onboardingEvents.ts          # 首次启动引导事件
+├── setupCredentialStatus.ts     # 推荐/自定义 RAG Embedding 初始设置就绪判定
 ├── SetupChecklist.tsx           # 首次启动引导检查列表
 ├── SetupChecklist.module.css    # 首次启动引导检查列表样式
 ├── RuntimeOnboardingBanner.tsx  # Python Runtime 安装引导横幅
@@ -348,6 +350,8 @@ settings/
 ├── ApiKeySettings.module.css     # API 设置样式
 ├── CloudServiceSettings.tsx      # 云服务设置
 ├── CloudServiceSettings.module.css # 云服务样式
+├── RagModelSettings.tsx          # RAG 推荐、自定义 OpenAI/原生 Gemini Embedding 与 Reranker 连接设置
+├── RagModelSettings.module.css   # RAG 连接单卡片与互斥折叠面板样式
 ├── DataSettings.tsx              # 数据管理设置
 ├── DataSettings.module.css       # 数据设置样式
 ├── GeneralSettings.tsx           # 通用设置
@@ -964,7 +968,11 @@ rag/
 ├── ContextProvider.ts            # 上下文提供器
 ├── HybridRetriever.ts            # 混合检索器（向量+关键词）
 ├── VectorStore.ts                # 向量存储（单例 + LRU 缓存）
-├── EmbeddingService.ts           # 嵌入向量服务（单例 + LRU 缓存 + 分批调用）
+├── EmbeddingService.ts           # profile-aware 嵌入服务（SiliconFlow/OpenAI/Gemini + LRU + 按 profile 节流退避）
+├── RagConnectionConfig.ts        # RAG 路由验证、推荐/原生 Gemini 配置与 Embedding profile
+├── RagConnectionService.ts       # RAG 连接测试、启用及重建编排
+├── RagIndexCoordinator.ts        # 索引写入与 profile 迁移互斥协调
+├── RagIndexRebuildService.ts     # 按 25 条原子检查点幂等重建向量索引
 ├── DocumentChunker.ts            # 文档分块器
 ├── BM25Index.ts                  # BM25 关键词索引（增量 IDF 更新）
 ├── RagQueryPreprocessor.ts       # RAG 查询预处理器
@@ -1137,7 +1145,7 @@ commands/
 ├── diff_record.rs                # 差异记录命令
 ├── data_management.rs            # 数据导入导出命令
 ├── document_parser.rs            # 文档解析命令
-├── cloud_embedding.rs            # 云端嵌入服务命令
+├── cloud_embedding.rs            # SiliconFlow、自定义 OpenAI/Reranker 与原生 Gemini 嵌入命令
 ├── security_settings.rs          # 安全设置相关
 ├── shell.rs                      # Shell 执行编排 + Preview 本进程 lease、receipt 原子隔离与 no-follow workspace/trash 回收
 ├── network_broker.rs             # 主进程网络 Broker 核心

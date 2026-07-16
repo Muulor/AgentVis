@@ -34,11 +34,11 @@ Sandbox permissions are configured per Agent. Different Agents can use different
 
 ## 3. How to Choose Among the Three Modes
 
-| Mode | When to use it | Boundaries you should know |
-| --- | --- | --- |
-| Local Audit | Daily tasks, local project development, tasks that need local files and desktop capabilities | Dangerous-command blocking, protected paths, dangerous-script scanning, soft delete, and audit are enabled by default |
+| Mode               | When to use it                                                                                                                 | Boundaries you should know                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Local Audit        | Daily tasks, local project development, tasks that need local files and desktop capabilities                                   | Dangerous-command blocking, protected paths, dangerous-script scanning, soft delete, and audit are enabled by default               |
 | Controlled Network | Tasks that need network access with stronger network safety, such as webpages, GitHub, cloud APIs, email, and networked skills | Focuses on network egress audit, not full virtual-machine isolation; normal tasks can still reuse local files and credential caches |
-| Offline Isolated | Untrusted third-party skills, high-risk scripts, tasks that only process local workspace files | No network, limited file boundaries, no desktop control, screenshots, hotkeys, or external GUI launch |
+| Offline Isolated   | Untrusted third-party skills, high-risk scripts, tasks that only process local workspace files                                 | No network, limited file boundaries, no desktop control, screenshots, hotkeys, or external GUI launch                               |
 
 If you are not sure, use this rule of thumb:
 
@@ -94,16 +94,16 @@ You should know:
 
 Controlled Network is not simply "allow network access". It turns common high-risk network behavior into blockable, confirmable, and auditable actions.
 
-| Risk scenario | How AgentVis handles it |
-| --- | --- |
-| Bypassing the proxy | Identifies high-confidence bypass signals such as `NO_PROXY=*`, `curl --noproxy`, clearing proxy variables, direct proxy, and raw sockets, then blocks before execution. |
-| Accessing localhost, private networks, or cloud metadata | The broker/proxy rejects localhost, private, link-local, metadata, and similar targets. It also identifies private-network or metadata addresses encoded in hostnames. |
-| Non-HTTP(S) direct connections | Does not allow broad pass-through. The protocol, host, port, and source must be explicit enough before entering the direct-audit authorization flow. |
-| Uploading local files | Commands that clearly upload local files trigger one-time confirmation. The confirmation only applies to the current retry. |
-| Sensitive exfiltration | High-confidence combinations such as reading `.env` or environment variables and putting their content into a network body trigger confirmation. |
-| Remote destruction | High-risk operations such as deleting remote repositories, destroying cloud resources, dropping databases, or clearing remote storage trigger confirmation. The default recommendation for real accounts and real resources is to cancel. |
-| Credential leakage | Broker-managed credentials do not enter command lines, environment variables, logs, or observations, and are injected only for HTTPS and exact host allowlists. |
-| Hard-to-debug task failures | Security Audit records reason codes, target hosts, sources, and protection modes to help distinguish proxy bypass, target risk, missing authorization, and runtime environment differences. |
+| Risk scenario                                            | How AgentVis handles it                                                                                                                                                                                                                   |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bypassing the proxy                                      | Identifies high-confidence bypass signals such as `NO_PROXY=*`, `curl --noproxy`, clearing proxy variables, direct proxy, and raw sockets, then blocks before execution.                                                                  |
+| Accessing localhost, private networks, or cloud metadata | The broker/proxy rejects localhost, private, link-local, metadata, and similar targets. It also identifies private-network or metadata addresses encoded in hostnames.                                                                    |
+| Non-HTTP(S) direct connections                           | Does not allow broad pass-through. The protocol, host, port, and source must be explicit enough before entering the direct-audit authorization flow.                                                                                      |
+| Uploading local files                                    | Commands that clearly upload local files trigger one-time confirmation. The confirmation only applies to the current retry.                                                                                                               |
+| Sensitive exfiltration                                   | High-confidence combinations such as reading `.env` or environment variables and putting their content into a network body trigger confirmation.                                                                                          |
+| Remote destruction                                       | High-risk operations such as deleting remote repositories, destroying cloud resources, dropping databases, or clearing remote storage trigger confirmation. The default recommendation for real accounts and real resources is to cancel. |
+| Credential leakage                                       | Broker-managed credentials do not enter command lines, environment variables, logs, or observations, and are injected only for HTTPS and exact host allowlists.                                                                           |
+| Hard-to-debug task failures                              | Security Audit records reason codes, target hosts, sources, and protection modes to help distinguish proxy bypass, target risk, missing authorization, and runtime environment differences.                                               |
 
 Boundary note: Controlled Network is not a full virtual machine, a transparent proxy for all protocols, or generalized DLP. It focuses on narrowing network egress and high-confidence risky actions. It does not describe the default mode as full protocol-level hard isolation.
 
@@ -234,11 +234,11 @@ How to handle it:
 
 Controlled Network triggers one-time confirmation for three kinds of high-confidence risk:
 
-| Risk type | Example | Recommendation |
-| --- | --- | --- |
-| File upload | `curl -F file=@...`, uploading a local file | Allow this run only when you trust the target. |
-| Sensitive exfiltration | Reading `.env` or environment variables and sending them in a network body | Cancel by default unless you clearly know the content and target. |
-| Remote destruction | Deleting remote repositories, cloud resources, or databases | Cancel by default, especially on real accounts and real resources. |
+| Risk type              | Example                                                                    | Recommendation                                                     |
+| ---------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| File upload            | `curl -F file=@...`, uploading a local file                                | Allow this run only when you trust the target.                     |
+| Sensitive exfiltration | Reading `.env` or environment variables and sending them in a network body | Cancel by default unless you clearly know the content and target.  |
+| Remote destruction     | Deleting remote repositories, cloud resources, or databases                | Cancel by default, especially on real accounts and real resources. |
 
 Confirmation only applies to the current retry. It does not become long-term authorization.
 
@@ -333,20 +333,35 @@ When you click Project Preview in the file panel, AgentVis does not execute the 
 
 These boundaries protect the deliverable directory and Preview-service lifecycle, but they are not a virtual machine or browser-network DLP. In particular, complete-project Vite/PostCSS/Tailwind configuration is executable Node code; `preview=inherit`/Local Audit cannot stop it from actively reading other local files or using the network with the current user's authority. Enable complete-project Preview only for projects created by the user or a trusted Agent, and do not treat preview pages or build-configuration execution as strong isolation for untrusted content.
 
+### 10.6 Network and Credential Boundaries for RAG Model Connections
+
+“Settings -> Cloud Services -> RAG model connections” can use the recommended SiliconFlow route, a custom OpenAI-compatible Embedding endpoint, the native Google Gemini Embeddings protocol, and a separately configured optional Reranker. Confirm these boundaries before configuring one:
+
+- The Embedding endpoint receives Knowledge Base chunks, memory, skill descriptions, and other text being compared semantically. The Reranker receives the query and Knowledge Base candidate chunks. Connect only to a service you trust and whose privacy terms you accept.
+- OpenAI-compatible Embedding, native Gemini Embeddings, and Reranker API keys use separate purpose-level system-credential slots and are never displayed back in the UI. The recommended SiliconFlow configuration has another credential slot. Custom OpenAI-compatible Embedding and Reranker credentials are also bound to the endpoint origin present when they are saved (scheme, host, and port): a model or path change on the same origin can reuse the key, but an origin change requires re-entry and the Rust backend refuses to send the old key to the new endpoint. Provider display names are editable labels rather than a security boundary. Legacy custom credentials without an endpoint binding must be saved again before use.
+- Clicking Save beside an API-key field writes it to the system credential store immediately. Save and apply at the bottom persists only non-sensitive connection settings and activates the route; it does not save a key still present in the input. Endpoint URLs, protocols, provider display names, model IDs, and output dimensions are non-sensitive settings and are persisted with application settings.
+- Never put an API key, token, or other secret in an endpoint URL or query string. Non-sensitive parameters such as `api-version` may remain in the URL; enter credentials only in the API Key field.
+- Remote endpoints require HTTPS, while HTTP is accepted only for loopback addresses. The client follows no redirects, and Rust enforces a 15-second network hard timeout. These restrictions reduce misconfiguration and SSRF exposure, but do not make a third-party service trustworthy.
+- The native Gemini route does not accept a user-defined network target. Rust only sends `x-goog-api-key` to the exact HTTPS host `generativelanguage.googleapis.com`, constructs the `v1beta` batch path from an allowlisted model ID, and never puts the key in a URL or query string. Custom Gemini proxies, Vertex AI, OAuth, multimodal input, and asynchronous Batch jobs are outside this route's trust boundary.
+- Google states that content submitted through unpaid Gemini API services may be used to improve its products and may be reviewed by humans. Because AgentVis embeds Knowledge Base chunks, memory, skill descriptions, and semantic-comparison text, do not use the unpaid tier for sensitive, confidential, or personal data. Paid-service terms differ; review the current [Gemini API Additional Terms](https://ai.google.dev/gemini-api/terms), [pricing](https://ai.google.dev/gemini-api/docs/pricing), and [available regions](https://ai.google.dev/gemini-api/docs/available-regions) yourself.
+- Provider error-response bodies and complete request URLs are not written to the UI or logs. The internal error path retains only a stable category / HTTP status, while the UI shows localized troubleshooting guidance, preventing URL query parameters, query text, or candidate content from being exposed again through errors.
+- Before applying a user-selected Embedding mode, protocol, endpoint, model, or output-dimension change, AgentVis tests the target connection and confirms that index rebuilding may consume API usage and send content. After confirmation, the prompt closes immediately while configuration activation and index rebuilding continue in the background, so Settings no longer blocks other work. Gemini task mapping is an internal, versioned profile strategy rather than a user-selectable setting. If an application update changes its strategy version, AgentVis forms a new profile so the next index check or Embedding-profile activation rebuilds vectors without mixing incompatible spaces. Rebuilds are transactional per Agent. After a partial failure, the new profile continues to isolate old vectors, unmigrated Agents temporarily fall back to local BM25, and the rebuild can be retried later.
+- These are application-level cloud-model calls. Do not treat the Agent sandbox mode or command broker as a substitute for deciding whether to trust a third-party RAG endpoint. Verify the hostname, provider, and data-processing terms yourself.
+
 ---
 
 ## 11. Common Usage Recommendations
 
-| Scenario | Recommended mode |
-| --- | --- |
-| Daily office work, research, analysis | Local Audit / Controlled Network |
-| Modifying local project code and running tests | Local Audit |
-| Having the Agent manually start a custom local preview server through a command | Local Audit |
-| Running a newly installed unknown skill | Offline Isolated or Controlled Network |
-| Handling untrusted scripts or workspace-file tasks | Offline Isolated |
-| Using browser automation to access webpages | Local Audit, or dedicated browser capability under Controlled Network |
-| Uploading files to an external service | Controlled Network, and confirm that the target is trusted |
-| Remote deletion, destruction, or database-drop operations | Controlled Network, where confirmation is cancelled by default |
+| Scenario                                                                        | Recommended mode                                                      |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Daily office work, research, analysis                                           | Local Audit / Controlled Network                                      |
+| Modifying local project code and running tests                                  | Local Audit                                                           |
+| Having the Agent manually start a custom local preview server through a command | Local Audit                                                           |
+| Running a newly installed unknown skill                                         | Offline Isolated or Controlled Network                                |
+| Handling untrusted scripts or workspace-file tasks                              | Offline Isolated                                                      |
+| Using browser automation to access webpages                                     | Local Audit, or dedicated browser capability under Controlled Network |
+| Uploading files to an external service                                          | Controlled Network, and confirm that the target is trusted            |
+| Remote deletion, destruction, or database-drop operations                       | Controlled Network, where confirmation is cancelled by default        |
 
 ---
 

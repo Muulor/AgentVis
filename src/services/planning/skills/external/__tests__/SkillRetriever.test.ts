@@ -137,10 +137,10 @@ describe('SkillRetriever', () => {
       // 应该调用 encodeBatch 一次
       expect(service.encodeBatch).toHaveBeenCalledTimes(1);
       // 索引文本格式应该是 "name: description"
-      expect(service.encodeBatch).toHaveBeenCalledWith([
-        'pdf: PDF 文件处理工具',
-        'docx: Word 文档处理',
-      ]);
+      expect(service.encodeBatch).toHaveBeenCalledWith(
+        ['pdf: PDF 文件处理工具', 'docx: Word 文档处理'],
+        'document'
+      );
     });
 
     it('应该自动过滤 Script 模式技能，只索引 Guide 技能', async () => {
@@ -158,7 +158,10 @@ describe('SkillRetriever', () => {
 
       // 只有 2 个 Guide 技能被索引
       expect(retriever.getIndexSize()).toBe(2);
-      expect(service.encodeBatch).toHaveBeenCalledWith(['pdf: PDF 处理', 'docx: Word 处理']);
+      expect(service.encodeBatch).toHaveBeenCalledWith(
+        ['pdf: PDF 处理', 'docx: Word 处理'],
+        'document'
+      );
     });
 
     it('应该过滤掉已禁用的技能', async () => {
@@ -567,6 +570,43 @@ describe('SkillRetriever', () => {
   });
 
   describe('clear - 索引清空', () => {
+    it('detects when cached skill vectors belong to an old embedding profile', async () => {
+      let profileId = 'profile-a';
+      const service = createMockEmbeddingService({
+        getActiveProfileId: () => profileId,
+      });
+      const retriever = new SkillRetriever(service);
+
+      await retriever.register([createGuideSkill('pdf', 'PDF')]);
+      expect(retriever.isProfileStale()).toBe(false);
+
+      profileId = 'profile-b';
+      expect(retriever.isProfileStale()).toBe(true);
+      retriever.clear();
+      expect(retriever.isProfileStale()).toBe(false);
+    });
+
+    it('drops L2 results when the embedding profile changes during query encoding', async () => {
+      let profileId = 'profile-a';
+      const cosineSimilarityMock = vi.fn(() => 1);
+      const service = createMockEmbeddingService({
+        getActiveProfileId: () => profileId,
+        encodeBatch: vi.fn(async (texts: string[]) => texts.map(() => [1, 0])),
+        encode: vi.fn(async () => {
+          profileId = 'profile-b';
+          return [1, 0];
+        }),
+        cosineSimilarity: cosineSimilarityMock,
+      });
+      const retriever = new SkillRetriever(service);
+      await retriever.register([createGuideSkill('pdf', 'Portable documents')]);
+
+      const results = await retriever.retrieve('semantic request', 3, 0);
+
+      expect(results).toEqual([]);
+      expect(cosineSimilarityMock).not.toHaveBeenCalled();
+    });
+
     it('clear() 后 isReady 应该返回 false', async () => {
       const service = createMockEmbeddingService();
       const retriever = new SkillRetriever(service);

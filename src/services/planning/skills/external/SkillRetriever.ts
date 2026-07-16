@@ -20,6 +20,7 @@
 
 import type { LoadedExternalSkill } from './types';
 import { getLogger } from '@services/logger';
+import type { EmbeddingPurpose } from '@/types/rag';
 
 const logger = getLogger('SkillRetriever');
 
@@ -64,11 +65,13 @@ export interface SkillRetrievalResult {
  */
 export interface EmbeddingServiceDep {
   /** 将单个文本编码为向量 */
-  encode(text: string): Promise<number[]>;
+  encode(text: string, purpose?: EmbeddingPurpose): Promise<number[]>;
   /** 批量编码文本为向量 */
-  encodeBatch(texts: string[]): Promise<number[][]>;
+  encodeBatch(texts: string[], purpose?: EmbeddingPurpose): Promise<number[][]>;
   /** 计算余弦相似度 */
   cosineSimilarity(a: number[], b: number[]): number;
+  /** 当前向量语义空间标识；旧 mock/适配器可不提供。 */
+  getActiveProfileId?(): string;
 }
 
 // ==================== 常量 ====================
@@ -128,6 +131,9 @@ export class SkillRetriever {
   /** 是否已完成注册 */
   private initialized = false;
 
+  /** 构建当前内存索引时使用的 embedding profile。 */
+  private indexedProfileId: string | null = null;
+
   /**
    * @param embeddingService Embedding 服务（依赖注入）
    */
@@ -152,6 +158,7 @@ export class SkillRetriever {
     if (guideSkills.length === 0) {
       this.entries = [];
       this.initialized = true;
+      this.indexedProfileId = this.embeddingService.getActiveProfileId?.() ?? null;
       logger.trace('[SkillRetriever] 无 Guide 技能需要索引');
       return;
     }
@@ -160,14 +167,21 @@ export class SkillRetriever {
     const indexTexts = guideSkills.map((s) => `${s.name}: ${s.description}`);
 
     try {
+      const profileAtStart = this.embeddingService.getActiveProfileId?.() ?? null;
       // 批量 embedding（一次性网络调用，启动时仅执行一次）
-      const embeddings = await this.embeddingService.encodeBatch(indexTexts);
+      const embeddings = await this.embeddingService.encodeBatch(indexTexts, 'document');
 
       // 校验 embedding 返回数量与技能数量是否对齐，防止部分失败导致索引错位
       if (embeddings.length !== guideSkills.length) {
         throw new Error(
           `Embedding result count (${embeddings.length}) does not match skill count (${guideSkills.length})`
         );
+      }
+      if (
+        profileAtStart !== null &&
+        this.embeddingService.getActiveProfileId?.() !== profileAtStart
+      ) {
+        throw new Error('RAG_EMBEDDING_PROFILE_CHANGED_DURING_SKILL_INDEX');
       }
 
       this.entries = guideSkills.map((skill, i) => ({
@@ -178,22 +192,24 @@ export class SkillRetriever {
       }));
 
       this.initialized = true;
+      this.indexedProfileId = profileAtStart;
 
       logger.trace('[SkillRetriever] 索引构建完成:', {
         skillCount: guideSkills.length,
         indexTexts: indexTexts.map((t) => t.substring(0, 60)),
       });
-    } catch (error) {
+    } catch {
       // embedding 失败时降级为「仅关键词」索引（L1 可用，L2 向量检索不可用）
       // 原因：让 L1 关键词触发（如技能名精确命中）仍然有效，而不是完全返回空列表；
       // 使用 EMPTY_EMBEDDING 空向量，L2 cosineSimilarity 在零向量时会得到 0，不会超过阈值
-      logger.error('[SkillRetriever] Embedding 失败，降级为仅关键词索引（L1 仍可用）:', error);
+      logger.error('[SkillRetriever] Embedding 失败，降级为仅关键词索引（L1 仍可用）');
       this.entries = guideSkills.map((skill) => ({
         skill,
         embedding: EMPTY_EMBEDDING,
         ...this.buildTriggerIndex(skill),
       }));
       this.initialized = true;
+      this.indexedProfileId = null;
     }
   }
 
@@ -233,9 +249,9 @@ export class SkillRetriever {
     let vectorHits: SkillRetrievalResult[] = [];
     try {
       vectorHits = await this.multiFragmentVectorMatch(query, threshold);
-    } catch (l2Error) {
+    } catch {
       // L2 失败时降级为仅 L1 结果，不中断主流程
-      logger.warn('[SkillRetriever] L2 向量检索失败，降级为仅 L1 关键词结果:', l2Error);
+      logger.warn('[SkillRetriever] L2 向量检索失败，降级为仅 L1 关键词结果');
     }
 
     // 合并两层结果：同一技能取 max score
@@ -282,6 +298,17 @@ export class SkillRetriever {
     return this.entries.every((e) => e.embedding.length === 0);
   }
 
+  /** Whether the cached vectors belong to a previous active embedding profile. */
+  isProfileStale(): boolean {
+    const activeProfileId = this.embeddingService.getActiveProfileId?.();
+    return Boolean(
+      this.initialized &&
+      this.indexedProfileId &&
+      activeProfileId &&
+      this.indexedProfileId !== activeProfileId
+    );
+  }
+
   /**
    * 获取当前索引的技能数量
    */
@@ -297,6 +324,7 @@ export class SkillRetriever {
   clear(): void {
     this.entries = [];
     this.initialized = false;
+    this.indexedProfileId = null;
     logger.trace('[SkillRetriever] 索引已清空');
   }
 
@@ -381,11 +409,26 @@ export class SkillRetriever {
       return [];
     }
 
+    const profileAtStart = this.embeddingService.getActiveProfileId?.() ?? null;
+    if (
+      this.indexedProfileId !== null &&
+      profileAtStart !== null &&
+      this.indexedProfileId !== profileAtStart
+    ) {
+      throw new Error('RAG_EMBEDDING_PROFILE_CHANGED_DURING_SKILL_RETRIEVAL');
+    }
+
     // 批量 encode 所有 fragments（单次 API 调用）
     const fragmentEmbeddings =
       fragments.length === 1
-        ? [await this.embeddingService.encode(fragments[0] ?? '')]
-        : await this.embeddingService.encodeBatch(fragments);
+        ? [await this.embeddingService.encode(fragments[0] ?? '', 'query')]
+        : await this.embeddingService.encodeBatch(fragments, 'query');
+    if (
+      profileAtStart !== null &&
+      (this.embeddingService.getActiveProfileId?.() ?? null) !== profileAtStart
+    ) {
+      throw new Error('RAG_EMBEDDING_PROFILE_CHANGED_DURING_SKILL_RETRIEVAL');
+    }
 
     // 对每个技能，计算所有 fragment 的 max score
     const results: SkillRetrievalResult[] = [];

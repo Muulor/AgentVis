@@ -13,3 +13,6 @@ export * from './HybridRetriever';
 export * from './RagQueryPreprocessor';
 export * from './LruCache';
 export * from './KnowledgeFileFilter';
+export * from './RagConnectionConfig';
+export * from './RagConnectionService';
+export * from './RagIndexCoordinator';

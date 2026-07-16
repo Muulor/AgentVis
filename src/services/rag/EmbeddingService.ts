@@ -1,422 +1,701 @@
 /**
- * EmbeddingService - 统一 Embedding 服务
+ * EmbeddingService - profile-aware RAG embedding client.
  *
- * 整合原 memory/EmbeddingAdapter 功能，作为全局唯一的 Embedding 服务。
- *
- * 功能：
- * 1. 文本向量化（单条/批量）
- * 2. 余弦相似度计算
- * 3. 语义相似性判断
- * 4. 内存缓存（避免重复 API 请求）
- *
- * 后端实现：SiliconFlow BAAI/bge-m3 (1024 维，免费，8K 上下文)
+ * A top-level encode call resolves one immutable route snapshot. Cache entries
+ * are isolated by embedding profile and purpose, so switching providers or
+ * models can never reuse vectors from another semantic space.
  */
 
 import { invoke } from '@tauri-apps/api/core';
 import { getLogger } from '@services/logger';
+import type { EmbeddingPurpose } from '@/types/rag';
+import {
+  resolveRagEmbeddingRoute,
+  subscribeToEmbeddingProfileChanges,
+  type ResolvedEmbeddingRoute,
+} from './RagConnectionConfig';
 import { LruCache } from './LruCache';
 
 const logger = getLogger('EmbeddingService');
 
-// ============================================================================
-// 配置常量
-// ============================================================================
-
-/** 语义相似度阈值 - 超过此值视为相似（0.75 适合中文长句匹配） */
 export const SEMANTIC_SIMILARITY_THRESHOLD = 0.75;
-
-/** 默认 Embedding Provider */
-const DEFAULT_PROVIDER = 'siliconflow';
-
-/** 默认 Embedding 模型 */
-const DEFAULT_MODEL = 'BAAI/bge-m3';
-
-/** Fallback Embedding Provider（SiliconFlow 不可用时自动降级） */
-const FALLBACK_PROVIDER = 'giteeai';
-
-/** Fallback Embedding 模型（Gitee AI 的 bge-m3 模型名不带 BAAI/ 前缀） */
-const FALLBACK_MODEL = 'bge-m3';
-
-/** Embedding 缓存最大条目数 —— 每条约 8KB (1024 维 float64) */
 const MAX_EMBEDDING_CACHE_SIZE = 1000;
-
-/** 每批最大文本数量 —— 避免超出 Embedding API 单次请求限制 */
 const EMBEDDING_BATCH_SIZE = 25;
+/** Renderer IPC fallback; Rust enforces the actual 15-second network timeout. */
+const EMBEDDING_TIMEOUT_MS = 18_000;
+/** Conservative request spacing, not a claim about any Gemini account quota. */
+const GEMINI_REQUEST_INTERVAL_MS = 1_000;
+const GEMINI_MAX_RETRIES = 5;
+const GEMINI_RETRY_BASE_DELAY_MS = 2_000;
+const GEMINI_RETRY_MAX_DELAY_MS = 30_000;
+const OPENAI_COMPATIBLE_REQUEST_INTERVAL_MS = 0;
+const OPENAI_COMPATIBLE_MAX_RETRIES = 6;
+const OPENAI_COMPATIBLE_RETRY_BASE_DELAY_MS = 2_000;
+const OPENAI_COMPATIBLE_RETRY_MAX_DELAY_MS = 60_000;
+/** A custom endpoint cannot force the renderer to sleep indefinitely. */
+const MAX_SERVER_RETRY_AFTER_MS = 120_000;
+const RETRYABLE_EMBEDDING_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
-/**
- * Embedding API 单次调用超时时间（毫秒）
- *
- * 网络断开时 Tauri invoke 会等待系统 TCP 超时（可能长达数分钟），
- * 此值强制在 15s 内失败，使上层能及时降级，避免阻塞整个消息流程。
- */
-const EMBEDDING_TIMEOUT_MS = 15_000;
-
-// ============================================================================
-// 类型定义
-// ============================================================================
-
-/** 云端 Embedding 响应 */
 interface CloudEmbeddingResponse {
-  /** 编码后的向量列表 */
   embeddings: number[][];
-  /** 向量维度 */
   dimension: number;
-  /** 使用的模型 */
   model: string;
 }
 
-/** Embedding 服务接口 */
+type InvokeFunction = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+
+export type SafeEmbeddingFailureCategory =
+  | 'rate_limit'
+  | 'timeout'
+  | 'transient'
+  | 'client'
+  | 'other';
+
+export interface SafeEmbeddingFailure {
+  category: SafeEmbeddingFailureCategory;
+  code: string;
+  httpStatus?: number;
+  retryAfterMs?: number;
+  retryable: boolean;
+}
+
+/**
+ * Error exposed outside the provider retry boundary.
+ *
+ * It intentionally retains only a stable code/status and never the provider
+ * response body, request text, endpoint, or credential.
+ */
+export class EmbeddingRequestError extends Error {
+  readonly protocol: ResolvedEmbeddingRoute['protocol'];
+  readonly code: string;
+  readonly category: SafeEmbeddingFailureCategory;
+  readonly httpStatus?: number;
+  readonly retryAfterMs?: number;
+  readonly retryable: boolean;
+  readonly attemptCount: number;
+
+  constructor(
+    protocol: ResolvedEmbeddingRoute['protocol'],
+    failure: SafeEmbeddingFailure,
+    attemptCount: number
+  ) {
+    super(`RAG_EMBEDDING_${protocol.toUpperCase()}_${failure.code}`);
+    this.name = 'EmbeddingRequestError';
+    this.protocol = protocol;
+    this.code = failure.code;
+    this.category = failure.category;
+    this.httpStatus = failure.httpStatus;
+    this.retryAfterMs = failure.retryAfterMs;
+    this.retryable = failure.retryable;
+    this.attemptCount = attemptCount;
+  }
+}
+
+/** Return a safe, body-free classification for renderer logs and UI mapping. */
+export function classifyEmbeddingError(error: unknown): SafeEmbeddingFailure {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+
+  for (let depth = 0; depth < 6 && current !== undefined; depth++) {
+    if (visited.has(current)) break;
+    visited.add(current);
+
+    const failure = classifySingleEmbeddingError(current);
+    if (failure.code !== 'OTHER') return failure;
+
+    if (!(current instanceof Error) || !('cause' in current)) break;
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+
+  return { category: 'other', code: 'OTHER', retryable: false };
+}
+
+function classifySingleEmbeddingError(error: unknown): SafeEmbeddingFailure {
+  if (error instanceof EmbeddingRequestError) {
+    return {
+      category: error.category,
+      code: error.code,
+      httpStatus: error.httpStatus,
+      retryAfterMs: error.retryAfterMs,
+      retryable: error.retryable,
+    };
+  }
+
+  const message = typeof error === 'string' ? error : error instanceof Error ? error.message : '';
+  const statusMatch = /\bHTTP\s+(\d{3})\b/i.exec(message);
+  if (statusMatch?.[1]) {
+    const httpStatus = Number(statusMatch[1]);
+    const retryable = RETRYABLE_EMBEDDING_HTTP_STATUSES.has(httpStatus);
+    const retryAfterMatch = /\bretry-after-ms\s*[=:]\s*(\d+)\b/i.exec(message);
+    const rawRetryAfterMs = retryAfterMatch?.[1] ? Number(retryAfterMatch[1]) : undefined;
+    const retryAfterMs =
+      rawRetryAfterMs !== undefined && Number.isFinite(rawRetryAfterMs)
+        ? Math.min(MAX_SERVER_RETRY_AFTER_MS, Math.max(0, Math.round(rawRetryAfterMs)))
+        : undefined;
+    return {
+      category:
+        httpStatus === 429
+          ? 'rate_limit'
+          : retryable
+            ? 'transient'
+            : httpStatus >= 400 && httpStatus < 500
+              ? 'client'
+              : 'other',
+      code: `HTTP_${httpStatus}`,
+      httpStatus,
+      ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
+      retryable,
+    };
+  }
+
+  if (/RAG_EMBEDDING_TIMEOUT|\btimeout\b|timed out/i.test(message)) {
+    return { category: 'timeout', code: 'TIMEOUT', retryable: true };
+  }
+  if (/failed \((?:connect|request|read)\)/i.test(message)) {
+    return { category: 'transient', code: 'TRANSIENT_NETWORK', retryable: true };
+  }
+  return { category: 'other', code: 'OTHER', retryable: false };
+}
+
+export interface EmbeddingConnectionTestResult {
+  dimension: number;
+  model: string;
+  latencyMs: number;
+}
+
+export interface EmbeddingServiceOptions {
+  timeoutMs?: number;
+  routeResolver?: () => ResolvedEmbeddingRoute;
+  invokeFn?: InvokeFunction;
+  geminiRequestIntervalMs?: number;
+  geminiMaxRetries?: number;
+  geminiRetryBaseDelayMs?: number;
+  geminiRetryMaxDelayMs?: number;
+  openAiRequestIntervalMs?: number;
+  openAiMaxRetries?: number;
+  openAiRetryBaseDelayMs?: number;
+  openAiRetryMaxDelayMs?: number;
+  randomFn?: () => number;
+}
+
+interface EmbeddingRequestLane {
+  queue: Promise<void>;
+  nextRequestAt: number;
+}
+
 export interface IEmbeddingService {
-  /** 将单个文本转换为向量 */
-  encode(text: string): Promise<number[]>;
-  /** 批量向量化 */
-  encodeBatch(texts: string[]): Promise<number[][]>;
-  /** 计算余弦相似度 */
+  encode(text: string, purpose?: EmbeddingPurpose): Promise<number[]>;
+  encodeBatch(texts: string[], purpose?: EmbeddingPurpose): Promise<number[][]>;
+  getActiveProfileId(): string;
   cosineSimilarity(a: number[], b: number[]): number;
-  /** 判断两段文本是否语义相似 */
   isSemanticallySimilar(textA: string, textB: string, threshold?: number): Promise<boolean>;
-  /** 清空缓存 */
   clearCache(): void;
-  /** 获取缓存大小 */
   getCacheSize(): number;
 }
 
-// ============================================================================
-// 统一 Embedding 服务类
-// ============================================================================
-
-/**
- * 统一 Embedding 服务
- *
- * 使用 cloud_embedding_encode 后端命令，调用 SiliconFlow BAAI/bge-m3 API
- */
 export class EmbeddingService implements IEmbeddingService {
-  /** Embedding 缓存（LRU 淘汰，避免无限增长） */
-  private cache = new LruCache<string, number[]>(MAX_EMBEDDING_CACHE_SIZE);
+  private readonly cache = new LruCache<string, number[]>(MAX_EMBEDDING_CACHE_SIZE);
+  private readonly timeoutMs: number;
+  private readonly routeResolver: () => ResolvedEmbeddingRoute;
+  private readonly invokeFn: InvokeFunction;
+  private readonly geminiRequestIntervalMs: number;
+  private readonly geminiMaxRetries: number;
+  private readonly geminiRetryBaseDelayMs: number;
+  private readonly geminiRetryMaxDelayMs: number;
+  private readonly openAiRequestIntervalMs: number;
+  private readonly openAiMaxRetries: number;
+  private readonly openAiRetryBaseDelayMs: number;
+  private readonly openAiRetryMaxDelayMs: number;
+  private readonly randomFn: () => number;
+  private readonly requestLanes = new Map<string, EmbeddingRequestLane>();
 
-  /** 当前处于激活状态的 Provider（用于在批量处理中锁定 fallback 状态） */
-  private activeProvider = DEFAULT_PROVIDER;
-  private activeModel = DEFAULT_MODEL;
+  constructor(options: EmbeddingServiceOptions = {}) {
+    this.timeoutMs = options.timeoutMs ?? EMBEDDING_TIMEOUT_MS;
+    this.routeResolver = options.routeResolver ?? resolveRagEmbeddingRoute;
+    this.invokeFn = options.invokeFn ?? (invoke as InvokeFunction);
+    this.geminiRequestIntervalMs = Math.max(
+      0,
+      options.geminiRequestIntervalMs ?? GEMINI_REQUEST_INTERVAL_MS
+    );
+    this.geminiMaxRetries = Math.max(0, options.geminiMaxRetries ?? GEMINI_MAX_RETRIES);
+    this.geminiRetryBaseDelayMs = Math.max(
+      0,
+      options.geminiRetryBaseDelayMs ?? GEMINI_RETRY_BASE_DELAY_MS
+    );
+    this.geminiRetryMaxDelayMs = Math.max(
+      this.geminiRetryBaseDelayMs,
+      options.geminiRetryMaxDelayMs ?? GEMINI_RETRY_MAX_DELAY_MS
+    );
+    this.openAiRequestIntervalMs = Math.max(
+      0,
+      options.openAiRequestIntervalMs ?? OPENAI_COMPATIBLE_REQUEST_INTERVAL_MS
+    );
+    this.openAiMaxRetries = Math.max(0, options.openAiMaxRetries ?? OPENAI_COMPATIBLE_MAX_RETRIES);
+    this.openAiRetryBaseDelayMs = Math.max(
+      0,
+      options.openAiRetryBaseDelayMs ?? OPENAI_COMPATIBLE_RETRY_BASE_DELAY_MS
+    );
+    this.openAiRetryMaxDelayMs = Math.max(
+      this.openAiRetryBaseDelayMs,
+      options.openAiRetryMaxDelayMs ?? OPENAI_COMPATIBLE_RETRY_MAX_DELAY_MS
+    );
+    this.randomFn = options.randomFn ?? Math.random;
+  }
 
-  /**
-   * 带超时和 fallback 的 Embedding API 调用
-   *
-   * 优先调用 SiliconFlow，失败后自动降级到 Gitee AI（若已配置 API Key）。
-   * 两者使用相同的 bge-m3 模型（1024 维），向量完全兼容。
-   * 使用 Promise.race 在指定时间内强制失败，避免网络断开时
-   * Tauri invoke 永久 pending 阻塞上层调用链。
-   *
-   * @param texts - 要编码的文本列表
-   * @param timeoutMs - 超时毫秒数，默认 EMBEDDING_TIMEOUT_MS
-   * @returns CloudEmbeddingResponse
-   */
-  private async encodeWithTimeout(
+  getActiveRoute(): ResolvedEmbeddingRoute {
+    return this.routeResolver();
+  }
+
+  getActiveProfileId(): string {
+    return this.getActiveRoute().profileId;
+  }
+
+  async encode(text: string, purpose: EmbeddingPurpose = 'generic'): Promise<number[]> {
+    const route = this.getActiveRoute();
+    return this.encodeWithRoute(text, route, purpose);
+  }
+
+  async encodeWithRoute(
+    text: string,
+    route: ResolvedEmbeddingRoute,
+    purpose: EmbeddingPurpose = 'generic',
+    signal?: AbortSignal
+  ): Promise<number[]> {
+    const [embedding] = await this.encodeBatchWithRoute([text], route, purpose, signal);
+    return embedding ?? [];
+  }
+
+  async encodeBatch(texts: string[], purpose: EmbeddingPurpose = 'generic'): Promise<number[][]> {
+    const route = this.getActiveRoute();
+    return this.encodeBatchWithRoute(texts, route, purpose);
+  }
+
+  async encodeBatchWithRoute(
     texts: string[],
-    timeoutMs: number = EMBEDDING_TIMEOUT_MS
-  ): Promise<CloudEmbeddingResponse> {
-    // 如果当前已经降级，直接使用 fallback
-    if (this.activeProvider === FALLBACK_PROVIDER) {
-      return await this.callEmbeddingApi(this.activeProvider, this.activeModel, texts, timeoutMs);
-    }
+    route: ResolvedEmbeddingRoute,
+    purpose: EmbeddingPurpose = 'generic',
+    signal?: AbortSignal
+  ): Promise<number[][]> {
+    if (texts.length === 0) return [];
+    this.assertUsableRoute(route);
 
-    // 尝试主提供商
-    try {
-      return await this.callEmbeddingApi(this.activeProvider, this.activeModel, texts, timeoutMs);
-    } catch (primaryError) {
-      logger.warn(
-        `[EmbeddingService] 主提供商 ${this.activeProvider} 失败，尝试 fallback: ${String(primaryError)}`
-      );
-
-      // 检查 fallback 提供商是否已配置 API Key
-      try {
-        const hasFallbackKey = await invoke<boolean>('get_giteeai_api_key_status');
-        if (!hasFallbackKey) {
-          // Fallback 未配置，抛出原始错误
-          throw primaryError;
-        }
-
-        logger.info(
-          `[EmbeddingService] 降级到 fallback 提供商: ${FALLBACK_PROVIDER}，并在本次批处理中保持`
-        );
-
-        // 切换激活状态，避免后续批次重复重试失败的主提供商
-        this.activeProvider = FALLBACK_PROVIDER;
-        this.activeModel = FALLBACK_MODEL;
-
-        return await this.callEmbeddingApi(this.activeProvider, this.activeModel, texts, timeoutMs);
-      } catch (fallbackError) {
-        // Fallback 也失败，报告两个错误信息便于调试
-        logger.error(
-          `[EmbeddingService] Fallback 提供商 ${FALLBACK_PROVIDER} 也失败: ${String(fallbackError)}`
-        );
-        throw primaryError;
-      }
-    }
-  }
-
-  /**
-   * 调用单个 Embedding 提供商的 API（带超时保护）
-   */
-  private callEmbeddingApi(
-    provider: string,
-    model: string,
-    texts: string[],
-    timeoutMs: number
-  ): Promise<CloudEmbeddingResponse> {
-    const apiCall = invoke<CloudEmbeddingResponse>('cloud_embedding_encode', {
-      request: { provider, model, texts },
-    });
-
-    // 超时 Promise：到期后以明确错误 reject，使上层 catch 能区分超时 vs 其他错误
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(
-          new Error(
-            `Embedding API request timed out (>${timeoutMs}ms, provider: ${provider}). ` +
-              'Check the network connection or embedding service configuration.'
-          )
-        );
-      }, timeoutMs);
-    });
-
-    return Promise.race([apiCall, timeoutPromise]);
-  }
-
-  /**
-   * 获取单个文本的 Embedding 向量
-   *
-   * @param text - 要编码的文本
-   * @returns Embedding 向量 (1024 维)
-   */
-  async encode(text: string): Promise<number[]> {
-    // 每次独立调用重置状态
-    this.activeProvider = DEFAULT_PROVIDER;
-    this.activeModel = DEFAULT_MODEL;
-
-    // 先检查缓存
-    const cached = this.cache.get(text);
-    if (cached) {
-      return cached;
-    }
-
-    try {
-      // 使用超时包装防止网络断开时永久阻塞
-      const response = await this.encodeWithTimeout([text]);
-
-      const embedding = response.embeddings[0] ?? [];
-
-      // 存入缓存
-      this.cache.set(text, embedding);
-
-      return embedding;
-    } catch (error) {
-      logger.error('[EmbeddingService] 获取 Embedding 失败:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * 批量获取文本的 Embedding 向量
-   *
-   * @param texts - 要编码的文本列表
-   * @returns Embedding 向量列表
-   */
-  async encodeBatch(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) {
-      return [];
-    }
-
-    // 每次批处理开始前重置状态，允许从之前的降级中恢复
-    this.activeProvider = DEFAULT_PROVIDER;
-    this.activeModel = DEFAULT_MODEL;
-
-    // 分离已缓存和未缓存的文本
     const results: number[][] = Array<number[]>(texts.length);
     const uncachedTexts: string[] = [];
     const uncachedIndices: number[] = [];
 
-    for (let i = 0; i < texts.length; i++) {
-      const text = texts[i];
-      if (text === undefined) continue;
-      const cached = this.cache.get(text);
+    for (let index = 0; index < texts.length; index++) {
+      const value = texts[index];
+      if (value === undefined) continue;
+      const cacheKey = this.buildCacheKey(route.profileId, purpose, value);
+      const cached = purpose === 'test' ? undefined : this.cache.get(cacheKey);
       if (cached) {
-        results[i] = cached;
+        results[index] = cached;
       } else {
-        uncachedTexts.push(text);
-        uncachedIndices.push(i);
+        uncachedTexts.push(value);
+        uncachedIndices.push(index);
       }
     }
 
-    // 如果有未缓存的，调用 API
-    if (uncachedTexts.length > 0) {
-      try {
-        // 按 EMBEDDING_BATCH_SIZE 分批调用 API，避免超出单次请求限制
-        // 每批使用超时包装，防止网络断开时永久阻塞
-        for (
-          let batchStart = 0;
-          batchStart < uncachedTexts.length;
-          batchStart += EMBEDDING_BATCH_SIZE
-        ) {
-          const batchTexts = uncachedTexts.slice(batchStart, batchStart + EMBEDDING_BATCH_SIZE);
+    try {
+      for (
+        let batchStart = 0;
+        batchStart < uncachedTexts.length;
+        batchStart += EMBEDDING_BATCH_SIZE
+      ) {
+        const batchTexts = uncachedTexts.slice(batchStart, batchStart + EMBEDDING_BATCH_SIZE);
+        const response = await this.callEmbeddingApi(route, batchTexts, purpose, signal);
+        this.assertValidResponse(response, batchTexts.length);
 
-          const response = await this.encodeWithTimeout(batchTexts);
-
-          // 填充结果并更新缓存
-          for (let i = 0; i < batchTexts.length; i++) {
-            const globalIndex = batchStart + i;
-            const text = uncachedTexts[globalIndex];
-            const resultIndex = uncachedIndices[globalIndex];
-            if (text === undefined || resultIndex === undefined) continue;
-            const embedding = response.embeddings[i] ?? [];
-
-            results[resultIndex] = embedding;
-            this.cache.set(text, embedding);
+        for (let index = 0; index < batchTexts.length; index++) {
+          const globalIndex = batchStart + index;
+          const text = uncachedTexts[globalIndex];
+          const resultIndex = uncachedIndices[globalIndex];
+          const embedding = response.embeddings[index];
+          if (text === undefined || resultIndex === undefined || !embedding) continue;
+          results[resultIndex] = embedding;
+          if (purpose !== 'test') {
+            this.cache.set(this.buildCacheKey(route.profileId, purpose, text), embedding);
           }
         }
-      } catch (error) {
-        logger.error('[EmbeddingService] 批量获取 Embedding 失败:', error);
-        throw error;
       }
+    } catch (error) {
+      if (this.isAbortError(error)) throw error;
+      const safeFailure = classifyEmbeddingError(error);
+      logger.error('[EmbeddingService] Embedding request failed', {
+        protocol: route.protocol,
+        reason: safeFailure.code,
+        category: safeFailure.category,
+      });
+      throw error;
     }
 
+    for (let index = 0; index < texts.length; index++) {
+      if (!results[index]) throw new Error('RAG_EMBEDDING_RESULT_COUNT_MISMATCH');
+    }
     return results;
   }
 
-  /**
-   * 计算两个向量的 Cosine 相似度
-   *
-   * @param a - 向量 A
-   * @param b - 向量 B
-   * @returns 相似度 (0-1)
-   */
+  async testConnection(
+    route: ResolvedEmbeddingRoute,
+    signal?: AbortSignal
+  ): Promise<EmbeddingConnectionTestResult> {
+    const startedAt = performance.now();
+    const response = await this.callEmbeddingApi(
+      route,
+      ['AgentVis connection test'],
+      'test',
+      signal
+    );
+    this.assertValidResponse(response, 1);
+    return {
+      dimension: response.dimension,
+      model: response.model,
+      latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
+    };
+  }
+
   cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length || a.length === 0) {
-      return 0;
-    }
+    if (a.length !== b.length || a.length === 0) return 0;
 
     let dotProduct = 0;
     let normA = 0;
     let normB = 0;
-
-    for (let i = 0; i < a.length; i++) {
-      const valA = a[i] ?? 0;
-      const valB = b[i] ?? 0;
-      dotProduct += valA * valB;
-      normA += valA * valA;
-      normB += valB * valB;
+    for (let index = 0; index < a.length; index++) {
+      const valueA = a[index] ?? 0;
+      const valueB = b[index] ?? 0;
+      dotProduct += valueA * valueB;
+      normA += valueA * valueA;
+      normB += valueB * valueB;
     }
 
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
     return denominator === 0 ? 0 : dotProduct / denominator;
   }
 
-  /**
-   * 判断两段文本是否语义相似
-   *
-   * @param textA - 文本 A
-   * @param textB - 文本 B
-   * @param threshold - 相似度阈值，默认 0.75
-   * @returns 是否相似
-   */
   async isSemanticallySimilar(
     textA: string,
     textB: string,
     threshold: number = SEMANTIC_SIMILARITY_THRESHOLD
   ): Promise<boolean> {
     try {
-      const [embeddingA, embeddingB] = await Promise.all([this.encode(textA), this.encode(textB)]);
-
-      const similarity = this.cosineSimilarity(embeddingA, embeddingB);
-      logger.trace(`[EmbeddingService] 相似度: ${similarity.toFixed(3)} (阈值: ${threshold})`);
-
-      return similarity >= threshold;
-    } catch (error) {
-      logger.warn('[EmbeddingService] 语义相似度判断失败，降级为 false:', error);
+      const route = this.getActiveRoute();
+      const [embeddingA, embeddingB] = await Promise.all([
+        this.encodeWithRoute(textA, route),
+        this.encodeWithRoute(textB, route),
+      ]);
+      return this.cosineSimilarity(embeddingA, embeddingB) >= threshold;
+    } catch {
+      logger.warn('[EmbeddingService] Semantic comparison failed; using false');
       return false;
     }
   }
 
-  /**
-   * 清空 Embedding 缓存
-   *
-   * 用于测试或内存管理
-   */
   clearCache(): void {
     this.cache.clear();
   }
 
-  /**
-   * 获取缓存大小
-   */
   getCacheSize(): number {
     return this.cache.size;
   }
+
+  private async callEmbeddingApi(
+    route: ResolvedEmbeddingRoute,
+    texts: string[],
+    purpose: EmbeddingPurpose,
+    signal?: AbortSignal
+  ): Promise<CloudEmbeddingResponse> {
+    this.assertUsableRoute(route);
+    const request = {
+      provider: route.provider,
+      model: route.modelId,
+      texts,
+      endpointUrl: route.endpointUrl,
+      protocol: route.protocol,
+      authMode: route.authMode,
+      profileId: route.profileId,
+      purpose,
+      ...(route.protocol === 'gemini' ? { outputDimensionality: route.outputDimension } : {}),
+    };
+    const invokeOnce = () => {
+      this.throwIfAborted(signal);
+      const apiCall = Promise.resolve().then(
+        () =>
+          this.invokeFn('cloud_embedding_encode', {
+            request,
+          }) as Promise<CloudEmbeddingResponse>
+      );
+      return this.withTimeout(apiCall, route.provider, signal);
+    };
+
+    const lane = this.getRequestLane(route.profileId);
+    return this.enqueueEmbeddingOperation(
+      lane,
+      () => this.callWithRetry(route.protocol, lane, invokeOnce, purpose, signal),
+      signal
+    );
+  }
+
+  private async callWithRetry<T>(
+    protocol: ResolvedEmbeddingRoute['protocol'],
+    lane: EmbeddingRequestLane,
+    invokeOnce: () => Promise<T>,
+    purpose: EmbeddingPurpose,
+    signal?: AbortSignal
+  ): Promise<T> {
+    const policy = this.getRetryPolicy(protocol);
+    const maxAttempts = purpose === 'test' ? 1 : policy.maxRetries + 1;
+
+    for (let attemptCount = 1; attemptCount <= maxAttempts; attemptCount++) {
+      this.throwIfAborted(signal);
+      try {
+        await this.waitForRequestSlot(lane, policy.requestIntervalMs, signal);
+        return await invokeOnce();
+      } catch (error) {
+        if (this.isAbortError(error)) throw error;
+
+        const safeFailure = classifyEmbeddingError(error);
+        const mayRetry = safeFailure.retryable && attemptCount < maxAttempts;
+        if (!mayRetry) {
+          if (safeFailure.retryable) {
+            const cooldownMs = this.getRetryDelayMs(
+              attemptCount - 1,
+              policy.retryBaseDelayMs,
+              policy.retryMaxDelayMs,
+              safeFailure.retryAfterMs
+            );
+            lane.nextRequestAt = Math.max(lane.nextRequestAt, Date.now() + cooldownMs);
+          }
+          throw new EmbeddingRequestError(protocol, safeFailure, attemptCount);
+        }
+
+        const delayMs = this.getRetryDelayMs(
+          attemptCount - 1,
+          policy.retryBaseDelayMs,
+          policy.retryMaxDelayMs,
+          safeFailure.retryAfterMs
+        );
+        lane.nextRequestAt = Math.max(lane.nextRequestAt, Date.now() + delayMs);
+        logger.warn('[EmbeddingService] Retrying Embedding request', {
+          protocol,
+          reason: safeFailure.code,
+          category: safeFailure.category,
+          retry: attemptCount,
+          maxRetries: policy.maxRetries,
+          delayMs,
+        });
+        await this.wait(delayMs, signal);
+      }
+    }
+
+    throw new EmbeddingRequestError(
+      protocol,
+      { category: 'other', code: 'OTHER', retryable: false },
+      maxAttempts
+    );
+  }
+
+  private getRetryPolicy(protocol: ResolvedEmbeddingRoute['protocol']): {
+    requestIntervalMs: number;
+    maxRetries: number;
+    retryBaseDelayMs: number;
+    retryMaxDelayMs: number;
+  } {
+    if (protocol === 'gemini') {
+      return {
+        requestIntervalMs: this.geminiRequestIntervalMs,
+        maxRetries: this.geminiMaxRetries,
+        retryBaseDelayMs: this.geminiRetryBaseDelayMs,
+        retryMaxDelayMs: this.geminiRetryMaxDelayMs,
+      };
+    }
+    return {
+      requestIntervalMs: this.openAiRequestIntervalMs,
+      maxRetries: this.openAiMaxRetries,
+      retryBaseDelayMs: this.openAiRetryBaseDelayMs,
+      retryMaxDelayMs: this.openAiRetryMaxDelayMs,
+    };
+  }
+
+  private getRequestLane(profileId: string): EmbeddingRequestLane {
+    const existing = this.requestLanes.get(profileId);
+    if (existing) return existing;
+    const lane: EmbeddingRequestLane = { queue: Promise.resolve(), nextRequestAt: 0 };
+    this.requestLanes.set(profileId, lane);
+    return lane;
+  }
+
+  private enqueueEmbeddingOperation<T>(
+    lane: EmbeddingRequestLane,
+    operation: () => Promise<T>,
+    signal?: AbortSignal
+  ): Promise<T> {
+    const run = async () => {
+      this.throwIfAborted(signal);
+      return operation();
+    };
+
+    const request = lane.queue.then(run);
+    lane.queue = request.then(
+      () => undefined,
+      () => undefined
+    );
+    return request;
+  }
+
+  private async waitForRequestSlot(
+    lane: EmbeddingRequestLane,
+    requestIntervalMs: number,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const waitMs = Math.max(0, lane.nextRequestAt - Date.now());
+    if (waitMs > 0) await this.wait(waitMs, signal);
+    this.throwIfAborted(signal);
+    lane.nextRequestAt = Date.now() + requestIntervalMs;
+  }
+
+  private getRetryDelayMs(
+    retryCount: number,
+    retryBaseDelayMs: number,
+    retryMaxDelayMs: number,
+    retryAfterMs?: number
+  ): number {
+    const exponentialDelay = Math.min(retryMaxDelayMs, retryBaseDelayMs * 2 ** retryCount);
+    const jitterMultiplier = 0.5 + Math.min(1, Math.max(0, this.randomFn())) * 0.5;
+    const fallbackDelayMs = Math.max(1, Math.round(exponentialDelay * jitterMultiplier));
+    const safeRetryAfterMs =
+      retryAfterMs === undefined
+        ? 0
+        : Math.min(MAX_SERVER_RETRY_AFTER_MS, Math.max(0, Math.round(retryAfterMs)));
+    return Math.max(fallbackDelayMs, safeRetryAfterMs);
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    provider: string,
+    signal?: AbortSignal
+  ): Promise<T> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let removeAbortListener: (() => void) | undefined;
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`RAG_EMBEDDING_TIMEOUT:${provider}:${this.timeoutMs}`));
+      }, this.timeoutMs);
+    });
+    const abortPromise = new Promise<never>((_resolve, reject) => {
+      if (!signal) return;
+      const onAbort = () => reject(this.createAbortError());
+      signal.addEventListener('abort', onAbort, { once: true });
+      removeAbortListener = () => signal.removeEventListener('abort', onAbort);
+    });
+
+    try {
+      this.throwIfAborted(signal);
+      return await Promise.race([promise, timeoutPromise, abortPromise]);
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      removeAbortListener?.();
+    }
+  }
+
+  private wait(delayMs: number, signal?: AbortSignal): Promise<void> {
+    this.throwIfAborted(signal);
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      }, delayMs);
+      const onAbort = () => {
+        clearTimeout(timeoutId);
+        signal?.removeEventListener('abort', onAbort);
+        reject(this.createAbortError());
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) throw this.createAbortError();
+  }
+
+  private createAbortError(): Error {
+    const error = new Error('RAG_EMBEDDING_ABORTED');
+    error.name = 'AbortError';
+    return error;
+  }
+
+  private isAbortError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'AbortError';
+  }
+
+  private assertUsableRoute(route: ResolvedEmbeddingRoute): void {
+    if (!route.modelId || !route.profileId) {
+      throw new Error('RAG_EMBEDDING_ROUTE_INVALID');
+    }
+    if (route.provider === 'custom' && !route.endpointUrl) {
+      throw new Error('RAG_CUSTOM_EMBEDDING_CONFIG_INVALID');
+    }
+  }
+
+  private assertValidResponse(response: CloudEmbeddingResponse, expectedCount: number): void {
+    if (
+      response.embeddings.length !== expectedCount ||
+      !Number.isInteger(response.dimension) ||
+      response.dimension <= 0
+    ) {
+      throw new Error('RAG_EMBEDDING_RESULT_COUNT_MISMATCH');
+    }
+
+    for (const embedding of response.embeddings) {
+      if (
+        embedding.length !== response.dimension ||
+        embedding.length === 0 ||
+        embedding.some((value) => !Number.isFinite(value))
+      ) {
+        throw new Error('RAG_EMBEDDING_VECTOR_INVALID');
+      }
+    }
+  }
+
+  private buildCacheKey(profileId: string, purpose: EmbeddingPurpose, text: string): string {
+    return `${profileId}\u0000${purpose}\u0000${text}`;
+  }
 }
 
-// ============================================================================
-// 单例导出
-// ============================================================================
-
-/** 全局单例实例 */
 export const embeddingService = new EmbeddingService();
 
-/**
- * 创建 EmbeddingService 实例
- *
- * 通常应使用 embeddingService 单例，仅在需要独立缓存时创建新实例
- */
-export function createEmbeddingService(): EmbeddingService {
-  return new EmbeddingService();
+subscribeToEmbeddingProfileChanges((nextProfileId, previousProfileId) => {
+  embeddingService.clearCache();
+  void import('../memory/SemanticAnchors').then(({ clearAnchorCache }) => clearAnchorCache());
+  logger.info('[EmbeddingService] Active profile changed; dependent caches cleared:', {
+    previousProfileId,
+    nextProfileId,
+  });
+});
+
+export function createEmbeddingService(options: EmbeddingServiceOptions = {}): EmbeddingService {
+  return new EmbeddingService(options);
 }
 
-// ============================================================================
-// 便捷函数导出（向后兼容 memory/EmbeddingAdapter）
-// ============================================================================
-
-/**
- * 获取文本的 Embedding 向量
- * @deprecated 建议直接使用 embeddingService.encode()
- */
 export async function getEmbedding(text: string): Promise<number[]> {
   return embeddingService.encode(text);
 }
 
-/**
- * 批量获取文本的 Embedding 向量
- * @deprecated 建议直接使用 embeddingService.encodeBatch()
- */
 export async function getEmbeddings(texts: string[]): Promise<number[][]> {
   return embeddingService.encodeBatch(texts);
 }
 
-/**
- * 计算 Cosine 相似度
- * @deprecated 建议直接使用 embeddingService.cosineSimilarity()
- */
 export function cosineSimilarity(a: number[], b: number[]): number {
   return embeddingService.cosineSimilarity(a, b);
 }
 
-/**
- * 判断两段文本是否语义相似
- * @deprecated 建议直接使用 embeddingService.isSemanticallySimilar()
- */
 export async function isSemanticallySimilar(textA: string, textB: string): Promise<boolean> {
   return embeddingService.isSemanticallySimilar(textA, textB);
 }
 
-/**
- * 清空 Embedding 缓存
- * @deprecated 建议直接使用 embeddingService.clearCache()
- */
 export function clearEmbeddingCache(): void {
   embeddingService.clearCache();
 }
 
-/**
- * 获取缓存大小
- * @deprecated 建议直接使用 embeddingService.getCacheSize()
- */
 export function getEmbeddingCacheSize(): number {
   return embeddingService.getCacheSize();
 }

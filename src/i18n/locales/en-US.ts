@@ -205,6 +205,9 @@ export const enUS = {
       emptyKnowledge: 'No knowledge files',
       indexingProgress: 'Indexing {current}/{total}',
       indexingProgressSaving: 'Indexing {current}/{total}...',
+      knowledgeIndexFailedStatus: 'Vector index missing or failed; save again to retry',
+      knowledgeIndexFailed:
+        '{count} file(s) do not have a complete vector index and are not currently searchable in the knowledge base. Check the Embedding connection or service limits, then save again to retry.',
       pinnedMode: 'Pinned Skill Mode',
       pinnedHint:
         'Bind 1-{max} skills directly into context and ignore retrieval or injection for other skills',
@@ -900,9 +903,9 @@ export const enUS = {
     setupLlmKeyDescription:
       'Configure any model provider for Agent conversations and task execution.',
     setupLlmKeyAction: 'Open API Keys',
-    setupEmbeddingTitle: 'Embedding API Key',
+    setupEmbeddingTitle: 'RAG Embedding connection',
     setupEmbeddingDescription:
-      'Configure SiliconFlow for memory retrieval and knowledge vectorization.',
+      'Use the recommended SiliconFlow configuration or connect a custom Embedding service.',
     setupEmbeddingAction: 'Open Cloud Services',
     setupHubTitle: 'Hub',
     setupHubDescription: 'Create a Hub to organize discussions.',
@@ -2190,11 +2193,110 @@ export const enUS = {
       embeddingModel: 'Embedding Model',
       rerankerModel: 'Reranker Model',
       getApiKeyTitle: 'Get API Key',
-      siliconflowTitle: 'SiliconFlow (Embedding + Reranker)',
-      siliconflowDesc:
-        'Used for RAG vectorization, reranking, and semantic memory retrieval. Uses the free {embeddingModel} model (1024 dimensions) and {rerankerModel} reranker.',
-      giteeaiDesc:
-        'Fallback when SiliconFlow is unavailable. Uses the same free {model} model (1024 dimensions), with compatible vectors.',
+      ragConnectionTitle: 'RAG model connections',
+      ragConnectionDesc:
+        'Choose the Embedding service used by the Knowledge Base, memory, and other semantic retrieval. Reranker is only used to reorder Knowledge Base candidates.',
+      ragUseSiliconflow: 'Use the recommended SiliconFlow configuration',
+      ragUseSiliconflowHint:
+        'The recommended configuration uses the Mainland China endpoint. Turn it off outside Mainland China or when you need other services.',
+      ragSiliconflowSummary: 'Fixed endpoint · api.siliconflow.cn',
+      ragEmbeddingDimension: '1024 dimensions',
+      ragCustomSummary:
+        'Embedding is required. Reranker is optional and may use a different provider.',
+      ragEmbeddingConnection: 'Embedding connection',
+      ragRerankerConnection: 'Reranker connection',
+      ragProviderName: 'Provider name (optional)',
+      ragProviderPlaceholder: 'For example, OpenAI, Jina AI, or a private service',
+      ragProtocol: 'Compatible protocol',
+      ragEmbeddingProtocol: 'Embedding protocol',
+      ragProtocolOpenAi: 'OpenAI Embeddings',
+      ragProtocolGemini: 'Google Gemini Embeddings',
+      ragProtocolJinaCohere: 'Jina / Cohere Rerank',
+      ragProtocolVoyage: 'Voyage Rerank',
+      ragEndpointUrl: 'API endpoint URL',
+      ragEmbeddingEndpointPlaceholder: 'https://api.example.com/v1/embeddings',
+      ragRerankerEndpointPlaceholder: 'https://api.example.com/v1/rerank',
+      ragEndpointHint:
+        'Remote endpoints must use HTTPS; HTTP is allowed only for loopback addresses. Enter the complete API URL, and never put an API key in the URL or query string.',
+      ragModelId: 'Model ID',
+      ragModelPlaceholder: 'Enter the model ID required by the provider',
+      ragAuthMode: 'Authentication',
+      ragAuthBearer: 'Bearer API Key',
+      ragAuthNone: 'No authentication',
+      ragGeminiProvider: 'Google Gemini',
+      ragGeminiEndpointHint: 'Uses the fixed official Google Gemini API endpoint.',
+      ragGeminiOutputDimension: 'Output dimensions',
+      ragGeminiApiKey: 'Google API Key',
+      ragGeminiPrivacyWarning:
+        'Content sent through the Gemini free tier may be used to improve Google products and may be reviewed by humans. Do not upload sensitive, confidential, or personal information. Mainland China is not on the official Gemini API supported-regions list.',
+      ragGeminiTermsLink: 'View service terms',
+      ragGeminiPricingLink: 'View pricing',
+      ragGeminiRegionsLink: 'View supported regions',
+      ragGeminiGetApiKeyLink: 'Get a Google API Key',
+      ragEnableReranker: 'Enable a custom Reranker',
+      ragEnableRerankerHint:
+        'When disabled or unavailable, Knowledge Base retrieval continues with local RRF ranking.',
+      ragConnectionConfigured: '{provider} · {model}',
+      ragConnectionIncomplete: 'Connection details are incomplete',
+      ragCustomApiKey: 'Custom {purpose} API Key',
+      ragEndpointApiKey: '{purpose} API Key for this endpoint',
+      ragEmbeddingPurpose: 'Embedding',
+      ragRerankerPurpose: 'Reranker',
+      ragConnectionTestRequired: 'Test the current connections before saving and applying',
+      ragSaveApiKeyFirst: 'Save the API key currently entered before testing or applying',
+      ragCredentialSaveHint:
+        'Save beside this field writes immediately to the system credential store. Save and apply below only applies connection settings.',
+      ragCredentialDifferentEndpoint:
+        'The saved API key belongs to another endpoint. Re-enter and save a key for this endpoint so a credential is never sent to the wrong service.',
+      ragCredentialLegacy:
+        'The existing API key is not bound to an endpoint yet. Re-enter and save it once for this endpoint before testing.',
+      ragCredentialOperationFailedHint:
+        'The credential was not changed. Check system credential-storage access, then try again.',
+      ragConnectionTestFailedHint:
+        'Check the endpoint, compatible protocol, model ID, and API key, then try again.',
+      ragEmbeddingRateLimitConnectionHint:
+        'The Embedding service is currently rate- or token-limited. Connection tests do not retry for an extended period; wait for the limit window to recover, then try again.',
+      ragEmbeddingTimeoutConnectionHint:
+        'The Embedding request timed out. Check the network, VPN, or service endpoint, then try again.',
+      ragEmbeddingTransientConnectionHint:
+        'The Embedding service or network is temporarily unavailable. Try again later.',
+      ragEmbeddingRateLimitRebuildHint:
+        'The Embedding service is currently rate- or token-limited. AgentVis already retried with backoff and preserved completed index checkpoints; wait for the limit window to recover, then continue rebuilding.',
+      ragEmbeddingTimeoutRebuildHint:
+        'The Embedding request timed out. Completed index checkpoints were preserved; check the network or VPN, then continue rebuilding.',
+      ragEmbeddingTransientRebuildHint:
+        'The Embedding service or network is temporarily unavailable. Completed index checkpoints were preserved; continue rebuilding later.',
+      ragConfirmChangeTitle: 'Switch Embedding configuration and rebuild indexes?',
+      ragConfirmChangeDesc:
+        'After confirmation, this prompt closes, the new Embedding profile is activated immediately, and index rebuilding continues in the background so you can leave Settings and do other work. This consumes API usage and sends content being vectorized to the selected service. If part of the rebuild fails, the active profile keeps old vectors isolated and affected Agents temporarily fall back to local BM25; you can retry later.',
+      ragConfirmChangeAction: 'Apply and rebuild',
+      ragSaveAndApply: 'Save and apply',
+      ragApplying: 'Applying…',
+      ragRebuildPreparing: 'Checking vector indexes that need migration…',
+      ragRebuilding: 'Rebuilding vector indexes {current}/{total}',
+      ragApplySuccess: 'RAG model connections applied',
+      ragApplyFailed: 'Failed to apply RAG model connections',
+      ragApplyNotAppliedHint:
+        'The new connection was not activated, and the previous configuration remains unchanged. Check its details and credentials, then try again.',
+      ragApplyFailedHint:
+        'The new connection remains active and vectors from the old profile stay excluded. Agents that did not finish migration fall back to local BM25. Check the connection, then retry the index rebuild.',
+      ragRetryRebuild: 'Retry index rebuild',
+      ragCheckRebuild: 'Check and rebuild indexes',
+      ragRebuildUnavailableHint: 'Complete the active Embedding connection and credential first.',
+      ragRebuildUnsavedHint:
+        'Save and apply the current changes first. Index rebuilds only use the active Embedding configuration.',
+      ragRebuildBusyHint: 'Applying a configuration or rebuilding indexes. Please wait.',
+      ragRetrySuccess: 'Vector index rebuild completed',
+      ragRetryFailed: 'Some vector indexes are still not rebuilt',
+      ragRerankerDisabled: 'Disabled',
+      ragRequiredFieldsMissing: 'Complete all required connection fields first',
+      ragTestEmbeddingSuccess:
+        'Embedding connection succeeded: {dimension} dimensions, {latency} ms',
+      ragTestRerankerSuccess: 'Reranker connection succeeded: {latency} ms',
+      ragIndexChangeHint:
+        'When the Embedding connection or model changes, AgentVis rebuilds existing vectors with the new configuration. Vectors from different models are never mixed.',
+      ragPrivacyHint:
+        'The selected Embedding service receives Knowledge Base chunks, memory, skill descriptions, and other text being compared semantically. Reranker receives only the query and Knowledge Base candidate chunks. API keys are isolated by purpose.',
       tavilyTitle: 'Web Search (Tavily + DuckDuckGo)',
       tavilyDesc:
         'Used for web search in Task mode. Tavily is preferred when configured; DuckDuckGo is used as a free fallback without an API key.',

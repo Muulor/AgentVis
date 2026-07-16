@@ -5,8 +5,8 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::db::{IndexStats, VectorSearchResult};
-use crate::error::CommandResult;
+use crate::db::{ChunkEmbeddingUpdate, IndexStats, VectorSearchResult};
+use crate::error::{AppError, CommandResult};
 use crate::AppState;
 
 /// 索引块参数
@@ -31,6 +31,17 @@ pub struct SearchParams {
     pub threshold: Option<f32>,
     /// 可选的 document_id 前缀过滤，用于隔离不同类型的向量条目
     pub document_id_prefix: Option<String>,
+    /// Required vector-space fingerprint. Vectors from other profiles are not comparable.
+    pub expected_embedding_profile_id: String,
+}
+
+/// One chunk in an atomic embedding/profile migration.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchChunkEmbeddingUpdate {
+    pub chunk_id: String,
+    pub embedding: Vec<f32>,
+    pub metadata: String,
 }
 
 /// 索引块响应
@@ -110,6 +121,17 @@ pub async fn rag_search(
 ) -> CommandResult<Vec<VectorSearchResult>> {
     let top_k = params.top_k.unwrap_or(5);
     let threshold = params.threshold.unwrap_or(0.7);
+    if params.expected_embedding_profile_id.trim().is_empty()
+        || params.expected_embedding_profile_id.len() > 512
+        || params
+            .expected_embedding_profile_id
+            .chars()
+            .any(char::is_control)
+    {
+        return Err(AppError::Generic(
+            "expected_embedding_profile_id is invalid".to_string(),
+        ));
+    }
 
     let db = state.db.lock().await;
     let results = db
@@ -120,6 +142,7 @@ pub async fn rag_search(
             top_k,
             threshold,
             params.document_id_prefix.as_deref(),
+            &params.expected_embedding_profile_id,
         )
         .await?;
 
@@ -174,4 +197,32 @@ pub async fn rag_list_document_ids(
     let db = state.db.lock().await;
     let ids = db.vector_repo().list_document_ids(&agent_id).await?;
     Ok(ids)
+}
+
+/// List Agents that currently own persisted vector data.
+#[tauri::command]
+pub async fn rag_list_vector_agent_ids(state: State<'_, AppState>) -> CommandResult<Vec<String>> {
+    let db = state.db.lock().await;
+    db.vector_repo().list_vector_agent_ids().await
+}
+
+/// Atomically replace chunk vectors and metadata for one Agent.
+#[tauri::command]
+pub async fn rag_batch_update_chunk_embeddings(
+    state: State<'_, AppState>,
+    agent_id: String,
+    updates: Vec<BatchChunkEmbeddingUpdate>,
+) -> CommandResult<u64> {
+    let updates = updates
+        .into_iter()
+        .map(|update| ChunkEmbeddingUpdate {
+            chunk_id: update.chunk_id,
+            embedding: update.embedding,
+            metadata_json: update.metadata,
+        })
+        .collect::<Vec<_>>();
+    let db = state.db.lock().await;
+    db.vector_repo()
+        .batch_update_chunk_embeddings(&agent_id, &updates)
+        .await
 }

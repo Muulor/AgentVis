@@ -17,6 +17,7 @@ import { embeddingService } from './EmbeddingService';
 import { preprocessRagQuery, type RagQueryPreprocessResult } from './RagQueryPreprocessor';
 import { rerankService } from './RerankService';
 import { getLogger } from '@services/logger';
+import type { ResolvedEmbeddingRoute, ResolvedRerankerRoute } from './RagConnectionConfig';
 
 const logger = getLogger('HybridRetriever');
 
@@ -146,6 +147,7 @@ interface FusedResult {
   chunk: Chunk;
   rrfScore: number;
   rerankScore?: number;
+  rawRerankScore?: number;
   embeddingScore?: number;
   bm25Score?: number;
   embeddingRank?: number;
@@ -224,6 +226,9 @@ export class HybridRetriever {
     options: Partial<HybridRetrieverConfig> = {}
   ): Promise<SearchResult[]> {
     const config = { ...this.config, ...options };
+    const embeddingRoute = embeddingService.getActiveRoute();
+    const rerankerRoute = rerankService.getActiveRoute();
+    const useBuiltinScoreCalibration = embeddingRoute.mode === 'siliconflow';
 
     logger.trace('[HybridRetriever] 开始混合检索:', {
       agentId,
@@ -243,7 +248,7 @@ export class HybridRetriever {
     }
 
     // 1. Embedding 检索 Top 30（使用原始 query，保持语义纯净）
-    const embeddingResults = await this.embeddingSearch(agentId, query, config);
+    const embeddingResults = await this.embeddingSearch(agentId, query, config, embeddingRoute);
     logger.trace('[HybridRetriever] Embedding 结果:', embeddingResults.length, '条');
 
     // 2. BM25 检索 Top 30（使用增强 query + 可选多片段检索，提升关键词命中率）
@@ -274,7 +279,13 @@ export class HybridRetriever {
     this.logRrfTopK(fusedResults, config.rrfTopK);
 
     // 4. Rerank 二阶段重排：失败时自动保留 RRF 结果
-    fusedResults = await this.rerankFusedResults(query, fusedResults, config);
+    fusedResults = await this.rerankFusedResults(
+      query,
+      fusedResults,
+      config,
+      rerankerRoute,
+      useBuiltinScoreCalibration
+    );
 
     // 5. Parent 聚合（如果启用）
     let finalResults: SearchResult[];
@@ -360,31 +371,34 @@ export class HybridRetriever {
       }
     }
 
-    const beforeFilterCount = finalResults.length;
-    finalResults = finalResults.filter((r) => {
-      const rerankScore = rerankScoreMap.get(r.chunk.id);
-      if (rerankScore !== undefined && rerankScore >= config.strongRerankScoreThreshold) {
-        return true;
+    if (useBuiltinScoreCalibration) {
+      const beforeFilterCount = finalResults.length;
+      finalResults = finalResults.filter((r) => {
+        const rerankScore = rerankScoreMap.get(r.chunk.id);
+        if (rerankScore !== undefined && rerankScore >= config.strongRerankScoreThreshold) {
+          return true;
+        }
+
+        const embScore = embeddingScoreMap.get(r.chunk.id);
+        // 仅 BM25 命中（无 embedding score）的结果保留，交由 RRF 排序决定
+        if (embScore === undefined) return true;
+        return embScore >= config.embeddingThreshold;
+      });
+
+      if (finalResults.length < beforeFilterCount) {
+        logger.trace(
+          `[HybridRetriever] embedding 阈值过滤: ${beforeFilterCount} → ${finalResults.length}`,
+          `(threshold=${config.embeddingThreshold})`
+        );
       }
-
-      const embScore = embeddingScoreMap.get(r.chunk.id);
-      // 仅 BM25 命中（无 embedding score）的结果保留，交由 RRF 排序决定
-      if (embScore === undefined) return true;
-      return embScore >= config.embeddingThreshold;
-    });
-
-    if (finalResults.length < beforeFilterCount) {
-      logger.trace(
-        `[HybridRetriever] embedding 阈值过滤: ${beforeFilterCount} → ${finalResults.length}`,
-        `(threshold=${config.embeddingThreshold})`
-      );
     }
 
     finalResults = this.applyFinalRelevanceGate(
       finalResults,
       fusedResults,
       preprocessedQuery,
-      config
+      config,
+      !useBuiltinScoreCalibration
     );
 
     finalResults = this.orderBroadOverviewResultsByRerankScore(
@@ -422,18 +436,21 @@ export class HybridRetriever {
   private async embeddingSearch(
     agentId: string,
     query: string,
-    config: HybridRetrieverConfig
+    config: HybridRetrieverConfig,
+    route: ResolvedEmbeddingRoute
   ): Promise<Array<{ chunk: Chunk; score: number; rank: number }>> {
     try {
       // 将查询向量化
-      const queryEmbedding = await embeddingService.encode(query);
+      const queryEmbedding = await embeddingService.encodeWithRoute(query, route, 'query');
 
       // 执行向量检索
       const results = await this.vectorStore.search(
         agentId,
         queryEmbedding,
         config.embeddingTopK,
-        config.embeddingThreshold
+        route.mode === 'custom' ? -1 : config.embeddingThreshold,
+        undefined,
+        route.profileId
       );
 
       // 添加排名信息
@@ -442,8 +459,8 @@ export class HybridRetriever {
         score: r.score,
         rank: index + 1,
       }));
-    } catch (error) {
-      logger.error('[HybridRetriever] Embedding 检索失败:', error);
+    } catch {
+      logger.error('[HybridRetriever] Embedding 检索失败');
       return [];
     }
   }
@@ -479,8 +496,8 @@ export class HybridRetriever {
       }
 
       return results;
-    } catch (error) {
-      logger.error('[HybridRetriever] BM25 检索失败:', error);
+    } catch {
+      logger.error('[HybridRetriever] BM25 检索失败');
       return [];
     }
   }
@@ -642,9 +659,16 @@ export class HybridRetriever {
   private async rerankFusedResults(
     query: string,
     fusedResults: FusedResult[],
-    config: HybridRetrieverConfig
+    config: HybridRetrieverConfig,
+    route: ResolvedRerankerRoute,
+    useBuiltinScoreCalibration: boolean
   ): Promise<FusedResult[]> {
-    if (!config.enableRerank || fusedResults.length <= 1 || config.rerankTopK <= 1) {
+    if (
+      !config.enableRerank ||
+      !route.enabled ||
+      fusedResults.length <= 1 ||
+      config.rerankTopK <= 1
+    ) {
       return fusedResults;
     }
 
@@ -652,13 +676,14 @@ export class HybridRetriever {
     const candidates = fusedResults.slice(0, candidateCount);
 
     try {
-      const reranked = await rerankService.rerank(
+      const reranked = await rerankService.rerankWithRoute(
         query,
         candidates.map((result) => ({
           id: result.chunkId,
           text: this.buildRerankDocumentText(result.chunk),
         })),
-        candidateCount
+        candidateCount,
+        route
       );
 
       if (reranked.length === 0) {
@@ -667,8 +692,10 @@ export class HybridRetriever {
 
       const fusedById = new Map(candidates.map((result) => [result.chunkId, result]));
       const rerankedResults: FusedResult[] = [];
-      for (const result of reranked) {
-        if (result.score < config.rerankMinScore) {
+      for (let rerankIndex = 0; rerankIndex < reranked.length; rerankIndex++) {
+        const result = reranked[rerankIndex];
+        if (!result) continue;
+        if (useBuiltinScoreCalibration && result.score < config.rerankMinScore) {
           continue;
         }
 
@@ -677,10 +704,13 @@ export class HybridRetriever {
           continue;
         }
 
+        const rankOnlyScore = 1 / (config.rrfK + rerankIndex + 1);
+        const effectiveScore = useBuiltinScoreCalibration ? result.score : rankOnlyScore;
         rerankedResults.push({
           ...fused,
-          rrfScore: result.score,
-          rerankScore: result.score,
+          rrfScore: effectiveScore,
+          rerankScore: effectiveScore,
+          rawRerankScore: result.score,
         });
       }
 
@@ -692,8 +722,8 @@ export class HybridRetriever {
       });
 
       return rerankedResults;
-    } catch (error) {
-      logger.warn('[HybridRetriever] Rerank 失败，降级使用 RRF 结果:', error);
+    } catch {
+      logger.warn('[HybridRetriever] Rerank 失败，降级使用 RRF 结果');
       return fusedResults;
     }
   }
@@ -947,9 +977,13 @@ export class HybridRetriever {
     results: SearchResult[],
     fusedResults: FusedResult[],
     preprocessedQuery: RagQueryPreprocessResult,
-    config: HybridRetrieverConfig
+    config: HybridRetrieverConfig,
+    customRankOnly: boolean = false
   ): SearchResult[] {
-    if (!config.enableFinalRelevanceFilter || results.length === 0) {
+    if (results.length === 0) {
+      return results;
+    }
+    if (!config.enableFinalRelevanceFilter && !customRankOnly) {
       return results;
     }
 
@@ -963,7 +997,8 @@ export class HybridRetriever {
         fusedByChunkId.get(result.chunk.id),
         relevanceTerms,
         preprocessedQuery,
-        config
+        config,
+        customRankOnly
       );
 
       if (!decision.keep) {
@@ -998,7 +1033,8 @@ export class HybridRetriever {
     fused: FusedResult | undefined,
     relevanceTerms: RelevanceTerm[],
     preprocessedQuery: RagQueryPreprocessResult,
-    config: HybridRetrieverConfig
+    config: HybridRetrieverConfig,
+    customRankOnly: boolean = false
   ): FinalRelevanceDecision {
     const rerankScore = fused?.rerankScore;
     const embeddingScore = fused?.embeddingScore;
@@ -1010,6 +1046,19 @@ export class HybridRetriever {
       config
     );
     const { lexical, hasUsefulLexicalMatch } = evidence;
+
+    if (customRankOnly) {
+      return {
+        keep: hasUsefulLexicalMatch,
+        reason: hasUsefulLexicalMatch
+          ? 'custom_rank_with_lexical_grounding'
+          : 'custom_rank_missing_lexical_grounding',
+        embeddingScore,
+        rerankScore,
+        lexicalHitCount: lexical.hitCount,
+        usefulLexicalHitCount: lexical.usefulHitCount,
+      };
+    }
 
     if (rerankScore !== undefined && rerankScore >= config.strongRerankScoreThreshold) {
       return {

@@ -41,6 +41,10 @@ describe('RerankService', () => {
       request: {
         provider: 'siliconflow',
         model: 'BAAI/bge-reranker-v2-m3',
+        endpointUrl: undefined,
+        protocol: 'jina_cohere',
+        authMode: 'bearer',
+        purpose: 'rerank',
         query: 'alpha query',
         documents: ['first candidate', 'second candidate'],
         topN: 2,
@@ -72,10 +76,45 @@ describe('RerankService', () => {
       2
     );
 
-    const expectation = expect(promise).rejects.toThrow('Rerank API request timed out');
+    const expectation = expect(promise).rejects.toThrow('RAG_RERANK_TIMEOUT:siliconflow:10');
     await vi.advanceTimersByTimeAsync(10);
     await expectation;
 
     vi.useRealTimers();
+  });
+
+  it('supports a custom Voyage route and does nothing when the route is disabled', async () => {
+    const route = {
+      mode: 'custom' as const,
+      enabled: true,
+      provider: 'custom' as const,
+      protocol: 'voyage' as const,
+      endpointUrl: 'https://api.voyageai.com/v1/rerank',
+      modelId: 'rerank-2.5',
+      authMode: 'bearer' as const,
+    };
+    invokeMock.mockResolvedValue({
+      model: route.modelId,
+      results: [{ index: 0, relevance_score: 0.5 }],
+    });
+    const service = new RerankService({ routeResolver: () => route });
+
+    await service.rerank('query', [{ id: 'a', text: 'candidate' }]);
+    expect(invokeMock).toHaveBeenCalledWith('cloud_rerank_documents', {
+      request: expect.objectContaining({
+        provider: 'custom',
+        protocol: 'voyage',
+        endpointUrl: route.endpointUrl,
+        model: route.modelId,
+        purpose: 'rerank',
+      }),
+    });
+
+    const disabled = new RerankService({
+      routeResolver: () => ({ ...route, enabled: false }),
+    });
+    invokeMock.mockClear();
+    await expect(disabled.rerank('query', [{ id: 'a', text: 'candidate' }])).resolves.toEqual([]);
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });

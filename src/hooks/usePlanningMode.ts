@@ -1631,8 +1631,8 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
           // Embedding 警告回调：语义检索降级时向用户弹出非阻塞性提示
           // 使用 warning 级别而非 error，因为消息流程将降级继续执行（只是缺少记忆检索助力）
-          onEmbeddingWarning: (errorMessage) => {
-            logger.warn('[usePlanningMode] Embedding 服务降级，已通知用户:', errorMessage);
+          onEmbeddingWarning: () => {
+            logger.warn('[usePlanningMode] Embedding 服务降级，已通知用户');
             toast({
               type: 'warning',
               title: t('chat.toastEmbeddingDegradedTitle'),

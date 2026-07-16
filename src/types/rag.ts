@@ -2,6 +2,59 @@
  * RAG (Retrieval-Augmented Generation) 相关类型定义
  */
 
+/** RAG 服务路由模式。 */
+export type RagServiceMode = 'siliconflow' | 'custom';
+
+/** RAG 端点的认证方式。 */
+export type RagEndpointAuthMode = 'bearer' | 'none' | 'google_api_key';
+
+/** Embedding 请求用途，同时用于隔离本地缓存。 */
+export type EmbeddingPurpose = 'query' | 'document' | 'generic' | 'test';
+
+export type GeminiEmbeddingModelId = 'gemini-embedding-001' | 'gemini-embedding-2';
+export type GeminiEmbeddingOutputDimension = 768 | 1536 | 3072;
+
+/** 自定义 RAG 凭据相对当前端点的绑定状态。 */
+export type CustomRagCredentialState = 'missing' | 'bound' | 'different_endpoint' | 'legacy';
+
+export interface CustomRagCredentialStatus {
+  state: CustomRagCredentialState;
+}
+
+/** OpenAI-compatible 自定义 Embedding 端点。 */
+export interface CustomOpenAiEmbeddingConfig {
+  providerName: string;
+  protocol: 'openai';
+  /** 完整的 embeddings endpoint，例如 https://host/v1/embeddings。 */
+  endpointUrl: string;
+  modelId: string;
+  authMode: Exclude<RagEndpointAuthMode, 'google_api_key'>;
+  outputDimension?: never;
+}
+
+/** Google Gemini 原生 Embedding 端点；端点与认证方式由应用固定。 */
+export interface CustomGeminiEmbeddingConfig {
+  providerName: string;
+  protocol: 'gemini';
+  endpointUrl: string;
+  modelId: GeminiEmbeddingModelId;
+  authMode: 'google_api_key';
+  outputDimension: GeminiEmbeddingOutputDimension;
+}
+
+export type CustomEmbeddingConfig = CustomOpenAiEmbeddingConfig | CustomGeminiEmbeddingConfig;
+
+/** 自定义 Reranker 端点。 */
+export interface CustomRerankerConfig {
+  enabled: boolean;
+  providerName: string;
+  protocol: 'jina_cohere' | 'voyage';
+  /** 完整的 rerank endpoint。 */
+  endpointUrl: string;
+  modelId: string;
+  authMode: Exclude<RagEndpointAuthMode, 'google_api_key'>;
+}
+
 /** 文档块 */
 export interface Chunk {
   /** 块 ID */
@@ -22,6 +75,10 @@ export interface Chunk {
 
 /** 块元数据 */
 export interface ChunkMetadata {
+  /** 生成当前向量的 Embedding profile，用于防止跨模型向量混用。 */
+  embeddingProfileId?: string;
+  /** 持久化向量的维度，用于重建和诊断。 */
+  embeddingDimension?: number;
   /** 来源文件名 */
   fileName?: string;
   /** 来源文件路径 */

@@ -2,15 +2,27 @@
  * VectorStore - 向量存储接口
  *
  * 封装 Tauri IPC 调用，提供向量存储和检索的前端接口。
- * 实际的向量存储由 Rust 后端的 sqlite-vec 实现。
+ * 实际向量由 Rust 后端持久化到 SQLite，并在检索时执行 cosine 排序。
  */
 
 import { invoke } from '@tauri-apps/api/core';
 import type { Chunk, SearchResult, IndexStatus, ChunkMetadata } from '../../types';
 import { LruCache } from './LruCache';
 import { getLogger } from '@services/logger';
+import { getActiveEmbeddingProfileId } from './RagConnectionConfig';
 
 const logger = getLogger('VectorStore');
+
+function parseChunkMetadata(serialized: string): ChunkMetadata {
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as ChunkMetadata)
+      : {};
+  } catch {
+    return {};
+  }
+}
 
 /** 向量插入参数（snake_case 匹配 Rust 后端） */
 interface InsertParams {
@@ -36,6 +48,14 @@ interface SearchParams {
   threshold: number;
   /** 可选的 document_id 前缀过滤，用于隔离不同类型的向量条目 */
   document_id_prefix?: string;
+  /** Only vectors produced by this semantic-space profile may participate. */
+  expected_embedding_profile_id: string;
+}
+
+export interface ChunkEmbeddingUpdate {
+  chunkId: string;
+  embedding: number[];
+  metadata: string;
 }
 
 interface PersistedChunkResponse {
@@ -65,27 +85,39 @@ export class VectorStore {
    * @param chunk - 文档块
    * @param embedding - 向量表示
    */
-  async insert(chunk: Chunk, embedding: number[]): Promise<void> {
+  async insert(
+    chunk: Chunk,
+    embedding: number[],
+    embeddingProfileId: string = getActiveEmbeddingProfileId()
+  ): Promise<void> {
+    const persistedChunk: Chunk = {
+      ...chunk,
+      metadata: {
+        ...chunk.metadata,
+        embeddingProfileId,
+        embeddingDimension: embedding.length,
+      },
+    };
     const params: InsertParams = {
-      chunk_id: chunk.id,
-      agent_id: chunk.agentId,
-      document_id: chunk.documentId,
-      chunk_index: chunk.chunkIndex,
-      content: chunk.content,
+      chunk_id: persistedChunk.id,
+      agent_id: persistedChunk.agentId,
+      document_id: persistedChunk.documentId,
+      chunk_index: persistedChunk.chunkIndex,
+      content: persistedChunk.content,
       embedding,
-      metadata: JSON.stringify(chunk.metadata),
+      metadata: JSON.stringify(persistedChunk.metadata),
     };
 
     const response = await invoke<InsertResponse>('rag_index_chunk', { params });
-    if (response.id !== chunk.id) {
+    if (response.id !== persistedChunk.id) {
       logger.warn('[VectorStore] Backend returned a different chunk id:', {
-        frontendChunkId: chunk.id,
+        frontendChunkId: persistedChunk.id,
         backendChunkId: response.id,
       });
     }
 
     // 缓存 chunk 用于 BM25 检索
-    this.chunkCache.set(chunk.id, chunk);
+    this.chunkCache.set(persistedChunk.id, persistedChunk);
   }
 
   /**
@@ -150,7 +182,7 @@ export class VectorStore {
         documentId: row.document_id,
         chunkIndex: row.chunk_index,
         content: row.content,
-        metadata: JSON.parse(row.metadata) as unknown as ChunkMetadata,
+        metadata: parseChunkMetadata(row.metadata),
         createdAt: row.created_at > 0 ? row.created_at * 1000 : Date.now(),
       };
       this.chunkCache.set(chunk.id, chunk);
@@ -173,7 +205,11 @@ export class VectorStore {
    * @param chunks - 文档块列表
    * @param embeddings - 对应的向量列表
    */
-  async insertBatch(chunks: Chunk[], embeddings: number[][]): Promise<void> {
+  async insertBatch(
+    chunks: Chunk[],
+    embeddings: number[][],
+    embeddingProfileId: string = getActiveEmbeddingProfileId()
+  ): Promise<void> {
     if (chunks.length !== embeddings.length) {
       throw new Error('chunks and embeddings count mismatch');
     }
@@ -191,7 +227,7 @@ export class VectorStore {
           if (!embedding) {
             throw new Error(`Missing embedding at index ${idx}`);
           }
-          return this.insert(chunk, embedding);
+          return this.insert(chunk, embedding, embeddingProfileId);
         })
       );
     }
@@ -211,7 +247,8 @@ export class VectorStore {
     queryEmbedding: number[],
     topK: number = 5,
     threshold: number = 0.7,
-    documentIdPrefix?: string
+    documentIdPrefix?: string,
+    expectedEmbeddingProfileId: string = getActiveEmbeddingProfileId()
   ): Promise<SearchResult[]> {
     // 使用 snake_case 匹配 Rust 后端的 SearchParams 结构
     const params: SearchParams = {
@@ -220,6 +257,7 @@ export class VectorStore {
       top_k: topK,
       threshold,
       document_id_prefix: documentIdPrefix,
+      expected_embedding_profile_id: expectedEmbeddingProfileId,
     };
 
     const results = await invoke<
@@ -240,12 +278,39 @@ export class VectorStore {
         documentId: r.document_id,
         chunkIndex: this.chunkCache.get(r.chunk_id)?.chunkIndex ?? 0,
         content: r.content,
-        metadata: JSON.parse(r.metadata) as unknown as ChunkMetadata,
+        metadata: parseChunkMetadata(r.metadata),
         createdAt: Date.now(),
       },
       score: r.score,
       distance: r.distance,
     }));
+  }
+
+  /** List every Agent namespace that currently owns persisted vectors. */
+  listVectorAgentIds(): Promise<string[]> {
+    return invoke<string[]>('rag_list_vector_agent_ids');
+  }
+
+  /** Transactionally replace a set of vectors and their profile metadata for one Agent. */
+  async batchUpdateChunkEmbeddings(
+    agentId: string,
+    updates: ChunkEmbeddingUpdate[]
+  ): Promise<number> {
+    if (updates.length === 0) return 0;
+    const updatedCount = await invoke<number>('rag_batch_update_chunk_embeddings', {
+      agentId,
+      updates,
+    });
+
+    for (const update of updates) {
+      const cached = this.chunkCache.get(update.chunkId);
+      if (cached?.agentId !== agentId) continue;
+      this.chunkCache.set(update.chunkId, {
+        ...cached,
+        metadata: parseChunkMetadata(update.metadata),
+      });
+    }
+    return updatedCount;
   }
 
   /**

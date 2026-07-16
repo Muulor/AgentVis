@@ -5,6 +5,15 @@ import {
   getProviderIds,
   isValidProvider,
 } from '@/config/modelRegistry';
+import type {
+  CustomEmbeddingConfig,
+  CustomGeminiEmbeddingConfig,
+  CustomOpenAiEmbeddingConfig,
+  CustomRerankerConfig,
+  GeminiEmbeddingModelId,
+  GeminiEmbeddingOutputDimension,
+  RagServiceMode,
+} from '@/types/rag';
 
 /**
  * LLM 提供商类型
@@ -30,7 +39,7 @@ export type TaskCompletionNotificationContentMode = 'summary' | 'private';
 /**
  * 设置状态类型
  */
-interface SettingsState {
+export interface SettingsState {
   // API Keys (加密存储在 Rust 端，这里仅标记是否已配置)
   apiKeyConfigured: Record<string, boolean>;
 
@@ -65,6 +74,9 @@ interface SettingsState {
   ragTopK: number;
   ragThreshold: number;
   ragChunkSize: number;
+  ragServiceMode: RagServiceMode;
+  customEmbeddingConfig: CustomEmbeddingConfig;
+  customRerankerConfig: CustomRerankerConfig;
 
   // 桌面通知配置
   taskCompletionNotificationsEnabled: boolean;
@@ -86,6 +98,16 @@ interface SettingsState {
   setImageGenerationModel: (model: string) => void;
   setImageGenerationApiUrl: (url: string) => void;
   setImageGenerationUseStreaming: (enabled: boolean) => void;
+  setRagServiceMode: (mode: RagServiceMode) => void;
+  setCustomEmbeddingConfig: (
+    config: CustomEmbeddingConfig | Partial<CustomEmbeddingConfig>
+  ) => void;
+  setCustomRerankerConfig: (config: CustomRerankerConfig | Partial<CustomRerankerConfig>) => void;
+  setRagConnectionSettings: (settings: {
+    mode: RagServiceMode;
+    embedding: CustomEmbeddingConfig;
+    reranker: CustomRerankerConfig;
+  }) => void;
   setTaskCompletionNotificationsEnabled: (enabled: boolean) => void;
   setTaskCompletionNotificationsBackgroundOnly: (backgroundOnly: boolean) => void;
   setTaskCompletionNotificationContentMode: (mode: TaskCompletionNotificationContentMode) => void;
@@ -119,6 +141,149 @@ function normalizeNotificationContentMode(
   return mode === 'summary' || mode === 'private' ? mode : fallback;
 }
 
+export const DEFAULT_CUSTOM_EMBEDDING_CONFIG: CustomOpenAiEmbeddingConfig = {
+  providerName: '',
+  protocol: 'openai',
+  endpointUrl: '',
+  modelId: '',
+  authMode: 'bearer',
+};
+
+export const GEMINI_EMBEDDING_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta';
+export const GEMINI_EMBEDDING_MODELS = [
+  'gemini-embedding-2',
+  'gemini-embedding-001',
+] as const satisfies readonly GeminiEmbeddingModelId[];
+export const GEMINI_EMBEDDING_OUTPUT_DIMENSIONS = [
+  768, 1536, 3072,
+] as const satisfies readonly GeminiEmbeddingOutputDimension[];
+export const DEFAULT_GEMINI_EMBEDDING_MODEL: GeminiEmbeddingModelId = 'gemini-embedding-2';
+export const DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSION: GeminiEmbeddingOutputDimension = 768;
+export const DEFAULT_GEMINI_EMBEDDING_CONFIG: CustomGeminiEmbeddingConfig = {
+  providerName: 'Google Gemini',
+  protocol: 'gemini',
+  endpointUrl: GEMINI_EMBEDDING_ENDPOINT,
+  modelId: DEFAULT_GEMINI_EMBEDDING_MODEL,
+  authMode: 'google_api_key',
+  outputDimension: DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSION,
+};
+
+export const DEFAULT_CUSTOM_RERANKER_CONFIG: CustomRerankerConfig = {
+  enabled: false,
+  providerName: '',
+  protocol: 'jina_cohere',
+  endpointUrl: '',
+  modelId: '',
+  authMode: 'bearer',
+};
+
+export function normalizeRagServiceMode(value: unknown): RagServiceMode {
+  return value === 'custom' ? 'custom' : 'siliconflow';
+}
+
+function normalizeText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  return hasControlCharacters(value) ? value : value.trim();
+}
+
+function hasControlCharacters(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || (code >= 127 && code <= 159)) return true;
+  }
+  return false;
+}
+
+export function normalizeRagEndpointUrl(value: unknown, fallback: string = ''): string {
+  const trimmed = normalizeText(value, fallback);
+  if (!trimmed) return '';
+  if (hasControlCharacters(trimmed)) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.pathname.length > 1) {
+      url.pathname = url.pathname.replace(/\/+$/, '');
+    }
+    return url.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+export function normalizeCustomEmbeddingConfig(
+  value: unknown,
+  fallback: CustomEmbeddingConfig = DEFAULT_CUSTOM_EMBEDDING_CONFIG
+): CustomEmbeddingConfig {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const protocol =
+    input.protocol === 'gemini'
+      ? 'gemini'
+      : input.protocol === 'openai'
+        ? 'openai'
+        : input.protocol === undefined
+          ? fallback.protocol
+          : 'openai';
+
+  if (protocol === 'gemini') {
+    const fallbackModel =
+      fallback.protocol === 'gemini' ? fallback.modelId : DEFAULT_GEMINI_EMBEDDING_MODEL;
+    const fallbackDimension =
+      fallback.protocol === 'gemini'
+        ? fallback.outputDimension
+        : DEFAULT_GEMINI_EMBEDDING_OUTPUT_DIMENSION;
+    return {
+      providerName: 'Google Gemini',
+      protocol,
+      endpointUrl: GEMINI_EMBEDDING_ENDPOINT,
+      modelId: isGeminiEmbeddingModel(input.modelId) ? input.modelId : fallbackModel,
+      authMode: 'google_api_key',
+      outputDimension: isGeminiEmbeddingOutputDimension(input.outputDimension)
+        ? input.outputDimension
+        : fallbackDimension,
+    };
+  }
+
+  const openAiFallback =
+    fallback.protocol === 'openai' ? fallback : DEFAULT_CUSTOM_EMBEDDING_CONFIG;
+  return {
+    providerName: normalizeText(input.providerName, openAiFallback.providerName),
+    protocol,
+    endpointUrl: normalizeRagEndpointUrl(input.endpointUrl, openAiFallback.endpointUrl),
+    modelId: normalizeText(input.modelId, openAiFallback.modelId),
+    authMode:
+      input.authMode === 'none' || input.authMode === 'bearer'
+        ? input.authMode
+        : openAiFallback.authMode,
+  };
+}
+
+function isGeminiEmbeddingModel(value: unknown): value is GeminiEmbeddingModelId {
+  return GEMINI_EMBEDDING_MODELS.some((model) => model === value);
+}
+
+function isGeminiEmbeddingOutputDimension(value: unknown): value is GeminiEmbeddingOutputDimension {
+  return GEMINI_EMBEDDING_OUTPUT_DIMENSIONS.some((dimension) => dimension === value);
+}
+
+export function normalizeCustomRerankerConfig(
+  value: unknown,
+  fallback: CustomRerankerConfig = DEFAULT_CUSTOM_RERANKER_CONFIG
+): CustomRerankerConfig {
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    enabled: typeof input.enabled === 'boolean' ? input.enabled : fallback.enabled,
+    providerName: normalizeText(input.providerName, fallback.providerName),
+    protocol:
+      input.protocol === 'voyage' || input.protocol === 'jina_cohere'
+        ? input.protocol
+        : fallback.protocol,
+    endpointUrl: normalizeRagEndpointUrl(input.endpointUrl, fallback.endpointUrl),
+    modelId: normalizeText(input.modelId, fallback.modelId),
+    authMode:
+      input.authMode === 'none' || input.authMode === 'bearer' ? input.authMode : fallback.authMode,
+  };
+}
+
 /**
  * Settings Store - 管理全局设置和 API 配置
  *
@@ -145,6 +310,9 @@ export const useSettingsStore = create<SettingsState>()(
       ragTopK: 5,
       ragThreshold: 0.7,
       ragChunkSize: 500,
+      ragServiceMode: 'siliconflow',
+      customEmbeddingConfig: { ...DEFAULT_CUSTOM_EMBEDDING_CONFIG },
+      customRerankerConfig: { ...DEFAULT_CUSTOM_RERANKER_CONFIG },
       taskCompletionNotificationsEnabled: true,
       taskCompletionNotificationsBackgroundOnly: true,
       taskCompletionNotificationContentMode: 'summary',
@@ -170,6 +338,27 @@ export const useSettingsStore = create<SettingsState>()(
       setImageGenerationModel: (model) => set({ imageGenerationModel: model }),
       setImageGenerationApiUrl: (url) => set({ imageGenerationApiUrl: url }),
       setImageGenerationUseStreaming: (enabled) => set({ imageGenerationUseStreaming: enabled }),
+      setRagServiceMode: (mode) => set({ ragServiceMode: normalizeRagServiceMode(mode) }),
+      setCustomEmbeddingConfig: (config) =>
+        set((state) => ({
+          customEmbeddingConfig: normalizeCustomEmbeddingConfig(
+            config,
+            state.customEmbeddingConfig
+          ),
+        })),
+      setCustomRerankerConfig: (config) =>
+        set((state) => ({
+          customRerankerConfig: normalizeCustomRerankerConfig(config, state.customRerankerConfig),
+        })),
+      setRagConnectionSettings: ({ mode, embedding, reranker }) =>
+        set((state) => ({
+          ragServiceMode: normalizeRagServiceMode(mode),
+          customEmbeddingConfig: normalizeCustomEmbeddingConfig(
+            embedding,
+            state.customEmbeddingConfig
+          ),
+          customRerankerConfig: normalizeCustomRerankerConfig(reranker, state.customRerankerConfig),
+        })),
       setTaskCompletionNotificationsEnabled: (enabled) =>
         set({ taskCompletionNotificationsEnabled: enabled }),
       setTaskCompletionNotificationsBackgroundOnly: (backgroundOnly) =>
@@ -213,6 +402,15 @@ export const useSettingsStore = create<SettingsState>()(
           taskCompletionNotificationContentMode: normalizeNotificationContentMode(
             merged.taskCompletionNotificationContentMode,
             current.taskCompletionNotificationContentMode
+          ),
+          ragServiceMode: normalizeRagServiceMode(merged.ragServiceMode),
+          customEmbeddingConfig: normalizeCustomEmbeddingConfig(
+            merged.customEmbeddingConfig,
+            current.customEmbeddingConfig
+          ),
+          customRerankerConfig: normalizeCustomRerankerConfig(
+            merged.customRerankerConfig,
+            current.customRerankerConfig
           ),
         };
       },

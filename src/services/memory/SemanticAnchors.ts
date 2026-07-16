@@ -94,15 +94,22 @@ const UNCERTAINTY_ANCHORS = [
 /** 锚点 Embedding 缓存（首次调用后缓存） */
 let cachedCertaintyEmbeddings: number[][] | null = null;
 let cachedUncertaintyEmbeddings: number[][] | null = null;
+let cachedEmbeddingProfileId: string | null = null;
 
 /**
  * 获取锚点 Embeddings（带缓存）
  */
-async function getAnchorEmbeddings(): Promise<{
+async function getAnchorEmbeddings(
+  route: ReturnType<typeof embeddingService.getActiveRoute>
+): Promise<{
   certainty: number[][];
   uncertainty: number[][];
 }> {
-  if (cachedCertaintyEmbeddings && cachedUncertaintyEmbeddings) {
+  if (
+    cachedEmbeddingProfileId === route.profileId &&
+    cachedCertaintyEmbeddings &&
+    cachedUncertaintyEmbeddings
+  ) {
     return {
       certainty: cachedCertaintyEmbeddings,
       uncertainty: cachedUncertaintyEmbeddings,
@@ -111,11 +118,12 @@ async function getAnchorEmbeddings(): Promise<{
 
   // 一次性获取所有锚点的 Embedding
   const allAnchors = [...CERTAINTY_ANCHORS, ...UNCERTAINTY_ANCHORS];
-  const allEmbeddings = await embeddingService.encodeBatch(allAnchors);
+  const allEmbeddings = await embeddingService.encodeBatchWithRoute(allAnchors, route, 'document');
 
   // 分割结果
   cachedCertaintyEmbeddings = allEmbeddings.slice(0, CERTAINTY_ANCHORS.length);
   cachedUncertaintyEmbeddings = allEmbeddings.slice(CERTAINTY_ANCHORS.length);
+  cachedEmbeddingProfileId = route.profileId;
 
   return {
     certainty: cachedCertaintyEmbeddings,
@@ -153,10 +161,11 @@ function averageSimilarity(textEmbedding: number[], anchorEmbeddings: number[][]
 export async function getSemanticHints(text: string): Promise<SemanticHints> {
   try {
     // 获取锚点 Embeddings
-    const anchors = await getAnchorEmbeddings();
+    const route = embeddingService.getActiveRoute();
+    const anchors = await getAnchorEmbeddings(route);
 
     // 获取候选文本的 Embedding
-    const [textEmbedding] = await embeddingService.encodeBatch([text]);
+    const [textEmbedding] = await embeddingService.encodeBatchWithRoute([text], route, 'query');
 
     if (!textEmbedding || textEmbedding.length === 0) {
       logger.warn('[SemanticAnchors] 获取文本 Embedding 失败，返回中性提示');
@@ -201,8 +210,8 @@ export async function getSemanticHints(text: string): Promise<SemanticHints> {
         avgUncertaintySimilarity,
       },
     };
-  } catch (error) {
-    logger.error('[SemanticAnchors] 获取语义提示失败:', error);
+  } catch {
+    logger.error('[SemanticAnchors] 获取语义提示失败');
     // 失败时返回中性提示，不影响原有打分
     return {
       certaintyBoost: 0,
@@ -227,10 +236,11 @@ export async function getSemanticHintsBatch(texts: string[]): Promise<SemanticHi
 
   try {
     // 获取锚点 Embeddings
-    const anchors = await getAnchorEmbeddings();
+    const route = embeddingService.getActiveRoute();
+    const anchors = await getAnchorEmbeddings(route);
 
     // 批量获取所有文本的 Embedding
-    const textEmbeddings = await embeddingService.encodeBatch(texts);
+    const textEmbeddings = await embeddingService.encodeBatchWithRoute(texts, route, 'query');
 
     // 计算每个文本的语义提示
     return textEmbeddings.map((textEmbedding, index) => {
@@ -270,8 +280,8 @@ export async function getSemanticHintsBatch(texts: string[]): Promise<SemanticHi
         },
       };
     });
-  } catch (error) {
-    logger.error('[SemanticAnchors] 批量获取语义提示失败:', error);
+  } catch {
+    logger.error('[SemanticAnchors] 批量获取语义提示失败');
     // 失败时返回中性提示
     return texts.map(() => ({
       certaintyBoost: 0,
@@ -287,4 +297,5 @@ export async function getSemanticHintsBatch(texts: string[]): Promise<SemanticHi
 export function clearAnchorCache(): void {
   cachedCertaintyEmbeddings = null;
   cachedUncertaintyEmbeddings = null;
+  cachedEmbeddingProfileId = null;
 }

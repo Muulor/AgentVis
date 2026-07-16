@@ -802,7 +802,7 @@ export class AgentService {
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.warn('[AgentService] 加载记忆上下文失败:', errorMsg);
+      logger.warn('[AgentService] 加载记忆上下文失败');
 
       // 检测是否为 Embedding 相关错误（超时或 API 调用失败）
       // 失败不阻塞发送流程，但需告知用户语义检索已降级
@@ -811,7 +811,7 @@ export class AgentService {
         errorMsg.includes('cloud_embedding') ||
         errorMsg.includes('embedding');
       if (isEmbeddingRelated && onEmbeddingWarning) {
-        onEmbeddingWarning(errorMsg);
+        onEmbeddingWarning('RAG_EMBEDDING_UNAVAILABLE');
       }
     }
 
@@ -835,7 +835,7 @@ export class AgentService {
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        logger.warn('[AgentService] RAG 检索失败:', errorMsg);
+        logger.warn('[AgentService] RAG 检索失败');
 
         // RAG 检索失败也可能源于 Embedding 超时，同样需要回调通知
         const isEmbeddingRelated =
@@ -843,7 +843,7 @@ export class AgentService {
           errorMsg.includes('cloud_embedding') ||
           errorMsg.includes('embedding');
         if (isEmbeddingRelated && onEmbeddingWarning) {
-          onEmbeddingWarning(errorMsg);
+          onEmbeddingWarning('RAG_EMBEDDING_UNAVAILABLE');
         }
       }
     } else {

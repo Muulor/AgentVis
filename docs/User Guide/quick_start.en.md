@@ -35,8 +35,12 @@ If you use a custom compatible API, relay service, or private gateway, use the p
 
 After entering "Settings -> Cloud Services", you need to configure at least two service types:
 
-- Embedding model provider credentials: used for Knowledge Base, memory, and semantic retrieval.
+- RAG Embedding connection: “Use the recommended SiliconFlow configuration” is enabled by default. Enter one SiliconFlow API key to use the fixed `BAAI/bge-m3` and `BAAI/bge-reranker-v2-m3` models. The Mainland China endpoint is typically fastest in Mainland China; turn the switch off outside Mainland China or when you need another service.
 - Memory-system LLM: used for memory summaries and fact extraction.
+
+In custom mode, Embedding is required. Choose either a complete OpenAI Embeddings-compatible endpoint or the native Google Gemini Embeddings protocol. The Gemini option uses the fixed Google Developer API endpoint, supports the stable `gemini-embedding-2` and `gemini-embedding-001` text models, and offers 768, 1536, or 3072 dimensions. OpenAI-compatible Embedding, native Gemini, and Reranker credentials use separate fixed system-credential slots. Reranker is optional and supports Jina/Cohere or Voyage protocol shapes. If Reranker is disabled or unavailable, Knowledge Base retrieval continues with local RRF ranking. Changing an Embedding protocol, endpoint, model, or dimension tests the connection and asks for confirmation before rebuilding existing vectors; this may consume API usage and send content being vectorized to the selected service. Gemini task mapping is an internal, versioned part of the Embedding profile rather than a user-selectable setting. If an application update changes that strategy version, AgentVis creates a new profile so the next index check or Embedding-profile activation rebuilds vectors instead of mixing incompatible spaces.
+
+Google currently provides a free Standard tier for Gemini Embeddings, but availability and quotas depend on the project and region. Google also states that content submitted through unpaid services may be used to improve products and may be reviewed by humans. Do not send sensitive, confidential, or personal Knowledge Base or memory content through the unpaid tier. Review the [pricing](https://ai.google.dev/gemini-api/docs/pricing), [available regions](https://ai.google.dev/gemini-api/docs/available-regions), and [additional terms](https://ai.google.dev/gemini-api/terms) before enabling it.
 
 We also recommend applying for and configuring a Tavily key. After configuration, Agents can use web search tools more reliably to query public information. DuckDuckGo is used as a free fallback without an API key.
 
@@ -214,7 +218,7 @@ Before regular use, confirm the following in order:
 
 - API keys are configured.
 - The default provider and model are selected.
-- The embedding service and memory-system LLM are configured.
+- The RAG Embedding connection and memory-system LLM are configured (Reranker is optional).
 - Preset skill Python dependencies are installed.
 - Tavily is configured when web search is needed.
 - Image services are configured when image generation is needed.

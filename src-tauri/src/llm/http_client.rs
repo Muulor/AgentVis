@@ -19,7 +19,7 @@
 //! ```
 
 use once_cell::sync::Lazy;
-use reqwest::Client;
+use reqwest::{redirect::Policy, Client};
 use std::time::Duration;
 
 // ==================== 配置 ====================
@@ -64,6 +64,11 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| build_default_client());
 /// 流式请求使用该 Client，并由 SSE 消费循环负责空闲超时判断。
 static STREAMING_HTTP_CLIENT: Lazy<Client> = Lazy::new(|| build_streaming_client());
 
+/// RAG model requests use a short, real transport timeout and never follow
+/// redirects. Custom endpoints are user supplied, so disabling redirects also
+/// prevents a configured credential from being forwarded to another host.
+static RAG_HTTP_CLIENT: Lazy<Client> = Lazy::new(|| build_rag_client());
+
 /// 构建默认配置的 HTTP Client
 fn build_default_client() -> Client {
     build_client(Some(config::REQUEST_TIMEOUT_SECS))
@@ -72,6 +77,20 @@ fn build_default_client() -> Client {
 /// 构建流式请求专用的 HTTP Client
 fn build_streaming_client() -> Client {
     build_client(None)
+}
+
+fn build_rag_client() -> Client {
+    Client::builder()
+        .pool_max_idle_per_host(config::POOL_MAX_IDLE_PER_HOST)
+        .pool_idle_timeout(Duration::from_secs(config::POOL_IDLE_TIMEOUT_SECS))
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(15))
+        .tcp_keepalive(Duration::from_secs(config::TCP_KEEPALIVE_SECS))
+        .tcp_nodelay(true)
+        .gzip(true)
+        .redirect(Policy::none())
+        .build()
+        .expect("Failed to create RAG HTTP client")
 }
 
 /// 构建共享配置的 HTTP Client
@@ -126,6 +145,12 @@ pub fn get_client() -> &'static Client {
 #[inline]
 pub fn get_streaming_client() -> &'static Client {
     &STREAMING_HTTP_CLIENT
+}
+
+/// Get the HTTP client dedicated to embedding and rerank requests.
+#[inline]
+pub fn get_rag_client() -> &'static Client {
+    &RAG_HTTP_CLIENT
 }
 
 /// 获取流式响应空闲超时时长
@@ -276,6 +301,13 @@ mod tests {
     fn test_streaming_client_returns_same_instance() {
         let client1 = get_streaming_client();
         let client2 = get_streaming_client();
+        assert!(std::ptr::eq(client1, client2));
+    }
+
+    #[test]
+    fn test_rag_client_returns_same_instance() {
+        let client1 = get_rag_client();
+        let client2 = get_rag_client();
         assert!(std::ptr::eq(client1, client2));
     }
 }

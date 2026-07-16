@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Bot, CheckCircle2, Circle, Cloud, FolderPlus, KeyRound, Loader2 } from 'lucide-react';
 import { useAgentStore } from '@stores/agentStore';
 import { useHubStore } from '@stores/hubStore';
+import { useSettingsStore } from '@stores/settingsStore';
 import { useI18n, type TranslationKey } from '@/i18n';
+import type { CustomEmbeddingConfig, CustomRagCredentialStatus } from '@/types/rag';
 import { cx } from '@utils/classNames';
 import {
   openAgentCreate,
@@ -11,6 +13,7 @@ import {
   openSettingsTab,
   SETUP_STATUS_CHANGED_EVENT,
 } from './onboardingEvents';
+import { isRagEmbeddingConnectionReady } from './setupCredentialStatus';
 import styles from './SetupChecklist.module.css';
 
 type SetupStepId = 'llmKey' | 'embeddingKey' | 'hub' | 'agent';
@@ -48,6 +51,21 @@ export interface SetupChecklistState {
 const LOCAL_DATA_EVALUATION_DELAY_MS = 500;
 const SETUP_COMPLETED_STORAGE_KEY = 'agentvis-setup-checklist-completed-v1';
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function getCustomEmbeddingCredentialKind(
+  config: CustomEmbeddingConfig
+): 'embedding' | 'gemini_embedding' {
+  return config.protocol === 'gemini' ? 'gemini_embedding' : 'embedding';
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function shouldApplyCredentialRefresh(
+  requestGeneration: number,
+  latestGeneration: number
+): boolean {
+  return requestGeneration === latestGeneration;
+}
+
 function isStatusComplete(value: boolean | null): SetupStepStatus {
   if (value === null) return 'checking';
   return value ? 'complete' : 'pending';
@@ -67,33 +85,64 @@ function storeSetupCompleted(): void {
 export function useSetupChecklistState(): SetupChecklistState {
   const hubs = useHubStore((state) => state.hubs);
   const agents = useAgentStore((state) => state.agents);
+  const ragServiceMode = useSettingsStore((state) => state.ragServiceMode);
+  const customEmbeddingConfig = useSettingsStore((state) => state.customEmbeddingConfig);
   const [credentialState, setCredentialState] = useState<CredentialState>({
     hasLlmApiKey: null,
     hasEmbeddingApiKey: null,
   });
   const [canEvaluateLocalData, setCanEvaluateLocalData] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(getStoredSetupCompleted);
+  const credentialRefreshGenerationRef = useRef(0);
 
   const refreshCredentials = useCallback(async () => {
+    const requestGeneration = ++credentialRefreshGenerationRef.current;
     try {
-      const [apiKeyStatuses, embeddingConfigured] = await Promise.all([
+      const embeddingStatusPromise =
+        ragServiceMode === 'siliconflow'
+          ? invoke<boolean>('get_siliconflow_api_key_status')
+          : customEmbeddingConfig.authMode === 'none'
+            ? Promise.resolve(false)
+            : invoke<CustomRagCredentialStatus>('get_custom_rag_credential_status', {
+                kind: getCustomEmbeddingCredentialKind(customEmbeddingConfig),
+                endpointUrl:
+                  customEmbeddingConfig.protocol === 'openai'
+                    ? customEmbeddingConfig.endpointUrl
+                    : null,
+              }).then((status) => status.state === 'bound');
+      const [apiKeyStatuses, embeddingCredentialConfigured] = await Promise.all([
         invoke<ApiKeyStatus[]>('settings_get_api_key_status'),
-        invoke<boolean>('get_siliconflow_api_key_status'),
+        embeddingStatusPromise,
       ]);
+
+      if (
+        !shouldApplyCredentialRefresh(requestGeneration, credentialRefreshGenerationRef.current)
+      ) {
+        return;
+      }
 
       setCredentialState({
         hasLlmApiKey: apiKeyStatuses.some(
           (status) => status.provider !== 'local' && status.configured
         ),
-        hasEmbeddingApiKey: embeddingConfigured,
+        hasEmbeddingApiKey: isRagEmbeddingConnectionReady({
+          mode: ragServiceMode,
+          customEmbeddingConfig,
+          credentialConfigured: embeddingCredentialConfigured,
+        }),
       });
     } catch {
+      if (
+        !shouldApplyCredentialRefresh(requestGeneration, credentialRefreshGenerationRef.current)
+      ) {
+        return;
+      }
       setCredentialState({
         hasLlmApiKey: false,
         hasEmbeddingApiKey: false,
       });
     }
-  }, []);
+  }, [customEmbeddingConfig, ragServiceMode]);
 
   useEffect(() => {
     const timer = window.setTimeout(
@@ -112,6 +161,7 @@ export function useSetupChecklistState(): SetupChecklistState {
     window.addEventListener(SETUP_STATUS_CHANGED_EVENT, handleRefreshCredentials);
     window.addEventListener('focus', handleRefreshCredentials);
     return () => {
+      credentialRefreshGenerationRef.current += 1;
       window.removeEventListener(SETUP_STATUS_CHANGED_EVENT, handleRefreshCredentials);
       window.removeEventListener('focus', handleRefreshCredentials);
     };
