@@ -60,7 +60,7 @@ describe('MasterBrain', () => {
   describe('decide 方法', () => {
     it('应该调用 LLM 并返回解析后的决策', async () => {
       const mockResponse = createValidLLMResponse('RESPOND_TO_USER', {
-        response: 'Task completed',
+        nextStep: { response: 'Task completed' },
       });
       const mockLLM = createMockLLMService(mockResponse);
 
@@ -81,7 +81,7 @@ describe('MasterBrain', () => {
 
     it('应该将构建的 Prompt 传递给 LLM', async () => {
       const mockResponse = createValidLLMResponse('RESPOND_TO_USER', {
-        response: 'Done',
+        nextStep: { response: 'Done' },
       });
       const mockLLM = createMockLLMService(mockResponse);
 
@@ -153,7 +153,7 @@ describe('MasterBrain', () => {
         decision: 'RESPOND_TO_USER',
         rationale: 'Recovered but truncated.',
         riskAssessment: { level: 'low', notes: 'No risk' },
-        response: 'Recovered response',
+        nextStep: { response: 'Recovered response' },
       }).slice(0, -1);
       const malformedWrapper = `\`\`\`json
 {
@@ -166,7 +166,7 @@ describe('MasterBrain', () => {
           .mockResolvedValueOnce(malformedWrapper)
           .mockResolvedValueOnce(
             createValidLLMResponse('RESPOND_TO_USER', {
-              response: 'Safe retry response',
+              nextStep: { response: 'Safe retry response' },
             })
           ),
       };
@@ -183,6 +183,41 @@ describe('MasterBrain', () => {
         expect.objectContaining({
           mbDecisionCorrection: expect.objectContaining({
             reason: 'truncated_output',
+          }),
+        })
+      );
+    });
+
+    it('新旧 response 内容冲突时应使用 schema_invalid 共享额度纠错一次', async () => {
+      const mockLLM = {
+        generate: vi
+          .fn()
+          .mockResolvedValueOnce(
+            createValidLLMResponse('RESPOND_TO_USER', {
+              nextStep: { response: 'Canonical response' },
+              response: 'Conflicting legacy response',
+            })
+          )
+          .mockResolvedValueOnce(
+            createValidLLMResponse('RESPOND_TO_USER', {
+              nextStep: { response: 'Corrected response' },
+            })
+          ),
+      };
+      const brain = new MasterBrain(promptBuilder, decisionParser, mockLLM);
+
+      const decision = await brain.decide(createTestInput());
+
+      expect(decision.decision).toBe('RESPOND_TO_USER');
+      if (decision.decision === 'RESPOND_TO_USER') {
+        expect(decision.response).toBe('Corrected response');
+      }
+      expect(mockLLM.generate).toHaveBeenCalledTimes(2);
+      expect(mockLLM.generate.mock.calls[1]?.[1]).toEqual(
+        expect.objectContaining({
+          mbDecisionCorrection: expect.objectContaining({
+            reason: 'schema_invalid',
+            detail: expect.stringContaining('conflicting nextStep.response'),
           }),
         })
       );

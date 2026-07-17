@@ -490,6 +490,8 @@ export interface DecisionNextStep {
   command?: string;
   /** 向用户提问（REQUEST_MORE_INPUT 时使用） */
   questionsForUser?: string | string[];
+  /** 给用户的回复内容（RESPOND_TO_USER 的 MB wire protocol 字段） */
+  response?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════

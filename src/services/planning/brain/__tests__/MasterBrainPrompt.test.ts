@@ -628,7 +628,18 @@ describe('MasterBrainPrompt', () => {
 
       expect(footer).toContain('"decision"');
       expect(footer).toContain('SPAWN_SUB_AGENT');
+      expect(footer).toContain('REQUEST_MORE_INPUT');
       expect(footer).toContain('RESPOND_TO_USER');
+      expect(footer).toContain('"nextStep":{"task":"...","tools":["..."]}');
+      expect(footer).toContain('`nextStep.tools` authorizes special tools only when needed');
+      expect(footer).toContain('`behaviorHint`, `includeHistory`, and `role`');
+      expect(footer).toContain('"nextStep":{"response":"..."}');
+      expect(footer).not.toContain(
+        '"riskAssessment":{"level":"low | medium | high","notes":"..."},"response"'
+      );
+      expect(footer).not.toContain(
+        '"riskAssessment":{"level":"low | medium | high","notes":"..."},"questionsForUser"'
+      );
       // 应明确禁止非 JSON 格式
       expect(footer).toContain('TOOL_CALL');
     });
@@ -655,15 +666,19 @@ describe('MasterBrainPrompt', () => {
       expect(footerPos).toBeGreaterThan(guidesPos);
     });
 
-    it('精简后 buildFixedTemplate 中应只有一个 JSON Schema 块', () => {
+    it('buildFixedTemplate 应分别声明三个互斥的决策 payload 形状', () => {
       const input = createTestInput();
       const prompt = builder.build(input);
 
-      // 在输出格式 Section（Section 5）中应有 JSON Schema
+      // 在输出格式 Section 中应有三个明确的 decision-specific shape
       expect(prompt).toContain('Output Format');
-      // nextStep 字段应在 JSON Schema 中内联说明（而非独立的 Section 4 JSON 块）
-      expect(prompt).toContain('"nextStep"');
-      expect(prompt).toContain('"behaviorHint"');
+      expect(prompt).toContain('**SPAWN_SUB_AGENT**');
+      expect(prompt).toContain('**REQUEST_MORE_INPUT**');
+      expect(prompt).toContain('**RESPOND_TO_USER**');
+      expect(prompt).toContain('`nextStep.response` is required');
+      expect(prompt).toContain('Never put `response` or `questionsForUser` at the root level');
+      expect(prompt).not.toContain('\n  "response":');
+      expect(prompt).not.toContain('\n  "questionsForUser":');
       // 旧的 FINAL REMINDER 应已移除（由 Footer 替代）
       expect(prompt).not.toContain('FINAL REMINDER');
     });

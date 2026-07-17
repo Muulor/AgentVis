@@ -36,7 +36,20 @@ describe('DecisionParser', () => {
   const parser = new DecisionParser();
 
   describe('JSON 块提取', () => {
-    it('应该成功提取 markdown JSON 代码块', () => {
+    it('应该解析 nextStep.response 并规范化为内部顶层 response', () => {
+      const response = createValidDecisionJson('RESPOND_TO_USER', {
+        nextStep: { response: 'Task completed' },
+      });
+      const decision = parser.parse(response);
+
+      expect(decision.decision).toBe('RESPOND_TO_USER');
+      if (decision.decision === 'RESPOND_TO_USER') {
+        expect(decision.response).toBe('Task completed');
+        expect(decision.nextStep).toBeUndefined();
+      }
+    });
+
+    it('应该继续兼容 markdown JSON 代码块中的旧顶层 response', () => {
       const response = createValidDecisionJson('RESPOND_TO_USER', {
         response: 'Task completed',
       });
@@ -189,6 +202,19 @@ describe('DecisionParser', () => {
         expect(outcome.safeFallback.response).toBe(translate('chat.mbMalformedDecisionFallback'));
       }
     });
+
+    it('nextStep.response 的外层对象被截断时仍应标记为可重试', () => {
+      const response =
+        '{"decision":"RESPOND_TO_USER","rationale":"done",' +
+        '"riskAssessment":{"level":"low","notes":"ok"},' +
+        '"nextStep":{"response":"done"';
+
+      const outcome = parser.parseDetailed(response);
+
+      expect(outcome.quality).toBe('repaired');
+      expect(outcome.retryCorrection?.reason).toBe('truncated_output');
+      expect(outcome.safeFallback?.decision).toBe('RESPOND_TO_USER');
+    });
   });
 
   describe('Schema 验证', () => {
@@ -279,6 +305,109 @@ describe('DecisionParser', () => {
       const decision = parser.parse(response);
       expect(decision.decision).toBe('RESPOND_TO_USER');
       expect(decision.riskAssessment).toEqual({ level: 'low', notes: '' });
+    });
+
+    it('REQUEST_MORE_INPUT 应将 nextStep.questionsForUser 规范化为内部字符串数组', () => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('REQUEST_MORE_INPUT', {
+          nextStep: { questionsForUser: 'Which workspace should be used?' },
+        })
+      );
+
+      expect(outcome.retryCorrection).toBeUndefined();
+      expect(outcome.decision.decision).toBe('REQUEST_MORE_INPUT');
+      if (outcome.decision.decision === 'REQUEST_MORE_INPUT') {
+        expect(outcome.decision.questionsForUser).toEqual(['Which workspace should be used?']);
+        expect(outcome.decision.nextStep).toBeUndefined();
+      }
+    });
+
+    it('新旧 response 同时存在且内容冲突时应拒绝猜测并请求纠错重试', () => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('RESPOND_TO_USER', {
+          nextStep: { response: 'Canonical response' },
+          response: 'Conflicting legacy response',
+        })
+      );
+
+      expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+      expect(outcome.retryCorrection?.reason).toBe('schema_invalid');
+      expect(outcome.retryCorrection?.detail).toContain('conflicting nextStep.response');
+    });
+
+    it.each([
+      ['空字符串', ''],
+      ['错误类型', { text: 'Invalid canonical response' }],
+    ])('nextStep.response 为%s时不得回退到有效旧字段', (_caseName, canonicalResponse) => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('RESPOND_TO_USER', {
+          nextStep: { response: canonicalResponse },
+          response: 'Stale legacy response',
+        })
+      );
+
+      expect(outcome.retryCorrection?.reason).toBe('schema_invalid');
+      expect(outcome.retryCorrection?.detail).toContain('nextStep.response');
+    });
+
+    it('新旧 response 内容相同时应接受并规范化，避免无意义重试', () => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('RESPOND_TO_USER', {
+          nextStep: { response: 'Same response' },
+          response: 'Same response',
+        })
+      );
+
+      expect(outcome.retryCorrection).toBeUndefined();
+      expect(outcome.decision.decision).toBe('RESPOND_TO_USER');
+      if (outcome.decision.decision === 'RESPOND_TO_USER') {
+        expect(outcome.decision.response).toBe('Same response');
+        expect(outcome.decision.nextStep).toBeUndefined();
+      }
+    });
+
+    it('新旧 questionsForUser 内容冲突时应请求纠错重试', () => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('REQUEST_MORE_INPUT', {
+          nextStep: { questionsForUser: 'Canonical question?' },
+          questionsForUser: ['Conflicting legacy question?'],
+        })
+      );
+
+      expect(outcome.retryCorrection?.reason).toBe('schema_invalid');
+      expect(outcome.retryCorrection?.detail).toContain('conflicting nextStep.questionsForUser');
+    });
+
+    it.each([
+      ['空数组', []],
+      ['错误类型', { question: 'Invalid canonical questions' }],
+      ['混合非法数组', ['Valid question?', 42]],
+    ])('nextStep.questionsForUser 为%s时不得回退到有效旧字段', (_caseName, canonicalQuestions) => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('REQUEST_MORE_INPUT', {
+          nextStep: { questionsForUser: canonicalQuestions },
+          questionsForUser: ['Stale legacy question?'],
+        })
+      );
+
+      expect(outcome.retryCorrection?.reason).toBe('schema_invalid');
+      expect(outcome.retryCorrection?.detail).toContain('nextStep.questionsForUser');
+    });
+
+    it('新旧 questionsForUser 内容相同时应接受并规范化', () => {
+      const outcome = parser.parseDetailed(
+        createValidDecisionJson('REQUEST_MORE_INPUT', {
+          nextStep: { questionsForUser: 'Same question?' },
+          questionsForUser: ['Same question?'],
+        })
+      );
+
+      expect(outcome.retryCorrection).toBeUndefined();
+      expect(outcome.decision.decision).toBe('REQUEST_MORE_INPUT');
+      if (outcome.decision.decision === 'REQUEST_MORE_INPUT') {
+        expect(outcome.decision.questionsForUser).toEqual(['Same question?']);
+        expect(outcome.decision.nextStep).toBeUndefined();
+      }
     });
 
     it('缺少早期循环状态字段的决策仍应接受', () => {
@@ -477,7 +606,7 @@ in a cozy kitchen, cooking a delicious-looking meal.
       expect(nextStep?.tools).toEqual(['generate_image']);
     });
 
-    it('recovers RESPOND_TO_USER JSON followed by an extra closing brace', () => {
+    it('recovers nested RESPOND_TO_USER JSON followed by an extra closing brace', () => {
       const response = `
 \`\`\`json
 {
@@ -487,8 +616,9 @@ in a cozy kitchen, cooking a delicious-looking meal.
     "level": "low",
     "notes": "The deliverable is ready for user review."
   },
-  "nextStep": {},
-  "response": "Your high-fidelity 3D ISS Orbital Tracker is ready in index.html."
+  "nextStep": {
+    "response": "Your high-fidelity 3D ISS Orbital Tracker is ready in index.html."
+  }
 }
 }
 \`\`\`
@@ -502,15 +632,16 @@ in a cozy kitchen, cooking a delicious-looking meal.
       }
     });
 
-    it('recovers RESPOND_TO_USER JSON with quoted UI labels followed by prose commas', () => {
+    it('recovers nested RESPOND_TO_USER JSON with quoted UI labels followed by prose commas', () => {
       const response = `
 \`\`\`json
 {
   "decision": "RESPOND_TO_USER",
   "rationale": "Both checks completed.",
   "riskAssessment": { "level": "low", "notes": "No failures." },
-  "nextStep": {},
-  "response": "All checks are complete. Window title "GameViewer", interface shows "UU Remote", "My Devices" and the browser stayed minimized."
+  "nextStep": {
+    "response": "All checks are complete. Window title "GameViewer", interface shows "UU Remote", "My Devices" and the browser stayed minimized."
+  }
 }
 \`\`\`
 `;

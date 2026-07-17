@@ -186,6 +186,48 @@ describe('parseWithFallback', () => {
     expect(result.data?.decision).toBe('SPAWN_SUB_AGENT');
   });
 
+  it('保留多行 task 中连续的中文引用短语并完成保守修复', () => {
+    const task = [
+      '请输出结构化报告：',
+      '1. 模型概述',
+      '2. 技术架构',
+      '',
+      '执行步骤建议：',
+      '- 使用 web_search 查询“Kimi K3 发布”“Kimi K3 model”“Moonshot AI Kimi K3”等关键词。',
+      '- 使用 arxiv-search 搜索论文。',
+    ].join('\n');
+    const rawLlmOutput =
+      '{\n' +
+      '  "decision": "SPAWN_SUB_AGENT",\n' +
+      '  "nextStep": {\n' +
+      `    "task": "${task}",\n` +
+      '    "tools": ["web_search"]\n' +
+      '  }\n' +
+      '}';
+
+    const result = parseWithFallback<Record<string, unknown>>(rawLlmOutput);
+    const nextStep = result.data?.nextStep as Record<string, unknown> | undefined;
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe('sanitized');
+    expect(result.quality).toBe('sanitized');
+    expect(nextStep?.task).toBe(task);
+    expect(nextStep?.task).toContain('“Kimi K3 发布”“Kimi K3 model”“Moonshot AI Kimi K3”');
+  });
+
+  it('保留对旧式中文引号和全角结构标点 JSON 的兼容修复', () => {
+    const rawLlmOutput =
+      '{“decision”：“SPAWN_SUB_AGENT”，“nextStep”：{“task”：“test”，“tools”：[“read”]}}';
+
+    const result = parseWithFallback<Record<string, unknown>>(rawLlmOutput);
+    const nextStep = result.data?.nextStep as Record<string, unknown> | undefined;
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe('sanitized');
+    expect(result.data?.decision).toBe('SPAWN_SUB_AGENT');
+    expect(nextStep?.task).toBe('test');
+  });
+
   it('repairs an unterminated string value before the next property key', () => {
     const rawLlmOutput =
       '```json\n' +

@@ -550,6 +550,8 @@ export class DecisionParser {
     }
 
     // ── decision 专属必需字段 ───────────────────────────────────────
+    // MB wire protocol 将所选决策的 payload 统一放在 nextStep 下；解析边界
+    // 同时兼容旧顶层字段，并规范化为应用内部既有的判别联合结构。
     if (d.decision === 'SPAWN_SUB_AGENT') {
       const nextStep = this.asRecord(d.nextStep);
       if (!nextStep) {
@@ -571,19 +573,85 @@ export class DecisionParser {
       nextStep.task = task;
     } else if (d.decision === 'REQUEST_MORE_INPUT') {
       const nextStep = this.asRecord(d.nextStep);
-      const questions = nextStep?.questionsForUser ?? d.questionsForUser;
-      if (!this.hasNonEmptyQuestion(questions)) {
+      const hasNestedQuestions = this.hasOwn(nextStep, 'questionsForUser');
+      const hasLegacyQuestions = this.hasOwn(d, 'questionsForUser');
+      const nestedQuestions = this.normalizeQuestionsForUser(nextStep?.questionsForUser);
+      const legacyQuestions = this.normalizeQuestionsForUser(d.questionsForUser);
+
+      // canonical key 一旦出现就必须独立合法，不能由旧顶层字段掩盖协议错误。
+      if (hasNestedQuestions) {
+        if (!nestedQuestions) {
+          throw new DecisionParseError(
+            'Schema validation failed: nextStep.questionsForUser is required for REQUEST_MORE_INPUT'
+          );
+        }
+
+        if (
+          hasLegacyQuestions &&
+          (!legacyQuestions || !this.areEquivalentQuestions(nestedQuestions, legacyQuestions))
+        ) {
+          throw new DecisionParseError(
+            'Schema validation failed: conflicting nextStep.questionsForUser and legacy root questionsForUser'
+          );
+        }
+      }
+
+      const questions = hasNestedQuestions ? nestedQuestions : legacyQuestions;
+      if (!questions) {
         throw new DecisionParseError(
-          'Schema validation failed: questionsForUser is required for REQUEST_MORE_INPUT'
+          'Schema validation failed: nextStep.questionsForUser is required for REQUEST_MORE_INPUT'
         );
       }
-    } else if (
-      d.decision === 'RESPOND_TO_USER' &&
-      (typeof d.response !== 'string' || d.response.trim().length === 0)
-    ) {
-      throw new DecisionParseError(
-        'Schema validation failed: response is required for RESPOND_TO_USER'
-      );
+
+      if (!hasNestedQuestions) {
+        logger.debug(
+          '[DecisionParser] REQUEST_MORE_INPUT 使用兼容顶层 questionsForUser，已规范化为内部决策'
+        );
+      }
+
+      d.questionsForUser = questions;
+      if (nextStep && Object.prototype.hasOwnProperty.call(nextStep, 'questionsForUser')) {
+        delete nextStep.questionsForUser;
+        this.removeEmptyNextStep(d, nextStep);
+      }
+    } else if (d.decision === 'RESPOND_TO_USER') {
+      const nextStep = this.asRecord(d.nextStep);
+      const hasNestedResponse = this.hasOwn(nextStep, 'response');
+      const hasLegacyResponse = this.hasOwn(d, 'response');
+      const nestedResponse = this.readNonEmptyString(nextStep?.response);
+      const legacyResponse = this.readNonEmptyString(d.response);
+
+      // canonical key 一旦出现就必须独立合法，不能由旧顶层字段掩盖协议错误。
+      if (hasNestedResponse) {
+        if (!nestedResponse) {
+          throw new DecisionParseError(
+            'Schema validation failed: nextStep.response is required for RESPOND_TO_USER'
+          );
+        }
+
+        if (hasLegacyResponse && nestedResponse.trim() !== legacyResponse?.trim()) {
+          throw new DecisionParseError(
+            'Schema validation failed: conflicting nextStep.response and legacy root response'
+          );
+        }
+      }
+
+      const response = hasNestedResponse ? nestedResponse : legacyResponse;
+      if (!response) {
+        throw new DecisionParseError(
+          'Schema validation failed: nextStep.response is required for RESPOND_TO_USER'
+        );
+      }
+
+      if (!hasNestedResponse) {
+        logger.debug('[DecisionParser] RESPOND_TO_USER 使用兼容顶层 response，已规范化为内部决策');
+      }
+
+      d.response = response;
+      if (nextStep && Object.prototype.hasOwnProperty.call(nextStep, 'response')) {
+        delete nextStep.response;
+        this.removeEmptyNextStep(d, nextStep);
+      }
     }
 
     // 进展和预算由 LoopGovernor 后台维护，MB 输出中不再要求循环状态字段。
@@ -596,13 +664,50 @@ export class DecisionParser {
     return value as Record<string, unknown>;
   }
 
-  private hasNonEmptyQuestion(value: unknown): boolean {
+  private hasOwn(record: Record<string, unknown> | undefined, key: string): boolean {
+    return record !== undefined && Object.prototype.hasOwnProperty.call(record, key);
+  }
+
+  private readNonEmptyString(value: unknown): string | undefined {
     if (typeof value === 'string') {
-      return value.trim().length > 0;
+      return value.trim().length > 0 ? value : undefined;
     }
+
+    return undefined;
+  }
+
+  private normalizeQuestionsForUser(value: unknown): string[] | undefined {
+    const singleQuestion = this.readNonEmptyString(value);
+    if (singleQuestion) {
+      return [singleQuestion];
+    }
+
     if (Array.isArray(value)) {
-      return value.some((item) => typeof item === 'string' && item.trim().length > 0);
+      if (
+        value.length === 0 ||
+        !value.every((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      ) {
+        return undefined;
+      }
+      return value;
     }
-    return false;
+
+    return undefined;
+  }
+
+  private areEquivalentQuestions(left: string[], right: string[]): boolean {
+    return (
+      left.length === right.length &&
+      left.every((question, index) => question.trim() === right[index]?.trim())
+    );
+  }
+
+  private removeEmptyNextStep(
+    decision: Record<string, unknown>,
+    nextStep: Record<string, unknown>
+  ): void {
+    if (Object.keys(nextStep).length === 0) {
+      delete decision.nextStep;
+    }
   }
 }

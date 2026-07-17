@@ -367,6 +367,8 @@ export const enUS = {
       '[SYSTEM: The previous Master Brain decision was truncated or required an unreliable aggressive repair ({reason}). That decision was not executed. Reuse the existing context without repeating a long analysis, and immediately output one complete valid JSON decision object with every required field for the selected decision.]',
     mbMalformedDecisionRetryInstruction:
       '[SYSTEM: The previous Master Brain output failed the decision protocol validation ({reason}). That decision was not executed. Reuse the existing context without repeating a long analysis, and immediately output exactly one complete valid JSON decision object with every required field for the selected decision.]',
+    mbSchemaInvalidDecisionRetryInstruction:
+      '[SYSTEM: The previous Master Brain JSON used an invalid decision payload shape ({reason}). That decision was not executed. Reuse the existing context and output exactly one complete JSON object. Put the selected decision payload only in nextStep: SPAWN_SUB_AGENT requires nextStep.task, REQUEST_MORE_INPUT requires nextStep.questionsForUser, and RESPOND_TO_USER requires nextStep.response. Never put response or questionsForUser at the root level, and do not emit conflicting legacy and nextStep fields.]',
     mbMalformedDecisionFallback:
       '⚠️ The AI returned an invalid decision, so the task cannot be executed. Please retry or switch models.',
     mbToolCallDecisionFallback:

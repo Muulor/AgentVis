@@ -607,6 +607,8 @@ export class AgentLoop {
           mbBudgetRemaining?: number;
           /** 流式增量回调，LLM 输出过程中实时推送累积内容到 Thought 卡片 */
           onStreamDelta?: (accumulatedContent: string) => void;
+          /** MB 流式传输开始一次新的 provider attempt */
+          onStreamAttemptStart?: () => void;
           /** provider reasoning_content 流式回调 */
           onReasoningTrace?: (event: ReasoningTraceEvent) => void;
           /** 流式异常与解析异常共用的 MB 语义重试状态 */
@@ -1120,16 +1122,17 @@ export class AgentLoop {
               messagesForCall: AgentLoopLLMMessage[]
             ): Promise<string> => {
               const collect = () =>
-                callMasterBrainWithRetry('MB stream', () =>
-                  this.collectMBStreamResponse(
+                callMasterBrainWithRetry('MB stream', () => {
+                  options.onStreamAttemptStart?.();
+                  return this.collectMBStreamResponse(
                     messagesForCall,
                     onStreamDelta,
                     activeTransportMaxTokens,
                     finalDecisionMaxTokens,
                     temperature,
                     onReasoningTrace
-                  )
-                );
+                  );
+                });
 
               try {
                 return await collect();
@@ -1776,6 +1779,8 @@ export class AgentLoop {
         return translate('chat.mbReasoningDecisionRetryInstruction');
       case 'anomalous_content':
         return translate('chat.mbAnomalousDecisionRetryInstruction', { reason });
+      case 'schema_invalid':
+        return translate('chat.mbSchemaInvalidDecisionRetryInstruction', { reason });
       default:
         return translate('chat.mbMalformedDecisionRetryInstruction', { reason });
     }

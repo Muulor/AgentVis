@@ -327,36 +327,46 @@ function findValidJsonInCodeBlock(content: string): string {
 export function sanitizeJson(jsonStr: string): string {
   let result = jsonStr;
 
-  // 1. 中文引号替换（全角 → 半角）
+  // 1. 清理控制字符（保留换行和空格）
+  // 移除 ASCII 0-31 中除了 \t \n \r 之外的字符
+  // eslint-disable-next-line no-control-regex
+  result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  // 2. 优先进行保守修复，避免把字符串内容中的中文引号误当作 JSON 定界符
+  // 真实换行和非法转义是最常见的可无损修复；成功时无需继续改写标点。
+  const conservativeResult = normalizeLineBreaksInStrings(fixInvalidEscapes(result));
+  try {
+    JSON.parse(conservativeResult);
+    return conservativeResult;
+  } catch {
+    // 仍不合法时继续使用兼容旧式全角 JSON 的既有修复策略。
+  }
+
+  // 3. 中文引号替换（全角 → 半角）
   // 使用 Unicode 码点明确指定智能引号
   result = result
     .replace(/[\u201C\u201D]/g, '"') // 智能双引号 "" → "
     .replace(/[\u2018\u2019]/g, "'"); // 智能单引号 '' → '
 
-  // 2. 全角冒号和逗号替换
+  // 4. 全角冒号和逗号替换
   result = result.replace(/：/g, ':').replace(/，/g, ',');
 
-  // 3. 清理控制字符（保留换行和空格）
-  // 移除 ASCII 0-31 中除了 \t \n \r 之外的字符
-  // eslint-disable-next-line no-control-regex
-  result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-
-  // 4. 修复嵌套引号问题（字符串内部的未转义引号）
+  // 5. 修复嵌套引号问题（字符串内部的未转义引号）
   // ⚠️ 必须在 fixInvalidEscapes / normalizeLineBreaks 之前执行！
   // 这两个函数依赖 inString 状态机追踪字符串边界，
   // 如果值中存在未转义双引号
   // 状态机会在该处失步 → 后续输出损坏 → 修复无效
   result = fixNestedQuotes(result);
 
-  // 5. 修复非法 JSON 转义字符（如 Windows 路径中的 \U \A \M \R 等）
+  // 6. 修复非法 JSON 转义字符（如 Windows 路径中的 \U \A \M \R 等）
   // LLM 输出路径时反斜杠转义不一致，需要补全为双反斜杠
   result = fixInvalidEscapes(result);
 
-  // 6. 处理字符串值内部的换行（转换为 \n）
+  // 7. 处理字符串值内部的换行（转换为 \n）
   // 这需要更复杂的处理，因为需要区分 JSON 结构中的换行和字符串值中的换行
   result = normalizeLineBreaksInStrings(result);
 
-  // 7. 移除尾随逗号
+  // 8. 移除尾随逗号
   result = result
     .replace(/,(\s*})/g, '$1') // 对象尾随逗号
     .replace(/,(\s*\])/g, '$1'); // 数组尾随逗号

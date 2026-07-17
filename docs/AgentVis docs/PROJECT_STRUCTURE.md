@@ -756,7 +756,7 @@ planning/
 │   ├── 📁 handlers/              # 状态处理器模块 [模块化重构]
 │   │   ├── index.ts              # 模块导出
 │   │   ├── types.ts              # 处理器类型定义（HandlerContext/SharedState）
-│   │   ├── StateHandlers.ts      # 集中式状态处理器（5 个处理器函数）
+│   │   ├── StateHandlers.ts      # 集中式状态处理器（含 MB 决策载荷的安全流式提取）
 │   │   └── 📁 __tests__/         # 处理器测试
 │   │       └── StateHandlers.test.ts # 状态处理器测试
 │   │
@@ -803,10 +803,10 @@ planning/
 │   ├── MasterBrain.ts            # 主脑封装（决策协调器）
 │   ├── MasterBrainDecisionGuard.ts # MB 决策异常分类与共享语义重试额度
 │   ├── MasterBrainReasoningGuard.ts # MB 推理循环检测、硬熔断与有界展示快照
-│   ├── MasterBrainPrompt.ts      # Prompt 构建器
+│   ├── MasterBrainPrompt.ts      # Prompt 构建器（decision-specific nextStep 输出契约）
 │   │                             # - build()：主决策 Prompt
 │   │                             # - buildCheckpointEvaluationPrompt()：Checkpoint 评估
-│   ├── DecisionParser.ts         # 决策解析器（JSON Schema 验证）
+│   ├── DecisionParser.ts         # 决策解析器（wire 双格式兼容、规范化与 Schema 验证）
 │   ├── CheckpointDecisionParser.ts # Checkpoint 决策解析器
 │   │                             # - parseCheckpointDecision()：解析 LLM 输出
 │   │                             # - safeParseCheckpointDecision()：安全解析（Result 模式）

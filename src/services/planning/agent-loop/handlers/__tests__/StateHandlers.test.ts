@@ -277,14 +277,17 @@ describe('StateHandlers', () => {
       expect(handlerContext.dependencies.masterBrain!.decide).toHaveBeenCalled();
     });
 
-    it('应该只把 RESPOND_TO_USER.response 的累积内容流式转发给 UI', async () => {
+    it('应该只把 RESPOND_TO_USER.nextStep.response 的累积内容流式转发给 UI', async () => {
       const response = '第一段\n第二段："引用"，路径 C:\\tmp';
       const completeDecision = JSON.stringify({
         decision: 'RESPOND_TO_USER',
         rationale: '内部决策理由含伪字段 "response":"内部草稿"，也不应进入回复',
         riskAssessment: { level: 'low', notes: '无风险' },
         draft: { response: '嵌套的内部草稿也不应进入回复' },
-        response,
+        nextStep: {
+          draft: { response: 'nextStep 内部的嵌套草稿也不应进入回复' },
+          response,
+        },
       });
       const responsePrefix = '"response":"';
       const firstSnapshotEnd =
@@ -302,6 +305,65 @@ describe('StateHandlers', () => {
       expect(onResponseStream).toHaveBeenNthCalledWith(1, '第一段');
       expect(onResponseStream).toHaveBeenNthCalledWith(2, response);
       expect(onResponseStream).toHaveBeenCalledTimes(2);
+    });
+
+    it('应该在根对象闭合后一次性兼容旧顶层 RESPOND_TO_USER.response', async () => {
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","response":"Legacy response');
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","response":"Legacy response"}'
+        );
+        return createMockDecision('RESPOND_TO_USER', { response: 'Legacy response' });
+      });
+
+      await handleMasterDecision(fsmContext, handlerContext);
+
+      expect(handlerContext.dependencies.callbacks.onResponseStream).toHaveBeenCalledWith(
+        'Legacy response'
+      );
+      expect(handlerContext.dependencies.callbacks.onResponseStream).toHaveBeenCalledTimes(1);
+    });
+
+    it('mixed protocol 中旧 response 先出现时不应该抢先流入用户气泡', async () => {
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","response":"Legacy must not flash",'
+        );
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","response":"Legacy must not flash",' +
+            '"nextStep":{"response":"Canonical part'
+        );
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","response":"Legacy must not flash",' +
+            '"nextStep":{"response":"Canonical response"}}'
+        );
+        return createMockDecision('RESPOND_TO_USER', { response: 'Canonical response' });
+      });
+
+      await handleMasterDecision(fsmContext, handlerContext);
+
+      const onResponseStream = handlerContext.dependencies.callbacks.onResponseStream;
+      expect((onResponseStream as ReturnType<typeof vi.fn>).mock.calls).toEqual([
+        ['Canonical part'],
+        ['Canonical response'],
+      ]);
+    });
+
+    it('显式 canonical response 为空白时不应该回退显示旧顶层 response', async () => {
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","nextStep":{"response":"   "},' +
+            '"response":"Legacy must stay hidden"}'
+        );
+        return createMockDecision('RESPOND_TO_USER', { response: 'Corrected response' });
+      });
+
+      await handleMasterDecision(fsmContext, handlerContext);
+
+      expect(handlerContext.dependencies.callbacks.onResponseStream).not.toHaveBeenCalled();
     });
 
     it('不应该把 SPAWN_SUB_AGENT 决策中的其他字段流式显示为用户回复', async () => {
@@ -329,9 +391,14 @@ describe('StateHandlers', () => {
     it('MasterBrain 重试时应该清除上一轮未完成的回复快照', async () => {
       const mockBrain = handlerContext.dependencies.masterBrain;
       vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
-        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","response":"旧的未完成回复');
-        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","rationale":"纠错重试"}');
-        streamOptions?.onStreamDelta?.('{"decision":"RESPOND_TO_USER","response":"新的完整回复"}');
+        streamOptions?.onStreamAttemptStart?.();
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","nextStep":{"response":"旧的未完成回复'
+        );
+        streamOptions?.onStreamAttemptStart?.();
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","nextStep":{"response":"新的完整回复"}}'
+        );
         return createMockDecision('RESPOND_TO_USER', { response: '新的完整回复' });
       });
 
@@ -344,6 +411,30 @@ describe('StateHandlers', () => {
         [''],
         ['新的完整回复'],
       ]);
+    });
+
+    it('纠错 attempt 只有 reasoning 后失败时也应该立即清除旧回复快照', async () => {
+      const mockBrain = handlerContext.dependencies.masterBrain;
+      vi.mocked(mockBrain!.decide).mockImplementation(async (_input, streamOptions) => {
+        streamOptions?.onStreamAttemptStart?.();
+        streamOptions?.onStreamDelta?.(
+          '{"decision":"RESPOND_TO_USER","nextStep":{"response":"不得残留的旧回复'
+        );
+        streamOptions?.onStreamAttemptStart?.();
+        streamOptions?.onReasoningTrace?.({
+          type: 'CONTENT',
+          content: '第二次尝试只有 reasoning',
+        });
+        throw new Error('纠错 attempt 未产生 final delta');
+      });
+
+      const result = await handleMasterDecision(fsmContext, handlerContext);
+
+      expect(result.type).toBe('DECISION_INVALID');
+      expect(
+        (handlerContext.dependencies.callbacks.onResponseStream as ReturnType<typeof vi.fn>).mock
+          .calls
+      ).toEqual([['不得残留的旧回复'], ['']]);
     });
 
     it('should pass sandboxMode into MasterBrainInputBuilder', async () => {

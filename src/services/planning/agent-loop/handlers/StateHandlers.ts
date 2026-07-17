@@ -296,6 +296,12 @@ interface StreamingJsonStringToken {
   complete: boolean;
 }
 
+interface StreamingJsonObjectToken {
+  rawValue: string;
+  endIndex: number;
+  complete: boolean;
+}
+
 function scanStreamingJsonString(
   jsonContent: string,
   openingQuoteIndex: number
@@ -328,13 +334,58 @@ function scanStreamingJsonString(
   };
 }
 
+function scanStreamingJsonObject(
+  jsonContent: string,
+  openingBraceIndex: number
+): StreamingJsonObjectToken {
+  let objectDepth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = openingBraceIndex; index < jsonContent.length; index += 1) {
+    const character = jsonContent.charAt(index);
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+    } else if (character === '{') {
+      objectDepth += 1;
+    } else if (character === '}') {
+      objectDepth -= 1;
+      if (objectDepth === 0) {
+        return {
+          rawValue: jsonContent.slice(openingBraceIndex, index + 1),
+          endIndex: index,
+          complete: true,
+        };
+      }
+    }
+  }
+
+  return {
+    rawValue: jsonContent.slice(openingBraceIndex),
+    endIndex: Math.max(openingBraceIndex, jsonContent.length - 1),
+    complete: false,
+  };
+}
+
 /**
  * 从首个 JSON 对象的顶层安全提取字符串字段，避免命中 rationale 等字符串里的伪字段。
  */
 function extractTopLevelStreamingJsonStringField(
   jsonContent: string,
   fieldName: string
-): { value: string; complete: boolean } | undefined {
+): { value: string | undefined; complete: boolean } | undefined {
   let objectDepth = 0;
   let arrayDepth = 0;
   let rootStarted = false;
@@ -355,7 +406,9 @@ function extractTopLevelStreamingJsonStringField(
           if (key === fieldName) {
             cursor += 1;
             while (/\s/.test(jsonContent.charAt(cursor))) cursor += 1;
-            if (jsonContent.charAt(cursor) !== '"') return undefined;
+            if (jsonContent.charAt(cursor) !== '"') {
+              return { value: undefined, complete: false };
+            }
 
             const valueToken = scanStreamingJsonString(jsonContent, cursor);
             return {
@@ -386,10 +439,67 @@ function extractTopLevelStreamingJsonStringField(
   return undefined;
 }
 
+/** 从首个 JSON 对象的顶层安全提取对象字段，支持尚未闭合的流式对象。 */
+function extractTopLevelStreamingJsonObjectField(
+  jsonContent: string,
+  fieldName: string
+): { value: string; complete: boolean } | undefined {
+  let objectDepth = 0;
+  let arrayDepth = 0;
+  let rootStarted = false;
+
+  for (let index = 0; index < jsonContent.length; index += 1) {
+    const character = jsonContent.charAt(index);
+
+    if (character === '"') {
+      const token = scanStreamingJsonString(jsonContent, index);
+      if (!token.complete) return undefined;
+
+      if (rootStarted && objectDepth === 1 && arrayDepth === 0) {
+        let cursor = token.endIndex + 1;
+        while (/\s/.test(jsonContent.charAt(cursor))) cursor += 1;
+
+        if (jsonContent.charAt(cursor) === ':') {
+          const key = decodeStreamingJsonString(token.rawValue);
+          if (key === fieldName) {
+            cursor += 1;
+            while (/\s/.test(jsonContent.charAt(cursor))) cursor += 1;
+            if (jsonContent.charAt(cursor) !== '{') return undefined;
+
+            const valueToken = scanStreamingJsonObject(jsonContent, cursor);
+            return {
+              value: valueToken.rawValue,
+              complete: valueToken.complete,
+            };
+          }
+        }
+      }
+
+      index = token.endIndex;
+      continue;
+    }
+
+    if (character === '{') {
+      rootStarted = true;
+      objectDepth += 1;
+    } else if (character === '}') {
+      objectDepth = Math.max(0, objectDepth - 1);
+      if (rootStarted && objectDepth === 0) return undefined;
+    } else if (character === '[' && rootStarted) {
+      arrayDepth += 1;
+    } else if (character === ']' && rootStarted) {
+      arrayDepth = Math.max(0, arrayDepth - 1);
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * 仅从 RESPOND_TO_USER 决策中提取面向用户的 response 累积快照。
  *
  * 不复用 Thought 的兜底文本，避免把 reasoning、rationale 或 JSON 骨架泄漏到回复气泡。
+ * 优先读取新 wire protocol 的 nextStep.response，并兼容旧顶层 response。
  */
 function extractStreamingResponseContent(rawContent: string): string | undefined {
   const jsonFenceMatch = rawContent.match(/```json\s*\n?\s*\{/);
@@ -403,7 +513,24 @@ function extractStreamingResponseContent(rawContent: string): string | undefined
   const decision = extractTopLevelStreamingJsonStringField(jsonPart, 'decision');
   if (!decision?.complete || decision.value !== 'RESPOND_TO_USER') return undefined;
 
-  return extractTopLevelStreamingJsonStringField(jsonPart, 'response')?.value;
+  const nextStep = extractTopLevelStreamingJsonObjectField(jsonPart, 'nextStep');
+  const nestedResponse = nextStep
+    ? extractTopLevelStreamingJsonStringField(nextStep.value, 'response')
+    : undefined;
+
+  // 一旦显式出现 canonical response 键，就不再猜测旧顶层 response。
+  // 空白/非法 canonical 值会由 DecisionParser 触发协议纠错，不能在流式层降级到 legacy。
+  if (nestedResponse) {
+    return nestedResponse.value?.trim() ? nestedResponse.value : undefined;
+  }
+
+  // 旧协议只有在根对象完整闭合、确认没有 canonical response 后才显示。
+  // 这样 mixed payload 中先出现的 legacy response 不会抢先闪入用户气泡。
+  const rootObject = scanStreamingJsonObject(jsonPart, 0);
+  if (!rootObject.complete) return undefined;
+
+  const legacyResponse = extractTopLevelStreamingJsonStringField(rootObject.rawValue, 'response');
+  return legacyResponse?.value?.trim() ? legacyResponse.value : undefined;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -518,6 +645,11 @@ export async function handleMasterDecision(
     // 流式结束 JSON 解析完成后，三阶段内容（rationale/notes/task）依次覆盖更新为解析结果
     let lastResponseSnapshot: string | undefined;
     const decision = await masterBrain.decide(input, {
+      onStreamAttemptStart: () => {
+        if (lastResponseSnapshot === undefined) return;
+        lastResponseSnapshot = undefined;
+        callbacks.onResponseStream?.('');
+      },
       onStreamDelta: (accumulatedContent) => {
         // 从累积的 LLM 原始输出中增量提取 JSON 字段值，
         // 剥离 JSON 结构（键名、花括号、代码围栏等），只展示有意义的文本

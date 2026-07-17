@@ -111,7 +111,30 @@ If a provider explicitly rejects the requested max-token parameter, MB retries o
 lower transport tier (32K to 16K, or 16K to 8K). This is not used for an accepted response that
 finishes with `length` or `max_tokens`; provider exhaustion follows semantic truncation recovery.
 
-### 3.3 SPAWN_SUB_AGENT Decision Content
+### 3.3 MB Decision Output Contract
+
+MB output uses a unified wire protocol consisting of root decision metadata plus a decision-specific `nextStep` payload:
+
+| Decision | Required payload |
+|------|------|
+| `SPAWN_SUB_AGENT` | `nextStep.task` |
+| `REQUEST_MORE_INPUT` | `nextStep.questionsForUser` |
+| `RESPOND_TO_USER` | `nextStep.response` |
+
+For example, a direct user response must use:
+
+```json
+{
+  "decision": "RESPOND_TO_USER",
+  "rationale": "The task is complete",
+  "riskAssessment": { "level": "low", "notes": "No additional risk" },
+  "nextStep": { "response": "The final user-facing response" }
+}
+```
+
+At the protocol boundary, `DecisionParser` continues to accept legacy root-level `response` / `questionsForUser` fields and then normalizes them into the existing internal discriminated union so the wire migration does not spread through the FSM. Legacy fallback applies only when the canonical key is absent; an explicitly present canonical key that is empty or type-invalid is classified as `schema_invalid`. If legacy and `nextStep` locations are both present with conflicting content, the system does not guess: it classifies the decision as `schema_invalid` and consumes the shared one-attempt MB semantic correction budget. Decisions obtained through truncated or aggressive repair are still never executed directly.
+
+### 3.4 SPAWN_SUB_AGENT Decision Content
 
 When MB decides to dispatch an SA, the emitted `nextStep` structure is JIT-built by `SubAgentSpecBuilder` into a complete `SubAgentSpec`:
 

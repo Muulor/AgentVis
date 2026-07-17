@@ -60,6 +60,8 @@ export interface LLMServiceInterface {
        * LLM 流式生成过程中调用，传递累积的部分内容
        */
       onStreamDelta?: (accumulatedContent: string) => void;
+      /** MB 流式传输开始一次新的 provider attempt */
+      onStreamAttemptStart?: () => void;
       /** MB provider reasoning_content 流式回调 */
       onReasoningTrace?: (event: ReasoningTraceEvent) => void;
       /** 流式异常与解析异常共用的 MB 语义重试状态 */
@@ -103,6 +105,8 @@ export class MasterBrain {
     streamOptions?: {
       /** 流式增量回调：LLM 输出过程中实时推送累积内容到 Thought 卡片 */
       onStreamDelta?: (accumulatedContent: string) => void;
+      /** MB 流式传输开始一次新的 provider attempt */
+      onStreamAttemptStart?: () => void;
       /** provider reasoning_content 流式回调 */
       onReasoningTrace?: (event: ReasoningTraceEvent) => void;
     }
@@ -118,6 +122,7 @@ export class MasterBrain {
     let rawResponse = await this.callLLM(systemPrompt, {
       mbBudgetRemaining: input.mbBudgetRemaining,
       onStreamDelta: streamOptions?.onStreamDelta,
+      onStreamAttemptStart: streamOptions?.onStreamAttemptStart,
       onReasoningTrace: streamOptions?.onReasoningTrace,
       mbDecisionRetryState: retryState,
     });
@@ -135,6 +140,7 @@ export class MasterBrain {
         rawResponse = await this.callLLM(systemPrompt, {
           mbBudgetRemaining: input.mbBudgetRemaining,
           onStreamDelta: streamOptions?.onStreamDelta,
+          onStreamAttemptStart: streamOptions?.onStreamAttemptStart,
           onReasoningTrace: streamOptions?.onReasoningTrace,
           mbDecisionRetryState: retryState,
           mbDecisionCorrection: correction,
@@ -167,6 +173,7 @@ export class MasterBrain {
     extra?: {
       mbBudgetRemaining?: number;
       onStreamDelta?: (accumulatedContent: string) => void;
+      onStreamAttemptStart?: () => void;
       onReasoningTrace?: (event: ReasoningTraceEvent) => void;
       mbDecisionRetryState?: MbDecisionRetryState;
       mbDecisionCorrection?: MbDecisionRetryCorrection;
@@ -178,6 +185,7 @@ export class MasterBrain {
       temperature: PLANNING_CONSTANTS.MASTER_BRAIN_TEMPERATURE, // 低温度确保决策稳定一致
       mbBudgetRemaining: extra?.mbBudgetRemaining, // 透传预算剐余量，供 AgentLoop 判断是否注入尾部警告
       onStreamDelta: extra?.onStreamDelta, // 透传流式回调，实时推送 LLM 输出到 Thought 卡片
+      onStreamAttemptStart: extra?.onStreamAttemptStart,
       onReasoningTrace: extra?.onReasoningTrace,
       mbDecisionRetryState: extra?.mbDecisionRetryState,
       mbDecisionCorrection: extra?.mbDecisionCorrection,

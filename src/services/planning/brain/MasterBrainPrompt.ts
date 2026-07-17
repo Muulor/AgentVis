@@ -85,8 +85,7 @@ export class MasterBrainPrompt {
         'riskAssessment.notes',
         'nextStep.task',
         'nextStep.questionsForUser',
-        'questionsForUser',
-        'response',
+        'nextStep.response',
       ],
       additionalRule:
         'An explicit output-language request in the latest user message overrides all other language signals.',
@@ -332,24 +331,48 @@ When dispatching a task, the following optional **three dispatch elements** are 
 
 ## 4. Output Format & Language(Strict)
 
-⚠️ Your response **must be exactly and only** the following JSON object, with no other text, explanations, comments, or extra fields. Strictly use the user's input language to output.
+⚠️ Your response **must be exactly and only one** JSON object matching the selected decision shape below, with no other text, explanations, comments, or extra fields. Strictly use the user's input language to output.
+
+**SPAWN_SUB_AGENT** — \`nextStep.task\` is required. The optional dispatch fields \`tools\`, \`behaviorHint\`, \`includeHistory\`, and \`role\` may appear inside \`nextStep\` only when needed.
 
 \`\`\`json
 {
-  "decision": "SPAWN_SUB_AGENT | REQUEST_MORE_INPUT | RESPOND_TO_USER",
+  "decision": "SPAWN_SUB_AGENT",
   "rationale": "Requirement analysis and decision rationale",
   "riskAssessment": { "level": "low | medium | high", "notes": "Potential failure points" },
   "nextStep": {
-    "task": "Task description (required for SPAWN_SUB_AGENT)",
-    "tools": ["Special tools (only when needed)"],
-    "behaviorHint": "careful | direct",
-    "includeHistory": "true (only when needed)",
-    "role": "Custom role name (recommended)",
-    "questionsForUser": "Questions for the user (required for REQUEST_MORE_INPUT)"
-  },
-  "response": "Reply to the user (required for RESPOND_TO_USER)"
+    "task": "Task description"
+  }
 }
 \`\`\`
+
+**REQUEST_MORE_INPUT** — \`nextStep.questionsForUser\` is required.
+
+\`\`\`json
+{
+  "decision": "REQUEST_MORE_INPUT",
+  "rationale": "Requirement analysis and decision rationale",
+  "riskAssessment": { "level": "low | medium | high", "notes": "Potential failure points" },
+  "nextStep": {
+    "questionsForUser": "Questions for the user"
+  }
+}
+\`\`\`
+
+**RESPOND_TO_USER** — \`nextStep.response\` is required.
+
+\`\`\`json
+{
+  "decision": "RESPOND_TO_USER",
+  "rationale": "Requirement analysis and decision rationale",
+  "riskAssessment": { "level": "low | medium | high", "notes": "Potential failure points" },
+  "nextStep": {
+    "response": "Reply to the user"
+  }
+}
+\`\`\`
+
+⛔ Include only the fields allowed for the selected decision. Never put \`response\` or \`questionsForUser\` at the root level.
 `;
   }
 
@@ -394,20 +417,15 @@ Are your Prime Directive, decision principles, dispatch protocol, and dispatch h
 For a SPAWN_SUB_AGENT decision, nextStep.task must reference the relevant skill name to guide SA execution.
 Your response **must be exactly and only** one JSON object in this format:
 Output-language contract: use ${outputLanguageHint.label} for every natural-language JSON field. ${outputLanguageHint.guidance}
-⚠️ All your outputs, including \`rationale\`, \`riskAssessment.notes\`, \`nextStep.task\`, \`nextStep.questionsForUser\`, \`questionsForUser\`, and \`response\`, must strictly follow [OUTPUT_LANGUAGE]. Strictly forbidden to output in a different language unless the user explicitly requests another language.
+⚠️ All your outputs, including \`rationale\`, \`riskAssessment.notes\`, \`nextStep.task\`, \`nextStep.questionsForUser\`, and \`nextStep.response\`, must strictly follow [OUTPUT_LANGUAGE]. Strictly forbidden to output in a different language unless the user explicitly requests another language.
 
-\`\`\`json
-{
-  "decision": "SPAWN_SUB_AGENT | REQUEST_MORE_INPUT | RESPOND_TO_USER",
-  "rationale": "...",
-  "riskAssessment": { "level": "low | medium | high", "notes": "..." },
-  "nextStep": { "task": "...", "tools": ["..."] },
-  "response": "..."
-}
-\`\`\`
+Choose exactly one payload shape:
+- \`{"decision":"SPAWN_SUB_AGENT","rationale":"...","riskAssessment":{"level":"low | medium | high","notes":"..."},"nextStep":{"task":"...","tools":["..."]}}\` (\`nextStep.tools\` authorizes special tools only when needed; \`behaviorHint\`, \`includeHistory\`, and \`role\` may also appear inside \`nextStep\` when needed)
+- \`{"decision":"REQUEST_MORE_INPUT","rationale":"...","riskAssessment":{"level":"low | medium | high","notes":"..."},"nextStep":{"questionsForUser":"..."}}\`
+- \`{"decision":"RESPOND_TO_USER","rationale":"...","riskAssessment":{"level":"low | medium | high","notes":"..."},"nextStep":{"response":"..."}}\`
 
 ⛔ Do not return plain text, natural-language explanations, tool-call formats such as [TOOL_CALL], or any non-JSON content.
-⛔ Even for RESPOND_TO_USER/REQUEST_MORE_INPUT, place the reply inside the JSON "response"/"questionsForUser" field.
+⛔ Never put \`response\` or \`questionsForUser\` at the root level. Include only fields applicable to the selected decision.
 
 ---END_OUTPUT_FORMAT_FOOTER---
 `;

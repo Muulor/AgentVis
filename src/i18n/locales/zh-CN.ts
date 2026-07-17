@@ -357,6 +357,8 @@ export const zhCN = {
       '[SYSTEM: 上一次 Master Brain 决策被截断或需要不可靠的激进修复（{reason}）。该决策没有被执行。请沿用现有上下文，不要重复长篇分析，立即输出一个完整、合法的 JSON 决策对象。JSON 必须包含所选 decision 的全部必需字段。]',
     mbMalformedDecisionRetryInstruction:
       '[SYSTEM: 上一次 Master Brain 输出未通过决策协议校验（{reason}）。该决策没有被执行。请沿用现有上下文，不要重复长篇分析，立即只输出一个完整、合法的 JSON 决策对象，并包含所选 decision 的全部必需字段。]',
+    mbSchemaInvalidDecisionRetryInstruction:
+      '[SYSTEM: 上一次 Master Brain JSON 使用了无效的决策载荷结构（{reason}），该决策没有被执行。请沿用现有上下文，只输出一个完整 JSON 对象，并且只在 nextStep 中放置所选 decision 的载荷：SPAWN_SUB_AGENT 必须使用 nextStep.task，REQUEST_MORE_INPUT 必须使用 nextStep.questionsForUser，RESPOND_TO_USER 必须使用 nextStep.response。不得在根级放置 response 或 questionsForUser，也不得同时输出互相冲突的旧字段和 nextStep 字段。]',
     mbMalformedDecisionFallback: '⚠️ AI 返回了异常决策，任务无法执行。请重试或切换模型。',
     mbToolCallDecisionFallback:
       '⚠️ AI 在 Master Brain 阶段返回了不允许的工具调用格式。没有工具被执行，请重试或切换模型。',

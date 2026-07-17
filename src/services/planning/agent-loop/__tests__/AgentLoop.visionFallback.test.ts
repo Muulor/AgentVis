@@ -467,14 +467,21 @@ describe('AgentLoop MB vision fallback', () => {
     const requests = llmCalls.map(
       ([, args]) =>
         args as {
-          request: { messages: Array<{ images?: Array<{ data?: string }> }> };
+          request: {
+            messages: Array<{ content: string; images?: Array<{ data?: string }> }>;
+          };
         }
     );
+    const schemaRetryInstructionPrefix = translate('chat.mbSchemaInvalidDecisionRetryInstruction', {
+      reason: '__reason__',
+    }).split('__reason__')[0];
 
     expect(llmCalls).toHaveLength(3);
     expect(extractImageData(requests[0]!.request.messages)).toContain('current-image');
     expect(extractImageData(requests[1]!.request.messages)).toContain('current-image');
     expect(extractImageData(requests[2]!.request.messages)).not.toContain('current-image');
+    expect(requests[1]!.request.messages.at(-1)?.content).toContain(schemaRetryInstructionPrefix);
+    expect(requests[1]!.request.messages.at(-1)?.content).toContain('nextStep.response');
     expect(saveAndPassImagesToSA).toHaveBeenCalledTimes(1);
   });
 
@@ -545,13 +552,18 @@ describe('AgentLoop MB vision fallback', () => {
         createLLMService: () => {
           generate: (
             prompt: string,
-            options?: { onStreamDelta?: (content: string) => void }
+            options?: {
+              onStreamDelta?: (content: string) => void;
+              onStreamAttemptStart?: () => void;
+            }
           ) => Promise<string>;
         };
       }
     ).createLLMService();
+    const onStreamAttemptStart = vi.fn();
     const result = await llmService.generate('system prompt', {
       onStreamDelta: vi.fn(),
+      onStreamAttemptStart,
     });
 
     const streamCalls = vi
@@ -562,6 +574,7 @@ describe('AgentLoop MB vision fallback', () => {
     };
 
     expect(streamCalls).toHaveLength(2);
+    expect(onStreamAttemptStart).toHaveBeenCalledTimes(2);
     expect(result).toContain('"decision":"RESPOND_TO_USER"');
     expect(secondRequest.request.messages.at(-1)?.content).toBe(
       translate('chat.mbEmptyDecisionRetryInstruction')
