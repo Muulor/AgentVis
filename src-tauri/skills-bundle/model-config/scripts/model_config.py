@@ -112,7 +112,7 @@ BUILTIN_MODELS: list[dict] = [
     {"id": "glm-5.2", "name": "GLM-5.2", "providerId": "volcengine", "contextWindow": 1000000, "supportsVision": False},
     # OpenRouter (routes to free models from various providers through an OpenAI-compatible protocol)
     # Context windows have been converted to tokens: 262K→262144, 131K→131072, 196K→196608
-    {"id": "openai/gpt-oss-120b:free", "name": "GPT-OSS 120B (free)", "providerId": "openrouter", "contextWindow": 131072, "supportsVision": False},
+    {"id": "xiaomi/mimo-v2.5", "name": "Mimo V2.5", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": True},
     # Local
     {"id": "gpt-5.4", "name": "GPT-5.4", "providerId": "local", "contextWindow": 400000, "supportsVision": True},
     {"id": "gpt-5.5", "name": "GPT-5.5", "providerId": "local", "contextWindow": 400000, "supportsVision": True},

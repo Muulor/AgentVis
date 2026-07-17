@@ -1549,7 +1549,7 @@ pub async fn llm_list_models(
             "image-01".to_string(),
         ],
         "openrouter" => vec![
-            "openai/gpt-oss-120b:free".to_string(),
+            "xiaomi/mimo-v2.5".to_string(),
             "google/gemini-3.1-flash-image-preview".to_string(),
         ],
         "local" => vec![
@@ -2070,6 +2070,7 @@ pub async fn llm_chat_with_tools(
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
     };
@@ -2095,6 +2096,7 @@ pub async fn llm_chat_with_tools(
                     input_tokens: None,
                     output_tokens: None,
                     reasoning_content: None,
+                    reasoning_details: None,
                 });
             }
             Ok(response)
@@ -2108,6 +2110,7 @@ pub async fn llm_chat_with_tools(
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
+            reasoning_details: None,
         }),
     }
 }
@@ -2144,6 +2147,7 @@ async fn dispatch_with_cancel(
                     input_tokens: None,
                     output_tokens: None,
                     reasoning_content: None,
+                    reasoning_details: None,
                 })
             }
         }
@@ -2570,6 +2574,7 @@ mod command_tests {
             input_tokens: None,
             output_tokens: Some(32_768),
             reasoning_content: None,
+            reasoning_details: None,
         };
 
         assert_eq!(discard_truncated_tool_calls(&mut response), 1);
@@ -2593,6 +2598,7 @@ mod command_tests {
             input_tokens: None,
             output_tokens: Some(8),
             reasoning_content: None,
+            reasoning_details: None,
         };
 
         assert_eq!(discard_truncated_tool_calls(&mut response), 0);

@@ -369,4 +369,6 @@ export interface LLMResponseWithTools {
   outputTokens?: number;
   /** Provider 返回的推理内容（若可用）。 */
   reasoningContent?: string;
+  /** Provider 原生结构化推理块（若可用）。 */
+  reasoningDetails?: Array<Record<string, unknown>>;
 }

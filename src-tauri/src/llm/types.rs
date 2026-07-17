@@ -353,9 +353,13 @@ pub struct ToolChatMessage {
     /// 工具名称（tool 消息用于协议适配；前端字段名为 toolName）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_name: Option<String>,
-    /// 思考内容（DeepSeek 思考模式专用，工具调用场景需回传 API）
+    /// Provider plaintext reasoning, normalized for display and compatible aliases.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// Provider-native structured reasoning blocks. OpenRouter requires these
+    /// to be returned unchanged when a tool result continues the same turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
 }
 
 /// 带工具的 LLM 请求
@@ -411,9 +415,12 @@ pub struct ToolChatResponse {
     /// 输出 token 数（来自 API usage 响应）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_tokens: Option<u32>,
-    /// 思考内容（DeepSeek 思考模式返回的推理链，需在多轮工具调用中回传）
+    /// Provider plaintext reasoning normalized for UI display.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// Provider-native structured reasoning blocks for lossless tool-turn continuation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
 }
 
 #[cfg(test)]
@@ -432,6 +439,7 @@ mod tests {
             input_tokens: None,
             output_tokens: Some(8192),
             reasoning_content: None,
+            reasoning_details: None,
         };
 
         let value = serde_json::to_value(response).expect("serialize tool chat response");

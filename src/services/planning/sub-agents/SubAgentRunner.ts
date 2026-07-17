@@ -358,8 +358,10 @@ export interface LLMResponse {
   outputTokens?: number;
   /** Provider 返回的完成原因（如 stop、length、max_tokens、MAX_TOKENS） */
   finishReason?: string;
-  /** 思考内容（DeepSeek 思考模式返回的推理链，需在多轮工具调用中回传 API） */
+  /** Provider 返回的可展示推理文本，需在多轮工具调用中回传。 */
   reasoningContent?: string;
+  /** Provider 原生结构化推理块；OpenRouter 工具续轮要求原样回传。 */
+  reasoningDetails?: Array<Record<string, unknown>>;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -402,8 +404,10 @@ export interface LoopMessage {
   images?: Array<{ mimeType: string; data: string }>;
   /** 视觉 fallback 时优先保留此消息上的图片（例如当前轮用户附件） */
   preserveImagesOnVisionFallback?: boolean;
-  /** 思考内容（DeepSeek 思考模式专用，工具调用场景需回传 API） */
+  /** Provider 返回的可展示推理文本，工具调用场景需回传 API。 */
   reasoningContent?: string;
+  /** Provider 原生结构化推理块，工具调用场景需原样回传 API。 */
+  reasoningDetails?: Array<Record<string, unknown>>;
 }
 
 type LoopToolCall = NonNullable<LoopMessage['toolCalls']>[number];
@@ -533,6 +537,11 @@ export class SubAgentRunner {
             total += Math.ceil(tc.thoughtSignature.length / 4);
           }
         }
+      }
+      if (msg.reasoningDetails) {
+        total += Math.ceil(JSON.stringify(msg.reasoningDetails).length / 4);
+      } else if (msg.reasoningContent) {
+        total += this.estimateTextTokens(msg.reasoningContent);
       }
       // 每条消息额外固定开销（role 标记、结构化 token）
       total += 4;
@@ -1406,6 +1415,7 @@ export class SubAgentRunner {
             images: m.images,
             preserveImagesOnVisionFallback: m.preserveImagesOnVisionFallback,
             reasoningContent: m.reasoningContent,
+            reasoningDetails: m.reasoningDetails,
             timestamp: Date.now(),
           })),
           additionalInstructions, // 传递 Master Brain 的策略调整指令
@@ -1654,8 +1664,9 @@ export class SubAgentRunner {
             id: tc.id,
             ...(tc.thoughtSignature && { thoughtSignature: tc.thoughtSignature }),
           })),
-          // DeepSeek 思考模式：将 reasoning_content 存入 assistant 消息历史，下轮回传 API
+          // 将 provider 推理数据存入 assistant 消息历史，下轮回传 API。
           reasoningContent: response.reasoningContent,
+          reasoningDetails: response.reasoningDetails,
         });
 
         // 更新 lastContent：确保非终止信号的文字响应也被记录

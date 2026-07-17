@@ -60,6 +60,7 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 reasoning_content: None,
+                reasoning_details: None,
             }],
             model_id: Some(model.to_string()),
             provider_id: Some("anthropic".to_string()),
@@ -833,6 +834,7 @@ impl AnthropicAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -933,6 +935,7 @@ impl AnthropicAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1182,6 +1185,7 @@ impl AnthropicAdapter {
                 input_tokens: final_input_tokens,
                 output_tokens: final_output_tokens,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1201,6 +1205,7 @@ impl AnthropicAdapter {
                     input_tokens: final_input_tokens,
                     output_tokens: final_output_tokens,
                     reasoning_content: None,
+                    reasoning_details: None,
                 });
             }
         }
@@ -1219,6 +1224,7 @@ impl AnthropicAdapter {
             input_tokens: final_input_tokens,
             output_tokens: final_output_tokens,
             reasoning_content: None,
+            reasoning_details: None,
         })
     }
 
@@ -1275,6 +1281,7 @@ impl AnthropicAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1294,6 +1301,7 @@ impl AnthropicAdapter {
                     input_tokens: None,
                     output_tokens: None,
                     reasoning_content: None,
+                    reasoning_details: None,
                 });
             }
         }
@@ -1312,6 +1320,7 @@ impl AnthropicAdapter {
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
+            reasoning_details: None,
         })
     }
 

@@ -78,8 +78,10 @@ interface LLMResponseWithTools {
   outputTokens?: number;
   /** Provider 返回的完成原因；token 截断与参数拒绝是两类不同信号。 */
   finishReason?: string;
-  /** 思考内容（DeepSeek 思考模式返回的推理链，需在多轮工具调用中回传） */
+  /** Provider 返回的可展示推理文本，需在多轮工具调用中回传。 */
   reasoningContent?: string;
+  /** Provider 原生结构化推理块；OpenRouter 工具续轮要求原样回传。 */
+  reasoningDetails?: Array<Record<string, unknown>>;
 }
 
 interface ToolCallProgressPayload {
@@ -113,8 +115,10 @@ interface Message {
   /** 图片附件（tool 角色时可填充，用于多模态 tool_result） */
   images?: Array<{ mimeType: string; data: string }>;
   preserveImagesOnVisionFallback?: boolean;
-  /** 思考内容（DeepSeek 思考模式专用，工具调用场景需回传 API） */
+  /** Provider 返回的可展示推理文本，工具调用场景需回传 API。 */
   reasoningContent?: string;
+  /** Provider 原生结构化推理块，工具调用场景需原样回传 API。 */
+  reasoningDetails?: Array<Record<string, unknown>>;
 }
 
 const VISION_UNSUPPORTED_ERROR_PATTERNS = [
@@ -235,6 +239,7 @@ export class SubAgentLLMCallerFactory {
         ...(ctx.images && ctx.images.length > 0 && { images: ctx.images }),
         ...(ctx.preserveImagesOnVisionFallback && { preserveImagesOnVisionFallback: true }),
         ...(ctx.reasoningContent && { reasoningContent: ctx.reasoningContent }),
+        ...(ctx.reasoningDetails && { reasoningDetails: ctx.reasoningDetails }),
       });
     }
 
@@ -836,8 +841,9 @@ export class SubAgentLLMCallerFactory {
         inputTokens: response.inputTokens,
         outputTokens: response.outputTokens,
         ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
-        // DeepSeek 思考模式：透传 reasoning_content 给 Runner 存入消息历史
+        // 透传 provider 推理数据给 Runner 存入消息历史。
         reasoningContent: response.reasoningContent,
+        reasoningDetails: response.reasoningDetails,
       };
     }
 
@@ -855,6 +861,7 @@ export class SubAgentLLMCallerFactory {
         outputTokens: response.outputTokens,
         ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
         reasoningContent: response.reasoningContent,
+        reasoningDetails: response.reasoningDetails,
       };
     }
 
@@ -867,6 +874,7 @@ export class SubAgentLLMCallerFactory {
       outputTokens: response.outputTokens,
       ...(response.finishReason !== undefined && { finishReason: response.finishReason }),
       reasoningContent: response.reasoningContent,
+      reasoningDetails: response.reasoningDetails,
     };
   }
 

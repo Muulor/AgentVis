@@ -289,8 +289,11 @@ export interface AccumulatedMessage {
   /** 视觉 fallback 时优先保留此消息上的图片（例如当前轮用户附件） */
   preserveImagesOnVisionFallback?: boolean;
 
-  /** 思考内容（DeepSeek 思考模式专用，工具调用场景需回传 API） */
+  /** Provider 返回的可展示推理文本，工具调用场景需回传 API。 */
   reasoningContent?: string;
+
+  /** Provider 原生结构化推理块，工具调用场景需原样回传 API。 */
+  reasoningDetails?: Array<Record<string, unknown>>;
 
   /** 时间戳 */
   timestamp: number;

@@ -105,21 +105,24 @@ behavior; this does not always mean omitting the provider field. The Rust LLM ro
 explicit preset to the current protocol's native field, alias, or thinking switch.
 
 Available presets must be resolved from the actual `provider + model + protocol/route` capability.
-Unknown, custom, and aggregator-compatible routes expose only `recommended` and omit unverified
-outbound reasoning controls. The backend must also normalize unsupported input to a verified,
-conservative value for that route rather than treating the frontend menu as a trust boundary.
+Unknown, custom, and unverified aggregator-compatible routes expose only `recommended` and omit
+unverified outbound reasoning controls. Verified aggregator routes may expose only the controls
+reported for that provider/model pair. The backend must also normalize unsupported input to a
+verified, conservative value for that route rather than treating the frontend menu as a trust
+boundary.
 
 Verified routes currently use these special normalization rules:
 
-| Route/model                       | UI presets (excluding `recommended`)            | Outbound rule                                                                                                                                                         |
-| --------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenAI GPT-5.4 family and GPT-5.5 | `none`, `low`, `medium`, `high`, `xhigh`        | Do not send `minimal`, which these models reject; defensively clamp a stale value to `low`.                                                                           |
-| OpenAI GPT-5.6 Sol/Terra/Luna     | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Pass `max` through unchanged; use `reasoning.effort` on Responses paths and `reasoning_effort` on Chat Completions paths.                                             |
-| Anthropic Claude 4.6 Sonnet       | `low`, `medium`, `high`, `max`                  | Do not send `xhigh`, which this model rejects; defensively clamp a stale value to `high`.                                                                             |
-| DeepSeek V4                       | `none`, `high`, `max`                           | For `none`, send only `thinking.type=disabled` and omit `reasoning_effort`; `low/medium` alias `high`, while `xhigh` aliases `max`, so duplicate levels are hidden.   |
-| MiniMax M3                        | `none`, `high`                                  | For `none`, send only `thinking.type=disabled`; for `high`, send `thinking.type=adaptive`; do not send Claude `output_config`, and do not inherit the switch to M2.x. |
-| ZhipuAI Coding GLM-5.1/5.2        | GLM-5.1: `none`; GLM-5.2: `none`, `high`, `max` | Reuse the parameter mapping for the matching model on the regular Zhipu route while keeping the Coding Plan endpoint and quota isolated.                              |
-| StepFun Step 3.7 Flash            | `low`, `medium`, `high`                         | Send only `reasoning_effort` on the OpenAI-compatible route.                                                                                                          |
+| Route/model                       | UI presets (excluding `recommended`)            | Outbound rule                                                                                                                                                                                                             |
+| --------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI GPT-5.4 family and GPT-5.5 | `none`, `low`, `medium`, `high`, `xhigh`        | Do not send `minimal`, which these models reject; defensively clamp a stale value to `low`.                                                                                                                               |
+| OpenAI GPT-5.6 Sol/Terra/Luna     | `none`, `low`, `medium`, `high`, `xhigh`, `max` | Pass `max` through unchanged; use `reasoning.effort` on Responses paths and `reasoning_effort` on Chat Completions paths.                                                                                                 |
+| Anthropic Claude 4.6 Sonnet       | `low`, `medium`, `high`, `max`                  | Do not send `xhigh`, which this model rejects; defensively clamp a stale value to `high`.                                                                                                                                 |
+| DeepSeek V4                       | `none`, `high`, `max`                           | For `none`, send only `thinking.type=disabled` and omit `reasoning_effort`; `low/medium` alias `high`, while `xhigh` aliases `max`, so duplicate levels are hidden.                                                       |
+| MiniMax M3                        | `none`, `high`                                  | For `none`, send only `thinking.type=disabled`; for `high`, send `thinking.type=adaptive`; do not send Claude `output_config`, and do not inherit the switch to M2.x.                                                     |
+| ZhipuAI Coding GLM-5.1/5.2        | GLM-5.1: `none`; GLM-5.2: `none`, `high`, `max` | Reuse the parameter mapping for the matching model on the regular Zhipu route while keeping the Coding Plan endpoint and quota isolated.                                                                                  |
+| StepFun Step 3.7 Flash            | `low`, `medium`, `high`                         | Send only `reasoning_effort` on the OpenAI-compatible route.                                                                                                                                                              |
+| OpenRouter Xiaomi MiMo-V2.5       | `none`                                          | Send the unified nested `reasoning` object with `exclude=false`; normalize `reasoning`, `reasoning_content`, and visible `reasoning_details` for display, and return raw `reasoning_details` unchanged across tool turns. |
 
 Reasoning presets and output-token budgets are independent dimensions. Selecting `xhigh` or `max`
 does not raise a scenario transport ceiling, the Master Brain final-body limit, or the reasoning
@@ -154,6 +157,8 @@ Required regression coverage includes:
 - shared-reasoning registry routes resolving to real built-in provider/model pairs.
 - omitted/`recommended` preserving legacy behavior, explicit presets mapping consistently across
   plain, streaming, and tool calls, and unknown routes not leaking reasoning parameters.
+- OpenRouter plaintext aliases and structured reasoning blocks normalizing without duplicate UI
+  text, while tool continuations preserve every `reasoning_details` value and the provider order.
 
 ## 8. StatusBar Current Context
 
@@ -163,7 +168,7 @@ Current Context only tracks explicitly attributed foreground LLM calls for the v
 
 Its lifecycle is:
 
-- Show `Current Context` after a call begins. Estimate input from the final request messages (including historical tool calls and reasoning content), protocol fields, tool schemas, and image count.
+- Show `Current Context` after a call begins. Estimate input from the final request messages (including historical tool calls, reasoning content, and structured reasoning details), protocol fields, tool schemas, and image count.
 - During streaming generation, include visible response text, available reasoning content, and large tool-argument progress at a throttled rate; include tool-call arguments on completion as well.
 - Show `Last Context` after the LLM call completes while the task is still executing tools or scheduling its next step.
 - Hide the metric when the task finishes, is cancelled, or otherwise becomes idle. A stale call must not overwrite or clear a newer call; updates are guarded by `callId`.

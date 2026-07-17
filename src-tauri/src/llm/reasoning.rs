@@ -1,8 +1,8 @@
-//! Route-scoped reasoning controls for supported first-party LLM APIs.
+//! Route-scoped reasoning controls for supported LLM APIs.
 //!
 //! The UI sends a provider-neutral preset. This module is the only place that
-//! maps that preset to provider protocol semantics. Unknown, compatible, and
-//! aggregator routes deliberately preserve their legacy request bodies.
+//! maps that preset to provider protocol semantics. Unknown and unverified
+//! compatible routes deliberately preserve their legacy request bodies.
 
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +60,7 @@ pub enum ReasoningRoute {
     StepFunChat,
     ZhipuChat,
     MimoChat,
+    OpenRouterChat,
     Unknown,
 }
 
@@ -74,8 +75,9 @@ impl ReasoningRoute {
             "stepfun" => Self::StepFunChat,
             "zhipu" | "zhipu-coding" => Self::ZhipuChat,
             "xiaomi-mimo" => Self::MimoChat,
-            // In particular, Volcengine, OpenRouter, and Local are distinct
-            // routes and must not inherit a first-party profile.
+            "openrouter" => Self::OpenRouterChat,
+            // In particular, Volcengine and Local are distinct routes and
+            // must not inherit a first-party profile.
             _ => Self::Unknown,
         }
     }
@@ -116,6 +118,10 @@ pub(crate) enum ResolvedReasoning {
     ThinkingToggle {
         enabled: bool,
     },
+    OpenRouter {
+        enabled: bool,
+        effort: Option<&'static str>,
+    },
 }
 
 pub(crate) fn resolve_reasoning(
@@ -133,6 +139,7 @@ pub(crate) fn resolve_reasoning(
         ReasoningRoute::StepFunChat => resolve_stepfun(model, preset),
         ReasoningRoute::ZhipuChat => resolve_zhipu(model, preset),
         ReasoningRoute::MimoChat => resolve_mimo(model, preset),
+        ReasoningRoute::OpenRouterChat => resolve_openrouter(preset),
         ReasoningRoute::Auto | ReasoningRoute::Unknown => ResolvedReasoning::Preserve,
     };
     log::trace!(
@@ -386,6 +393,23 @@ fn resolve_mimo(model: &str, preset: ReasoningPreset) -> ResolvedReasoning {
     }
 }
 
+fn resolve_openrouter(preset: ReasoningPreset) -> ResolvedReasoning {
+    let effort = match preset {
+        ReasoningPreset::Recommended | ReasoningPreset::None => None,
+        ReasoningPreset::Minimal => Some("minimal"),
+        ReasoningPreset::Low => Some("low"),
+        ReasoningPreset::Medium => Some("medium"),
+        ReasoningPreset::High => Some("high"),
+        ReasoningPreset::Xhigh => Some("xhigh"),
+        ReasoningPreset::Max => Some("max"),
+    };
+
+    ResolvedReasoning::OpenRouter {
+        enabled: preset != ReasoningPreset::None,
+        effort,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -559,7 +583,7 @@ mod tests {
 
     #[test]
     fn provider_ids_resolve_only_to_verified_routes() {
-        for provider in ["volcengine", "openrouter", "local", "agnes"] {
+        for provider in ["volcengine", "local", "agnes"] {
             assert_eq!(
                 ReasoningRoute::for_provider_id(provider),
                 ReasoningRoute::Unknown,
@@ -577,6 +601,47 @@ mod tests {
         assert_eq!(
             ReasoningRoute::for_provider_id("zhipu-coding"),
             ReasoningRoute::ZhipuChat
+        );
+        assert_eq!(
+            ReasoningRoute::for_provider_id("openrouter"),
+            ReasoningRoute::OpenRouterChat
+        );
+    }
+
+    #[test]
+    fn openrouter_maps_all_gateway_presets_without_model_name_inference() {
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::OpenRouterChat,
+                "xiaomi/mimo-v2.5",
+                Some(ReasoningPreset::Recommended),
+            ),
+            ResolvedReasoning::OpenRouter {
+                enabled: true,
+                effort: None,
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::OpenRouterChat,
+                "xiaomi/mimo-v2.5",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::OpenRouter {
+                enabled: false,
+                effort: None,
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::OpenRouterChat,
+                "vendor/future-model",
+                Some(ReasoningPreset::Xhigh),
+            ),
+            ResolvedReasoning::OpenRouter {
+                enabled: true,
+                effort: Some("xhigh"),
+            }
         );
     }
 

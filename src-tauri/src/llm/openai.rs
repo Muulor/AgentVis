@@ -97,20 +97,32 @@ fn model_uses_openai_responses_reasoning(model: &str) -> bool {
 fn openai_chat_reasoning_fields(
     reasoning: ResolvedReasoning,
     preset: Option<super::reasoning::ReasoningPreset>,
-) -> (Option<OpenAIThinkingConfig>, Option<String>) {
+) -> (
+    Option<OpenAIThinkingConfig>,
+    Option<String>,
+    Option<OpenRouterReasoningConfig>,
+) {
     match reasoning {
         ResolvedReasoning::OpenAiResponses { effort } if matches!(preset, Some(value) if value != super::reasoning::ReasoningPreset::Recommended) => {
-            (None, Some(effort.to_string()))
+            (None, Some(effort.to_string()), None)
         }
-        ResolvedReasoning::OpenAiCompatibleEffort { effort } => (None, Some(effort.to_string())),
+        ResolvedReasoning::OpenAiCompatibleEffort { effort } => {
+            (None, Some(effort.to_string()), None)
+        }
         ResolvedReasoning::CompatibleThinking { enabled, effort } => (
             Some(OpenAIThinkingConfig::new(enabled)),
             effort.map(str::to_string),
+            None,
         ),
         ResolvedReasoning::ThinkingToggle { enabled } => {
-            (Some(OpenAIThinkingConfig::new(enabled)), None)
+            (Some(OpenAIThinkingConfig::new(enabled)), None, None)
         }
-        _ => (None, None),
+        ResolvedReasoning::OpenRouter { enabled, effort } => (
+            None,
+            None,
+            Some(OpenRouterReasoningConfig::new(enabled, effort)),
+        ),
+        _ => (None, None, None),
     }
 }
 
@@ -119,13 +131,17 @@ fn apply_openai_chat_reasoning(
     reasoning: ResolvedReasoning,
     preset: Option<super::reasoning::ReasoningPreset>,
 ) {
-    let (thinking, effort) = openai_chat_reasoning_fields(reasoning, preset);
+    let (thinking, effort, openrouter_reasoning) = openai_chat_reasoning_fields(reasoning, preset);
     if let Some(thinking) = thinking {
         body["thinking"] = serde_json::to_value(thinking)
             .unwrap_or_else(|_| serde_json::json!({ "type": "enabled" }));
     }
     if let Some(effort) = effort {
         body["reasoning_effort"] = serde_json::Value::String(effort);
+    }
+    if let Some(openrouter_reasoning) = openrouter_reasoning {
+        body["reasoning"] = serde_json::to_value(openrouter_reasoning)
+            .unwrap_or_else(|_| serde_json::json!({ "enabled": true, "exclude": false }));
     }
 }
 
@@ -357,7 +373,7 @@ impl OpenAIAdapter {
         });
         let model = self.get_model(request.model.as_deref());
         let reasoning = resolve_reasoning(self.reasoning_route(), &model, request.reasoning_preset);
-        let (thinking, reasoning_effort) =
+        let (thinking, reasoning_effort, openrouter_reasoning) =
             openai_chat_reasoning_fields(reasoning, request.reasoning_preset);
         let (max_tokens, max_completion_tokens) =
             if self.max_tokens_request_field(&model) == "max_completion_tokens" {
@@ -378,6 +394,7 @@ impl OpenAIAdapter {
             image_config,
             thinking,
             reasoning_effort,
+            reasoning: openrouter_reasoning,
         }
     }
 
@@ -534,8 +551,13 @@ impl OpenAIAdapter {
                                 msg_json["content"] =
                                     serde_json::Value::String(msg.content.clone());
                             }
-                            // DeepSeek 思考模式：工具调用场景下 reasoning_content 必须回传 API
-                            if let Some(ref rc) = msg.reasoning_content {
+                            // OpenRouter structured blocks must take precedence and be
+                            // returned unchanged. Plaintext remains the compatibility path
+                            // for providers such as DeepSeek.
+                            if let Some(ref details) = msg.reasoning_details {
+                                msg_json["reasoning_details"] =
+                                    serde_json::Value::Array(details.clone());
+                            } else if let Some(ref rc) = msg.reasoning_content {
                                 msg_json["reasoning_content"] =
                                     serde_json::Value::String(rc.clone());
                             }
@@ -910,6 +932,7 @@ impl OpenAIAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1007,6 +1030,7 @@ impl OpenAIAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1235,6 +1259,7 @@ impl OpenAIAdapter {
                 } else {
                     Some(reasoning_buffer)
                 },
+                reasoning_details: None,
             })
         } else {
             Ok(ToolChatResponse {
@@ -1254,6 +1279,7 @@ impl OpenAIAdapter {
                 } else {
                     Some(reasoning_buffer)
                 },
+                reasoning_details: None,
             })
         }
     }
@@ -1333,6 +1359,7 @@ impl OpenAIAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1340,6 +1367,7 @@ impl OpenAIAdapter {
         let mut stream = response.bytes_stream().eventsource();
         let mut content_buffer = String::new();
         let mut reasoning_buffer = String::new();
+        let mut reasoning_details_buffer: Vec<serde_json::Value> = Vec::new();
         let mut tool_acc = ToolCallAccumulator::with_progress(progress_callback);
         let mut chunk_count: u64 = 0;
         let mut last_event_type: Option<String> = None;
@@ -1418,8 +1446,17 @@ impl OpenAIAdapter {
                             content_buffer.push_str(delta_content);
                         }
 
-                        // 累积 reasoning_content（DeepSeek 思考模式专用）
-                        if let Some(ref delta_reasoning) = choice.delta.reasoning_content {
+                        // Normalize plaintext reasoning aliases for UI display while
+                        // preserving OpenRouter's structured blocks for the next tool turn.
+                        let delta_reasoning = normalized_reasoning_delta(
+                            choice.delta.reasoning.as_deref(),
+                            choice.delta.reasoning_content.as_deref(),
+                            choice.delta.reasoning_details.as_deref(),
+                        );
+                        if let Some(details) = choice.delta.reasoning_details.as_ref() {
+                            reasoning_details_buffer.extend(details.iter().cloned());
+                        }
+                        if let Some(delta_reasoning) = delta_reasoning {
                             if !delta_reasoning.is_empty() {
                                 has_useful_progress = true;
                                 if let Some(callback) = reasoning_callback.as_ref() {
@@ -1429,7 +1466,7 @@ impl OpenAIAdapter {
                                     });
                                 }
                             }
-                            reasoning_buffer.push_str(delta_reasoning);
+                            reasoning_buffer.push_str(&delta_reasoning);
                         }
 
                         // 累积 tool_call 片段
@@ -1531,6 +1568,8 @@ impl OpenAIAdapter {
                 } else {
                     Some(reasoning_buffer)
                 },
+                reasoning_details: (!reasoning_details_buffer.is_empty())
+                    .then_some(reasoning_details_buffer),
             })
         } else {
             log::trace!(
@@ -1555,6 +1594,8 @@ impl OpenAIAdapter {
                 } else {
                     Some(reasoning_buffer)
                 },
+                reasoning_details: (!reasoning_details_buffer.is_empty())
+                    .then_some(reasoning_details_buffer),
             })
         }
     }
@@ -1635,6 +1676,13 @@ impl OpenAIAdapter {
     ) -> AppResult<super::types::ToolChatResponse> {
         use super::types::{ToolCall as TypesToolCall, ToolChatResponse};
 
+        let reasoning_content = normalized_reasoning_delta(
+            choice.message.reasoning.as_deref(),
+            choice.message.reasoning_content.as_deref(),
+            choice.message.reasoning_details.as_deref(),
+        );
+        let reasoning_details = choice.message.reasoning_details.clone();
+
         if let Some(ref tool_calls) = choice.message.tool_calls {
             if !tool_calls.is_empty() {
                 let parsed_calls: Vec<TypesToolCall> = tool_calls.iter().filter_map(|tc| {
@@ -1674,7 +1722,8 @@ impl OpenAIAdapter {
                     finish_reason: choice.finish_reason.clone(),
                     input_tokens: None,
                     output_tokens: None,
-                    reasoning_content: None,
+                    reasoning_content: reasoning_content.clone(),
+                    reasoning_details: reasoning_details.clone(),
                 });
             }
         }
@@ -1693,7 +1742,8 @@ impl OpenAIAdapter {
             finish_reason: choice.finish_reason.clone(),
             input_tokens: None,
             output_tokens: None,
-            reasoning_content: None,
+            reasoning_content,
+            reasoning_details,
         })
     }
 }
@@ -1866,10 +1916,13 @@ impl LlmProvider for OpenAIAdapter {
                         .and_then(|c| c.delta.content.as_ref())
                         .cloned()
                         .unwrap_or_default();
-                    let reasoning_delta = choice
-                        .and_then(|c| c.delta.reasoning_content.as_ref())
-                        .filter(|reasoning| !reasoning.is_empty())
-                        .cloned();
+                    let reasoning_delta = choice.and_then(|c| {
+                        normalized_reasoning_delta(
+                            c.delta.reasoning.as_deref(),
+                            c.delta.reasoning_content.as_deref(),
+                            c.delta.reasoning_details.as_deref(),
+                        )
+                    });
 
                     // OpenRouter 图像生成：将 delta.images 转为 markdown 格式，
                     // 与 Gemini adapter 的 inlineData → markdown 处理统一，
@@ -1952,6 +2005,8 @@ struct OpenAIRequest {
     thinking: Option<OpenAIThinkingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<OpenRouterReasoningConfig>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1964,6 +2019,24 @@ impl OpenAIThinkingConfig {
     fn new(enabled: bool) -> Self {
         Self {
             thinking_type: if enabled { "enabled" } else { "disabled" },
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct OpenRouterReasoningConfig {
+    enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    effort: Option<String>,
+    exclude: bool,
+}
+
+impl OpenRouterReasoningConfig {
+    fn new(enabled: bool, effort: Option<&str>) -> Self {
+        Self {
+            enabled,
+            effort: effort.map(str::to_string),
+            exclude: false,
         }
     }
 }
@@ -2075,6 +2148,13 @@ struct OpenAIDelta {
     /// OpenAI-compatible reasoning models such as DeepSeek return thought deltas here.
     #[serde(default)]
     reasoning_content: Option<String>,
+    /// OpenRouter's canonical plaintext reasoning delta.
+    #[serde(default)]
+    reasoning: Option<String>,
+    /// OpenRouter's structured reasoning blocks. Visible text is derived for
+    /// the UI while the raw blocks are preserved by tool-call flows.
+    #[serde(default)]
+    reasoning_details: Option<Vec<serde_json::Value>>,
     /// OpenRouter 图像生成模型返回的图片数据
     #[serde(default)]
     images: Option<Vec<OpenRouterImageEntry>>,
@@ -2133,6 +2213,12 @@ struct OpenAIFunctionInfo {
 struct OpenAIToolResponseMessage {
     /// 文本内容（思考过程，tool_use 时可能存在）
     content: Option<String>,
+    #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
+    reasoning: Option<String>,
+    #[serde(default)]
+    reasoning_details: Option<Vec<serde_json::Value>>,
     /// 工具调用列表
     tool_calls: Option<Vec<OpenAIToolCallInfo>>,
 }
@@ -2181,7 +2267,40 @@ struct OpenAIStreamDeltaWithTools {
     #[serde(default)]
     reasoning_content: Option<String>,
     #[serde(default)]
+    reasoning: Option<String>,
+    #[serde(default)]
+    reasoning_details: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
     tool_calls: Option<Vec<OpenAIStreamToolCallDelta>>,
+}
+
+fn reasoning_details_display_delta(details: &[serde_json::Value]) -> String {
+    details
+        .iter()
+        .filter_map(
+            |detail| match detail.get("type").and_then(|value| value.as_str()) {
+                Some("reasoning.text") => detail.get("text").and_then(|value| value.as_str()),
+                Some("reasoning.summary") => detail.get("summary").and_then(|value| value.as_str()),
+                _ => None,
+            },
+        )
+        .filter(|text| !text.is_empty())
+        .collect::<String>()
+}
+
+fn normalized_reasoning_delta(
+    reasoning: Option<&str>,
+    reasoning_content: Option<&str>,
+    reasoning_details: Option<&[serde_json::Value]>,
+) -> Option<String> {
+    reasoning
+        .filter(|value| !value.is_empty())
+        .or_else(|| reasoning_content.filter(|value| !value.is_empty()))
+        .map(str::to_string)
+        .or_else(|| {
+            let details_delta = reasoning_details_display_delta(reasoning_details?);
+            (!details_delta.is_empty()).then_some(details_delta)
+        })
 }
 
 /// 扩展的流式 choice（用于 tool_calls 场景）
@@ -2721,7 +2840,7 @@ impl ResponsesToolCallAccumulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::types::{ToolChatMessage, ToolChatRequest, ToolChatRole};
+    use crate::llm::types::{ToolCall, ToolChatMessage, ToolChatRequest, ToolChatRole};
     use crate::llm::{ReasoningPreset, ReasoningRoute};
 
     fn tool_request(model: &str, preset: Option<ReasoningPreset>) -> ToolChatRequest {
@@ -2734,6 +2853,7 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 reasoning_content: None,
+                reasoning_details: None,
             }],
             model_id: Some(model.to_string()),
             provider_id: None,
@@ -3036,6 +3156,102 @@ mod tests {
     }
 
     #[test]
+    fn openrouter_reasoning_config_applies_to_plain_and_tool_bodies() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://openrouter.ai/api/v1")
+                .with_reasoning_route(ReasoningRoute::OpenRouterChat),
+        );
+        let recommended = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("xiaomi/mimo-v2.5".to_string()),
+            reasoning_preset: Some(ReasoningPreset::Recommended),
+            ..Default::default()
+        };
+        let disabled = ChatRequest {
+            reasoning_preset: Some(ReasoningPreset::None),
+            ..recommended.clone()
+        };
+
+        let recommended_body =
+            serde_json::to_value(adapter.build_request_body(&recommended)).unwrap();
+        let disabled_body = serde_json::to_value(adapter.build_request_body(&disabled)).unwrap();
+        let (tool_body, _, _) = adapter.build_tool_request_body(&tool_request(
+            "xiaomi/mimo-v2.5",
+            Some(ReasoningPreset::High),
+        ));
+
+        assert_eq!(recommended_body["reasoning"]["enabled"], true);
+        assert_eq!(recommended_body["reasoning"]["exclude"], false);
+        assert!(recommended_body["reasoning"].get("effort").is_none());
+        assert_eq!(disabled_body["reasoning"]["enabled"], false);
+        assert_eq!(disabled_body["reasoning"]["exclude"], false);
+        assert_eq!(tool_body["reasoning"]["enabled"], true);
+        assert_eq!(tool_body["reasoning"]["effort"], "high");
+        assert_eq!(tool_body["reasoning"]["exclude"], false);
+        assert!(tool_body.get("reasoning_effort").is_none());
+        assert!(tool_body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn openrouter_reasoning_details_are_returned_unchanged_in_tool_history() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://openrouter.ai/api/v1")
+                .with_reasoning_route(ReasoningRoute::OpenRouterChat),
+        );
+        let details = vec![
+            serde_json::json!({
+                "type": "reasoning.text",
+                "text": "Need a file first.",
+                "signature": "signed-value",
+                "id": "reasoning-1",
+                "format": "openai-responses-v1",
+                "index": 0
+            }),
+            serde_json::json!({
+                "type": "reasoning.encrypted",
+                "data": "opaque-value",
+                "id": "reasoning-2",
+                "format": "openai-responses-v1",
+                "index": 1
+            }),
+        ];
+        let request = ToolChatRequest {
+            messages: vec![ToolChatMessage {
+                role: ToolChatRole::Assistant,
+                content: String::new(),
+                images: None,
+                tool_calls: Some(vec![ToolCall {
+                    name: "file_read".to_string(),
+                    args: serde_json::json!({ "path": "README.md" }),
+                    id: Some("call-1".to_string()),
+                    thought_signature: None,
+                }]),
+                tool_call_id: None,
+                tool_name: None,
+                reasoning_content: Some("derived display text".to_string()),
+                reasoning_details: Some(details.clone()),
+            }],
+            model_id: Some("xiaomi/mimo-v2.5".to_string()),
+            provider_id: Some("openrouter".to_string()),
+            supports_vision: None,
+            tools: None,
+            temperature: None,
+            max_tokens: Some(456),
+            reasoning_preset: Some(ReasoningPreset::Recommended),
+            base_url: None,
+        };
+
+        let (body, _, _) = adapter.build_tool_request_body(&request);
+        let assistant = &body["messages"][0];
+
+        assert_eq!(assistant["reasoning_details"], serde_json::json!(details));
+        assert!(assistant.get("reasoning_content").is_none());
+        assert!(assistant.get("reasoning").is_none());
+    }
+
+    #[test]
     fn unknown_compatible_routes_never_leak_reasoning_parameters() {
         for (base_url, model) in [
             ("https://openrouter.ai/api/v1", "openai/gpt-5.5"),
@@ -3194,6 +3410,7 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 reasoning_content: None,
+                reasoning_details: None,
             }],
             model_id: Some("gpt-5.4".to_string()),
             provider_id: Some("openai".to_string()),
@@ -3352,6 +3569,90 @@ mod tests {
         assert_eq!(
             chunk.choices[0].delta.reasoning_content.as_deref(),
             Some("Thinking through the task")
+        );
+    }
+
+    #[test]
+    fn openrouter_reasoning_aliases_normalize_without_duplicate_display() {
+        let details = vec![serde_json::json!({
+            "type": "reasoning.text",
+            "text": "structured duplicate"
+        })];
+
+        assert_eq!(
+            normalized_reasoning_delta(
+                Some("canonical reasoning"),
+                Some("compatibility duplicate"),
+                Some(&details),
+            )
+            .as_deref(),
+            Some("canonical reasoning")
+        );
+        assert_eq!(
+            normalized_reasoning_delta(None, Some("compatibility reasoning"), Some(&details))
+                .as_deref(),
+            Some("compatibility reasoning")
+        );
+        assert_eq!(
+            normalized_reasoning_delta(None, None, Some(&details)).as_deref(),
+            Some("structured duplicate")
+        );
+    }
+
+    #[test]
+    fn openrouter_stream_and_non_stream_tool_responses_preserve_reasoning_details() {
+        let stream_chunk: OpenAIStreamChunkWithTools = serde_json::from_value(serde_json::json!({
+            "choices": [{
+                "delta": {
+                    "reasoning": "Inspect the file.",
+                    "reasoning_content": "Inspect the file.",
+                    "reasoning_details": [{
+                        "type": "reasoning.text",
+                        "text": "Inspect the file.",
+                        "signature": "signed"
+                    }]
+                }
+            }]
+        }))
+        .expect("parse OpenRouter tool stream chunk");
+        let delta = &stream_chunk.choices[0].delta;
+        assert_eq!(delta.reasoning.as_deref(), Some("Inspect the file."));
+        assert_eq!(delta.reasoning_details.as_ref().map(Vec::len), Some(1));
+
+        let choice: OpenAIToolChoice = serde_json::from_value(serde_json::json!({
+            "message": {
+                "content": null,
+                "reasoning": "Inspect the file.",
+                "reasoning_content": "Inspect the file.",
+                "reasoning_details": [{
+                    "type": "reasoning.text",
+                    "text": "Inspect the file.",
+                    "signature": "signed"
+                }],
+                "tool_calls": [{
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                        "name": "file_read",
+                        "arguments": "{\"path\":\"README.md\"}"
+                    }
+                }]
+            },
+            "finish_reason": "tool_calls"
+        }))
+        .expect("parse OpenRouter non-stream tool response");
+
+        let response =
+            OpenAIAdapter::extract_tool_response(&choice).expect("extract OpenRouter response");
+
+        assert_eq!(
+            response.reasoning_content.as_deref(),
+            Some("Inspect the file.")
+        );
+        assert_eq!(response.reasoning_details.as_ref().map(Vec::len), Some(1));
+        assert_eq!(
+            response.reasoning_details.as_ref().unwrap()[0]["signature"],
+            "signed"
         );
     }
 

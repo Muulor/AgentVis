@@ -292,7 +292,7 @@ pub async fn settings_test_api_key(
             // OpenRouter 使用 OpenAI 兼容协议，指定免费模型进行连通性测试
             let openrouter_config = config
                 .with_base_url("https://openrouter.ai/api/v1")
-                .with_model("openai/gpt-oss-120b:free");
+                .with_model("openai/gpt-oss-20b:free");
             let adapter = OpenAIAdapter::new(openrouter_config);
             adapter.test_connection().await
         }

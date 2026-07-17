@@ -25,6 +25,7 @@ describe('tokenEstimator', () => {
         role: 'assistant',
         content: 'done',
         reasoningContent: 'reason',
+        reasoningDetails: [{ type: 'reasoning.text', text: 'structured reason' }],
         toolCalls: [{ name: 'read', args: { path: 'README.md' }, id: 'call-1' }],
       },
     ]);

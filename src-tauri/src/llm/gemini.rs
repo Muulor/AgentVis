@@ -99,7 +99,8 @@ impl GeminiAdapter {
                 | ResolvedReasoning::OpenAiCompatibleEffort { .. }
                 | ResolvedReasoning::AnthropicAdaptive { .. }
                 | ResolvedReasoning::CompatibleThinking { .. }
-                | ResolvedReasoning::ThinkingToggle { .. } => None,
+                | ResolvedReasoning::ThinkingToggle { .. }
+                | ResolvedReasoning::OpenRouter { .. } => None,
             }
         } else {
             None
@@ -583,6 +584,7 @@ impl GeminiAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             };
         }
 
@@ -602,6 +604,7 @@ impl GeminiAdapter {
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
+            reasoning_details: None,
         }
     }
 
@@ -700,6 +703,7 @@ impl GeminiAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -739,6 +743,7 @@ impl GeminiAdapter {
             input_tokens: None,
             output_tokens: None,
             reasoning_content: None,
+            reasoning_details: None,
         })
     }
 
@@ -813,6 +818,7 @@ impl GeminiAdapter {
                 input_tokens: None,
                 output_tokens: None,
                 reasoning_content: None,
+                reasoning_details: None,
             });
         }
 
@@ -1444,6 +1450,7 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 reasoning_content: None,
+                reasoning_details: None,
             }],
             model_id: Some(model.to_string()),
             provider_id: Some("gemini".to_string()),

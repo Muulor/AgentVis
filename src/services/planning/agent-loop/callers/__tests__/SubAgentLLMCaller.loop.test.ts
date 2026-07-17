@@ -108,6 +108,53 @@ describe('SubAgentLLMCaller Loop', () => {
       expect(response.content).toBeDefined();
     });
 
+    it('原样透传 OpenRouter reasoningDetails 并返回给 Runner', async () => {
+      const reasoningDetails = [
+        {
+          type: 'reasoning.text',
+          text: 'Inspect the file first.',
+          signature: 'signed-value',
+          id: 'reasoning-1',
+          index: 0,
+        },
+        {
+          type: 'reasoning.encrypted',
+          data: 'opaque-value',
+          id: 'reasoning-2',
+          index: 1,
+        },
+      ];
+      vi.mocked(invoke).mockResolvedValue({
+        type: 'tool_use',
+        content: 'Reading the file.',
+        reasoningContent: 'Inspect the file first.',
+        reasoningDetails,
+        toolCalls: [{ id: 'call-2', name: 'read', args: { path: 'README.md' } }],
+      });
+      const caller = factory.create();
+      const accumulatedContext: AccumulatedMessage[] = [
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call-1', name: 'read', args: { path: 'src/App.tsx' } }],
+          reasoningContent: 'Display-only compatibility text',
+          reasoningDetails,
+          timestamp: Date.now(),
+        },
+      ];
+
+      const response = await caller.callWithContext('System prompt', ['read'], accumulatedContext);
+      const request = vi.mocked(invoke).mock.calls[0]?.[1] as {
+        request: {
+          messages: Array<{ reasoningDetails?: Array<Record<string, unknown>> }>;
+        };
+      };
+      const assistant = request.request.messages.find((message) => message.reasoningDetails);
+
+      expect(assistant?.reasoningDetails).toEqual(reasoningDetails);
+      expect(response.reasoningDetails).toEqual(reasoningDetails);
+    });
+
     it('工具结果正确追加到消息历史', async () => {
       const caller = factory.create();
 

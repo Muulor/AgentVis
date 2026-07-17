@@ -115,6 +115,51 @@ describe('SubAgentRunner 新架构 Checkpoint', () => {
     });
   });
 
+  it('[新架构] OpenRouter reasoningDetails 保留到工具续轮上下文', async () => {
+    const reasoningDetails = [
+      {
+        type: 'reasoning.text',
+        text: 'Inspect the file first.',
+        signature: 'signed-value',
+        index: 0,
+      },
+    ];
+    const contexts: unknown[][] = [];
+    let callIndex = 0;
+    const mockCaller: LLMCaller = {
+      async callWithContext(_systemPrompt, _tools, accumulatedContext): Promise<LLMResponse> {
+        contexts.push(accumulatedContext);
+        callIndex++;
+        return callIndex === 1
+          ? {
+              content: '',
+              rawToolCalls: [{ id: 'call-1', name: 'read', args: { path: 'README.md' } }],
+              reasoningContent: 'Inspect the file first.',
+              reasoningDetails,
+            }
+          : { content: 'TASK_COMPLETE', rawToolCalls: [] };
+      },
+    };
+    const runner = new SubAgentRunner(mockCaller);
+    runner.setToolExecutor(vi.fn().mockResolvedValue({ success: true, content: 'README' }));
+    const spec = createMockSpec({
+      loopConfig: createMockLoopConfig({ initialBudget: 2 }),
+    });
+
+    const result = await runner.runWithDynamicLoop(spec, createMockContext(), vi.fn(), []);
+
+    expect(result.status).toBe('completed');
+    expect(contexts[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'assistant',
+          reasoningContent: 'Inspect the file first.',
+          reasoningDetails,
+        }),
+      ])
+    );
+  });
+
   it('[新架构] Master Brain EXTEND_BUDGET 决策延长工具调用上限', async () => {
     const responses: LLMResponse[] = [
       { content: 'Step 1', rawToolCalls: [{ name: 'read', args: {} }] },

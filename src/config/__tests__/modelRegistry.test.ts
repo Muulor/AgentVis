@@ -58,6 +58,7 @@ describe('modelRegistry reasoning output budget capabilities', () => {
     expect(modelUsesSharedReasoningOutputBudget('MiniMax-M3', 'minimax')).toBe(true);
     expect(modelUsesSharedReasoningOutputBudget('GLM-5.1', 'zhipu-coding')).toBe(true);
     expect(modelUsesSharedReasoningOutputBudget('GLM-5.2', 'zhipu-coding')).toBe(true);
+    expect(modelUsesSharedReasoningOutputBudget('xiaomi/mimo-v2.5', 'openrouter')).toBe(true);
   });
 
   it('keeps compatible local routes opt-in instead of inferring reasoning by model ID', () => {
@@ -166,13 +167,17 @@ describe('modelRegistry reasoning preset capabilities', () => {
       'none',
       'high',
     ]);
+    expect(getSupportedReasoningPresets('openrouter', 'xiaomi/mimo-v2.5')).toEqual([
+      'recommended',
+      'none',
+    ]);
   });
 
   it('keeps local, aggregator, coding-plan, custom, and unverified routes recommended-only', () => {
     expect(getSupportedReasoningPresets('local', 'gpt-5.4')).toEqual(['recommended']);
-    expect(getSupportedReasoningPresets('openrouter', 'openai/gpt-oss-120b:free')).toEqual([
-      'recommended',
-    ]);
+    expect(getSupportedReasoningPresets('openrouter', 'vendor/unverified-reasoning-model')).toEqual(
+      ['recommended']
+    );
     expect(getSupportedReasoningPresets('zhipu-coding', 'GLM-4.7')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('minimax', 'MiniMax-M2.7')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('volcengine', 'MiniMax-M3')).toEqual(['recommended']);
@@ -188,6 +193,8 @@ describe('modelRegistry reasoning preset capabilities', () => {
     expect(normalizeReasoningPreset('minimax', 'MiniMax-M3', 'none')).toBe('none');
     expect(normalizeReasoningPreset('minimax', 'MiniMax-M2.7', 'none')).toBe('recommended');
     expect(normalizeReasoningPreset('zhipu-coding', 'GLM-5.2', 'max')).toBe('max');
+    expect(normalizeReasoningPreset('openrouter', 'xiaomi/mimo-v2.5', 'none')).toBe('none');
+    expect(normalizeReasoningPreset('openrouter', 'xiaomi/mimo-v2.5', 'high')).toBe('recommended');
     expect(normalizeReasoningPreset('gemini', 'gemini-3.1-pro-preview', 'minimal')).toBe(
       'recommended'
     );

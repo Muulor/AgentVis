@@ -492,13 +492,54 @@ const BUILTIN_MODELS: ModelDefinition[] = [
   // 通过 OpenRouter 聚合路由访问各厂商免费模型（OpenAI 兼容协议）
   // 上下文窗口单位：tokens（原文 K 已换算：262K→262144, 131K→131072, 196K→196608）
   {
-    id: 'openai/gpt-oss-120b:free',
-    name: 'GPT-OSS 120B (free)',
+    id: 'xiaomi/mimo-v2.5',
+    name: 'Mimo V2.5',
     providerId: 'openrouter',
-    contextWindow: 131072,
+    contextWindow: 1000000,
+    supportsVision: true,
+  },
+  {
+    id: 'xiaomi/mimo-v2.5-pro',
+    name: 'Mimo V2.5 Pro',
+    providerId: 'openrouter',
+    contextWindow: 1000000,
     supportsVision: false,
   },
-
+  {
+    id: 'deepseek/deepseek-v4-flash',
+    name: 'Deepseek V4 Flash',
+    providerId: 'openrouter',
+    contextWindow: 1000000,
+    supportsVision: false,
+  },
+  {
+    id: 'deepseek/deepseek-v4-pro',
+    name: 'Deepseek V4 Pro',
+    providerId: 'openrouter',
+    contextWindow: 1000000,
+    supportsVision: false,
+  },
+  {
+    id: 'minimax/minimax-m3',
+    name: 'Minimax M3',
+    providerId: 'openrouter',
+    contextWindow: 1000000,
+    supportsVision: true,
+  },
+  {
+    id: 'z-ai/glm-5.2',
+    name: 'GLM 5.2',
+    providerId: 'openrouter',
+    contextWindow: 1000000,
+    supportsVision: false,
+  },
+  {
+    id: 'moonshotai/kimi-k3',
+    name: 'Kimi K3',
+    providerId: 'openrouter',
+    contextWindow: 1000000,
+    supportsVision: true,
+  },
   // ━━ Local（本地代理）━━
   // 协议推断规则:
   //   claude-*       → Anthropic 协议
@@ -567,15 +608,22 @@ const SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES = [
   ['deepseek', 'deepseek-v4-flash'],
   ['xiaomi-mimo', 'mimo-v2.5'],
   ['xiaomi-mimo', 'mimo-v2.5-pro'],
-  ['minimax', 'MiniMax-M3'],
   ['zhipu-coding', 'GLM-5.1'],
   ['zhipu-coding', 'glm-5.2'],
+  ['minimax', 'MiniMax-M3'],
   ['volcengine', 'deepseek-v4-flash'],
   ['volcengine', 'deepseek-v4-pro'],
   ['volcengine', 'kimi-k2.6'],
   ['volcengine', 'Kimi-K2.7-Code'],
   ['volcengine', 'MiniMax-M3'],
   ['volcengine', 'glm-5.2'],
+  ['openrouter', 'xiaomi/mimo-v2.5'],
+  ['openrouter', 'xiaomi/mimo-v2.5-pro'],
+  ['openrouter', 'deepseek/deepseek-v4-pro'],
+  ['openrouter', 'deepseek/deepseek-v4-flash'],
+  ['openrouter', 'minimax/minimax-m3'],
+  ['openrouter', 'z-ai/glm-5.2'],
+  ['openrouter', 'moonshotai/kimi-k3'],
 ] as const;
 
 function getModelRouteKey(providerId: string, modelId: string): string {
@@ -585,8 +633,8 @@ function getModelRouteKey(providerId: string, modelId: string): string {
 /**
  * 可复用的推理档位集合。
  *
- * 这里只声明已验证为有效且行为互不重复的档位。聚合路由、本地路由、用户自定义路由，
- * 以及尚未验证的供应商路由都会回退为 recommended-only。
+ * 这里只声明已验证为有效且行为互不重复的档位。未经验证的聚合路由、本地路由、
+ * 用户自定义路由以及尚未验证的供应商路由都会回退为 recommended-only。
  */
 const REASONING_PRESET_PROFILES = {
   recommendedOnly: ['recommended'],
@@ -630,9 +678,19 @@ const REASONING_PRESET_MODEL_ROUTES = [
   ['deepseek', 'deepseek-v4-flash', 'highMax'],
   ['xiaomi-mimo', 'mimo-v2.5', 'toggleHigh'],
   ['xiaomi-mimo', 'mimo-v2.5-pro', 'toggleHigh'],
-  ['minimax', 'MiniMax-M3', 'toggleHigh'],
   ['zhipu-coding', 'GLM-5.1', 'toggle'],
   ['zhipu-coding', 'GLM-5.2', 'highMax'],
+  ['minimax', 'MiniMax-M3', 'toggleHigh'],
+  ['volcengine', 'deepseek-v4-flash', 'highMax'],
+  ['volcengine', 'deepseek-v4-pro', 'highMax'],
+  ['volcengine', 'kimi-k2.6,', 'toggle'],
+  ['volcengine', 'Kimi-K2.7-Code', 'toggleHigh'],
+  ['volcengine', 'glm-5.2', 'highMax'],
+  ['openrouter', 'xiaomi/mimo-v2.5', 'toggle'],
+  ['openrouter', 'xiaomi/mimo-v2.5-pro', 'toggle'],
+  ['openrouter', 'deepseek/deepseek-v4-pro', 'highMax'],
+  ['openrouter', 'deepseek/deepseek-v4-flash', 'highMax'],
+  ['openrouter', 'z-ai/glm-5.2', 'highMax'],
 ] as const satisfies ReadonlyArray<readonly [string, string, ReasoningPresetProfileId]>;
 
 const REASONING_PRESET_PROFILE_BY_MODEL_KEY = new Map<string, ReasoningPresetProfileId>(
@@ -786,7 +844,8 @@ export function modelSupportsVision(modelId: string, providerId?: string): boole
 /**
  * 返回指定供应商路由实际开放的推理档位。
  *
- * 未知、本地、聚合以及尚未验证的路由只返回 recommended，避免发送未经验证的参数。
+ * 未知、本地、未经验证的聚合路由以及尚未验证的供应商路由只返回 recommended，
+ * 避免发送未经验证的参数。
  */
 export function getSupportedReasoningPresets(
   providerId: string,

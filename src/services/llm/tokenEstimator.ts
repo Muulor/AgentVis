@@ -25,6 +25,7 @@ export interface TokenEstimateMessage {
   role?: string;
   content?: string;
   reasoningContent?: string;
+  reasoningDetails?: unknown;
   toolName?: string;
   toolCallId?: string;
   toolCalls?: readonly TokenEstimateToolCall[];
@@ -115,12 +116,16 @@ export function estimateRequestTokens(
 
   const messageTokens = messages.reduce((total, message) => {
     const imageCount = message.images?.length ?? 0;
+    const reasoningTokens =
+      message.reasoningDetails !== undefined
+        ? estimateTextTokens(stringifyForEstimate(message.reasoningDetails))
+        : estimateTextTokens(message.reasoningContent);
     return (
       total +
       MESSAGE_OVERHEAD_TOKENS +
       estimateTextTokens(message.role) +
       estimateTextTokens(message.content) +
-      estimateTextTokens(message.reasoningContent) +
+      reasoningTokens +
       estimateTextTokens(message.toolName) +
       estimateTextTokens(message.toolCallId) +
       estimateToolCalls(message.toolCalls) +
