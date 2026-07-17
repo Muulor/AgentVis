@@ -113,6 +113,13 @@ BUILTIN_MODELS: list[dict] = [
     # OpenRouter (routes to free models from various providers through an OpenAI-compatible protocol)
     # Context windows have been converted to tokens: 262K→262144, 131K→131072, 196K→196608
     {"id": "xiaomi/mimo-v2.5", "name": "Mimo V2.5", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": True},
+    {"id": "xiaomi/mimo-v2.5-pro", "name": "Mimo V2.5 Pro", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": False},
+    {"id": "deepseek/deepseek-v4-flash", "name": "Deepseek V4 Flash", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": False},
+    {"id": "deepseek/deepseek-v4-pro", "name": "Deepseek V4 Pro", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": False},
+    {"id": "minimax/minimax-m3", "name": "Minimax M3", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": True},
+    {"id": "stepfun/step-3.7-flash", "name": "Step 3.7 Flash", "providerId": "openrouter", "contextWindow": 256000, "supportsVision": True},
+    {"id": "z-ai/glm-5.2", "name": "GLM 5.2", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": False},
+    {"id": "moonshotai/kimi-k3", "name": "Kimi K3", "providerId": "openrouter", "contextWindow": 1000000, "supportsVision": True},
     # Local
     {"id": "gpt-5.4", "name": "GPT-5.4", "providerId": "local", "contextWindow": 400000, "supportsVision": True},
     {"id": "gpt-5.5", "name": "GPT-5.5", "providerId": "local", "contextWindow": 400000, "supportsVision": True},

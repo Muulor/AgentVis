@@ -3172,12 +3172,18 @@ mod tests {
             reasoning_preset: Some(ReasoningPreset::None),
             ..recommended.clone()
         };
+        let minimax_disabled = ChatRequest {
+            model: Some("minimax/minimax-m3".to_string()),
+            ..disabled.clone()
+        };
 
         let recommended_body =
             serde_json::to_value(adapter.build_request_body(&recommended)).unwrap();
         let disabled_body = serde_json::to_value(adapter.build_request_body(&disabled)).unwrap();
+        let minimax_disabled_body =
+            serde_json::to_value(adapter.build_request_body(&minimax_disabled)).unwrap();
         let (tool_body, _, _) = adapter.build_tool_request_body(&tool_request(
-            "xiaomi/mimo-v2.5",
+            "stepfun/step-3.7-flash",
             Some(ReasoningPreset::High),
         ));
 
@@ -3186,11 +3192,65 @@ mod tests {
         assert!(recommended_body["reasoning"].get("effort").is_none());
         assert_eq!(disabled_body["reasoning"]["enabled"], false);
         assert_eq!(disabled_body["reasoning"]["exclude"], false);
+        assert_eq!(minimax_disabled_body["reasoning"]["enabled"], false);
+        assert!(minimax_disabled_body["reasoning"].get("effort").is_none());
         assert_eq!(tool_body["reasoning"]["enabled"], true);
         assert_eq!(tool_body["reasoning"]["effort"], "high");
         assert_eq!(tool_body["reasoning"]["exclude"], false);
         assert!(tool_body.get("reasoning_effort").is_none());
         assert!(tool_body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn volcengine_reasoning_config_applies_to_plain_and_tool_bodies() {
+        let adapter = OpenAIAdapter::new(
+            ProviderConfig::new("test-key")
+                .with_base_url("https://ark.cn-beijing.volces.com/api/coding/v3")
+                .with_reasoning_route(ReasoningRoute::VolcengineChat),
+        );
+        let deepseek_disabled = ChatRequest {
+            messages: vec![ChatMessage::user("Hi")],
+            model: Some("deepseek-v4-flash".to_string()),
+            reasoning_preset: Some(ReasoningPreset::None),
+            ..Default::default()
+        };
+        let glm_disabled = ChatRequest {
+            model: Some("glm-5.2".to_string()),
+            ..deepseek_disabled.clone()
+        };
+        let kimi_27_disabled = ChatRequest {
+            model: Some("Kimi-K2.7-Code".to_string()),
+            ..deepseek_disabled.clone()
+        };
+        let minimax_disabled = ChatRequest {
+            model: Some("MiniMax-M3".to_string()),
+            ..deepseek_disabled.clone()
+        };
+
+        let deepseek_body =
+            serde_json::to_value(adapter.build_request_body(&deepseek_disabled)).unwrap();
+        let glm_body = serde_json::to_value(adapter.build_request_body(&glm_disabled)).unwrap();
+        let kimi_27_disabled_body =
+            serde_json::to_value(adapter.build_request_body(&kimi_27_disabled)).unwrap();
+        let minimax_disabled_body =
+            serde_json::to_value(adapter.build_request_body(&minimax_disabled)).unwrap();
+        let (kimi_26_tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("kimi-k2.6", Some(ReasoningPreset::None)));
+        let (kimi_27_tool_body, _, _) = adapter
+            .build_tool_request_body(&tool_request("Kimi-K2.7-Code", Some(ReasoningPreset::High)));
+
+        assert_eq!(deepseek_body["thinking"]["type"], "disabled");
+        assert!(deepseek_body.get("reasoning_effort").is_none());
+        assert_eq!(glm_body["thinking"]["type"], "disabled");
+        assert_eq!(glm_body["reasoning_effort"], "none");
+        assert!(kimi_27_disabled_body.get("thinking").is_none());
+        assert!(kimi_27_disabled_body.get("reasoning_effort").is_none());
+        assert_eq!(minimax_disabled_body["thinking"]["type"], "disabled");
+        assert!(minimax_disabled_body.get("reasoning_effort").is_none());
+        assert_eq!(kimi_26_tool_body["thinking"]["type"], "disabled");
+        assert!(kimi_26_tool_body.get("reasoning_effort").is_none());
+        assert!(kimi_27_tool_body.get("reasoning_effort").is_none());
+        assert!(kimi_27_tool_body.get("thinking").is_none());
     }
 
     #[test]

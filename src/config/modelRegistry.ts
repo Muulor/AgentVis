@@ -527,6 +527,13 @@ const BUILTIN_MODELS: ModelDefinition[] = [
     supportsVision: true,
   },
   {
+    id: 'stepfun/step-3.7-flash',
+    name: 'Step 3.7 Flash',
+    providerId: 'openrouter',
+    contextWindow: 256000,
+    supportsVision: true,
+  },
+  {
     id: 'z-ai/glm-5.2',
     name: 'GLM 5.2',
     providerId: 'openrouter',
@@ -622,6 +629,7 @@ const SHARED_REASONING_OUTPUT_BUDGET_MODEL_ROUTES = [
   ['openrouter', 'deepseek/deepseek-v4-pro'],
   ['openrouter', 'deepseek/deepseek-v4-flash'],
   ['openrouter', 'minimax/minimax-m3'],
+  ['openrouter', 'stepfun/step-3.7-flash'],
   ['openrouter', 'z-ai/glm-5.2'],
   ['openrouter', 'moonshotai/kimi-k3'],
 ] as const;
@@ -684,12 +692,15 @@ const REASONING_PRESET_MODEL_ROUTES = [
   ['volcengine', 'deepseek-v4-flash', 'highMax'],
   ['volcengine', 'deepseek-v4-pro', 'highMax'],
   ['volcengine', 'kimi-k2.6', 'toggle'],
-  ['volcengine', 'Kimi-K2.7-Code', 'toggleHigh'],
+  ['volcengine', 'Kimi-K2.7-Code', 'recommendedOnly'],
+  ['volcengine', 'MiniMax-M3', 'toggle'],
   ['volcengine', 'glm-5.2', 'highMax'],
   ['openrouter', 'xiaomi/mimo-v2.5', 'toggle'],
   ['openrouter', 'xiaomi/mimo-v2.5-pro', 'toggle'],
   ['openrouter', 'deepseek/deepseek-v4-pro', 'highMax'],
   ['openrouter', 'deepseek/deepseek-v4-flash', 'highMax'],
+  ['openrouter', 'minimax/minimax-m3', 'toggle'],
+  ['openrouter', 'stepfun/step-3.7-flash', 'stepFun'],
   ['openrouter', 'z-ai/glm-5.2', 'highMax'],
 ] as const satisfies ReadonlyArray<readonly [string, string, ReasoningPresetProfileId]>;
 

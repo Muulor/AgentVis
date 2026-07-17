@@ -1240,7 +1240,7 @@ llm/
 ├── http_client.rs                # HTTP 客户端（连接池）
 ├── schema_compat.rs
 ├── json_repair.rs                # 流式/截断 JSON 参数修复（上层须结合 finish reason 安全处置）
-├── reasoning.rs                  # 路由级 reasoning preset 能力解析与供应商（含 OpenRouter）语义映射
+├── reasoning.rs                  # 路由级 reasoning preset 能力解析与供应商（含 Volcengine/OpenRouter）语义映射
 ├── gemini.rs                     # Google Gemini 适配器（thinkingLevel 映射）
 ├── openai.rs                     # OpenAI 适配器（Responses/兼容路由参数、OpenRouter 推理归一化与续轮）
 └── anthropic.rs                  # Anthropic Claude Adaptive Thinking 与 MiniMax M3 thinking 开关映射

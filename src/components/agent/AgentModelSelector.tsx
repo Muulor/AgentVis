@@ -17,6 +17,7 @@ import { Tooltip } from '@components/ui/Tooltip';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import {
+  formatModelSelectorLabel,
   hasConfigurableReasoningPresets,
   resolveModelSelectionPreset,
 } from './AgentModelSelector.helpers';
@@ -99,7 +100,7 @@ export function AgentModelSelector({
     if (!model) return t('agent.modelNotConfigured');
     const displayName = getModelDisplayName(model);
     if (!provider) return displayName;
-    return `${displayName} · ${normalizeReasoningPreset(provider, model, reasoningPreset)}`;
+    return formatModelSelectorLabel(provider, model, displayName, reasoningPreset);
   }, [model, provider, reasoningPreset, t]);
 
   // 点击当前模型保留有效档位；切换到新路由时使用 recommended。
@@ -239,9 +240,6 @@ export function AgentModelSelector({
                                 </svg>
                               )}
                               <span className={styles.modelOptionName}>{m.name}</span>
-                              {isSelected && !hasReasoningMenu && (
-                                <span className={styles.currentPreset}>{selectedPreset}</span>
-                              )}
                             </button>
                             {hasReasoningMenu && (
                               <button

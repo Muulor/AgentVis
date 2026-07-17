@@ -60,6 +60,7 @@ pub enum ReasoningRoute {
     StepFunChat,
     ZhipuChat,
     MimoChat,
+    VolcengineChat,
     OpenRouterChat,
     Unknown,
 }
@@ -75,9 +76,10 @@ impl ReasoningRoute {
             "stepfun" => Self::StepFunChat,
             "zhipu" | "zhipu-coding" => Self::ZhipuChat,
             "xiaomi-mimo" => Self::MimoChat,
+            "volcengine" => Self::VolcengineChat,
             "openrouter" => Self::OpenRouterChat,
-            // In particular, Volcengine and Local are distinct routes and
-            // must not inherit a first-party profile.
+            // Local and other compatible endpoints must not inherit a
+            // first-party profile based only on their model id.
             _ => Self::Unknown,
         }
     }
@@ -139,7 +141,8 @@ pub(crate) fn resolve_reasoning(
         ReasoningRoute::StepFunChat => resolve_stepfun(model, preset),
         ReasoningRoute::ZhipuChat => resolve_zhipu(model, preset),
         ReasoningRoute::MimoChat => resolve_mimo(model, preset),
-        ReasoningRoute::OpenRouterChat => resolve_openrouter(preset),
+        ReasoningRoute::VolcengineChat => resolve_volcengine(model, preset),
+        ReasoningRoute::OpenRouterChat => resolve_openrouter(model, preset),
         ReasoningRoute::Auto | ReasoningRoute::Unknown => ResolvedReasoning::Preserve,
     };
     log::trace!(
@@ -393,7 +396,54 @@ fn resolve_mimo(model: &str, preset: ReasoningPreset) -> ResolvedReasoning {
     }
 }
 
-fn resolve_openrouter(preset: ReasoningPreset) -> ResolvedReasoning {
+fn resolve_volcengine(model: &str, preset: ReasoningPreset) -> ResolvedReasoning {
+    let model = normalized_model(model);
+
+    match model.as_str() {
+        "deepseek-v4-pro" | "deepseek-v4-flash" => resolve_deepseek(&model, preset),
+        "glm-5-2" => resolve_zhipu(&model, preset),
+        "kimi-k2-6" => match preset {
+            ReasoningPreset::None => ResolvedReasoning::ThinkingToggle { enabled: false },
+            // Only the verified off switch is exposed for K2.6 on this route.
+            _ => ResolvedReasoning::Preserve,
+        },
+        // K2.7 Code always thinks. Neither its off switch nor an effort field
+        // is verified on the Volcengine Coding Plan route, so preserve the body.
+        "kimi-k2-7-code" => ResolvedReasoning::Preserve,
+        "minimax-m3" => match preset {
+            ReasoningPreset::None => ResolvedReasoning::ThinkingToggle { enabled: false },
+            _ => ResolvedReasoning::Preserve,
+        },
+        _ => ResolvedReasoning::Preserve,
+    }
+}
+
+fn resolve_openrouter(model: &str, preset: ReasoningPreset) -> ResolvedReasoning {
+    let model = normalized_model(model);
+    if model == "minimax/minimax-m3" {
+        return ResolvedReasoning::OpenRouter {
+            enabled: preset != ReasoningPreset::None,
+            // OpenRouter reports that M3 is optional reasoning, but does not
+            // advertise effort levels. Ignore stale non-none effort values.
+            effort: None,
+        };
+    }
+
+    if model == "stepfun/step-3-7-flash" {
+        let effort = match preset {
+            ReasoningPreset::Recommended => None,
+            // OpenRouter marks reasoning as mandatory for this model. Clamp a
+            // defensive off/minimal request to the lowest supported effort.
+            ReasoningPreset::None | ReasoningPreset::Minimal | ReasoningPreset::Low => Some("low"),
+            ReasoningPreset::Medium => Some("medium"),
+            ReasoningPreset::High | ReasoningPreset::Xhigh | ReasoningPreset::Max => Some("high"),
+        };
+        return ResolvedReasoning::OpenRouter {
+            enabled: true,
+            effort,
+        };
+    }
+
     let effort = match preset {
         ReasoningPreset::Recommended | ReasoningPreset::None => None,
         ReasoningPreset::Minimal => Some("minimal"),
@@ -583,7 +633,7 @@ mod tests {
 
     #[test]
     fn provider_ids_resolve_only_to_verified_routes() {
-        for provider in ["volcengine", "local", "agnes"] {
+        for provider in ["local", "agnes"] {
             assert_eq!(
                 ReasoningRoute::for_provider_id(provider),
                 ReasoningRoute::Unknown,
@@ -606,10 +656,72 @@ mod tests {
             ReasoningRoute::for_provider_id("openrouter"),
             ReasoningRoute::OpenRouterChat
         );
+        assert_eq!(
+            ReasoningRoute::for_provider_id("volcengine"),
+            ReasoningRoute::VolcengineChat
+        );
     }
 
     #[test]
-    fn openrouter_maps_all_gateway_presets_without_model_name_inference() {
+    fn volcengine_maps_only_model_specific_verified_controls() {
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::VolcengineChat,
+                "deepseek-v4-flash",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::CompatibleThinking {
+                enabled: false,
+                effort: None,
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::VolcengineChat,
+                "glm-5.2",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::CompatibleThinking {
+                enabled: false,
+                effort: Some("none"),
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::VolcengineChat,
+                "kimi-k2.6",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::ThinkingToggle { enabled: false }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::VolcengineChat,
+                "Kimi-K2.7-Code",
+                Some(ReasoningPreset::High),
+            ),
+            ResolvedReasoning::Preserve
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::VolcengineChat,
+                "Kimi-K2.7-Code",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::Preserve
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::VolcengineChat,
+                "MiniMax-M3",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::ThinkingToggle { enabled: false }
+        );
+    }
+
+    #[test]
+    fn openrouter_maps_gateway_presets_and_honors_model_metadata() {
         assert_eq!(
             resolve_reasoning(
                 ReasoningRoute::OpenRouterChat,
@@ -641,6 +753,39 @@ mod tests {
             ResolvedReasoning::OpenRouter {
                 enabled: true,
                 effort: Some("xhigh"),
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::OpenRouterChat,
+                "minimax/minimax-m3",
+                Some(ReasoningPreset::High),
+            ),
+            ResolvedReasoning::OpenRouter {
+                enabled: true,
+                effort: None,
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::OpenRouterChat,
+                "stepfun/step-3.7-flash",
+                Some(ReasoningPreset::None),
+            ),
+            ResolvedReasoning::OpenRouter {
+                enabled: true,
+                effort: Some("low"),
+            }
+        );
+        assert_eq!(
+            resolve_reasoning(
+                ReasoningRoute::OpenRouterChat,
+                "stepfun/step-3.7-flash",
+                Some(ReasoningPreset::Max),
+            ),
+            ResolvedReasoning::OpenRouter {
+                enabled: true,
+                effort: Some("high"),
             }
         );
     }

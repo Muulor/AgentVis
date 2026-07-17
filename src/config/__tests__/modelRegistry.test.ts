@@ -30,6 +30,13 @@ describe('modelRegistry context windows', () => {
     expect(getContextWindowSize('MiniMax-M3', 'volcengine')).toBe(512_000);
   });
 
+  it('registers the OpenRouter Step 3.7 Flash route with its exact context window', () => {
+    expect(getContextWindowSize('stepfun/step-3.7-flash', 'openrouter')).toBe(256_000);
+    expect(getModelsByProvider('openrouter').map((model) => model.id)).toContain(
+      'stepfun/step-3.7-flash'
+    );
+  });
+
   it('keeps model-only callers backward compatible', () => {
     expect(getContextWindowSize('gpt-5.4')).toBe(1_050_000);
   });
@@ -59,6 +66,7 @@ describe('modelRegistry reasoning output budget capabilities', () => {
     expect(modelUsesSharedReasoningOutputBudget('GLM-5.1', 'zhipu-coding')).toBe(true);
     expect(modelUsesSharedReasoningOutputBudget('GLM-5.2', 'zhipu-coding')).toBe(true);
     expect(modelUsesSharedReasoningOutputBudget('xiaomi/mimo-v2.5', 'openrouter')).toBe(true);
+    expect(modelUsesSharedReasoningOutputBudget('stepfun/step-3.7-flash', 'openrouter')).toBe(true);
   });
 
   it('keeps compatible local routes opt-in instead of inferring reasoning by model ID', () => {
@@ -155,6 +163,11 @@ describe('modelRegistry reasoning preset capabilities', () => {
       'recommended',
       'none',
     ]);
+    expect(getSupportedReasoningPresets('volcengine', 'Kimi-K2.7-Code')).toEqual(['recommended']);
+    expect(getSupportedReasoningPresets('volcengine', 'MiniMax-M3')).toEqual([
+      'recommended',
+      'none',
+    ]);
     expect(getSupportedReasoningPresets('stepfun', 'step-3.7-flash')).toEqual([
       'recommended',
       'low',
@@ -181,16 +194,25 @@ describe('modelRegistry reasoning preset capabilities', () => {
       'recommended',
       'none',
     ]);
+    expect(getSupportedReasoningPresets('openrouter', 'minimax/minimax-m3')).toEqual([
+      'recommended',
+      'none',
+    ]);
+    expect(getSupportedReasoningPresets('openrouter', 'stepfun/step-3.7-flash')).toEqual([
+      'recommended',
+      'low',
+      'medium',
+      'high',
+    ]);
   });
 
-  it('keeps local, aggregator, coding-plan, custom, and unverified routes recommended-only', () => {
+  it('keeps local, custom, and unverified routes recommended-only', () => {
     expect(getSupportedReasoningPresets('local', 'gpt-5.4')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('openrouter', 'vendor/unverified-reasoning-model')).toEqual(
       ['recommended']
     );
     expect(getSupportedReasoningPresets('zhipu-coding', 'GLM-4.7')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('minimax', 'MiniMax-M2.7')).toEqual(['recommended']);
-    expect(getSupportedReasoningPresets('volcengine', 'MiniMax-M3')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('openai', 'user-model')).toEqual(['recommended']);
   });
 
@@ -201,9 +223,18 @@ describe('modelRegistry reasoning preset capabilities', () => {
     expect(normalizeReasoningPreset('deepseek', 'deepseek-v4-pro', 'none')).toBe('none');
     expect(normalizeReasoningPreset('minimax', 'MiniMax-M3', 'none')).toBe('none');
     expect(normalizeReasoningPreset('minimax', 'MiniMax-M2.7', 'none')).toBe('recommended');
+    expect(normalizeReasoningPreset('volcengine', 'MiniMax-M3', 'none')).toBe('none');
     expect(normalizeReasoningPreset('zhipu-coding', 'GLM-5.2', 'max')).toBe('max');
     expect(normalizeReasoningPreset('openrouter', 'xiaomi/mimo-v2.5', 'none')).toBe('none');
     expect(normalizeReasoningPreset('openrouter', 'xiaomi/mimo-v2.5', 'high')).toBe('recommended');
+    expect(normalizeReasoningPreset('openrouter', 'minimax/minimax-m3', 'high')).toBe(
+      'recommended'
+    );
+    expect(normalizeReasoningPreset('openrouter', 'stepfun/step-3.7-flash', 'none')).toBe(
+      'recommended'
+    );
+    expect(normalizeReasoningPreset('volcengine', 'Kimi-K2.7-Code', 'none')).toBe('recommended');
+    expect(normalizeReasoningPreset('volcengine', 'Kimi-K2.7-Code', 'high')).toBe('recommended');
     expect(normalizeReasoningPreset('gemini', 'gemini-3.1-pro-preview', 'minimal')).toBe(
       'recommended'
     );

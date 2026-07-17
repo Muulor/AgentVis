@@ -1550,6 +1550,8 @@ pub async fn llm_list_models(
         ],
         "openrouter" => vec![
             "xiaomi/mimo-v2.5".to_string(),
+            "minimax/minimax-m3".to_string(),
+            "stepfun/step-3.7-flash".to_string(),
             "google/gemini-3.1-flash-image-preview".to_string(),
         ],
         "local" => vec![

@@ -15,6 +15,16 @@ export function hasConfigurableReasoningPresets(providerId: string, modelId: str
   return getSupportedReasoningPresets(providerId, modelId).length > 1;
 }
 
+export function formatModelSelectorLabel(
+  providerId: string,
+  modelId: string,
+  displayName: string,
+  preset: ReasoningPreset | null | undefined
+): string {
+  if (!hasConfigurableReasoningPresets(providerId, modelId)) return displayName;
+  return `${displayName} · ${normalizeReasoningPreset(providerId, modelId, preset)}`;
+}
+
 export function resolveModelSelectionPreset(
   currentProvider: string | null,
   currentModel: string | null,

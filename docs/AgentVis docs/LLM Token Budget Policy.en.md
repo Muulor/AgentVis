@@ -105,11 +105,11 @@ behavior; this does not always mean omitting the provider field. The Rust LLM ro
 explicit preset to the current protocol's native field, alias, or thinking switch.
 
 Available presets must be resolved from the actual `provider + model + protocol/route` capability.
-Unknown, custom, and unverified aggregator-compatible routes expose only `recommended` and omit
-unverified outbound reasoning controls. Verified aggregator routes may expose only the controls
-reported for that provider/model pair. The backend must also normalize unsupported input to a
-verified, conservative value for that route rather than treating the frontend menu as a trust
-boundary.
+Unknown, custom, and unverified aggregator-compatible routes remain `recommended` internally, but
+the UI omits the preset suffix and reasoning submenu as well as unverified outbound controls. A
+verified aggregator route exposes only controls proven for that exact provider/model pair. The
+backend must still normalize unsupported input to a conservative value allowed by that route; never
+treat the frontend menu as a trust boundary.
 
 Verified routes currently use these special normalization rules:
 
@@ -121,7 +121,12 @@ Verified routes currently use these special normalization rules:
 | DeepSeek V4                       | `none`, `high`, `max`                           | For `none`, send only `thinking.type=disabled` and omit `reasoning_effort`; `low/medium` alias `high`, while `xhigh` aliases `max`, so duplicate levels are hidden.                                                       |
 | MiniMax M3                        | `none`, `high`                                  | For `none`, send only `thinking.type=disabled`; for `high`, send `thinking.type=adaptive`; do not send Claude `output_config`, and do not inherit the switch to M2.x.                                                     |
 | ZhipuAI Coding GLM-5.1/5.2        | GLM-5.1: `none`; GLM-5.2: `none`, `high`, `max` | Reuse the parameter mapping for the matching model on the regular Zhipu route while keeping the Coding Plan endpoint and quota isolated.                                                                                  |
+| Volcengine DeepSeek V4/GLM-5.2    | `none`, `high`, `max`                           | Use the dedicated Volcengine route. `none` sends `thinking.type=disabled`; DeepSeek omits `reasoning_effort`, while GLM-5.2 also sends `reasoning_effort=none`.                                                           |
+| Volcengine Kimi K2.6/K2.7 Code    | K2.6: `none`; K2.7 Code: none                   | K2.6 `none` sends only `thinking.type=disabled`. K2.7 Code always thinks and its effort field is unverified on the Volcengine route, so neither `thinking` nor `reasoning_effort` is sent.                                |
+| Volcengine MiniMax M3             | `none`                                          | `none` sends only `thinking.type=disabled`; do not infer effort levels that the Volcengine Coding Plan route does not publish.                                                                                            |
 | StepFun Step 3.7 Flash            | `low`, `medium`, `high`                         | Send only `reasoning_effort` on the OpenAI-compatible route.                                                                                                                                                              |
+| OpenRouter MiniMax M3             | `none`                                          | Use OpenRouter's unified `reasoning` object; `none` sends `enabled=false`. Model metadata does not advertise effort levels, so values such as `high` are neither shown nor sent.                                          |
+| OpenRouter Step 3.7 Flash         | `low`, `medium`, `high`                         | Reasoning is mandatory. Send the three levels through unified `reasoning.effort`, omit `none`, and defensively clamp off or out-of-range inputs to a valid level.                                                         |
 | OpenRouter Xiaomi MiMo-V2.5       | `none`                                          | Send the unified nested `reasoning` object with `exclude=false`; normalize `reasoning`, `reasoning_content`, and visible `reasoning_details` for display, and return raw `reasoning_details` unchanged across tool turns. |
 
 Reasoning presets and output-token budgets are independent dimensions. Selecting `xhigh` or `max`
@@ -157,6 +162,10 @@ Required regression coverage includes:
 - shared-reasoning registry routes resolving to real built-in provider/model pairs.
 - omitted/`recommended` preserving legacy behavior, explicit presets mapping consistently across
   plain, streaming, and tool calls, and unknown routes not leaking reasoning parameters.
+- Volcengine plain and tool requests emitting only verified model-specific controls: Kimi K2.6 and
+  MiniMax M3 receive their off switch, while K2.7 Code keeps the request body unchanged.
+- OpenRouter distinguishing optional MiniMax M3 reasoning from mandatory Step 3.7 Flash reasoning
+  and emitting the unified `reasoning` object consistently in plain and tool requests.
 - OpenRouter plaintext aliases and structured reasoning blocks normalizing without duplicate UI
   text, while tool continuations preserve every `reasoning_details` value and the provider order.
 
