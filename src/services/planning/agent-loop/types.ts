@@ -354,7 +354,7 @@ export interface LLMRequestWithTools {
  */
 export interface LLMResponseWithTools {
   /** 响应类型 */
-  type: 'text' | 'tool_use' | 'error';
+  type: 'text' | 'tool_use' | 'error' | 'cancelled';
   /** 文本内容（如果是 text 类型） */
   content?: string;
   /** 工具调用列表（如果是 tool_use 类型） */

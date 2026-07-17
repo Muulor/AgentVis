@@ -683,7 +683,7 @@ const REASONING_PRESET_MODEL_ROUTES = [
   ['minimax', 'MiniMax-M3', 'toggleHigh'],
   ['volcengine', 'deepseek-v4-flash', 'highMax'],
   ['volcengine', 'deepseek-v4-pro', 'highMax'],
-  ['volcengine', 'kimi-k2.6,', 'toggle'],
+  ['volcengine', 'kimi-k2.6', 'toggle'],
   ['volcengine', 'Kimi-K2.7-Code', 'toggleHigh'],
   ['volcengine', 'glm-5.2', 'highMax'],
   ['openrouter', 'xiaomi/mimo-v2.5', 'toggle'],

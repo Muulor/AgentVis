@@ -35,7 +35,7 @@ import { imageCompressionService } from '@services/attachment/ImageCompressionSe
 import type { ReasoningPreset } from '@/config/modelRegistry';
 
 const logger = getLogger('AgentService');
-const CANCEL_FORCE_UNLOCK_MS = 10000;
+const CANCEL_SETTLEMENT_WARNING_MS = 10000;
 
 // ==================== 配置类型 ====================
 
@@ -116,6 +116,11 @@ export interface AgentServiceConfig {
  * 处理消息的选项
  */
 export interface ProcessMessageOptions {
+  /**
+   * 本轮开始时用于完整替换 Session 的持久化聊天历史。
+   * 必须在 processMessage 获取运行锁后应用，避免新请求改写仍被旧 run 使用的 Session。
+   */
+  chatHistory?: ChatHistoryMessageInput[];
   /** 进度回调 */
   onProgress?: (items: ProgressItemData[]) => void;
   /** 授权请求回调 */
@@ -238,7 +243,7 @@ export interface ProcessMessageOptions {
   onEmbeddingWarning?: (errorMessage: string) => void;
 }
 
-interface ChatHistoryMessageInput {
+export interface ChatHistoryMessageInput {
   role: 'user' | 'assistant';
   content: string;
   /** 消息创建时间戳（Unix ms），用于对话历史时间感知 */
@@ -273,8 +278,11 @@ export class AgentService {
   /** Current run id that owns isProcessing/activeLoop. */
   private activeRunId: number | null = null;
 
-  /** Watchdog used when cancellation does not make the active loop settle. */
-  private cancelForceUnlockTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Watchdog used to diagnose cancellation that does not make the active loop settle. */
+  private cancelSettlementWarningTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Timed-out cancellation instances must be detached from the cache before another run starts. */
+  private replaceAfterCancellationTimeout = false;
 
   /** 当前执行中的 AgentLoop（用于取消） */
   private activeLoop: AgentLoop | null = null;
@@ -293,33 +301,33 @@ export class AgentService {
     logger.trace(`[AgentService] 创建服务: agentId=${config.agentId}`);
   }
 
-  private clearCancelForceUnlockTimer(): void {
-    if (this.cancelForceUnlockTimer) {
-      clearTimeout(this.cancelForceUnlockTimer);
-      this.cancelForceUnlockTimer = null;
+  private clearCancelSettlementWarningTimer(): void {
+    if (this.cancelSettlementWarningTimer) {
+      clearTimeout(this.cancelSettlementWarningTimer);
+      this.cancelSettlementWarningTimer = null;
     }
   }
 
-  private scheduleCancelForceUnlock(): void {
+  private scheduleCancelSettlementWarning(): void {
     const runId = this.activeRunId;
     if (!this.isProcessing || runId === null) {
       return;
     }
 
-    this.clearCancelForceUnlockTimer();
-    this.cancelForceUnlockTimer = setTimeout(() => {
+    this.clearCancelSettlementWarningTimer();
+    this.cancelSettlementWarningTimer = setTimeout(() => {
       if (!this.isProcessing || this.activeRunId !== runId || !this.cancellationRequested) {
         return;
       }
 
       logger.warn(
-        `[AgentService] Cancel did not settle within ${CANCEL_FORCE_UNLOCK_MS}ms; force releasing processing lock: agentId=${this.config.agentId}, runId=${runId}`
+        `[AgentService] Cancel did not settle within ${CANCEL_SETTLEMENT_WARNING_MS}ms; keeping processing lock until the active run settles: agentId=${this.config.agentId}, runId=${runId}`
       );
-      this.isProcessing = false;
-      this.activeLoop = null;
-      this.activeRunId = null;
-      this.cancelForceUnlockTimer = null;
-    }, CANCEL_FORCE_UNLOCK_MS);
+      // An unsettled AgentLoop still owns this service's AgentSession and callbacks. Releasing
+      // the lock here would allow a new run to mutate that shared state concurrently.
+      this.replaceAfterCancellationTimeout = true;
+      this.cancelSettlementWarningTimer = null;
+    }, CANCEL_SETTLEMENT_WARNING_MS);
   }
 
   private createCancelledResult(message = 'Processing cancelled'): AgentLoopResult {
@@ -378,6 +386,17 @@ export class AgentService {
    * @param messages 历史消息列表（不包含当前用户消息）
    */
   loadChatHistory(messages: ChatHistoryMessageInput[]): void {
+    if (this.isProcessing) {
+      logger.warn(
+        `[AgentService] 忽略活跃 run 期间的历史覆盖: agentId=${this.config.agentId}, runId=${String(this.activeRunId)}`
+      );
+      return;
+    }
+
+    this.replaceChatHistory(messages);
+  }
+
+  private replaceChatHistory(messages: ChatHistoryMessageInput[]): void {
     const session = this.getOrCreateSession();
     let imageCount = 0;
 
@@ -444,7 +463,7 @@ export class AgentService {
     this.isProcessing = true;
     const runId = ++this.processingRunSeq;
     this.activeRunId = runId;
-    this.clearCancelForceUnlockTimer();
+    this.clearCancelSettlementWarningTimer();
     // 每次处理新消息前重置取消标志位，避免上一次取消残留影响新请求
     this.cancellationRequested = false;
 
@@ -452,11 +471,17 @@ export class AgentService {
       // 1. 获取或创建会话
       const session = this.getOrCreateSession();
 
+      // 历史快照必须在本 run 获取处理锁后同步。若服务仍被旧 run 占用，方法会在
+      // 上方直接返回 alreadyProcessing，不会触碰旧 run 正在使用的 Session。
+      if (options.chatHistory !== undefined) {
+        this.replaceChatHistory(options.chatHistory);
+      }
+
       // 2. 加载运行时上下文（记忆 + RAG）
       // 传入 cancellationRequested 标志引用使内部各个 await 点可被中断
       // 传入 onEmbeddingWarning 使 Embedding 失败时能回调 UI 层弹出提示
       const runtimeContext = await this.loadRuntimeContext(message, options.onEmbeddingWarning);
-      if (this.activeRunId !== runId) {
+      if (this.activeRunId !== runId || this.isCancellationRequested()) {
         return this.createCancelledResult('Processing cancelled before runtime context completed');
       }
 
@@ -469,7 +494,7 @@ export class AgentService {
       // 3. 准备上下文（包含预算管理，用于历史压缩和预算计算）
       // 注意：用户消息由 AgentLoop.run() 内部添加，避免重复
       await session.prepareContext(runtimeContext);
-      if (this.activeRunId !== runId) {
+      if (this.activeRunId !== runId || this.isCancellationRequested()) {
         return this.createCancelledResult('Processing cancelled before agent loop started');
       }
 
@@ -596,7 +621,7 @@ export class AgentService {
       );
 
       // 保存引用（用于取消）
-      if (this.activeRunId !== runId) {
+      if (this.activeRunId !== runId || this.isCancellationRequested()) {
         return this.createCancelledResult(
           'Processing cancelled before agent loop ownership was assigned'
         );
@@ -687,6 +712,13 @@ export class AgentService {
 
       return result;
     } catch (error) {
+      if (this.activeRunId === runId && this.isCancellationRequested()) {
+        logger.debug(
+          `[AgentService] 取消中的异步阶段以异常收口，按 cancelled 处理: agentId=${this.config.agentId}, runId=${runId}`
+        );
+        return this.createCancelledResult('Processing cancelled while an async stage settled');
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error('[AgentService] 处理消息失败:', error);
       return {
@@ -704,7 +736,7 @@ export class AgentService {
         this.isProcessing = false;
         this.activeLoop = null; // 确保清除引用
         this.activeRunId = null;
-        this.clearCancelForceUnlockTimer();
+        this.clearCancelSettlementWarningTimer();
       } else {
         logger.trace(
           `[AgentService] Stale run settled after ownership moved: agentId=${this.config.agentId}, runId=${runId}, activeRunId=${this.activeRunId}`
@@ -730,7 +762,7 @@ export class AgentService {
       logger.debug(`[AgentService] 没有活动的处理可取消: agentId=${this.config.agentId}`);
     }
 
-    this.scheduleCancelForceUnlock();
+    this.scheduleCancelSettlementWarning();
   }
 
   /**
@@ -866,6 +898,14 @@ export class AgentService {
     return this.isProcessing;
   }
 
+  shouldReplaceAfterCancellationTimeout(): boolean {
+    return this.replaceAfterCancellationTimeout;
+  }
+
+  private isCancellationRequested(): boolean {
+    return this.cancellationRequested;
+  }
+
   /**
    * 获取配置
    */
@@ -893,7 +933,15 @@ export function getOrCreateAgentService(config: AgentServiceConfig): AgentServic
   const cacheKey = config.contextId ?? config.agentId;
   const cached = serviceCache.get(cacheKey);
 
-  if (cached) {
+  if (cached?.shouldReplaceAfterCancellationTimeout()) {
+    // Keep the timed-out instance alive for its original caller, but detach it from the cache.
+    // A replacement receives a separate AgentSession, so the unsettled run cannot corrupt it.
+    serviceCache.delete(cacheKey);
+    logger.warn('[AgentService] 取消超时服务已脱离缓存，下一请求将使用新实例', {
+      cacheKey,
+      agentId: config.agentId,
+    });
+  } else if (cached) {
     // 检查关键配置是否变化（模型供应商、模型 ID、API 基址、Agent 规则）
     const cachedConfig = cached.getConfig();
     const configChanged =
@@ -971,8 +1019,14 @@ export function cancelCachedAgentService(contextIdOrAgentId: string): boolean {
 export function destroyAgentService(agentId: string): void {
   const service = serviceCache.get(agentId);
   if (service) {
-    service.resetSession();
     serviceCache.delete(agentId);
+    if (service.getIsProcessing()) {
+      // Detach first so a subsequent request gets a fresh service/session. The active loop still
+      // owns the old session, so clearing it here would corrupt that loop while cancellation settles.
+      service.cancelProcessing();
+    } else {
+      service.resetSession();
+    }
     logger.trace(`[AgentService] 已销毁服务: ${agentId}`);
   }
 }
@@ -981,9 +1035,14 @@ export function destroyAgentService(agentId: string): void {
  * 清空所有服务缓存
  */
 export function clearAllAgentServices(): void {
-  for (const [, service] of serviceCache) {
-    service.resetSession();
-  }
+  const services = [...serviceCache.values()];
   serviceCache.clear();
+  for (const service of services) {
+    if (service.getIsProcessing()) {
+      service.cancelProcessing();
+    } else {
+      service.resetSession();
+    }
+  }
   logger.trace('[AgentService] 已清空所有服务缓存');
 }

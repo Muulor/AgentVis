@@ -145,6 +145,16 @@ describe('modelRegistry reasoning preset capabilities', () => {
       'high',
       'max',
     ]);
+    expect(getSupportedReasoningPresets('volcengine', 'deepseek-v4-pro')).toEqual([
+      'recommended',
+      'none',
+      'high',
+      'max',
+    ]);
+    expect(getSupportedReasoningPresets('volcengine', 'kimi-k2.6')).toEqual([
+      'recommended',
+      'none',
+    ]);
     expect(getSupportedReasoningPresets('stepfun', 'step-3.7-flash')).toEqual([
       'recommended',
       'low',
@@ -181,7 +191,6 @@ describe('modelRegistry reasoning preset capabilities', () => {
     expect(getSupportedReasoningPresets('zhipu-coding', 'GLM-4.7')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('minimax', 'MiniMax-M2.7')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('volcengine', 'MiniMax-M3')).toEqual(['recommended']);
-    expect(getSupportedReasoningPresets('volcengine', 'deepseek-v4-pro')).toEqual(['recommended']);
     expect(getSupportedReasoningPresets('openai', 'user-model')).toEqual(['recommended']);
   });
 

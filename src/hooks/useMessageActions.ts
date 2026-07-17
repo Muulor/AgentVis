@@ -591,15 +591,9 @@ async function handleAgentRevoke(
       logger.warn('[useMessageActions] 删除短期缓冲记录失败:', e);
     }
 
-    // 2.6  重置 AgentSession，清空内存中的消息历史和工具输出
-    try {
-      const { getOrCreateAgentService } = await import('@services/planning/AgentService');
-      const agentService = getOrCreateAgentService({ agentId });
-      agentService.resetSession();
-      logger.trace('[useMessageActions] 已重置 AgentSession 内存缓存');
-    } catch (e) {
-      logger.warn('[useMessageActions] 重置 AgentSession 失败:', e);
-    }
+    // 2.6 不在撤回流程中重置 AgentSession。
+    // 活跃 Planning 任务仍持有该 Session，清空会破坏其取消收敛；下一次 Planning
+    // 会在 processMessage 获取运行锁后，使用撤回后的持久化消息快照（包括空快照）覆盖 Session。
 
     // 2.7 RAG 向量索引不在消息撤销时清理
     // 向量生命周期由知识库 UI 管理：用户在 Agent 设置 → 知识库标签页中移除文件即可清除对应向量

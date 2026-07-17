@@ -144,9 +144,20 @@ const VISION_UNSUPPORTED_ERROR_PATTERNS = [
 ];
 
 function retryErrorFromToolResponse(response: LLMResponseWithTools): unknown {
-  return response.type === 'error'
-    ? (response.error ?? response.content ?? 'LLM call failed')
-    : undefined;
+  if (response.type === 'error') {
+    return response.error ?? response.content ?? 'LLM call failed';
+  }
+  if (response.type === 'cancelled') {
+    return response.error ?? response.content ?? 'Agent loop cancelled';
+  }
+  return undefined;
+}
+
+class AgentLoopCancelledError extends Error {
+  constructor() {
+    super('Agent loop cancelled');
+    this.name = 'AbortError';
+  }
 }
 
 class MbEmptyDecisionContentError extends Error {
@@ -235,6 +246,8 @@ export class AgentLoop {
   private toolCallCount = 0;
   /** 当前会话 ID（用于后端取消） */
   private currentSessionId: string | null = null;
+  /** Per-loop local cancellation signal used to settle frontend waits without relying on IPC events. */
+  private readonly runAbortController = new AbortController();
   /** 技能定义列表（用于动态规则生成） */
   private skills: SkillDefinition[] = [];
 
@@ -641,7 +654,7 @@ export class AgentLoop {
                         `(${retryClassification.reason})，等待 ${waitMs}ms 后重试 ` +
                         `(${retryCount}/${MASTER_BRAIN_LLM_RETRY_DELAYS_MS.length})`
                     );
-                    await new Promise((resolve) => setTimeout(resolve, waitMs));
+                    await this.waitForRunDelay(waitMs);
                     continue;
                   }
                 }
@@ -665,7 +678,7 @@ export class AgentLoop {
                       `(${retryClassification.reason})，等待 ${waitMs}ms 后重试 ` +
                       `(${retryCount}/${MASTER_BRAIN_LLM_RETRY_DELAYS_MS.length})`
                   );
-                  await new Promise((resolve) => setTimeout(resolve, waitMs));
+                  await this.waitForRunDelay(waitMs);
                   continue;
                 }
                 throw error;
@@ -699,23 +712,25 @@ export class AgentLoop {
               'MB Checkpoint',
               () =>
                 this.invokeMasterBrainWithContextUsage(messages, 'checkpoint', () =>
-                  invoke<LLMResponseWithTools>('llm_chat_with_tools', {
-                    request: {
-                      messages: this.sanitizeMessagesForIpc(messages),
-                      modelId: this.config.modelId,
-                      providerId: this.config.providerId,
-                      reasoningPreset: this.config.reasoningPreset,
-                      baseUrl: this.config.baseUrl,
-                      supportsVision: modelSupportsVision(
-                        this.config.modelId ?? '',
-                        this.config.providerId
-                      ),
-                      tools: [], // Checkpoint 评估不使用工具
-                      maxTokens: options.maxTokens ?? 4096,
-                      temperature: options.temperature,
-                    },
-                    sessionId: this.currentSessionId,
-                  })
+                  this.runWithLocalCancellation(() =>
+                    invoke<LLMResponseWithTools>('llm_chat_with_tools', {
+                      request: {
+                        messages: this.sanitizeMessagesForIpc(messages),
+                        modelId: this.config.modelId,
+                        providerId: this.config.providerId,
+                        reasoningPreset: this.config.reasoningPreset,
+                        baseUrl: this.config.baseUrl,
+                        supportsVision: modelSupportsVision(
+                          this.config.modelId ?? '',
+                          this.config.providerId
+                        ),
+                        tools: [], // Checkpoint 评估不使用工具
+                        maxTokens: options.maxTokens ?? 4096,
+                        temperature: options.temperature,
+                      },
+                      sessionId: this.currentSessionId,
+                    })
+                  )
                 ),
               retryErrorFromToolResponse
             );
@@ -726,6 +741,8 @@ export class AgentLoop {
                 response.content.substring(0, 200)
               );
               return response.content;
+            } else if (response.type === 'cancelled') {
+              throw new AgentLoopCancelledError();
             } else if (response.type === 'error') {
               throw new Error(response.error ?? 'Checkpoint LLM call failed');
             }
@@ -1289,23 +1306,25 @@ export class AgentLoop {
               'MB non-stream',
               () =>
                 this.invokeMasterBrainWithContextUsage(messagesForCall, 'master-brain', () =>
-                  invoke<LLMResponseWithTools>('llm_chat_with_tools', {
-                    request: {
-                      messages: this.sanitizeMessagesForIpc(messagesForCall),
-                      modelId: this.config.modelId,
-                      providerId: this.config.providerId,
-                      reasoningPreset: this.config.reasoningPreset,
-                      baseUrl: this.config.baseUrl,
-                      supportsVision: modelSupportsVision(
-                        this.config.modelId ?? '',
-                        this.config.providerId
-                      ),
-                      tools: [], // MasterBrain 决策不使用工具
-                      maxTokens: activeTransportMaxTokens,
-                      temperature: options?.temperature,
-                    },
-                    sessionId: this.currentSessionId,
-                  })
+                  this.runWithLocalCancellation(() =>
+                    invoke<LLMResponseWithTools>('llm_chat_with_tools', {
+                      request: {
+                        messages: this.sanitizeMessagesForIpc(messagesForCall),
+                        modelId: this.config.modelId,
+                        providerId: this.config.providerId,
+                        reasoningPreset: this.config.reasoningPreset,
+                        baseUrl: this.config.baseUrl,
+                        supportsVision: modelSupportsVision(
+                          this.config.modelId ?? '',
+                          this.config.providerId
+                        ),
+                        tools: [], // MasterBrain 决策不使用工具
+                        maxTokens: activeTransportMaxTokens,
+                        temperature: options?.temperature,
+                      },
+                      sessionId: this.currentSessionId,
+                    })
+                  )
                 ),
               retryErrorFromToolResponse
             );
@@ -1472,6 +1491,10 @@ export class AgentLoop {
               response = await invokeMasterBrain(allStripped.messages);
               this.setVisionFallbackMode('strip-all');
             }
+          }
+
+          if (response.type === 'cancelled') {
+            throw new AgentLoopCancelledError();
           }
 
           if (this.isTruncatedMbFinishReason(response.finishReason)) {
@@ -2055,6 +2078,7 @@ export class AgentLoop {
       this.currentSessionId ?? `planning-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const streamAttemptId = `${streamSessionId}-mb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const useDeepSeekV4MbGuard = this.isDeepSeekV4MbModel();
+    const cancelSignal = this.runAbortController.signal;
 
     return new Promise<string>((resolve, reject) => {
       const reasoningGuard = this.createMbReasoningGuard();
@@ -2077,6 +2101,7 @@ export class AgentLoop {
       let reportedInputTokens: number | undefined;
       let reportedOutputTokens: number | undefined;
       let contextUsageFlushTimer: ReturnType<typeof setTimeout> | null = null;
+      let abortHandler: (() => void) | null = null;
 
       const flushContextUsage = () => {
         if (contextUsageFlushTimer) {
@@ -2194,6 +2219,10 @@ export class AgentLoop {
         pendingStreamDisplayContent = null;
         unlistenFn?.();
         unlistenFn = null;
+        if (abortHandler) {
+          cancelSignal.removeEventListener('abort', abortHandler);
+          abortHandler = null;
+        }
       };
 
       const settleReject = (error: Error) => {
@@ -2223,6 +2252,13 @@ export class AgentLoop {
         cleanup();
         resolve(content);
       };
+
+      abortHandler = () => settleReject(new AgentLoopCancelledError());
+      cancelSignal.addEventListener('abort', abortHandler, { once: true });
+      if (cancelSignal.aborted) {
+        abortHandler();
+        return;
+      }
 
       const cancelForMbGuardError = (error: MbLocalStreamGuardError) => {
         if (guardCancellationError || settled) return;
@@ -2493,6 +2529,17 @@ export class AgentLoop {
         }
       })
         .then((unlisten) => {
+          // Cancellation can happen while the async listener registration is pending. In that
+          // window there is no Rust cancel channel yet, so local settlement must also prevent the
+          // request from being started after registration eventually completes.
+          if (settled || cancelSignal.aborted) {
+            unlisten();
+            if (!settled) {
+              abortHandler?.();
+            }
+            return;
+          }
+
           unlistenFn = unlisten;
 
           // 构建 ChatRequestDto 格式的请求（与 llm_chat_with_tools 的 ToolChatRequest 不同）
@@ -3311,6 +3358,10 @@ export class AgentLoop {
 
       return this.buildResult(mappedReason);
     } catch (error) {
+      if (this.runAbortController.signal.aborted || this.state === 'cancelled') {
+        return this.buildResult('cancelled');
+      }
+
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.callbacks.onError?.(error instanceof Error ? error : new Error(errorMessage));
 
@@ -3342,6 +3393,7 @@ export class AgentLoop {
    */
   cancel(): void {
     this.setState('cancelled');
+    this.runAbortController.abort();
 
     // 调用后端取消 API（如果有活动的 sessionId）
     if (this.currentSessionId) {
@@ -3354,6 +3406,58 @@ export class AgentLoop {
     if (this.fsmIntegration) {
       this.fsmIntegration.cancel();
     }
+  }
+
+  private runWithLocalCancellation<T>(operation: () => Promise<T>): Promise<T> {
+    const signal = this.runAbortController.signal;
+    if (signal.aborted) {
+      return Promise.reject(new AgentLoopCancelledError());
+    }
+
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => signal.removeEventListener('abort', handleAbort);
+      const settleResolve = (value: T) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const settleReject = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
+      const handleAbort = () => settleReject(new AgentLoopCancelledError());
+      signal.addEventListener('abort', handleAbort, { once: true });
+
+      try {
+        operation().then(settleResolve, settleReject);
+      } catch (error) {
+        settleReject(error);
+      }
+    });
+  }
+
+  private waitForRunDelay(delayMs: number): Promise<void> {
+    const signal = this.runAbortController.signal;
+    if (signal.aborted) {
+      return Promise.reject(new AgentLoopCancelledError());
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal.removeEventListener('abort', handleAbort);
+        resolve();
+      }, delayMs);
+      const handleAbort = () => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', handleAbort);
+        reject(new AgentLoopCancelledError());
+      };
+      signal.addEventListener('abort', handleAbort, { once: true });
+    });
   }
 
   /**

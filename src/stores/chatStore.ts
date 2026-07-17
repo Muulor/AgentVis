@@ -80,6 +80,10 @@ interface ChatState {
   inputContent: string;
   /** 正在发送的上下文 ID 集合（按 contextId 隔离，支持跨 Agent 并行发送） */
   sendingContexts: Set<string>;
+  /** 发送状态的当前运行 ID（用于阻止旧运行清理新运行） */
+  sendingRunIdsByContext: Map<string, string>;
+  /** 最近启动的运行 ID（完成后保留，用于识别迟到的跨模式 finally） */
+  latestRunIdsByContext: Map<string, string>;
   /** 模式选择（按 contextId 隔离，每个 Agent/Hub 独立维护） */
   modeByContext: Map<string, ChatMode>;
   /** Hub 窗口引用列表（按 Hub ID 分组） */
@@ -88,6 +92,8 @@ interface ChatState {
   pendingQuotesByAgent: Map<string, QuoteInfo[]>;
   /** 流式响应状态（按 contextId 隔离：Agent ID 或 Hub ID） */
   streamingByContext: Map<string, StreamingState>;
+  /** 流式状态的当前运行 ID（用于阻止旧运行覆盖或清理新运行） */
+  streamingRunIdsByContext: Map<string, string>;
   /** 消息级可视化增强后台任务状态（按 messageId 隔离） */
   visualEnhancementJobsByMessage: Map<string, VisualEnhancementJobState>;
   /** 中断控制器（按 contextId 隔离） */
@@ -146,11 +152,13 @@ interface ChatActions {
   /** 设置输入内容 */
   setInputContent: (content: string) => void;
   /** 标记指定上下文开始发送 */
-  startSending: (contextId: string) => void;
+  startSending: (contextId: string, runId?: string) => boolean;
   /** 标记指定上下文完成发送 */
-  finishSending: (contextId: string) => void;
+  finishSending: (contextId: string, runId?: string) => boolean;
   /** 查询指定上下文是否正在发送 */
   isSendingFor: (contextId: string) => boolean;
+  /** 查询指定运行是否仍是该上下文最近启动的运行 */
+  isLatestRun: (contextId: string, runId: string) => boolean;
   /** 设置指定上下文的模式 */
   setModeFor: (contextId: string, mode: LegacyChatMode) => void;
   /** 获取指定上下文的模式（默认 planning） */
@@ -178,24 +186,24 @@ interface ChatActions {
 
   // ========== 流式状态操作（按 contextId 隔离）==========
   /** 开始流式接收 */
-  startStreaming: (contextId: string, agentName?: string) => void;
+  startStreaming: (contextId: string, agentName?: string, runId?: string) => boolean;
   /** 追加流式内容 */
-  appendStreamingContent: (contextId: string, chunk: string) => void;
+  appendStreamingContent: (contextId: string, chunk: string, runId?: string) => void;
   /** 追加流式 reasoning 内容 */
-  appendStreamingReasoning: (contextId: string, chunk: string) => void;
+  appendStreamingReasoning: (contextId: string, chunk: string, runId?: string) => void;
   /** 覆盖式设置流式内容（VE 增强等场景，回调传入的是累积内容而非增量 delta） */
-  setStreamingContent: (contextId: string, content: string) => void;
+  setStreamingContent: (contextId: string, content: string, runId?: string) => void;
 
   /** 完成流式接收 */
-  finishStreaming: (contextId: string) => void;
+  finishStreaming: (contextId: string, runId?: string) => boolean;
   /** 获取指定 context 的流式状态 */
   getStreamingState: (contextId: string) => StreamingState;
   /** 设置中断控制器 */
-  setAbortController: (contextId: string, controller: AbortController) => void;
+  setAbortController: (contextId: string, controller: AbortController, runId?: string) => void;
   /** 设置流式请求 session ID（用于后端取消） */
-  setSessionId: (contextId: string, sessionId: string) => void;
+  setSessionId: (contextId: string, sessionId: string, runId?: string) => void;
   /** 停止流式输出（触发中断） */
-  stopStreaming: (contextId: string) => void;
+  stopStreaming: (contextId: string, runId?: string) => boolean;
 
   // ========== 可视化增强后台任务状态 ==========
   /** 设置或清理指定消息的增强任务状态 */
@@ -245,10 +253,13 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   messagesByHub: new Map(), // Hub 消息存储
   inputContent: '',
   sendingContexts: new Set(), // 发送状态（按 contextId 隔离）
+  sendingRunIdsByContext: new Map(), // 发送状态的当前运行 ID（用于跨模式所有权校验）
+  latestRunIdsByContext: new Map(), // 最近启动的运行 ID（完成后保留）
   modeByContext: new Map(), // 模式状态（按 contextId 隔离）
   pendingQuotesByHub: new Map(), // Hub 窗口引用存储
   pendingQuotesByAgent: new Map(), // Agent 窗口引用存储（隔离）
   streamingByContext: new Map(), // 流式状态（按 contextId 隔离）
+  streamingRunIdsByContext: new Map(), // 流式状态的当前运行 ID（用于跨模式所有权校验）
   visualEnhancementJobsByMessage: new Map(), // VE 后台任务状态（按 messageId 隔离）
   abortControllers: new Map(), // 中断控制器（按 contextId 隔离）
   sessionIdByContext: new Map(), // 流式 session ID（用于后端取消）
@@ -368,19 +379,52 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   setInputContent: (content: string) => set({ inputContent: content }),
 
   // 按 contextId 隔离的发送状态管理
-  startSending: (contextId) =>
+  startSending: (contextId, runId) => {
+    let started = false;
     set((state) => {
+      const currentRunId = state.sendingRunIdsByContext.get(contextId);
+      if (runId !== undefined && state.sendingContexts.has(contextId) && currentRunId !== runId) {
+        return state;
+      }
+
       const next = new Set(state.sendingContexts);
+      const nextRunIds = new Map(state.sendingRunIdsByContext);
+      const nextLatestRunIds = new Map(state.latestRunIdsByContext);
       next.add(contextId);
-      return { sendingContexts: next };
-    }),
-  finishSending: (contextId) =>
+      if (runId !== undefined) {
+        nextRunIds.set(contextId, runId);
+        nextLatestRunIds.set(contextId, runId);
+      } else {
+        nextRunIds.delete(contextId);
+        nextLatestRunIds.delete(contextId);
+      }
+      started = true;
+      return {
+        sendingContexts: next,
+        sendingRunIdsByContext: nextRunIds,
+        latestRunIdsByContext: nextLatestRunIds,
+      };
+    });
+    return started;
+  },
+  finishSending: (contextId, runId) => {
+    let finished = false;
     set((state) => {
+      if (runId !== undefined && state.sendingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const next = new Set(state.sendingContexts);
+      const nextRunIds = new Map(state.sendingRunIdsByContext);
       next.delete(contextId);
-      return { sendingContexts: next };
-    }),
+      nextRunIds.delete(contextId);
+      finished = true;
+      return { sendingContexts: next, sendingRunIdsByContext: nextRunIds };
+    });
+    return finished;
+  },
   isSendingFor: (contextId) => get().sendingContexts.has(contextId),
+  isLatestRun: (contextId, runId) => get().latestRunIdsByContext.get(contextId) === runId,
 
   setModeFor: (contextId, mode) =>
     set((state) => {
@@ -459,20 +503,50 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     }),
 
   // ========== 流式状态操作（按 contextId 隔离）==========
-  startStreaming: (contextId: string, agentName?: string) =>
+  startStreaming: (contextId: string, agentName?: string, runId?: string) => {
+    let started = false;
     set((state) => {
+      if (runId !== undefined && state.sendingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.streamingByContext);
+      const newRunIds = new Map(state.streamingRunIdsByContext);
+      const newAbortMap = new Map(state.abortControllers);
+      const newSessionMap = new Map(state.sessionIdByContext);
+      const previousRunId = newRunIds.get(contextId);
       newMap.set(contextId, {
         content: '',
         reasoningContent: '',
         isStreaming: true,
         agentName,
       });
-      return { streamingByContext: newMap };
-    }),
+      if (runId !== undefined) {
+        newRunIds.set(contextId, runId);
+        if (previousRunId !== runId) {
+          newAbortMap.delete(contextId);
+          newSessionMap.delete(contextId);
+        }
+      } else {
+        newRunIds.delete(contextId);
+      }
+      started = true;
+      return {
+        streamingByContext: newMap,
+        streamingRunIdsByContext: newRunIds,
+        abortControllers: newAbortMap,
+        sessionIdByContext: newSessionMap,
+      };
+    });
+    return started;
+  },
 
-  appendStreamingContent: (contextId: string, chunk: string) =>
+  appendStreamingContent: (contextId: string, chunk: string, runId?: string) =>
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.streamingByContext);
       const current = newMap.get(contextId) ?? {
         content: '',
@@ -489,8 +563,12 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       return { streamingByContext: newMap };
     }),
 
-  appendStreamingReasoning: (contextId: string, chunk: string) =>
+  appendStreamingReasoning: (contextId: string, chunk: string, runId?: string) =>
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.streamingByContext);
       const current = newMap.get(contextId) ?? {
         content: '',
@@ -507,8 +585,12 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       return { streamingByContext: newMap };
     }),
 
-  setStreamingContent: (contextId: string, content: string) =>
+  setStreamingContent: (contextId: string, content: string, runId?: string) =>
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.streamingByContext);
       const current = newMap.get(contextId) ?? {
         content: '',
@@ -525,8 +607,13 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       return { streamingByContext: newMap };
     }),
 
-  finishStreaming: (contextId: string) =>
+  finishStreaming: (contextId: string, runId?: string) => {
+    let finished = false;
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.streamingByContext);
       const current = newMap.get(contextId);
       if (current) {
@@ -542,12 +629,18 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       newAbortMap.delete(contextId);
       const newSessionMap = new Map(state.sessionIdByContext);
       newSessionMap.delete(contextId);
+      const newRunIds = new Map(state.streamingRunIdsByContext);
+      newRunIds.delete(contextId);
+      finished = true;
       return {
         abortControllers: newAbortMap,
         sessionIdByContext: newSessionMap,
         streamingByContext: newMap,
+        streamingRunIdsByContext: newRunIds,
       };
-    }),
+    });
+    return finished;
+  },
 
   getStreamingState: (contextId: string): StreamingState => {
     const { streamingByContext } = get();
@@ -555,24 +648,35 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   },
 
   // 设置中断控制器
-  setAbortController: (contextId: string, controller: AbortController) =>
+  setAbortController: (contextId: string, controller: AbortController, runId?: string) =>
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.abortControllers);
       newMap.set(contextId, controller);
       return { abortControllers: newMap };
     }),
 
   // 设置流式请求 session ID（用于后端取消）
-  setSessionId: (contextId: string, sessionId: string) =>
+  setSessionId: (contextId: string, sessionId: string, runId?: string) =>
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newMap = new Map(state.sessionIdByContext);
       newMap.set(contextId, sessionId);
       return { sessionIdByContext: newMap };
     }),
 
   // 停止流式输出（触发中断并清理状态，同时通知后端取消）
-  stopStreaming: (contextId: string) => {
-    const { abortControllers, sessionIdByContext } = get();
+  stopStreaming: (contextId: string, runId?: string) => {
+    const { abortControllers, sessionIdByContext, streamingRunIdsByContext } = get();
+    if (runId !== undefined && streamingRunIdsByContext.get(contextId) !== runId) {
+      return false;
+    }
 
     // 1. 中断本地 AbortController
     const controller = abortControllers.get(contextId);
@@ -598,10 +702,16 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
 
     // 3. 清理状态
     set((state) => {
+      if (runId !== undefined && state.streamingRunIdsByContext.get(contextId) !== runId) {
+        return state;
+      }
+
       const newAbortMap = new Map(state.abortControllers);
       newAbortMap.delete(contextId);
       const newSessionMap = new Map(state.sessionIdByContext);
       newSessionMap.delete(contextId);
+      const newRunIds = new Map(state.streamingRunIdsByContext);
+      newRunIds.delete(contextId);
       const newStreamingMap = new Map(state.streamingByContext);
       const current = newStreamingMap.get(contextId);
       if (current) {
@@ -613,9 +723,11 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
       return {
         abortControllers: newAbortMap,
         sessionIdByContext: newSessionMap,
+        streamingRunIdsByContext: newRunIds,
         streamingByContext: newStreamingMap,
       };
     });
+    return true;
   },
 
   setVisualEnhancementJobState: (messageId, jobState) =>

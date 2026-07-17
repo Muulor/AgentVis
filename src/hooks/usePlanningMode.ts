@@ -220,6 +220,14 @@ export function canPublishPlanningStream(
   return activeRunId === expectedRunId && !cancelRequested;
 }
 
+export function isPlanningRunOwner(
+  activeRunId: string | undefined,
+  latestRunId: string | undefined,
+  expectedRunId: string
+): boolean {
+  return activeRunId === expectedRunId && latestRunId === expectedRunId;
+}
+
 export function getPlanningHistoryEffectiveContent(
   message: Pick<Message, 'role' | 'content' | 'metadata'>
 ): string {
@@ -820,12 +828,13 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         return;
       }
 
+      const contextUsageRunId = crypto.randomUUID();
+      if (!startSending(contextId, contextUsageRunId)) return;
+
       sendingContextsRef.current.add(contextId);
       cancelRequestedContextsRef.current.delete(contextId);
-      const contextUsageRunId = crypto.randomUUID();
       contextUsageRunIdsRef.current.set(contextId, contextUsageRunId);
       useStatusStore.getState().clearContextPressure(contextId);
-      startSending(contextId);
 
       if (imBotId) {
         const activeImTask = getActiveImTask(imBotId);
@@ -848,6 +857,18 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
       let checkpointFlushPromise: Promise<void> | null = null;
       let checkpointDirty = false;
       let checkpointFinalized = false;
+
+      const ownsLatestPlanningRun = (): boolean => {
+        const state = useChatStore.getState();
+        return isPlanningRunOwner(
+          contextUsageRunIdsRef.current.get(contextId),
+          state.latestRunIdsByContext.get(contextId),
+          contextUsageRunId
+        );
+      };
+
+      const canPublishLivePlanningRun = (): boolean =>
+        ownsLatestPlanningRun() && !cancelRequestedContextsRef.current.has(contextId);
 
       // 收集思维链数据用于持久化
       const thinkingChainData: {
@@ -943,7 +964,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
       };
 
       const flushPlanningCheckpointNow = (): Promise<void> => {
-        if (!planningCheckpointMessage || checkpointFinalized) {
+        if (!planningCheckpointMessage || checkpointFinalized || !canPublishLivePlanningRun()) {
           return Promise.resolve();
         }
         if (checkpointFlushPromise) return checkpointFlushPromise;
@@ -958,7 +979,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             if (checkpointFlushPromise === promise) {
               checkpointFlushPromise = null;
             }
-            if (checkpointDirty && !checkpointFinalized && !checkpointFlushTimerRef.current) {
+            if (
+              checkpointDirty &&
+              !checkpointFinalized &&
+              !checkpointFlushTimerRef.current &&
+              canPublishLivePlanningRun()
+            ) {
               schedulePlanningCheckpointFlush();
             }
           });
@@ -967,12 +993,14 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
       };
 
       const schedulePlanningCheckpointFlush = (): void => {
-        if (!planningCheckpointMessage || checkpointFinalized) return;
+        if (!planningCheckpointMessage || checkpointFinalized || !canPublishLivePlanningRun()) {
+          return;
+        }
         checkpointDirty = true;
         if (checkpointFlushTimerRef.current) return;
         checkpointFlushTimerRef.current = setTimeout(() => {
           checkpointFlushTimerRef.current = null;
-          if (!checkpointDirty || checkpointFinalized) return;
+          if (!checkpointDirty || checkpointFinalized || !canPublishLivePlanningRun()) return;
           void flushPlanningCheckpointNow();
         }, PLANNING_CHECKPOINT_FLUSH_INTERVAL_MS);
       };
@@ -1019,6 +1047,34 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         }
       };
 
+      const discardPersistedPlanningAssistant = async (
+        messageId: string,
+        reason: string
+      ): Promise<void> => {
+        try {
+          await invoke('message_delete', { id: messageId });
+          logger.debug('[usePlanningMode] 已删除迟到的 Planning assistant:', reason);
+        } catch (error) {
+          logger.warn('[usePlanningMode] 删除迟到的 Planning assistant 失败:', reason, error);
+        } finally {
+          if (planningCheckpointMessage?.id === messageId) {
+            planningCheckpointMessage = null;
+            checkpointFinalized = true;
+          }
+        }
+      };
+
+      const stopBeforeAgentLoopIfInactive = async (reason: string): Promise<boolean> => {
+        if (canPublishLivePlanningRun()) return false;
+        logger.debug('[usePlanningMode] Planning 运行已取消或被新运行接管:', {
+          contextId,
+          contextUsageRunId,
+          reason,
+        });
+        await deletePlanningCheckpoint(reason);
+        return true;
+      };
+
       try {
         // ====== 步骤 0:  重置 FSM 可视化状态（绑定当前 Agent contextId，防止跨 Agent 思考内容泄露） ======
         const attachmentsForSend =
@@ -1027,6 +1083,8 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 await import('@services/attachment')
               ).attachmentService.hydrateAttachmentsForContext(attachments, messageAgentId)
             : [];
+
+        if (await stopBeforeAgentLoopIfInactive('run stopped while hydrating attachments')) return;
 
         fsmVisualizationActions.reset(contextId);
 
@@ -1086,11 +1144,21 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           onClearQuotes();
         }
 
+        if (await stopBeforeAgentLoopIfInactive('run stopped while persisting the user message')) {
+          return;
+        }
+
         // 复制附件用于后续处理（已在清空前获取）
         const attachmentsToSend = [...attachmentsForSend];
 
         // ====== 步骤 2: 显示加载状态 ======
-        startStreaming(contextId, effectiveAgentConfig.name);
+        if (!startStreaming(contextId, effectiveAgentConfig.name, contextUsageRunId)) {
+          logger.debug('[usePlanningMode] 当前运行已失去流式状态所有权，跳过后续任务:', {
+            contextId,
+            contextUsageRunId,
+          });
+          return;
+        }
 
         try {
           planningCheckpointMessage = await invoke<PersistedMessageResult>('message_create', {
@@ -1110,6 +1178,10 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             '[usePlanningMode] Planning checkpoint 创建失败，任务将继续执行:',
             checkpointError
           );
+        }
+
+        if (await stopBeforeAgentLoopIfInactive('run stopped while creating its checkpoint')) {
+          return;
         }
 
         // ====== 步骤 3: 获取或创建 AgentService ======
@@ -1189,6 +1261,8 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           // avatar/budget/projectPath 读取失败不影响主流程
           logger.warn('[usePlanningMode] 读取 Agent avatar/budget/projectPath 失败:', avatarError);
         }
+
+        if (await stopBeforeAgentLoopIfInactive('run stopped while preparing AgentService')) return;
 
         const agentService = getOrCreateAgentService({
           agentId: messageAgentId,
@@ -1290,6 +1364,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             '[usePlanningMode] 检测到预取消请求，AgentService 创建后立即取消, contextId:',
             contextId
           );
+        }
+        if (await stopBeforeAgentLoopIfInactive('run stopped before history synchronization')) {
+          return;
         }
 
         // ====== 步骤 3.5: 加载历史对话 ======
@@ -1484,10 +1561,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           }
         }
 
-        // 每轮都用持久化历史快照覆盖缓存 Session，包括空历史。
-        // 删除全部消息后如果跳过空数组同步，上一轮 AgentLoop 的消息会残留在内存中，
-        // 并在下一次普通、Cron 或 IM 任务中重新进入 MB 上下文。
-        agentService.loadChatHistory(historyMessages);
+        if (await stopBeforeAgentLoopIfInactive('run stopped while rebuilding chat history')) {
+          return;
+        }
 
         // ====== 步骤 4: 执行 AgentLoop ======
         // 构建引用上下文字符串，注入到 LLM 消息内容前（与 Chat 模式保持一致）
@@ -1498,6 +1574,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         const contentWithQuotes = quotesContext ? `${quotesContext}\n\n${content}` : content;
 
         const result = await agentService.processMessage(contentWithQuotes, {
+          // 每轮都在 AgentService 获取运行锁后，用持久化快照覆盖 Session（包括空历史）。
+          // 这样新请求若撞上尚未收口的旧 run，会先返回 alreadyProcessing，绝不会改写旧 Session。
+          chatHistory: historyMessages,
           // 附件文本内容注入（通过 RuntimeContext.attachments）
           attachmentContent,
           // 附件路径清单注入（通过 Sub-Agent TaskContext）
@@ -1509,9 +1588,11 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           imBotId,
           // Diff 数据回调：EditTool / FileWriteTool 返回预览时触发
           onDiffData: (diffData) => {
+            if (!canPublishLivePlanningRun()) return;
             void (async () => {
               logger.trace('[usePlanningMode] 收到 Diff 数据:', diffData.filePath);
               const { useDiffStore } = await import('@stores/diffStore');
+              if (!canPublishLivePlanningRun()) return;
               tempMessageIdForDiff = `temp_${Date.now()}`;
               const extractedFileName = diffData.filePath.split(/[/\\]/).pop() ?? 'document';
               if (contextId && diffData.xml) {
@@ -1537,6 +1618,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
           // ====== FSM 可视化回调 (Phase 1) ======
           onThinkingPhase: (event) => {
+            if (!canPublishLivePlanningRun()) return;
             fsmVisualizationActions.handleThinkingPhaseEvent(event, contextId);
             // CONTENT carries a full phase snapshot during MB streaming, so persist by replacement.
             if (event.type === 'CONTENT' && event.content) {
@@ -1559,6 +1641,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             }
           },
           onReasoningTrace: (event) => {
+            if (!canPublishLivePlanningRun()) return;
             fsmVisualizationActions.handleReasoningTraceEvent(event, contextId);
             switch (event.type) {
               case 'START':
@@ -1574,20 +1657,16 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             schedulePlanningCheckpointFlush();
           },
           onResponseStream: (accumulatedContent) => {
-            if (
-              canPublishPlanningStream(
-                contextUsageRunIdsRef.current.get(contextId),
-                contextUsageRunId,
-                cancelRequestedContextsRef.current.has(contextId)
-              )
-            ) {
-              setStreamingContent(contextId, accumulatedContent);
+            if (canPublishLivePlanningRun()) {
+              setStreamingContent(contextId, accumulatedContent, contextUsageRunId);
             }
           },
           onMetricsUpdate: (snapshot) => {
+            if (!canPublishLivePlanningRun()) return;
             fsmVisualizationActions.updateMetrics(snapshot, contextId);
           },
           onFSMStateChange: (from, to) => {
+            if (!canPublishLivePlanningRun()) return;
             // 类型转换：AgentLoopCallbacks 使用 string，Store 使用 AgentServiceState
             fsmVisualizationActions.handleFSMStateChange(
               from as import('@/services/planning/fsm/types').AgentServiceState,
@@ -1603,6 +1682,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
           // ====== Sub-Agent 实时观测回调 ======
           onSubAgentObservation: (event) => {
+            if (!canPublishLivePlanningRun()) return;
             fsmVisualizationActions.addSubAgentObservation(event, contextId);
             // IM 追踪器转发：imBotId 精确路由到对应 Bot 的飞书卡片
             const imTracker = getActiveImTracker(imBotId);
@@ -1614,6 +1694,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             schedulePlanningCheckpointFlush();
           },
           onSubAgentSpawn: () => {
+            if (!canPublishLivePlanningRun()) return;
             // Sub-Agent 创建时标记运行中；观测记录保留全轮次历史，由 runId 隔离分组。
             fsmVisualizationActions.setSubAgentRunning(true, contextId);
             // IM 追踪器转发（imBotId 精确路由）
@@ -1624,6 +1705,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             schedulePlanningCheckpointFlush();
           },
           onSubAgentComplete: () => {
+            if (!canPublishLivePlanningRun()) return;
             fsmVisualizationActions.setSubAgentRunning(false, contextId);
             // IM 追踪器转发（imBotId 精确路由）
             const imTracker = getActiveImTracker(imBotId);
@@ -1633,6 +1715,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             schedulePlanningCheckpointFlush();
           },
           onSubAgentFail: () => {
+            if (!canPublishLivePlanningRun()) return;
             fsmVisualizationActions.setSubAgentRunning(false, contextId);
             // IM 追踪器转发（imBotId 精确路由）
             const imTracker = getActiveImTracker(imBotId);
@@ -1645,6 +1728,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           // Embedding 警告回调：语义检索降级时向用户弹出非阻塞性提示
           // 使用 warning 级别而非 error，因为消息流程将降级继续执行（只是缺少记忆检索助力）
           onEmbeddingWarning: () => {
+            if (!canPublishLivePlanningRun()) return;
             logger.warn('[usePlanningMode] Embedding 服务降级，已通知用户');
             toast({
               type: 'warning',
@@ -1656,6 +1740,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         });
 
         // ====== 步骤 5: 处理执行结果 ======
+        if (!ownsLatestPlanningRun()) {
+          await stopPlanningCheckpointFlushes();
+          await deletePlanningCheckpoint('run settled after a newer Chat or Task took ownership');
+          return;
+        }
+
         if (!result.success) {
           throw new Error(result.error ?? t('chat.processingFailed'));
         }
@@ -1665,13 +1755,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         if (
           result.content &&
           result.terminationReason !== 'cancelled' &&
-          canPublishPlanningStream(
-            contextUsageRunIdsRef.current.get(contextId),
-            contextUsageRunId,
-            cancelRequestedContextsRef.current.has(contextId)
-          )
+          canPublishLivePlanningRun()
         ) {
-          setStreamingContent(contextId, result.content);
+          setStreamingContent(contextId, result.content, contextUsageRunId);
         }
 
         // ====== 步骤 5.2: IM 通道提前回复（可视化增强前发送原始纯文本到飞书）======
@@ -1776,6 +1862,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
         let assistantMessageResult: PersistedMessageResult;
         try {
           await stopPlanningCheckpointFlushes();
+          if (!ownsLatestPlanningRun()) {
+            await deletePlanningCheckpoint(
+              'run lost ownership before final assistant persistence started'
+            );
+            return;
+          }
 
           if (planningCheckpointMessage) {
             try {
@@ -1795,6 +1887,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 '[usePlanningMode] Planning checkpoint 最终更新失败，回退创建 assistant 消息:',
                 checkpointUpdateError
               );
+              if (!ownsLatestPlanningRun()) {
+                await deletePlanningCheckpoint(
+                  'run lost ownership after its checkpoint update failed'
+                );
+                return;
+              }
               assistantMessageResult = await invoke<PersistedMessageResult>('message_create', {
                 request: {
                   agentId: messageAgentId,
@@ -1830,6 +1928,14 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           throw dbError;
         }
 
+        if (!ownsLatestPlanningRun() || !isCreatedUserMessageStillPresent()) {
+          await discardPersistedPlanningAssistant(
+            assistantMessageResult.id,
+            'run lost ownership while its final assistant was being persisted'
+          );
+          return;
+        }
+
         const assistantMessage = {
           id: assistantMessageResult.id,
           content: result.content,
@@ -1853,7 +1959,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             cancelRequestedContextsRef.current.has(contextId)
           )
         ) {
-          finishStreaming(contextId);
+          finishStreaming(contextId, contextUsageRunId);
         }
 
         // ====== 步骤 6.5: 消息级 Visual Enhancer 后台调度 ======
@@ -2048,7 +2154,9 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         const imErrorMsg = errorMsg === 'User cancelled' ? t('im.bridge.abortedByUser') : errorMsg;
-        if (contextId) {
+        const canPublishPlanningFailure = () =>
+          useChatStore.getState().isLatestRun(contextId, contextUsageRunId);
+        if (contextId && canPublishPlanningFailure()) {
           fsmVisualizationActions.setSubAgentRunning(false, contextId);
         }
 
@@ -2061,6 +2169,16 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           );
         } else {
           logger.error('[usePlanningMode] Planning 模式处理失败:', errorMsg);
+        }
+
+        if (!canPublishPlanningFailure()) {
+          logger.debug('[usePlanningMode] 旧运行迟到失败，仅记录日志并清理 checkpoint:', {
+            contextId,
+            contextUsageRunId,
+          });
+          await stopPlanningCheckpointFlushes();
+          await deletePlanningCheckpoint('stale Planning run failed after a newer run started');
+          return;
         }
 
         // IM 任务失败：发射事件通知 ImTaskBridge 发送错误卡片
@@ -2089,6 +2207,12 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
 
         let errorMessage: Message | null = null;
         await stopPlanningCheckpointFlushes();
+        if (!canPublishPlanningFailure()) {
+          await deletePlanningCheckpoint(
+            'Planning run became stale before error assistant persistence'
+          );
+          return;
+        }
 
         if (planningCheckpointMessage && !checkpointFinalized) {
           try {
@@ -2101,6 +2225,13 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
                 createdAt: Date.now(),
               },
             });
+            planningCheckpointMessage = updatedCheckpoint;
+            if (!canPublishPlanningFailure()) {
+              await deletePlanningCheckpoint(
+                'Planning run became stale while persisting an error assistant'
+              );
+              return;
+            }
             checkpointFinalized = true;
             errorMessage = {
               id: updatedCheckpoint.id,
@@ -2114,6 +2245,14 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
             logger.warn('[usePlanningMode] Planning checkpoint 失败状态更新失败:', checkpointError);
             await deletePlanningCheckpoint('failed checkpoint status update failed');
           }
+        }
+
+        if (!canPublishPlanningFailure()) {
+          logger.debug('[usePlanningMode] 错误持久化后运行已过期，跳过 UI 错误发布:', {
+            contextId,
+            contextUsageRunId,
+          });
+          return;
         }
 
         // 添加错误消息到聊天历史（避免前端显示缓存的旧回复）
@@ -2149,15 +2288,21 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
           contextUsageRunIdsRef.current.get(contextId) === contextUsageRunId;
 
         if (ownsCurrentPlanningRun) {
+          const isLatestPlanningRun = useChatStore
+            .getState()
+            .isLatestRun(contextId, contextUsageRunId);
+
           sendingContextsRef.current.delete(contextId);
           cancelRequestedContextsRef.current.delete(contextId);
-          finishSending(contextId);
+          finishSending(contextId, contextUsageRunId);
           fsmVisualizationActions.setSubAgentRunning(false, contextId);
-          finishStreaming(contextId);
+          finishStreaming(contextId, contextUsageRunId);
 
-          // 任务结束后恢复模型状态灯（瞬时错误不应持续红灯）
-          useStatusStore.getState().setModelStatus('online');
-          useStatusStore.getState().clearContextPressure(contextId);
+          if (isLatestPlanningRun) {
+            // 任务结束后恢复模型状态灯（瞬时错误不应持续红灯）
+            useStatusStore.getState().setModelStatus('online');
+            useStatusStore.getState().clearContextPressure(contextId);
+          }
           contextUsageRunIdsRef.current.delete(contextId);
         }
 
@@ -2196,6 +2341,7 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
   const stopPlanningTask = useCallback(() => {
     // 按当前 contextId 取消对应的 AgentService（避免跨 Agent 误取消）
     if (contextId) {
+      const contextUsageRunId = contextUsageRunIdsRef.current.get(contextId);
       cancelRequestedContextsRef.current.add(contextId);
       const service = agentServiceMapRef.current.get(contextId);
       if (service) {
@@ -2215,9 +2361,11 @@ export function usePlanningMode(options: UsePlanningModeOptions): UsePlanningMod
       // 用户点击取消后输入框将锁死 15s 之久。
       // 在此主动解锁 UI，finally 块最终执行时也会再调用一次（幂等操作无副作用）
       sendingContextsRef.current.delete(contextId);
-      finishSending(contextId);
-      const { stopStreaming } = useChatStore.getState();
-      stopStreaming(contextId);
+      if (contextUsageRunId) {
+        finishSending(contextId, contextUsageRunId);
+        const { stopStreaming } = useChatStore.getState();
+        stopStreaming(contextId, contextUsageRunId);
+      }
       logger.debug('[usePlanningMode] 已强制清理 UI 发送状态, contextId:', contextId);
     }
   }, [contextId, finishSending]);

@@ -4,6 +4,7 @@ import {
   buildPlanningCheckpointProgressText,
   canPublishPlanningStream,
   getPlanningHistoryEffectiveContent,
+  isPlanningRunOwner,
   isPlanningCheckpointMessage,
   isRecoverablePlanningCheckpointMessage,
   isMessagePresentInList,
@@ -44,6 +45,13 @@ describe('usePlanningMode helpers', () => {
     expect(canPublishPlanningStream('run-current', 'run-current', true)).toBe(false);
     expect(canPublishPlanningStream('run-new', 'run-old', false)).toBe(false);
     expect(canPublishPlanningStream(undefined, 'run-old', false)).toBe(false);
+  });
+
+  it('lets only the latest foreground generation publish Planning side effects', () => {
+    expect(isPlanningRunOwner('run-current', 'run-current', 'run-current')).toBe(true);
+    expect(isPlanningRunOwner('run-current', 'chat-new', 'run-current')).toBe(false);
+    expect(isPlanningRunOwner('planning-new', 'planning-new', 'planning-old')).toBe(false);
+    expect(isPlanningRunOwner(undefined, 'run-current', 'run-current')).toBe(false);
   });
 
   it('uses assistant metadata.persistContent when rebuilding Planning history', () => {

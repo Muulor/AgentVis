@@ -322,9 +322,11 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         userMessageMeta,
       } = sendOptions ?? {};
 
+      const chatRunId = crypto.randomUUID();
+      if (!startSending(contextId, chatRunId)) return;
+
       sendingContextsRef.current.add(contextId);
       useStatusStore.getState().clearContextPressure(contextId);
-      startSending(contextId);
       let currentContextCallId: string | null = null;
 
       // 获取 chatStore 流式操作方法
@@ -447,7 +449,13 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           contextType === 'agent' ? agentConfig?.name : mentionedAgent?.name;
 
         // 立即开始流式状态，Hub @Agent 场景需要带上响应 Agent 名称，避免等待气泡退回显示 Hub
-        startStreaming(contextId, streamingAgentName);
+        if (!startStreaming(contextId, streamingAgentName, chatRunId)) {
+          logger.debug('[useChatSender] 当前运行已失去流式状态所有权，跳过后续请求:', {
+            contextId,
+            chatRunId,
+          });
+          return;
+        }
 
         // 用户消息发送成功，清空附件预览
         if (attachmentsForSend.length > 0 && onClearAttachments) {
@@ -905,8 +913,8 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
 
         // 注册 sessionId 和 AbortController 到 chatStore（用于取消信号传递）
         const abortController = new AbortController();
-        useChatStore.getState().setSessionId(contextId, sessionId);
-        useChatStore.getState().setAbortController(contextId, abortController);
+        useChatStore.getState().setSessionId(contextId, sessionId, chatRunId);
+        useChatStore.getState().setAbortController(contextId, abortController, chatRunId);
 
         let accumulatedContent = '';
         let accumulatedReasoning = '';
@@ -952,11 +960,11 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
           pendingReasoningDelta = '';
 
           if (contentDelta) {
-            appendStreamingContent(contextId, contentDelta);
+            appendStreamingContent(contextId, contentDelta, chatRunId);
           }
 
           if (reasoningDelta) {
-            appendStreamingReasoning(contextId, reasoningDelta);
+            appendStreamingReasoning(contextId, reasoningDelta, chatRunId);
           }
 
           if (contentDelta || reasoningDelta) {
@@ -1004,7 +1012,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
               flushStreamingDeltas();
               logger.error('[useChatSender] 流式响应错误:', event.payload.error);
             }
-            finishStreaming(contextId);
+            finishStreaming(contextId, chatRunId);
             return;
           }
 
@@ -1121,7 +1129,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
         // 若用户已取消，跳过响应保存，避免气泡消失后又被 addMessage 重新显示
         if (cancellationState.cancelled || abortController.signal.aborted) {
           logger.trace('[useChatSender] 用户已取消，跳过响应保存');
-          finishStreaming(contextId);
+          finishStreaming(contextId, chatRunId);
         } else if (accumulatedContent.trim() || accumulatedReasoning.trim()) {
           let assistantMessageId: string;
           let assistantMessageCreatedAt: number;
@@ -1159,7 +1167,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             addMessage(contextId, agentResponse);
 
             // 在 addMessage 后结束流式状态
-            finishStreaming(contextId);
+            finishStreaming(contextId, chatRunId);
             logger.trace('[useChatSender]  助手响应已保存');
 
             void notifyTaskCompleted({
@@ -1256,7 +1264,7 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
                 ...(accumulatedReasoning ? { reasoningContent: accumulatedReasoning } : {}),
               },
             });
-            finishStreaming(contextId);
+            finishStreaming(contextId, chatRunId);
             logger.trace('[useChatSender]  Hub 助手响应已持久化');
 
             if (mentionedAgent) {
@@ -1280,30 +1288,35 @@ export function useChatSender(options: UseChatSenderOptions): UseChatSenderRetur
             onClearQuotes();
           }
         } else {
-          finishStreaming(contextId);
+          finishStreaming(contextId, chatRunId);
         }
 
         // Legacy Session Usage accumulation happens in the stream done event.
       } catch (error) {
         logger.error('[useChatSender] 发送失败:', error);
-        useChatStore.getState().finishStreaming(contextId);
-        toast({
-          type: 'error',
-          title: t('chat.toastSendFailed'),
-          description: error instanceof Error ? error.message : String(error),
-          duration: 6000,
-        });
-        useStatusStore.getState().setModelStatus('error');
+        useChatStore.getState().finishStreaming(contextId, chatRunId);
+        if (useChatStore.getState().isLatestRun(contextId, chatRunId)) {
+          toast({
+            type: 'error',
+            title: t('chat.toastSendFailed'),
+            description: error instanceof Error ? error.message : String(error),
+            duration: 6000,
+          });
+          useStatusStore.getState().setModelStatus('error');
+        }
       } finally {
         if (contextId) {
-          if (currentContextCallId) {
+          const isLatestChatRun = useChatStore.getState().isLatestRun(contextId, chatRunId);
+          if (isLatestChatRun && currentContextCallId) {
             useStatusStore.getState().clearContextPressure(contextId, currentContextCallId);
           }
           sendingContextsRef.current.delete(contextId);
-          finishSending(contextId);
+          finishSending(contextId, chatRunId);
+          if (isLatestChatRun) {
+            // 仅当前代际可恢复全局模型状态，避免迟到 finally 覆盖后续运行。
+            useStatusStore.getState().setModelStatus('online');
+          }
         }
-        // 任务结束后恢复模型状态灯（瞬时错误不应持续红灯）
-        useStatusStore.getState().setModelStatus('online');
       }
     },
     [
