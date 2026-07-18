@@ -42,7 +42,9 @@ describe('SubAgentRunner 新架构 Checkpoint', () => {
    */
   const createExtendedMockCaller = (responses: LLMResponse[]) => {
     let callIndex = 0;
+    const receivedInstructions: Array<string | undefined> = [];
     return {
+      receivedInstructions,
       async callWithContext(
         _systemPrompt: string,
         _tools: string[],
@@ -52,6 +54,7 @@ describe('SubAgentRunner 新架构 Checkpoint', () => {
         if (responses.length === 0) {
           throw new Error('Mock responses array is empty');
         }
+        receivedInstructions.push(additionalInstructions);
         const response = responses[Math.min(callIndex, responses.length - 1)]!;
         // 记录是否传递了额外指令（用于验证）
         if (additionalInstructions) {
@@ -221,6 +224,23 @@ describe('SubAgentRunner 新架构 Checkpoint', () => {
     expect(checkpointFn.mock.calls[0]?.[0].checkpointTrigger).toBe('budget_near_exhaustion');
     expect(checkpointFn.mock.calls[0]?.[0].remainingBudget).toBe(5);
     expect(checkpointFn.mock.calls[0]?.[0].requestedAdditionalBudget).toBe(20);
+    const expectedNotice = translate(
+      'chat.subAgentBudgetExtendedNotice',
+      {
+        additionalIterations: 20,
+        maxSteps: 70,
+        remainingSteps: 25,
+      },
+      'zh-CN'
+    );
+    expect(mockCaller.receivedInstructions[45]).toContain(expectedNotice);
+    expect(mockCaller.receivedInstructions[45]).toContain('当前还剩 25 步');
+    expect(mockCaller.receivedInstructions[45]).not.toContain('工具步骤');
+    expect(
+      mockCaller.receivedInstructions.filter((instruction) =>
+        instruction?.includes('执行预算已增加')
+      )
+    ).toHaveLength(1);
     expect(result.status).toBe('completed');
   });
 

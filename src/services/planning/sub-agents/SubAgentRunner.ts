@@ -1018,6 +1018,7 @@ export class SubAgentRunner {
     let budgetWarningInjected = false;
     let budgetCriticalInjected = false;
     let budgetExtensionCount = 0;
+    let pendingBudgetExtensionIterations = 0;
     let lastBudgetNearExhaustionCheckpointMaxSteps: number | undefined;
 
     const applyBudgetExtension = (
@@ -1046,6 +1047,7 @@ export class SubAgentRunner {
 
       maxSteps += additionalIterations;
       budgetExtensionCount++;
+      pendingBudgetExtensionIterations += additionalIterations;
       budgetWarningInjected = false;
       budgetCriticalInjected = false;
       lastBudgetNearExhaustionCheckpointMaxSteps = undefined;
@@ -1336,6 +1338,19 @@ export class SubAgentRunner {
         compressor,
         stepCount
       );
+      const budgetExtensionNotice =
+        pendingBudgetExtensionIterations > 0
+          ? translate('chat.subAgentBudgetExtendedNotice', {
+              additionalIterations: pendingBudgetExtensionIterations,
+              maxSteps,
+              remainingSteps: Math.max(0, maxSteps - toolCallSteps),
+            })
+          : undefined;
+      const instructionsForCall = [additionalInstructions, budgetExtensionNotice]
+        .filter((instruction): instruction is string => Boolean(instruction))
+        .join('\n\n');
+      // 扩容通知只发送给扩容后的下一次 LLM 调用；即使该调用失败，也不重复注入。
+      pendingBudgetExtensionIterations = 0;
       const llmCallStartedAt = Date.now();
       let slowDecisionTimer: ReturnType<typeof setTimeout> | undefined;
       if (this.observationCallback) {
@@ -1418,7 +1433,7 @@ export class SubAgentRunner {
             reasoningDetails: m.reasoningDetails,
             timestamp: Date.now(),
           })),
-          additionalInstructions, // 传递 Master Brain 的策略调整指令
+          instructionsForCall || undefined, // 传递策略调整与单次预算扩容通知
           signal, // 传递 AbortSignal，终止时立即中断 LLM HTTP 请求
           // 持久化的用户介入消息：每步 LLM 调用都会将其注入到尾部热区。
           // 若 Safety Footer 已启用，则用户介入消息会位于 Footer 之后。

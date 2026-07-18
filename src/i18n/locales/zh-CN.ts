@@ -525,6 +525,8 @@ export const zhCN = {
       '🛑 这是最后一个行动步骤。请立即总结已完成工作或交接状态，并输出 TASK_COMPLETE。不要开始新的操作。',
     subAgentBudgetNearExhaustionWarning:
       '⚠️ 执行预算即将耗尽。请在接下来 2 步内完成任务核心部分或交接给其他成员继续；如果任务基本完成，请输出 TASK_COMPLETE。',
+    subAgentBudgetExtendedNotice:
+      '✅ 执行预算已增加 {additionalIterations} 步，新上限为 {maxSteps} 步，当前还剩 {remainingSteps} 步。如果此前收到预算告急提示，该提示现已失效。请按新预算继续完成原任务，不要仅因先前的预算提示进入交接或提前输出 TASK_COMPLETE。',
     subAgentInvalidToolCorrection:
       '❌ 工具 "{tool}" 不存在。你只能使用这些工具：{tools}。请改用正确工具名，或输出 TASK_COMPLETE 完成任务。',
     subAgentEmptyToolName: '空名称',

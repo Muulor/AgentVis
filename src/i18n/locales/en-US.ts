@@ -542,6 +542,8 @@ export const enUS = {
       '🛑 This is your final action step. Immediately summarize completed work or handoff status, and output TASK_COMPLETE. Do not start new operations.',
     subAgentBudgetNearExhaustionWarning:
       '⚠️ Execution budget is nearly exhausted. Complete the core part of the task or hand off within the next 2 steps, trusting other members to continue. If the task is mostly complete, output TASK_COMPLETE.',
+    subAgentBudgetExtendedNotice:
+      '✅ The execution budget has been increased by {additionalIterations} steps. The new limit is {maxSteps} steps, with {remainingSteps} steps remaining. Any earlier budget warning is now obsolete. Continue the original task under the new budget; do not hand off or output TASK_COMPLETE early solely because of the previous budget warning.',
     subAgentInvalidToolCorrection:
       '❌ Tool "{tool}" does not exist. You can only use these tools: {tools}. Use the correct tool name, or output TASK_COMPLETE to complete the task.',
     subAgentEmptyToolName: '(empty name)',
