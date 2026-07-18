@@ -192,7 +192,7 @@ export function SettingsModal({ isOpen, onClose, initialTab = 'general' }: Setti
   }, [isOpen, skillAuditStatus]);
 
   useEffect(() => {
-    if (isOpen && skillAuditStatus === 'idle') {
+    if (skillAuditStatus === 'idle') {
       setActiveTab(initialTab);
     }
   }, [initialTab, isOpen, skillAuditStatus]);

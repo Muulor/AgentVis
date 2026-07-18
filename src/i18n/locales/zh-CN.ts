@@ -1231,6 +1231,20 @@ export const zhCN = {
         '沙箱阻断：当前 `{mode}` 模式下不会执行这类命令。{reason} 如需开发依赖，请改用项目内/沙箱内临时安装；如确实需要主机全局 CLI、主机登录态或长期凭证，请请求 LocalAudit 模式或显式凭证。',
       sandboxRuntimeHint:
         '[SANDBOX_RUNTIME_CONTEXT] 这条命令是在 `{mode}` 沙箱中运行的。{reason} 不要据此断定用户主机缺少该 CLI、配置、Token 或登录态；如开发任务只需要依赖，请优先采用项目内/沙箱内临时安装。只有确实需要主机全局 CLI、主机登录态、长期凭证或桌面环境时，才向用户说明需要 LocalAudit 模式。',
+      recoverableDeleteRequiredHint:
+        '[DELETE_RETRY_REQUIRED] 删除未完成。请仅使用一条直接的字面路径命令重试一次：del /f /q "..."、rmdir /s /q "..."，或 powershell -NoProfile -Command "Remove-Item -LiteralPath \'...\' -Force"。如果仍然失败，请停止重试并向用户报告。',
+      recoverableDeleteUnavailableHint:
+        '[DELETE_UNAVAILABLE] 删除未完成。请保留当前目标，不要再使用其他命令、脚本或工具尝试删除；向用户报告本次操作未完成。',
+      scriptScanUnavailableHint:
+        '[EXECUTION_INPUT_UNAVAILABLE] 当前脚本无法执行。请确认脚本已经存在且可读，或拆分、缩小后重试一次；如果仍然失败，请停止并报告。',
+      scriptScanUnreadableHint:
+        '[EXECUTION_INPUT_UNREADABLE] 当前脚本或工作目录无法读取。请确认入口文件已经存在且可读，然后重试一次；如果仍然失败，请停止并报告。',
+      scriptScanTooLargeHint:
+        '[EXECUTION_INPUT_TOO_LARGE] 当前脚本超出执行输入限制（8 MiB，或读取期间持续增长）。请拆分或缩小脚本后重试；如果仍然失败，请停止并报告。',
+      scriptScanAmbiguousLauncherHint:
+        '[EXECUTION_ENTRY_AMBIGUOUS] 当前命令或脚本将启动的本地入口无法可靠确定。请使用带受支持扩展名的明确本地入口文件，并通过 exec workdir 指定运行目录后重试；如果仍然失败，请停止并报告。',
+      scriptScanDepthExceededHint:
+        '[EXECUTION_CHAIN_TOO_DEEP] 当前脚本调用链超过 8 层。请展开或拆分调用链后重试；如果仍然失败，请停止并报告。',
       externalSkillSandboxHint:
         '[EXTERNAL_SKILL_SANDBOX_HINT] 这条命令看起来在运行已安装的外部技能 "{skillName}"。如果它在 ControlledNetwork 中被阻断，请参考 external/packages/skill-creator/SKILL.md。先适配网络元数据：公开 HTTP(S) Guide -> agentvisNetwork: brokerProxyPreferred；非 HTTP -> agentvisNetworkEntrypoints + legacyNonHttp + network_targets；Script HTTP(S) -> brokerOnly。如果元数据已经正确，请按 sandbox reason 最小修改脚本：把 Python 里的 fetch(...) 这类 helper 改名，移除 trust_env=False、空 proxies map 等禁用代理的代码，不要从 Python 里 spawn curl.exe 或关闭 TLS，然后重试原命令。',
       sandboxHintReasons: {
@@ -1896,9 +1910,13 @@ export const zhCN = {
       trashBinMissingPath: '未获取到路径',
       trashBinOpenTitle: '在资源管理器中打开',
       trashBinHint:
-        'Agent 执行删除操作时，文件会被安全转移到此目录。可恢复条目会保留在 manifest 中，恢复后自动移除，30 天后自动清理。',
+        'Agent 常规任务中删除的文件会安全转移到此处，当前不会自动清理。临时截图、脚本和其他文件可能持续占用空间，建议定期检查并清理不再需要的条目。',
       refreshTrashTitle: '刷新最近删除',
       loadingTrash: '正在加载最近删除...',
+      trashRestoreInProgress: '正在恢复选中的文件。可以关闭设置，恢复会在后台继续。',
+      trashCleanInProgress: '正在清理选中的文件。可以关闭设置，清理会在后台继续。',
+      trashBusy: 'Agent 回收站正在完成另一项文件操作，列表会自动刷新。',
+      trashLoadFailed: 'Agent 回收站暂时无法加载，请点击刷新重试。',
       trashEmpty: '暂无可恢复的 Agent 删除记录',
       selectTrashEntries: '选择回收站条目（{count}）',
       selectEntryAria: '选择已删除条目 {path}',
@@ -1908,8 +1926,10 @@ export const zhCN = {
       selectBatchTitle: '选中同一次删除批次的 {count} 个条目',
       statusTrashMissing: '副本缺失',
       statusOriginalExists: '原路径已存在',
+      confirmCleanTitle: '永久清理回收站条目',
       confirmCleanEntries:
-        '将永久清理选中的 {count} 个回收站条目，并从 manifest 移除记录。此操作不可恢复，是否继续？',
+        '将永久清理选中的 {count} 个回收站条目，并移除对应记录。此操作不可恢复。',
+      confirmCleanAction: '永久清理',
       protectedPaths: '路径保护名单',
       protectedPathsEmpty: '暂无自定义保护路径，Agent 将仅受系统目录保护。',
       protectedPathsAdd: '添加路径',
@@ -1985,7 +2005,8 @@ export const zhCN = {
       trashBin: 'Agent 回收站',
       trashBinMissingPath: '未获取到路径',
       trashBinOpenTitle: '在资源管理器中打开',
-      trashBinHint: 'Agent 执行删除操作时，文件会被安全转移到此目录。保留 30 天后自动清理。',
+      trashBinHint:
+        'Agent 常规任务中删除的文件会安全转移到此处，当前不会自动清理。临时截图、脚本和其他文件可能持续占用空间，建议定期检查并清理不再需要的条目。',
       protectedPaths: '路径保护名单',
       protectedPathsEmpty: '暂无自定义保护路径，Agent 将仅受系统目录保护',
       protectedPathsAdd: '添加保护路径',

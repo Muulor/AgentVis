@@ -1478,6 +1478,9 @@ export function generateSandboxRuntimeCommandHint(
   if (!isOfflineIsolatedExecSandboxMode(sandboxMode)) {
     return null;
   }
+  if (extractCommandGuardReason(`${stderr}\n${stdout}`)?.source === 'safety') {
+    return null;
+  }
 
   const reasonKey = detectSandboxHintReasonKey(command, `${stdout}\n${stderr}`);
   if (!reasonKey) {
@@ -1490,8 +1493,58 @@ export function generateSandboxRuntimeCommandHint(
   });
 }
 
+export interface CommandGuardReason {
+  source: 'sandbox' | 'safety';
+  reasonCode: string;
+}
+
+export function extractCommandGuardReason(errorMessage: string): CommandGuardReason | undefined {
+  const match = errorMessage.match(
+    /^\s*(?:Operation forbidden:\s*)?(Sandbox|Safety) block \[([\w-]+)\]/i
+  );
+  const source = match?.[1]?.toLowerCase();
+  const reasonCode = match?.[2]?.toLowerCase();
+  if ((source !== 'sandbox' && source !== 'safety') || !reasonCode) {
+    return undefined;
+  }
+  return { source, reasonCode };
+}
+
 function extractSandboxReasonCode(errorMessage: string): string | undefined {
-  return errorMessage.match(/Sandbox block \[([\w-]+)\]/)?.[1];
+  const reason = extractCommandGuardReason(errorMessage);
+  return reason?.source === 'sandbox' ? reason.reasonCode : undefined;
+}
+
+export function generateCommandGuardRecoveryHint(errorMessage: string): string | null {
+  const reason = extractCommandGuardReason(errorMessage);
+  if (reason?.source !== 'safety') {
+    return null;
+  }
+  if (reason.reasonCode === 'recoverable_delete_required') {
+    return translate('tools.exec.recoverableDeleteRequiredHint');
+  }
+  if (
+    reason.reasonCode === 'recoverable_delete_unavailable' ||
+    reason.reasonCode === 'recoverable_delete_cross_volume'
+  ) {
+    return translate('tools.exec.recoverableDeleteUnavailableHint');
+  }
+  if (reason.reasonCode === 'script_scan_unavailable') {
+    return translate('tools.exec.scriptScanUnavailableHint');
+  }
+  if (reason.reasonCode === 'script_scan_unreadable') {
+    return translate('tools.exec.scriptScanUnreadableHint');
+  }
+  if (reason.reasonCode === 'script_scan_too_large') {
+    return translate('tools.exec.scriptScanTooLargeHint');
+  }
+  if (reason.reasonCode === 'script_scan_ambiguous_launcher') {
+    return translate('tools.exec.scriptScanAmbiguousLauncherHint');
+  }
+  if (reason.reasonCode === 'script_scan_depth_exceeded') {
+    return translate('tools.exec.scriptScanDepthExceededHint');
+  }
+  return null;
 }
 
 function isSandboxBlockMessage(message: string): boolean {
@@ -1535,6 +1588,15 @@ function formatSandboxGuardError(errorMessage: string): string | null {
     });
   }
   return null;
+}
+
+export function formatExecGuardErrorForObservation(rawErrorMessage: string): string {
+  const redactedErrorMessage = redactSensitiveObservation(rawErrorMessage);
+  return (
+    formatSandboxGuardError(redactedErrorMessage) ??
+    generateCommandGuardRecoveryHint(rawErrorMessage) ??
+    redactedErrorMessage
+  );
 }
 
 function auditValue(value: string | null | undefined, maxLength = 140): string {
@@ -2717,6 +2779,7 @@ class ExecToolImpl implements Tool {
       const rawErrorMessage = error instanceof Error ? error.message : String(error);
       const errorMessage = redactSensitiveObservation(rawErrorMessage);
       const sandboxGuardError = formatSandboxGuardError(errorMessage);
+      const observationErrorMessage = formatExecGuardErrorForObservation(rawErrorMessage);
       const sandboxHint = generateSandboxRuntimeCommandHint(
         command,
         '',
@@ -2736,7 +2799,7 @@ class ExecToolImpl implements Tool {
         content:
           translate('tools.exec.failed', {
             command,
-            error: sandboxGuardError ?? errorMessage,
+            error: observationErrorMessage,
           }) +
           (fileReadHint ? `\n\n${fileReadHint}` : '') +
           (timeoutGuidance ? `\n\n${timeoutGuidance}` : '') +

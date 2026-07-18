@@ -37,13 +37,13 @@ use super::process_sandbox::{
     list_persisted_sandbox_audit_events, record_sandbox_audit_event,
     required_network_direct_protocols, resolve_network_direct_target_risk, split_command_tokens,
     NetworkDirectAllowance, NetworkDirectTarget, NetworkDirectTargetRiskInfo, ProcessSandboxGuard,
-    SandboxAuditEvent, SandboxAuditEventQuery, SandboxNetworkIsolation, ShellSandboxPolicy,
+    RestrictedExecutionBackend, SandboxAuditEvent, SandboxAuditEventQuery, SandboxNetworkIsolation,
+    ShellSandboxPolicy,
 };
 #[cfg(target_os = "windows")]
 use super::process_sandbox::{
     spawn_appcontainer_filesystem_process_with_capabilities, spawn_restricted_token_process,
-    AppContainerFilesystemAccess, AppContainerFilesystemGrant, RestrictedExecutionBackend,
-    RestrictedTokenProbeResult,
+    AppContainerFilesystemAccess, AppContainerFilesystemGrant, RestrictedTokenProbeResult,
 };
 use super::trash_bin;
 
@@ -999,9 +999,76 @@ fn set_command_env(
     value: impl Into<String>,
 ) {
     let key = key.into();
+    #[cfg(target_os = "windows")]
+    let key = key.to_ascii_uppercase();
     let value = value.into();
     cmd.env(&key, &value);
     restricted_env_overrides.insert(key, value);
+}
+
+const DELETE_PATH_ENV_NAMES: [&str; 7] = [
+    "APPDATA",
+    "LOCALAPPDATA",
+    "USERPROFILE",
+    "HOME",
+    "TEMP",
+    "TMP",
+    "WORKDIR",
+];
+
+fn canonical_delete_path_env_name(key: &str) -> Option<&'static str> {
+    DELETE_PATH_ENV_NAMES
+        .iter()
+        .copied()
+        .find(|candidate| candidate.eq_ignore_ascii_case(key))
+}
+
+fn user_env_contains_delete_path_key(
+    user_env: Option<&HashMap<String, String>>,
+    expected: &str,
+) -> bool {
+    user_env.is_some_and(|values| values.keys().any(|key| key.eq_ignore_ascii_case(expected)))
+}
+
+/// Build the exact allowlisted path environment used by Trash Bin's PowerShell parser.
+///
+/// Precedence mirrors child-process construction: inherited process environment, AgentVis's
+/// WORKDIR default, request overrides, then the restricted sandbox profile.
+fn effective_delete_path_env(
+    user_env: Option<&HashMap<String, String>>,
+    resolved_workdir: Option<&Path>,
+    sandbox_profile_values: Option<&[(&'static str, String)]>,
+) -> HashMap<String, String> {
+    let mut effective = HashMap::new();
+    for name in DELETE_PATH_ENV_NAMES {
+        if let Some(value) = std::env::var_os(name) {
+            effective.insert(name.to_string(), value.to_string_lossy().to_string());
+        }
+    }
+
+    if !user_env_contains_delete_path_key(user_env, "WORKDIR") {
+        if let Some(workdir) = resolved_workdir {
+            effective.insert("WORKDIR".to_string(), workdir.to_string_lossy().to_string());
+        }
+    }
+
+    if let Some(user_env) = user_env {
+        for (key, value) in user_env {
+            if let Some(canonical) = canonical_delete_path_env_name(key) {
+                effective.insert(canonical.to_string(), value.clone());
+            }
+        }
+    }
+
+    if let Some(sandbox_profile_values) = sandbox_profile_values {
+        for (key, value) in sandbox_profile_values {
+            if let Some(canonical) = canonical_delete_path_env_name(key) {
+                effective.insert(canonical.to_string(), value.clone());
+            }
+        }
+    }
+
+    effective
 }
 
 fn push_venv_path_prefixes(path_prefix: &mut Vec<String>, venv_dir: &str) {
@@ -1119,15 +1186,14 @@ fn split_windows_home_path(home: &str) -> Option<(String, String)> {
     Some((drive, path))
 }
 
-fn apply_sandbox_profile_env(
+fn apply_sandbox_profile_env_values(
     cmd: &mut Command,
     restricted_env_overrides: &mut HashMap<String, String>,
-    app_data_dir: &Path,
-) -> CommandResult<()> {
-    for (key, value) in sandbox_profile_env(app_data_dir)? {
-        set_command_env(cmd, restricted_env_overrides, key, value);
+    values: &[(&'static str, String)],
+) {
+    for (key, value) in values {
+        set_command_env(cmd, restricted_env_overrides, *key, value.clone());
     }
-    Ok(())
 }
 
 fn appcontainer_direct_network_env_overrides() -> Vec<(&'static str, &'static str)> {
@@ -3113,7 +3179,10 @@ async fn prepare_network_broker_session_env(
 
 #[cfg(target_os = "windows")]
 fn build_windows_shell_raw_arg(command: &str) -> String {
-    format!("/S /C \"chcp 65001 >nul && {}\"", command)
+    // /D disables per-user/system Command Processor AutoRun hooks. Without it, an AutoRun
+    // `cd` or arbitrary side effect can make Trash Bin preflight disagree with the command that
+    // cmd.exe ultimately executes.
+    format!("/D /S /C \"chcp 65001 >nul && {}\"", command)
 }
 
 #[cfg(target_os = "windows")]
@@ -3125,26 +3194,29 @@ fn build_windows_shell_command(command: &str) -> String {
 mod tests {
     use super::{
         acquire_preview_template_lock_at_app_data, appcontainer_direct_network_env_overrides,
-        broker_fetch_helper_file_name, broker_fetch_helper_needs_refresh,
-        broker_fetch_helper_resource_candidates, broker_only_requested,
-        broker_proxy_required_for_network_intent, broker_unused_diagnostic_detail,
-        cleanup_preview_workspace_at_cache, cleanup_stale_preview_workspaces_at_cache,
-        controlled_browser_proxy_env_overrides, controlled_browser_runtime_command,
-        create_preview_workspace_at_cache, current_unix_time_millis, first_shell_token,
+        appcontainer_writable_grant_roots, broker_fetch_helper_file_name,
+        broker_fetch_helper_needs_refresh, broker_fetch_helper_resource_candidates,
+        broker_only_requested, broker_proxy_required_for_network_intent,
+        broker_unused_diagnostic_detail, cleanup_preview_workspace_at_cache,
+        cleanup_stale_preview_workspaces_at_cache, controlled_browser_proxy_env_overrides,
+        controlled_browser_runtime_command, create_preview_workspace_at_cache,
+        current_unix_time_millis, effective_delete_path_env, first_shell_token,
         first_shell_token_file_stem, is_preview_workspace_run_id,
         network_guard_backend_is_wfp_canary, network_guard_backend_is_wfp_hard,
         network_proxy_env_overrides, parse_wfp_inspect_readiness,
         prepare_wfp_managed_egress_executable, preview_quarantine_receipt_path,
         preview_workspace_has_active_lease, release_preview_template_lock,
         release_preview_workspace_lease, remove_preview_tree_no_follow_with_limits,
-        resolve_shell_timeout_duration, restore_renamed_workspace, wfp_canary_preflight_detail,
-        wfp_canary_task_category, wfp_helper_file_name, wfp_helper_resource_candidates,
-        wfp_managed_egress_command_name, wfp_proxy_preferred_fallback_allowed,
-        write_preview_quarantine_receipt, BackgroundPipeTail, BackgroundProcessRegistry,
+        resolve_shell_timeout_duration, restore_renamed_workspace, set_command_env,
+        validate_script_content_before_exec, wfp_canary_preflight_detail, wfp_canary_task_category,
+        wfp_helper_file_name, wfp_helper_resource_candidates, wfp_managed_egress_command_name,
+        wfp_proxy_preferred_fallback_allowed, write_preview_quarantine_receipt,
+        AppContainerFilesystemGrantRequest, BackgroundPipeTail, BackgroundProcessRegistry,
         ControlledBrowserRuntimeCommand, ForegroundCancellationRegistry, NetworkProxyEnvValues,
-        PreviewCleanupLimits, PreviewQuarantineReceipt, ProcessSandboxGuard, WfpGuardReadiness,
-        FOREGROUND_CANCEL_REQUEST_TTL, MAX_PENDING_FOREGROUND_CANCEL_REQUESTS,
-        MAX_PIPE_CAPTURE_BYTES, MAX_SHELL_TIMEOUT_SECONDS, WFP_MANAGED_EGRESS_MARKER,
+        PreviewCleanupLimits, PreviewQuarantineReceipt, ProcessSandboxGuard,
+        RestrictedExecutionBackend, WfpGuardReadiness, FOREGROUND_CANCEL_REQUEST_TTL,
+        MAX_PENDING_FOREGROUND_CANCEL_REQUESTS, MAX_PIPE_CAPTURE_BYTES, MAX_SHELL_TIMEOUT_SECONDS,
+        WFP_MANAGED_EGRESS_MARKER,
     };
     #[cfg(target_os = "windows")]
     use super::{
@@ -3156,6 +3228,193 @@ mod tests {
     use std::path::PathBuf;
     use std::process::Stdio;
     use tokio::process::Command;
+
+    fn delete_scope_test_root() -> PathBuf {
+        std::env::temp_dir().join(format!("agentvis-delete-scope-{}", uuid::Uuid::new_v4()))
+    }
+
+    #[test]
+    fn delete_path_environment_matches_child_override_precedence() {
+        let resolved_workdir = PathBuf::from("C:\\resolved-workdir");
+        let mut user_env = HashMap::new();
+        user_env.insert("temp".to_string(), "C:\\user-temp".to_string());
+        user_env.insert("WORKDIR".to_string(), "C:\\user-workdir".to_string());
+        let sandbox_profile = vec![
+            ("TEMP", "C:\\sandbox-temp".to_string()),
+            ("APPDATA", "C:\\sandbox-roaming".to_string()),
+        ];
+
+        let effective = effective_delete_path_env(
+            Some(&user_env),
+            Some(&resolved_workdir),
+            Some(&sandbox_profile),
+        );
+
+        assert_eq!(
+            effective.get("TEMP").map(String::as_str),
+            Some("C:\\sandbox-temp")
+        );
+        assert_eq!(
+            effective.get("APPDATA").map(String::as_str),
+            Some("C:\\sandbox-roaming")
+        );
+        assert_eq!(
+            effective.get("WORKDIR").map(String::as_str),
+            Some("C:\\user-workdir")
+        );
+
+        let defaulted = effective_delete_path_env(None, Some(&resolved_workdir), None);
+        assert_eq!(
+            defaulted.get("WORKDIR").map(String::as_str),
+            Some("C:\\resolved-workdir")
+        );
+    }
+
+    #[test]
+    fn supported_powershell_delete_is_deferred_to_trash_instead_of_script_scan() {
+        let command = r#"powershell -NoProfile -Command "Remove-Item -LiteralPath 'C:\work\victim.txt' -Force""#;
+
+        assert!(super::command_validator::validate_script_content(command, None).is_err());
+        assert!(validate_script_content_before_exec(command, None).is_ok());
+    }
+
+    #[test]
+    fn dynamic_or_unhardened_powershell_delete_still_uses_script_scan() {
+        for command in [
+            r#"powershell -Command "Remove-Item -LiteralPath 'C:\work\victim.txt' -Force""#,
+            r#"powershell -NoProfile -Command "[System.IO.File]::Delete('C:\work\victim.txt')""#,
+            r#"powershell -NoProfile -Command "iex 'Remove-Item -LiteralPath C:\work\victim.txt -Force'""#,
+        ] {
+            assert!(
+                validate_script_content_before_exec(command, None).is_err(),
+                "{command}"
+            );
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn restricted_environment_overrides_are_case_insensitive_on_windows() {
+        let mut command = Command::new("cmd.exe");
+        let mut overrides = HashMap::new();
+
+        set_command_env(&mut command, &mut overrides, "TEMP", "C:\\first");
+        set_command_env(&mut command, &mut overrides, "temp", "C:\\second");
+
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(
+            overrides.get("TEMP").map(String::as_str),
+            Some("C:\\second")
+        );
+    }
+
+    #[test]
+    fn delete_scope_restricted_token_does_not_include_appcontainer_grants() {
+        let root = delete_scope_test_root();
+        let writable = root.join("read-write");
+        fs::create_dir_all(&writable).expect("create writable grant root");
+        let grants = vec![AppContainerFilesystemGrantRequest {
+            path: writable.to_string_lossy().into_owned(),
+            access: Some("readWrite".to_string()),
+        }];
+
+        assert!(appcontainer_writable_grant_roots(
+            &grants,
+            RestrictedExecutionBackend::RestrictedToken
+        )
+        .is_empty());
+
+        fs::remove_dir_all(root).expect("remove delete scope test root");
+    }
+
+    #[test]
+    fn delete_scope_appcontainer_includes_existing_writable_grants() {
+        let root = delete_scope_test_root();
+        let writable = root.join("read-write");
+        let default_writable = root.join("default-write");
+        fs::create_dir_all(&writable).expect("create writable grant root");
+        fs::create_dir_all(&default_writable).expect("create default writable grant root");
+        let grants = vec![
+            AppContainerFilesystemGrantRequest {
+                path: writable.to_string_lossy().into_owned(),
+                access: Some("readWrite".to_string()),
+            },
+            AppContainerFilesystemGrantRequest {
+                path: default_writable.to_string_lossy().into_owned(),
+                access: None,
+            },
+        ];
+
+        assert_eq!(
+            appcontainer_writable_grant_roots(
+                &grants,
+                RestrictedExecutionBackend::AppContainerFilesystem
+            ),
+            vec![writable, default_writable]
+        );
+
+        fs::remove_dir_all(root).expect("remove delete scope test root");
+    }
+
+    #[test]
+    fn delete_scope_appcontainer_excludes_read_only_and_missing_grants() {
+        let root = delete_scope_test_root();
+        let read_only = root.join("read-only");
+        let missing = root.join("missing");
+        fs::create_dir_all(&read_only).expect("create read-only grant root");
+        let grants = vec![
+            AppContainerFilesystemGrantRequest {
+                path: read_only.to_string_lossy().into_owned(),
+                access: Some("readOnly".to_string()),
+            },
+            AppContainerFilesystemGrantRequest {
+                path: missing.to_string_lossy().into_owned(),
+                access: Some("readWrite".to_string()),
+            },
+        ];
+
+        assert!(appcontainer_writable_grant_roots(
+            &grants,
+            RestrictedExecutionBackend::AppContainerFilesystem
+        )
+        .is_empty());
+
+        fs::remove_dir_all(root).expect("remove delete scope test root");
+    }
+
+    #[test]
+    fn delete_scope_appcontainer_uses_first_duplicate_grant_access() {
+        let root = delete_scope_test_root();
+        let duplicate = root.join("duplicate");
+        fs::create_dir_all(&duplicate).expect("create duplicate grant root");
+
+        let read_only_first = vec![
+            AppContainerFilesystemGrantRequest {
+                path: duplicate.to_string_lossy().into_owned(),
+                access: Some("readOnly".to_string()),
+            },
+            AppContainerFilesystemGrantRequest {
+                path: duplicate.to_string_lossy().into_owned(),
+                access: Some("readWrite".to_string()),
+            },
+        ];
+        assert!(appcontainer_writable_grant_roots(
+            &read_only_first,
+            RestrictedExecutionBackend::AppContainerFilesystem
+        )
+        .is_empty());
+
+        let read_write_first = read_only_first.into_iter().rev().collect::<Vec<_>>();
+        assert_eq!(
+            appcontainer_writable_grant_roots(
+                &read_write_first,
+                RestrictedExecutionBackend::AppContainerFilesystem
+            ),
+            vec![duplicate]
+        );
+
+        fs::remove_dir_all(root).expect("remove delete scope test root");
+    }
 
     fn spawn_background_test_process(
         _windows_script: &str,
@@ -3398,7 +3657,7 @@ mod tests {
 
         assert_eq!(
             raw,
-            "/S /C \"chcp 65001 >nul && python -c \"print('ok')\"\""
+            "/D /S /C \"chcp 65001 >nul && python -c \"print('ok')\"\""
         );
     }
 
@@ -3409,7 +3668,7 @@ mod tests {
 
         assert_eq!(
             shell_command,
-            "cmd /S /C \"chcp 65001 >nul && dir \"C:\\Program Files\"\""
+            "cmd /D /S /C \"chcp 65001 >nul && dir \"C:\\Program Files\"\""
         );
     }
 
@@ -5262,6 +5521,7 @@ fn sandbox_delete_allowed_roots(
     app_data_dir: &Path,
     workdir: Option<&Path>,
     sandbox_policy: &ShellSandboxPolicy,
+    requested_grants: &[AppContainerFilesystemGrantRequest],
 ) -> Option<Vec<PathBuf>> {
     if !sandbox_policy.uses_restricted_process_backend() {
         return None;
@@ -5273,7 +5533,13 @@ fn sandbox_delete_allowed_roots(
     }
 
     #[cfg(target_os = "windows")]
-    roots.extend(appcontainer_app_managed_roots(app_data_dir));
+    {
+        roots.extend(appcontainer_app_managed_roots(app_data_dir));
+        roots.extend(appcontainer_writable_grant_roots(
+            requested_grants,
+            sandbox_policy.restricted_execution_backend(),
+        ));
+    }
 
     #[cfg(not(target_os = "windows"))]
     {
@@ -5282,6 +5548,39 @@ fn sandbox_delete_allowed_roots(
     }
 
     Some(roots)
+}
+
+fn appcontainer_writable_grant_roots(
+    requested_grants: &[AppContainerFilesystemGrantRequest],
+    restricted_backend: RestrictedExecutionBackend,
+) -> Vec<PathBuf> {
+    effective_appcontainer_requested_grants(requested_grants, restricted_backend)
+        .into_iter()
+        .filter(|grant| matches!(grant.access.as_deref(), None | Some("readWrite")))
+        .map(|grant| PathBuf::from(&grant.path))
+        .collect()
+}
+
+fn effective_appcontainer_requested_grants(
+    requested_grants: &[AppContainerFilesystemGrantRequest],
+    restricted_backend: RestrictedExecutionBackend,
+) -> Vec<AppContainerFilesystemGrantRequest> {
+    if restricted_backend != RestrictedExecutionBackend::AppContainerFilesystem {
+        return Vec::new();
+    }
+
+    let mut granted_paths = HashSet::new();
+    requested_grants
+        .iter()
+        .filter_map(|grant| {
+            let path = PathBuf::from(&grant.path);
+            if !path.exists() {
+                return None;
+            }
+            let key = path.to_string_lossy().to_ascii_lowercase();
+            granted_paths.insert(key).then(|| grant.clone())
+        })
+        .collect()
 }
 
 #[cfg(target_os = "windows")]
@@ -5427,7 +5726,10 @@ async fn run_appcontainer_foreground_shell(
     for root in app_managed_roots {
         push_grant(root, AppContainerFilesystemAccess::ReadWrite);
     }
-    for grant in requested_grants {
+    for grant in effective_appcontainer_requested_grants(
+        &requested_grants,
+        RestrictedExecutionBackend::AppContainerFilesystem,
+    ) {
         push_grant(
             PathBuf::from(&grant.path),
             appcontainer_filesystem_access_from_request(&grant),
@@ -5570,6 +5872,19 @@ fn resolve_shell_workdir(
     Ok(Some(fallback))
 }
 
+/// 扫描即将执行的脚本内容，同时让 Trash Bin 已完整建模的静态 PowerShell 删除
+/// 留到后续删除拦截阶段处理。该分类不移动文件；原命令只有在 Trash Bin 明确返回
+/// `NotDelete` 后才可能继续 spawn。
+fn validate_script_content_before_exec(
+    command: &str,
+    workdir: Option<&str>,
+) -> Result<(), AppError> {
+    if trash_bin::should_defer_powershell_delete_to_trash(command) {
+        return Ok(());
+    }
+    command_validator::validate_script_content(command, workdir)
+}
+
 /// 执行 Shell 命令
 ///
 /// 支持设置工作目录、超时时间、环境变量注入和后台执行。
@@ -5612,10 +5927,9 @@ pub async fn shell_execute(
     // ═══════════════════════════════════════════════════════════
 
     // 获取应用数据目录（用于加载自定义保护路径和 Trash Bin）
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+        AppError::FileSystem(format!("Failed to resolve app data directory: {}", error))
+    })?;
 
     // 0. 先确定进程沙箱策略与最终工作目录，保证相对路径按真实执行位置判定。
     let sandbox_policy = ShellSandboxPolicy::from_execution_options(
@@ -5649,7 +5963,7 @@ pub async fn shell_execute(
     )?;
 
     // 1.5 脚本内容扫描 — 检测间接攻击（file_write 危险脚本 → exec 执行）
-    command_validator::validate_script_content(&command, resolved_workdir_string.as_deref())?;
+    validate_script_content_before_exec(&command, resolved_workdir_string.as_deref())?;
 
     // 1.6 进程沙箱策略 — 当前用于外部 Script Skill 的禁网预检与环境收口
     for event in sandbox_policy.pre_spawn_audit_events(
@@ -6067,16 +6381,36 @@ pub async fn shell_execute(
         }
     }
 
-    // 2. 删除命令拦截 — 重写为移动到 Agent Trash Bin
-    let delete_allowed_roots =
-        sandbox_delete_allowed_roots(&app_data_dir, resolved_workdir.as_deref(), &sandbox_policy);
-    match trash_bin::try_intercept_delete_scoped(
+    // 2. 删除命令拦截 — 重写为移动到 Agent Trash Bin。PowerShell `$env:*` 路径必须
+    // 使用与实际子进程相同的覆盖顺序，否则预检可能软删除错误的宿主文件。
+    let prepared_sandbox_profile_env = if sandbox_policy.uses_restricted_process_backend() {
+        Some(sandbox_profile_env(&app_data_dir)?)
+    } else {
+        None
+    };
+    let effective_delete_env = effective_delete_path_env(
+        env.as_ref(),
+        resolved_workdir.as_deref(),
+        prepared_sandbox_profile_env.as_deref(),
+    );
+    let default_workdir_env = resolved_workdir.as_ref().and_then(|workdir| {
+        (!user_env_contains_delete_path_key(env.as_ref(), "WORKDIR"))
+            .then(|| workdir.to_string_lossy().to_string())
+    });
+    let delete_allowed_roots = sandbox_delete_allowed_roots(
+        &app_data_dir,
+        resolved_workdir.as_deref(),
+        &sandbox_policy,
+        &app_container_filesystem_grants,
+    );
+    match trash_bin::try_intercept_delete_scoped_with_env(
         &command,
         &app_data_dir,
         resolved_workdir.as_deref(),
         delete_allowed_roots.as_deref(),
+        Some(&effective_delete_env),
     ) {
-        Ok(Some(message)) => {
+        Ok(trash_bin::DeleteInterceptionOutcome::Intercepted(message)) => {
             // 删除命令已被拦截并移动到回收站，返回成功结果
             return Ok(shell_exec_result(
                 0,
@@ -6089,8 +6423,8 @@ pub async fn shell_execute(
                 false,
             ));
         }
-        Ok(None) => {
-            // 非删除命令或无法解析，继续正常执行
+        Ok(trash_bin::DeleteInterceptionOutcome::NotDelete) => {
+            // 仅已证明不包含本地文件删除意图的命令可以继续执行。
         }
         Err(e) => {
             // 拦截过程出错，报告错误但不继续执行原始删除命令
@@ -6279,7 +6613,7 @@ pub async fn shell_execute(
     }
 
     // 构建命令
-    // Windows: 使用 cmd /S /C "..." 执行命令
+    // Windows: 使用 cmd /D /S /C "..." 执行命令（/D 禁用 Command Processor AutoRun）
     // /S 标志强制 cmd.exe 严格剥离最外层引号对，保留内部引号语义
     // raw_arg 避免 Rust 自动对含引号的参数添加额外引号层
     // chcp 65001: 切换 cmd 到 UTF-8 代码页，解决中文文件名被损坏为 ???????? 的问题
@@ -6320,6 +6654,13 @@ pub async fn shell_execute(
                 );
             }
         }
+    }
+
+    // `$env:WORKDIR` is a supported delete-path convention. When the caller did not provide
+    // it explicitly, bind it to the resolved current directory so Trash parsing and PowerShell
+    // execution observe the same value.
+    if let Some(workdir) = default_workdir_env {
+        set_command_env(&mut cmd, &mut restricted_env_overrides, "WORKDIR", workdir);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -6410,8 +6751,8 @@ pub async fn shell_execute(
     // 注入 PYTHONUTF8 / NODE_PATH（不涉及 PATH，安全）
     enrich_process_env(&mut cmd, env.as_ref(), &mut restricted_env_overrides);
 
-    if sandbox_policy.uses_restricted_process_backend() {
-        apply_sandbox_profile_env(&mut cmd, &mut restricted_env_overrides, &app_data_dir)?;
+    if let Some(profile_env) = prepared_sandbox_profile_env.as_deref() {
+        apply_sandbox_profile_env_values(&mut cmd, &mut restricted_env_overrides, profile_env);
         if sandbox_policy.network_isolation() == SandboxNetworkIsolation::AuditOnly {
             apply_appcontainer_direct_network_env(&mut cmd, &mut restricted_env_overrides);
         }
@@ -6524,9 +6865,8 @@ pub async fn shell_execute(
     };
 
     // 沙箱环境变量必须最后注入，避免被外部调用参数覆盖。
-    sandbox_policy.apply_environment(&mut cmd);
     for (key, value) in sandbox_policy.environment_overrides() {
-        restricted_env_overrides.insert(key.to_string(), value.to_string());
+        set_command_env(&mut cmd, &mut restricted_env_overrides, key, value);
     }
     if let Some(plan) = &wfp_managed_egress_plan {
         set_command_env(
@@ -9116,16 +9456,16 @@ pub fn check_elevated_privileges() -> bool {
     }
 }
 
-/// 启动时清理过期的 Trash Bin 条目
+/// 清理过期的 Trash Bin 条目
 ///
-/// 在应用启动时调用一次，删除超过 30 天的回收站文件。
+/// 提供给应用维护流程显式调用，删除超过 30 天的回收站文件。
+/// 当前仅注册为 Tauri command，尚未接入自动启动调度。
 /// 使用 async 避免大量过期文件删除时阻塞启动。
 #[tauri::command]
 pub async fn startup_trash_cleanup(app_handle: tauri::AppHandle) -> CommandResult<u32> {
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+        AppError::FileSystem(format!("Failed to resolve app data directory: {}", error))
+    })?;
 
     // 在阻塞线程中执行文件系统操作，避免占用 tokio 异步运行时
     tokio::task::spawn_blocking(move || trash_bin::cleanup_expired_items(&app_data_dir))

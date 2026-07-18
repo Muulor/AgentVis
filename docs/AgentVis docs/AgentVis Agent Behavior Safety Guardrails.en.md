@@ -8,7 +8,7 @@ Agents can perform real side-effecting operations such as running Shell commands
 
 1. **LLM behavior soft-guardrail layer** (Prompt layer + FSM layer): guides and constrains Agent decision-making behavior.
 2. **TypeScript tool interception layer**: performs fast interception and tiered handling before tool calls take effect.
-3. **Rust command validation layer**: provides the final non-bypassable hard-blocking line before command execution.
+3. **Rust command validation layer**: provides host-side hard blocking before command execution for the policy patterns and semantics it recognizes.
 4. **Process / network sandbox and audit layer**: runtime protection that adds controllable constraints to shell / Skill execution through Job Object, Restricted Token, AppContainer, broker/proxy, and network policy.
 5. **Agent Trash Bin soft-delete layer**: after the Rust layer passes but before the OS actually deletes, transparently rewrites delete operations into "move to Trash Bin" so deletion is recoverable.
 
@@ -42,13 +42,13 @@ MasterBrain decomposes tasks and grants Sub-Agent tool capabilities as needed. I
 
 LoopGovernor is the internal "circuit breaker" for the FSM-driven Agent execution loop. It automatically terminates Agent execution under the following five abnormal patterns:
 
-| Termination condition | Priority | Description |
-|---------|--------|------|
-| `consecutive_no_progress` | 1 (highest) | Two consecutive loops with no substantive progress, preventing ineffective Agent spinning |
-| `tool_thrashing_detected` | 2 | N consecutive calls to the same tool (default 3), preventing dead-loop oscillation |
-| `over_delegation` | 3 | Sub-Agent dispatch count exceeds the budget limit (default synchronized with the MB decision budget of 8 rounds unless explicitly overridden) |
-| `risk_exceeded` | 4 | Accumulated risk score exceeds the threshold (default 0.8; the main flow currently does not connect MB `riskAssessment`, so this is a reserved extension point) |
-| `budget_exhausted` | 5 | MB decision round budget is exhausted (default 8 rounds; FSM stepping hard safety valve defaults to 48) |
+| Termination condition     | Priority    | Description                                                                                                                                                     |
+| ------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `consecutive_no_progress` | 1 (highest) | Two consecutive loops with no substantive progress, preventing ineffective Agent spinning                                                                       |
+| `tool_thrashing_detected` | 2           | N consecutive calls to the same tool (default 3), preventing dead-loop oscillation                                                                              |
+| `over_delegation`         | 3           | Sub-Agent dispatch count exceeds the budget limit (default synchronized with the MB decision budget of 8 rounds unless explicitly overridden)                   |
+| `risk_exceeded`           | 4           | Accumulated risk score exceeds the threshold (default 0.8; the main flow currently does not connect MB `riskAssessment`, so this is a reserved extension point) |
+| `budget_exhausted`        | 5           | MB decision round budget is exhausted (default 8 rounds; FSM stepping hard safety valve defaults to 48)                                                         |
 
 ```typescript
 // Tool thrashing detection: whether the last N calls all used the same tool.
@@ -97,17 +97,17 @@ Before tool calls actually take effect, the TypeScript layer implements two core
 
 The system predefines risk levels for all Native tools:
 
-| Tool | Risk level | Description |
-|------|---------|------|
-| `read` | low | Read-only operation with no side effects |
-| `web_search` | low | Read-only operation with no side effects |
-| `local_search` | low | Read-only operation with no side effects |
-| `generate_image` | low | Writes only to the deliverables directory and is reversible |
-| `file_write` | medium | Write operation with fast-apply snapshot fallback |
-| `cron` | medium | Reversible scheduled-task management |
-| `exec` | **high** | System command execution with possible irreversible side effects |
-| `external_skill_execute` | **high** | Unified execution entry for external Script Skills; executes skill-package scripts |
-| `im_send` | low | Unified tool for sending IM messages |
+| Tool                     | Risk level | Description                                                                        |
+| ------------------------ | ---------- | ---------------------------------------------------------------------------------- |
+| `read`                   | low        | Read-only operation with no side effects                                           |
+| `web_search`             | low        | Read-only operation with no side effects                                           |
+| `local_search`           | low        | Read-only operation with no side effects                                           |
+| `generate_image`         | low        | Writes only to the deliverables directory and is reversible                        |
+| `file_write`             | medium     | Write operation with fast-apply snapshot fallback                                  |
+| `cron`                   | medium     | Reversible scheduled-task management                                               |
+| `exec`                   | **high**   | System command execution with possible irreversible side effects                   |
+| `external_skill_execute` | **high**   | Unified execution entry for external Script Skills; executes skill-package scripts |
+| `im_send`                | low        | Unified tool for sending IM messages                                               |
 
 `feishu_send` / `slack_send` remain in the registry as low-risk compatibility bridges, but the Agent side actually exposes and recommends the unified `im_send`.
 
@@ -133,16 +133,16 @@ In the current implementation, Runner's MB high-risk pre-flight Checkpoint inter
 
 **Blocklist (`BLOCKED_EXEC_PATTERNS`)**: uses regex `\b` word boundaries for precise matching and covers the following threat types:
 
-| Category | Examples |
-|------|------|
-| Disk / partition destruction | `diskpart`, `format C:`, `cipher /w` |
-| System boot damage | `bcdedit` |
-| User / service management | `net user`, `net stop`, `sc delete` |
-| Registry damage | `reg delete`, `reg add HKLM` |
-| Base64 obfuscation | `-EncodedCommand`, `-enc` |
-| Persistent environment-variable modification | `setx /M`, `[Environment]::SetEnvironmentVariable` |
-| Direct registry-path writes | `Session Manager\Environment` |
-| ACL + system directories | `icacls/cacls/Set-Acl` combined with `system32/windows` |
+| Category                                     | Examples                                                |
+| -------------------------------------------- | ------------------------------------------------------- |
+| Disk / partition destruction                 | `diskpart`, `format C:`, `cipher /w`                    |
+| System boot damage                           | `bcdedit`                                               |
+| User / service management                    | `net user`, `net stop`, `sc delete`                     |
+| Registry damage                              | `reg delete`, `reg add HKLM`                            |
+| Base64 obfuscation                           | `-EncodedCommand`, `-enc`                               |
+| Persistent environment-variable modification | `setx /M`, `[Environment]::SetEnvironmentVariable`      |
+| Direct registry-path writes                  | `Session Manager\Environment`                           |
+| ACL + system directories                     | `icacls/cacls/Set-Acl` combined with `system32/windows` |
 
 **Allowlist (`SAFE_EXEC_PATTERNS`)**: uses regex matching for common side-effect-free operations and allows them to pass directly:
 
@@ -169,7 +169,7 @@ In skill-package scenarios such as `agent-browser`, the same type of tool (`exec
 
 **File**: `src-tauri/src/commands/command_validator.rs`
 
-The Rust layer is the system's **final line of defense**. It performs hard blocking before commands are actually executed by the operating system. Its design principle is "prefer false positives over missed detections." It uses `contains()` substring matching rather than regex word boundaries, ensuring dangerous commands cannot execute even if the TS layer is bypassed.
+The Rust layer is the host-side enforcement point. When one of its modeled command, token, path, or script policies matches, it performs hard blocking before the operating system starts the command, even if the TS layer was bypassed. It combines conservative substring checks with token/subcommand parsing, normalized-path checks, and static script scanning. This is not a semantic proof for arbitrary native executables, unknown interpreters, or runtime-generated code; those limits are documented in section 5.8.
 
 ### 3.1 Six-Stage Validation Pipeline
 
@@ -201,7 +201,7 @@ OK(())  -> command may execute
 
 ### 3.2 Core Protected Directories (Static)
 
-Built-in system-level immutable protected paths prevent commands from bypassing protection through environment-variable forms:
+Built-in immutable system paths cover the following literals and CMD `%...%` variable forms. This is a finite static pattern set, not a claim to understand every shell's environment-variable syntax. For final targets reconstructed by Trash Bin, the move-time checks also resolve and validate the current `SystemRoot` / `WINDIR` / `ProgramFiles` locations:
 
 ```rust
 const PROTECTED_PATHS: &[&str] = &[
@@ -227,7 +227,7 @@ const PROTECTED_PATHS: &[&str] = &[
 ["D:\\ImportantBackups", "E:\\ProjectArchives"]
 ```
 
-The system uses a global `RwLock<Option<Vec<String>>>` to cache custom paths. On first use, it loads from disk and caches the result. After users modify protected directories through the UI, `reload_custom_protected_paths()` refreshes the cache immediately without restarting the application.
+The system uses a global `RwLock` cache keyed by the app-data root. On first use, it loads custom paths from disk; `reload_custom_protected_paths()` refreshes that cache immediately after a UI change without requiring restart. The file is limited to 1 MiB and 4,096 entries, with each path limited to 32 KiB. Reads use metadata preflight plus a bounded `limit + 1` read, and UI writes apply the same limits before replacing the on-disk configuration. A missing file on first load means an empty list. Once a valid cache exists, malformed JSON, budget overflow, ordinary read failure, or an unexpectedly missing file during explicit reload does not replace the last valid cache. After application restart, a still-missing file initializes as not-yet-configured empty state. `protected_paths.json` itself is a reserved internal path for supported Trash Bin deletion recognizers.
 
 Custom protected directories apply to both:
 
@@ -236,7 +236,7 @@ Custom protected directories apply to both:
 
 ### 3.4 File Write Path Protection
 
-`validate_path_write_safety()` is called by Tauri file write/import commands such as `file_write_to_path`. It uses path **prefix matching** (not substring matching) to protect custom directories and all their subpaths:
+`validate_path_write_safety()` is called by Tauri file write/import commands such as `file_write_to_path`. It first performs lexical normalization, including `.` / `..` and Windows verbatim prefixes. It then canonicalizes the longest existing ancestor, appends any nonexistent suffix, and applies separator-bounded path-prefix matching to protect each custom directory and its descendants:
 
 ```rust
 // Additional separator-boundary check to avoid matching "D:\\important_other" for "D:\\important".
@@ -260,28 +260,43 @@ For diagnostics, the frontend marks cancellation and error rollback IPC as the `
 
 ### 3.5 Static Script Content Scanning
 
-`validate_script_content()` is called before exec runs script files. It reads script source code and scans for dangerous APIs.
+`validate_script_content()` is called before exec runs script files. It collects every script matched by a supported static extraction form rather than inspecting only the first argument. `cmd /D /C` wrappers (including combined switches, full executable paths, and `%ComSpec%` / `!ComSpec!`), `call`, PowerShell/Python/Node/Bun/Deno entrypoints, and statically identifiable nested scripts are scanned recursively up to eight levels. Dynamic composition, unknown interpreter entrypoints, and nested forms not recognized by the extractor remain outside this static guarantee.
 
-**Scannable file types**: `.ps1`, `.bat`, `.cmd`, `.py`, `.cs`, `.vbs`
+**Scannable file types**: `.ps1`, `.bat`, `.cmd`, `.py` / `.pyw`, the JavaScript/TypeScript family (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.mts`, `.cts`, `.tsx`), `.cs`, and `.vbs`
 
 **Forbidden script-content keywords (`SCRIPT_CONTENT_FORBIDDEN`)**:
 
-| Keyword | Threat description |
-|--------|---------|
-| `setenvironmentvariable` | PowerShell/.NET persistent modification of system/user-level environment variables |
-| `session manager\environment` | Directly writes system-level environment variables through a registry path |
-| `diskpart`, `bcdedit` | Disk partition / boot configuration destruction |
-| `cipher /w` | Irreversible disk wiping |
-| `takeown`, `sfc /` | System permission breakthrough |
-| `net user`, `sc delete` | User / service management |
-| `reg delete`, `reg add hklm` | Registry damage |
+| Keyword                       | Threat description                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `setenvironmentvariable`      | PowerShell/.NET persistent modification of system/user-level environment variables |
+| `session manager\environment` | Directly writes system-level environment variables through a registry path         |
+| `diskpart`, `bcdedit`         | Disk partition / boot configuration destruction                                    |
+| `cipher /w`                   | Irreversible disk wiping                                                           |
+| `takeown`, `sfc /`            | System permission breakthrough                                                     |
+| `net user`, `sc delete`       | User / service management                                                          |
+| `reg delete`, `reg add hklm`  | Registry damage                                                                    |
+
+The scanner also recognizes common file-deletion APIs by language: PowerShell `Remove-Item` and the `ri` / `rm` / `del` / `erase` / `rd` / `rmdir` aliases; Python `os.remove` / `shutil.rmtree` / `Path.unlink`; Node.js `fs.rm` / `unlink` / `rmdir`, including ESM named imports from `fs`; ordinary and compact batch builtins such as `del/f/q` and `rmdir/s/q`; and C# / VBS deletion calls. Direct or package-manager-wrapped `rimraf` inside a scannable script is blocked as well. Once local deletion is confirmed, the Rust scanner returns the structured `[recoverable_delete_required]` reason internally. The TS exec layer does not expose that label or the Trash Bin mechanism to the Agent; it maps the reason to a neutral `[DELETE_RETRY_REQUIRED]` observation that requests one supported direct literal-path retry. The script is never launched in the hope that its in-process deletion will be intercepted later.
 
 Script path extraction supports multiple invocation patterns:
 
 - `powershell -File script.ps1`
-- `python script.py` / `python3 -u my_script.py`
+- `pwsh -f script.ps1`, `powershell -NoProfile .\script.ps1`, and literal `-Command ".\script.ps1"` invocations, including quoted paths with spaces
+- `cmd.exe /q/d/c script.cmd` and `%ComSpec% /D /S /C script.bat`
+- `python script.py` / `python3 -u my_script.py`; once the interpreter is explicit, non-standard extensions are allowed
+- `node script.js` / `bun script.mjs` / `deno run script.ts`
+- `npx tsx script.ts` / `npx ts-node script.ts`
+- `cscript script.vbs` / `wscript script.vbs`
 - `csc.exe source.cs` (C# compiler; scans source code)
 - Direct invocation: `./setup.bat`, `install.cmd`
+
+Python, Node, Deno, and Bun entrypoint parsing shares each runtime's value-taking option table, honors `--`, and treats launcher options only before the real entrypoint; identically named arguments after the entrypoint remain script argv. Mode-specific values such as Deno test/bench `--filter` and Bun test `--test-name-pattern` are consumed as option data rather than file paths; explicit path-like Bun test entries are still scanned. Inline source from `-c` (including valid Python short-option clusters), eval/print, and PowerShell `-Command` reuses file-script scanning. Python `-m` scans `module.py` and package `__init__.py` / `__main__.py` when they can be resolved statically from exec workdir; installed modules that cannot be found there remain a dependency boundary. Deno task, package-task, and test auto-discovery modes do not misclassify task names or later data arguments as scripts.
+
+Explicit path-like local Node, Deno, and Bun preloads are scanned together with real file entrypoints; bare package specifiers remain an installed-dependency boundary. Remote entrypoints, URI preloads, path-like preloads without a supported extension, pre-entry runtime `--cwd` / PowerShell `-WorkingDirectory`, and a directory change before script launch fail closed with `[script_scan_ambiguous_launcher]`; the caller must use an explicit local entrypoint and exec workdir. Node launcher options for external configuration, snapshot configuration, or path-like test setup/reporters that may indirectly execute unscanned code fail with the same reason.
+
+Dangerous system keywords and delete APIs are first checked in code with comments and ordinary inert strings removed. Literal commands, argv arrays, and one-step literal variable bindings inside explicit execution contexts such as `subprocess`, `child_process`, `Process.Start`, `Start-Process`, and WSH Run remain blocked. Python comments and triple-quoted strings, JavaScript regex literals, PowerShell here-strings, Batch control segments, and bounded recursive executable interpolation in Python, JavaScript, PowerShell, and C# are handled by language-aware paths so inert explanatory strings pass while real interpolated calls remain visible. Interpolation that does not converge within eight levels fails with `[script_scan_depth_exceeded]`; analysis growth beyond 16 MiB fails with `[script_scan_too_large]` instead of accepting a partial scan. Nested path resolution preserves original case, quoting, and spaces; the lowercase normalized view used for dangerous-keyword matching is no longer used to select files for scanning.
+
+Each script read is limited to 8 MiB and supports UTF-8 plus UTF-16 LE/BE and UTF-32 LE/BE BOMs; NUL-heavy text without a BOM fails closed as an unreadable encoding. One nested scan may read at most 256 distinct file-and-language combinations and 64 MiB in total, while a cyclic dependency on the same real file is scanned only once. An ambiguous launcher, entrypoint, or resolution directory; an unreadable script or working directory; single-file or graph-budget overflow; and a new unvisited nesting chain beyond eight levels fail closed with `[script_scan_ambiguous_launcher]`, `[script_scan_unreadable]`, `[script_scan_too_large]`, and `[script_scan_depth_exceeded]` respectively. Inability to inspect is not treated as safe. This remains conservative static scanning, not interpreter-level semantic execution. Bare dependencies/package tasks, test auto-discovery, more complex runtime composition, downloaded code, native binaries, and TOCTOU replacement after scanning still depend on permission mode, sandboxing, and the remaining execution chain.
 
 ---
 
@@ -295,13 +310,13 @@ Runtime sandbox policy is added to the Rust shell execution chain. Its role is t
 
 ### 4.1 Execution Profiles and Default Network Policies
 
-| profile | Typical source | Default network policy | Description |
-|---------|----------|--------------|------|
-| `standard` | Normal `exec` | `inherit` | Does not change normal shell networking behavior |
-| `externalSkill` | External Script Skill | `audit` | Does not block by default, but scan hits write audit events |
-| `installer` | Skill installation / dependency installation | `inherit` | Allows dependency downloads during installation |
-| `preview` | Built-in Project Preview | `inherit` | Keeps networking available; isolated staging, input allow-lists, and owned PIDs separately constrain files and execution |
-| `restricted` | High-risk / strongly isolated execution | `blocked` | Enables stricter process and network constraints |
+| profile         | Typical source                               | Default network policy | Description                                                                                                              |
+| --------------- | -------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `standard`      | Normal `exec`                                | `inherit`              | Does not change normal shell networking behavior                                                                         |
+| `externalSkill` | External Script Skill                        | `audit`                | Does not block by default, but scan hits write audit events                                                              |
+| `installer`     | Skill installation / dependency installation | `inherit`              | Allows dependency downloads during installation                                                                          |
+| `preview`       | Built-in Project Preview                     | `inherit`              | Keeps networking available; isolated staging, input allow-lists, and owned PIDs separately constrain files and execution |
+| `restricted`    | High-risk / strongly isolated execution      | `blocked`              | Enables stricter process and network constraints                                                                         |
 
 `preview=inherit` does not mean that an Agent project is trusted directly. Built-in Project Preview does not execute in the deliverable directory, never executes npm lifecycle scripts, and does not infer process ownership by scanning ports. Snippet mode executes only AgentVis template configuration; complete-project mode executes staged project Vite/PostCSS/Tailwind configuration to preserve plugins, aliases, and CSS toolchain semantics. It uses app-cache staging, path/dependency/asset budgets (including a 256 KiB manifest and 128-dependency limit), fail-closed native-JS-only Import Map preflight, an AgentVis server wrapper, a per-run health token, and registry-owned PID lifecycle as its dedicated boundary. Rust native commands create staging and return a `runId`/`ownerToken`; `.agentvis/active` binds that exact identity and a cross-instance file lease protects an active workspace. Normal cleanup must also prove and release this process's registry lease, so another instance's marker/token alone cannot authorize removal. Only after app-cache direct-child, UUIDv4, link/reparse, and canonical-containment checks does it atomically quarantine and delete without following links; junctions have only the link removed. Stale cleanup requires at least 24 hours of inactivity and successful lease acquisition and runs in bounded native pages; a partially deleted `.trash-{UUIDv4}` is self-reclaimed only through a strictly paired root receipt that is at least 24 hours old. The frontend backlog is bounded with a fixed retry count per start. Complete-project configuration is executable Node code under the current user and Local Audit is not an OS-level VM; this boundary must not be described as strong isolation for arbitrary untrusted build configuration, browser-network DLP, or full virtual-machine isolation.
 
@@ -309,10 +324,10 @@ The shared Preview templates also use a per-template OS-backed cross-process exc
 
 Relationship between the three user permission modes and backend mechanisms:
 
-| UI mode | Backend mode | File boundary | Network boundary | Process lifecycle |
-| --- | --- | --- | --- | --- |
-| Local Audit Mode | `sandboxMode=LocalAudit` | Not restricted to workdir; uses protected paths and Trash Bin | Inherits system network | CLI uses managed lifecycle; GUI uses detached launch |
-| Offline Isolated Mode | `sandboxMode=OfflineIsolated` | AppContainer / workdir scope | deny-all | Blocks detached launch and desktop control |
+| UI mode                 | Backend mode                    | File boundary                                                                                                       | Network boundary                                                                                                                                                                                   | Process lifecycle                                                                                                                       |
+| ----------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Local Audit Mode        | `sandboxMode=LocalAudit`        | Not restricted to workdir; uses protected paths and Trash Bin                                                       | Inherits system network                                                                                                                                                                            | CLI uses managed lifecycle; GUI uses detached launch                                                                                    |
+| Offline Isolated Mode   | `sandboxMode=OfflineIsolated`   | AppContainer / workdir scope                                                                                        | deny-all                                                                                                                                                                                           | Blocks detached launch and desktop control                                                                                              |
 | Controlled Network Mode | `sandboxMode=ControlledNetwork` | Default: local file space + protected paths / Trash Bin; legacy fallback may return to AppContainer / workdir scope | Current: normal `exec` / Guide Skill broker-proxy-preferred + direct/audit; Script Skill can explicitly use brokerOnly; target: broker/proxy-only egress after OS-level direct-connection blocking | By default blocks general detached launch and desktop control; `agent-browser` is available through a dedicated CDP runtime narrow path |
 
 `execution.permissions.network` can affect the network policy of external Script Skills:
@@ -335,12 +350,12 @@ Relationship between the three user permission modes and backend mechanisms:
 - Windows child processes are attached to Job Object where possible, so timeout, cancel, and background kill preferentially terminate the process tree.
 - The `restricted` profile supports the Restricted Token path. When the AppContainer filesystem backend is explicitly enabled, the workdir is granted as the minimum accessible directory.
 - AppContainer deny-all network isolation is the preferred strong-isolation backend candidate for `restricted + blocked`; it is lifecycle-local and does not require a resident service.
-- AppContainer filesystem grants include not only workdir but also in-app runtime / skills roots for embedded Python, external Skills, and sandbox profiles. `brokerOnly` file-based IPC publishes requests in the runtime directory through temporary-file rename, so ReadWrite grants must support create/write/rename/delete.
+- AppContainer filesystem grants include workdir, in-app runtime / skills / deliverables roots, the user-level Agent Browser screenshot root, and sandbox-profile paths needed by embedded Python and external Skills. `brokerOnly` file-based IPC publishes requests in the runtime directory through temporary-file rename, so ReadWrite grants must support create/write/rename/delete.
 - Script Skills can use `execution.permissions.filesystem` to add AppContainer grants for user-provided files or directories. Grants may only reference string parameters in `argsSchema` and must declare `readOnly` or `readWrite`; this prevents controlled-network no-network paths from misclassifying valid local-file tasks as lacking permission.
 - Offline Isolated processes redirect `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, temp directories, and `XDG_*` into `{AppDataDir}/runtime/sandbox-profile/*`, preventing scripts from writing tokens/caches to the real user home directory. The target shape of Controlled Network no longer redirects these directories, so existing user CLI / Skill credential caches can be reused.
 - Native file tools (`read` / `file_write` / `local_search`) use `sandboxFilesystemScope` from tool context to decide file boundaries: Offline Isolated is fixed to `workspace`, while the Controlled Network target shape is `local`, avoiding a split where `exec` can access local files but native tools are forced back to the workspace.
 - The `exec` preflight blocks for "global install / login flows" and runtime hints such as "command not found / credentials missing may be caused by sandbox environment differences" are only used for Offline Isolated. Controlled Network no longer explains such failures as workspace file-sandbox issues, avoiding misleading the Agent into repeatedly asking to switch to Local Audit Mode.
-- Trash Bin delete interception happens inside the Tauri main process. Under Offline Isolated, it must first validate that the delete target is inside workdir or application-managed roots, so host-side soft delete cannot bypass AppContainer file boundaries. The Controlled Network target shape follows Local Audit Mode's protected paths, custom protected paths, and Trash Bin.
+- Trash Bin delete interception happens inside the Tauri main process. Under Offline Isolated, it validates workdir and fixed application-managed roots before a host-side move. Only when `AppContainerFilesystem` is the effective backend may currently existing, deduplicated read-write/default grants expand that host-side set; read-only or missing grants do not, and Restricted Token does not inherit this expansion. This prevents soft delete from silently widening the effective filesystem boundary. Controlled Network follows Local Audit Mode's protected paths, custom protected paths, and Trash Bin.
 - Desktop GUI control is not a normal CLI capability. In Offline Isolated, `desktop-control`-style Skills, hotkeys, screenshots, window activation, SendInput / pyautogui / pywinauto, and similar automation should be blocked before spawn, avoiding cases where scripts exit with code 0 while real desktop operations are swallowed by Windows UI isolation or Job Object lifecycle. The Controlled Network target shape should decide whether to open this only after network-only guard coverage is clear.
 - The Python runtime must be hermetic. If a shared venv's `pyvenv.cfg` points to user-host Python, such as `C:\Python*`, Offline Isolated Mode treats it as incompatible and requires rebuilding an embedded Python runtime.
 - WFP helper / probe remains an enhanced network-isolation spike and diagnostics entrypoint, and is not connected to the default shell / Skill chain. When `AGENTVIS_NETWORK_GUARD_BACKEND=wfpAppIdBlock` or `wfpPerRunAppIdBlock` is explicitly set, the normal shell chain first runs the WFP helper `inspect --json` readiness diagnostic and writes the result to a `wfpEnhanced` audit event. The first batch of per-run managed executable policy only supports foreground commands whose first token is bare `curl` / `node`: the main process creates a temporary directory marked with `.agentvis-egress-managed`, copies the real tool executable, prepends PATH, and starts a WFP dynamic block session for the command lifecycle. Other network-intent commands fail closed by default to avoid false positives from shared `cmd.exe` / interpreter AppIDs affecting other processes on the same machine. HTTP(S) Python Skills declared with `agentvisNetwork: brokerProxyPreferred` or explicitly opt-in via execution environment may downgrade to broker-proxy-preferred and write diagnostic audit. PowerShell specifically parses networking actions inside `-Command` / `-EncodedCommand`, such as `Invoke-WebRequest`, `Invoke-RestMethod`, `iwr`, `irm`, and `curl`; plain URL strings do not trigger WFP network intent by themselves. This switch validates the per-run egress guard foundation and does not mean ordinary commands already provide full brokerOnly.
@@ -420,7 +435,14 @@ type SandboxAuditEvent = {
   processLifecycle: 'managed' | 'detachedLaunch' | 'backgroundManaged';
   networkPolicy: 'inherit' | 'audit' | 'blocked';
   networkScope: 'inherit' | 'blocked' | 'lan' | 'internetAudit';
-  backend: 'none' | 'jobObject' | 'restrictedToken' | 'appContainer' | 'mainProcess' | 'broker' | 'wfpEnhanced';
+  backend:
+    | 'none'
+    | 'jobObject'
+    | 'restrictedToken'
+    | 'appContainer'
+    | 'mainProcess'
+    | 'broker'
+    | 'wfpEnhanced';
   decision: 'allow' | 'audit' | 'block' | 'diagnostic';
   reason: string;
   matchedPattern: string | null;
@@ -452,11 +474,13 @@ Events do not record the full original command text. They only record stable has
 
 **File**: `src-tauri/src/commands/trash_bin.rs`
 
-Agent Trash Bin is a **recoverable soft-delete layer** for file deletion operations. When an Agent runs delete commands such as `del`, `rmdir`, or `Remove-Item`, the Rust backend intercepts the command before calling the OS and **moves the target file/directory into the `Agent_Trash_Bin` directory** instead of actually destroying it.
+Agent Trash Bin is a **recoverable soft-delete layer** for file deletion operations. When an Agent runs delete commands such as `del`, `rmdir`, or `Remove-Item`, the Rust backend intercepts the command before calling the OS and preserves recoverable target content under the app-data `Agent_Trash_Bin` instead of allowing the original delete command to destroy it.
 
-> **Key design**: Agent-facing tool return values remain opaque and only return a success message semantically consistent with the original delete command, such as `Deleted successfully.` The real Trash Bin path, original path, and recovery information are written only to the manifest / logs / later user UI. This prevents the Agent from seeing the Trash Bin location, chasing it, and deleting it a second time.
+Soft deletion commits only when safety can be proven. The command first passes protected-path checks over command text and lexical targets. After allowlisted environment expansion and glob enumeration, Trash Bin revalidates every final target before transferring anything. It blocks protected paths and their ancestors, intersections with `protected_paths.json` or internal recovery metadata, and, under `restricted` mode, targets outside allowed roots. Lexical paths are checked together with canonicalized existing ancestors. **A filesystem volume is not an authorization boundary**: being on the system volume, another local volume, or outside an Agent-linked project does not by itself allow or deny interception. An absolute path supplied only in the task receives the same handling when the current permission mode already permits access. Volume topology selects only the internal transfer algorithm: a same-volume target uses a no-replace atomic rename, while a cross-volume target uses a central app-data payload, a verified candidate, and a short-lived hidden claim next to the source. Any failure blocks the original command; there is no permanent-delete fallback.
 
-> **Isolation boundary**: Trash Bin movement is performed by host-side Rust code and is not naturally constrained by AppContainer. Therefore, in Offline Isolated Mode, delete interception must include allowed-roots validation and only move targets inside authorized root directories such as workdir, `{AppDataDir}/runtime`, and `{AppDataDir}/skills`; an external-path hit returns a sandbox block directly. The Controlled Network target shape follows Local Audit Mode's protected paths, custom protected paths, and Trash Bin, without using workdir as the file boundary.
+> **Key design**: Agent-facing tool return values remain opaque and use a fixed success observation such as `Deleted successfully.` They do not preserve the original command's stdout, prompt text, or exit-code semantics, and do not proactively expose the Trash Bin path, original path, or recovery information. This context design reduces secondary-cleanup behavior; it is not path access control. Another process running as the same user may still read app-data, the manifest, or logs through other local capabilities.
+
+> **Isolation boundary**: Trash Bin movement is performed by host-side Rust code and is not naturally constrained by AppContainer. In Offline Isolated Mode, interception therefore permits only workdir, `{AppDataDir}/runtime`, `{AppDataDir}/skills`, `{AppDataDir}/deliverables`, and the user-level `~/.agent-browser/tmp/screenshots` root. Only when the actual backend is `AppContainerFilesystem` are currently existing, path-deduplicated read-write/default filesystem grants added as host-side delete roots; duplicate paths retain AppContainer's first-wins access level. A Restricted Token does not gain delete authority merely because grants are present, and read-only or nonexistent grants do not authorize deletion. External-path hits are blocked. Controlled Network follows Local Audit Mode's protected paths, custom protected paths, and Trash Bin rather than treating workdir as the file boundary.
 
 ### 5.1 Interception Timing
 
@@ -467,30 +491,48 @@ Trash Bin triggers after the command passes `validate_command_safety_with_workdi
          |
          v
 [try_intercept_delete()]            <- Trash Bin soft-delete interception
-   +-- Parse success -> move to Trash Bin -> return opaque success message to Agent
-   +-- Delete/cleanup intent exists but target cannot be safely parsed -> fail closed; do not enter OS execution
+   +-- Parse + boundary checks succeed
+   |      +-- same volume -> no-replace atomic rename
+   |      +-- cross volume -> central candidate/payload + verify + sibling hidden claim
+   |                          -> Pending -> PayloadReady -> Claimed -> PayloadVerified -> Ready
+   |      -> return opaque success only after the manifest reaches Ready
+   +-- -WhatIf / already missing / zero-match glob -> consume safely; do not run the original delete
+   +-- Recognized delete intent with incomplete semantics, or a safe-transfer failure
+          -> fail closed; do not enter OS execution
 ```
 
-In `restricted` mode, the "parse success" branch above must also satisfy that the target path belongs to allowed roots; otherwise the host-side move is not performed.
+Before generic script scanning, the shell performs a side-effect-free classification of PowerShell delete envelopes. Only static `-Command` deletes that are fully modeled by Trash Bin, explicitly use `-NoProfile`, and contain no dynamic control flow or unknown executable prefix skip the inline-script delete block and are deferred to `try_intercept_delete()`; this classification does not move files. Target resolution, protected paths, sandbox allowed roots, and transfer validation still run inside Trash Bin. Script files, `.NET Delete()`, `iex`, missing `-NoProfile`, and other unmodeled forms continue to fail closed in the script scanner or Trash Bin, so the original PowerShell command does not gain an execution path.
+
+In `restricted` mode, the "parse success" branch above must also satisfy that the target path belongs to allowed roots; otherwise the host-side move is not performed. In Local Audit and other modes that do not make workdir the sole filesystem boundary, an absolute path outside a linked project is not additionally rejected by Trash Bin merely because of its drive letter or project-link status, provided existing permission, protected-path, and target-semantics checks pass.
 
 ### 5.2 Supported Command Formats
 
-| Command format | Example |
-|---------|------|
-| `del filepath` | `del /f /q C:\project\old.log` |
-| `erase filepath` | `erase temp.txt` |
-| `rmdir /s /q dirpath` | `rmdir /s /q dist` |
-| `rd /s /q dirpath` | `rd /s /q .build` |
-| PowerShell `Remove-Item` | `powershell -Command "Remove-Item 'path' -Force"` |
-| PowerShell aliases `ri` / `rm` | `powershell -Command "ri 'path'"` |
-| Nested `cmd /c "del ..."` | `cmd /c "del file.txt"` |
-| Piped delete | `Get-ChildItem *.log \| Remove-Item` |
-| Wildcard glob | `del C:\project\*.webp` (expanded and moved one by one) |
-| PowerShell wildcard | `Remove-Item -Path "$env:APPDATA\com.agentvis.app\deliverables\Team\Agent\*"` |
-| PowerShell variable wildcard | `$target='C:\project'; Remove-Item -LiteralPath $target\* -Recurse -Force` |
-| `Get-ChildItem` loop delete | `foreach ($item in Get-ChildItem $dir) { Remove-Item -LiteralPath $item.FullName -Recurse -Force }` |
+| Command format                            | Example                                                                                                                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `del filepath`                            | `del /f /q C:\project\old.log`                                                                                                                                                |
+| `erase filepath`                          | `erase temp.txt`                                                                                                                                                              |
+| `rmdir /s /q dirpath`                     | `rmdir /s /q dist`                                                                                                                                                            |
+| `rd /s /q dirpath`                        | `rd /s /q .build`                                                                                                                                                             |
+| PowerShell `Remove-Item`                  | `powershell -NoProfile -Command "Remove-Item -LiteralPath 'path' -Force"`                                                                                                     |
+| PowerShell aliases `ri` / `rm`            | `powershell -NoProfile -Command "ri -LiteralPath 'path' -Force"`                                                                                                              |
+| Nested `cmd /D /C "del ..."`              | `cmd /D /C "del /f /q file.txt"`                                                                                                                                              |
+| Piped delete                              | `powershell -NoProfile -Command "Get-ChildItem -Force *.log \| Remove-Item -Force"`                                                                                           |
+| Simple `*` / `?` glob                     | `del C:\project\*.webp` (expanded from Rust glob results and moved one by one)                                                                                                |
+| PowerShell environment-variable wildcard  | `powershell -NoProfile -Command "Remove-Item -Path $env:APPDATA\com.agentvis.app\deliverables\Team\Agent\* -Recurse -Force"`                                                  |
+| PowerShell variable wildcard              | `powershell -NoProfile -Command "$target='C:\project'; Remove-Item -Path $target\* -Recurse -Force"`                                                                          |
+| Strictly allowlisted `Get-ChildItem` loop | `powershell -NoProfile -Command "$target='C:\project'; Get-ChildItem -LiteralPath $target -Force \| ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }"` |
 
-For complex commands whose text already shows delete/cleanup intent but whose target path cannot be safely reconstructed by the Trash Bin parser, such as multi-level pipeline chains, unresolved variables, .NET `Delete()` calls, `robocopy /purge`, or `git clean`, the system **fails closed**. It blocks execution and asks the Agent to use an explicitly supported delete form. This nudges the Agent toward `Remove-Item`, `del`, or `rmdir`, where soft delete can reliably catch the operation instead of letting it bypass Trash Bin and reach the OS.
+The parser treats PowerShell as executable script only inside an explicit `powershell` / `pwsh -Command` wrapper and distinguishes code from strings and comments. Every intercepted static PowerShell delete must include `-NoProfile`, and its launcher may not change the working directory with `-WorkingDirectory` / `-wd`; otherwise it fails closed before spawn so profiles, aliases, providers, or relative-path bases cannot change the effective target. `-WhatIf` simulates without moving, while `-WhatIf:$false` is treated as deletion. `-Recurse:$false` does not become recursive, and wildcards in `-LiteralPath` are never expanded. Target expressions are limited to modeled literals, exact ordinary variables, or allowlisted environment variables. Tilde paths, string composition, compound assignment, method/reflection calls, module-qualified delete commands, and unmodeled parenthesized expressions are blocked.
+
+Before a delete statement, only statically determined ordinary-variable assignments and strictly modeled direct `Get-ChildItem` pipelines / `ForEach-Object` enumeration are accepted. Unknown commands, control flow, invocation operators, backtick obfuscation, and dynamic execution prefixes fail closed. Environment expansion is limited to `WORKDIR`, `APPDATA`, `LOCALAPPDATA`, `USERPROFILE`, `HOME`, `TEMP`, and `TMP`. Values follow the child process's real precedence: inherited process environment, resolved default `WORKDIR`, the current exec `env`, then restricted-mode sandbox-profile overrides. Windows environment keys are canonicalized case-insensitively before injection, and resolved workdir is injected even when `WORKDIR` was not supplied. If prior script text mutates `$env:*` through assignment, Env-provider cmdlets/aliases, or `.SetEnvironmentVariable()`, the parser fails closed rather than guessing the new value. `Where-Object`, conditions, `-Filter` / `-Include` / `-Exclude`, and other forms whose semantics cannot be preserved are blocked; intercepted `Get-ChildItem` also requires explicit `-Force`. Common dynamic forms such as `iex` / `Invoke-Expression`, invocation operators, `Start-Process`, nested PowerShell, and `ScriptBlock.Create(...).Invoke()` are blocked as delete intent. Arbitrary runtime composition remains a static-recognition boundary.
+
+The actual outer Windows shell is always `cmd /D /S /C`, disabling Command Processor AutoRun. An Agent-supplied nested `cmd /C` / `/K` delete must also contain `/D` or it is blocked. Combined switches, full `cmd.exe` paths, `%ComSpec%`, double quotes, and multiple targets are parsed; single quotes remain literal CMD filename characters. Compact builtins such as `del/f/q`, `erase/f/q`, `rd/s/q`, and `rmdir/s/q` are intercepted. Leading or attached redirection and `call` / `if` / `start` wrappers whose semantics cannot be preserved are conservatively blocked. `del` / `erase` accept only `/f` and `/q`; `/a`, `/p`, `/s`, or unknown flags fail closed. Their simple `*` / `?` globs intercept files only, and read-only Windows files require `/f`. Recursive `**` and `[]` extended globs are not intercepted. A command may enumerate at most 256 targets and checks a two-second cooperative deadline during iterator output and later preflight. An observed budget overrun fails before the first move, but a single blocked directory/network-filesystem I/O cannot be preempted, so this is not a hard wall-clock timeout. `rmdir` / `rd` accept only `/s`, `/q`, and one non-glob directory target; a nonempty directory requires `/s`. Direct PowerShell deletion of a nonempty directory requires `-Recurse`, and Windows read-only files require `-Force`.
+
+Multi-target commands complete parsing, glob enumeration, protected/reserved-path, allowed-root, object-type, ancestor/descendant overlap, and recursion preflight before the first transfer, but a whole batch is not a rollback transaction. The batch writes all `Pending` records under one manifest lock, selects a same-volume rename or a cross-volume transaction for each target, and persists each item's phase. A same-volume item has one atomic no-replace rename. A cross-volume item follows `Pending -> PayloadReady -> Claimed -> PayloadVerified -> Ready`: it first copies into a central candidate and verifies content, then atomically renames the source into a random hidden claim under the same parent. Only after the claim still matches the candidate (or the candidate has been rebuilt from the claim) is the candidate atomically published as payload. Claim and final payload are compared again, and `PayloadVerified` is persisted before recursive claim cleanup starts. That durable boundary lets reconciliation continue an interrupted, partially completed claim cleanup without incorrectly requiring the remaining claim to equal the complete payload. If another process recreates the original path after claiming, reconciliation never treats that new object as the claim. A preparation failure stops before the first destructive step. If a later item fails, earlier completed items are not rolled back, but the original delete command is still never executed.
+
+The first cross-volume release handles only ordinary files and directories that can be enumerated and verified without following links. If the target itself or recursive content contains a symbolic link, junction, or another reparse point, the transaction fails closed before following it and leaves the source in place; it never turns link-target content into an ordinary payload through recursive copying. Same-volume handling may still atomically rename a leaf object only when target revalidation proves that doing so requires no traversal through the link target.
+
+If command text already reveals deletion/cleanup intent but the parser cannot reconstruct its semantics safely, the system **fails closed**. Covered examples include multi-level pipelines, unresolved variables, PowerShell .NET `Delete()`, inline Python/Node deletion, `rimraf`, `robocopy /purge`, non-dry-run `git clean`, and `git rm` that removes worktree content. Direct, chained, `call` / `start` / conditional, common package-manager exec/dlx/corepack, `cmd /c`, and dynamic PowerShell wrappers around `rimraf`, including version specifications, are detected. `git clean -n` / `--dry-run` only previews and `git rm --cached` only changes the index, so those are not intercepted as file deletion. Read-only references such as `pnpm list rimraf` or `yarn why rimraf` are not misclassified solely for mentioning the package. A recognized target that is already missing, or a glob with zero matches, is consumed as idempotent success and never falls through to the original command after the check.
 
 ### 5.3 Opaque Success Feedback (Preventing Secondary Cleanup)
 
@@ -504,17 +546,50 @@ This message enters the SA tool-call result directly. Its purpose is not to expl
 
 Complete recovery information is still stored in `trash_manifest.json` and internal logs for display to users through the "Settings -> File Protection" Agent Trash UI; by default, the Agent should not receive these paths.
 
+When a blocked error contains an internal structured reason, the TS exec layer replaces the original error, which may contain internal paths and implementation details, with a short i18n Agent observation. Internally, precise `recoverable_delete_*` and `script_scan_*` reasons remain available for audit and diagnostics, while Agent-facing labels deliberately omit Trash Bin, soft-delete, cross-volume, and scanning terminology:
+
+- `[recoverable_delete_required]` -> `[DELETE_RETRY_REQUIRED]`: says deletion did not complete and permits one retry with one direct command and an explicit literal path: `del /f /q "..."`, `rmdir /s /q "..."`, or `powershell -NoProfile -Command "Remove-Item -LiteralPath '...' -Force"`; after another failure, stop and report.
+- `[recoverable_delete_unavailable]` -> `[DELETE_UNAVAILABLE]`: says deletion did not complete, requires the Agent to leave the target in place, **not use another command, script, or tool to delete it**, and report that the operation was not completed; it does not expose the storage or transfer failure.
+- `[recoverable_delete_cross_volume]` -> `[DELETE_UNAVAILABLE]`: retained only as an observation compatibility mapping for errors from older backends. Cross-volume topology is no longer a blocking reason in the new implementation and is not exposed to the Agent.
+- `[script_scan_unreadable]` -> `[EXECUTION_INPUT_UNREADABLE]`: asks for an existing, readable entry script and working directory before one retry.
+- `[script_scan_too_large]` -> `[EXECUTION_INPUT_TOO_LARGE]`: says the script exceeds the 8 MiB execution-input limit or kept growing while being read, then asks for it to be split or reduced.
+- `[script_scan_ambiguous_launcher]` -> `[EXECUTION_ENTRY_AMBIGUOUS]`: says the local entrypoint that the current command or script will launch cannot be determined reliably, then asks for an explicit local entrypoint with a supported extension and an exec workdir.
+- `[script_scan_depth_exceeded]` -> `[EXECUTION_CHAIN_TOO_DEEP]`: says the script call chain exceeds eight levels and asks for it to be flattened or split.
+- `[script_scan_unavailable]` -> `[EXECUTION_INPUT_UNAVAILABLE]`: remains a compatibility fallback for older errors and provides only general existing/readable/split/reduce execution guidance.
+
+Other protected-path or general validation failures without one of these reasons continue through the existing generic redaction path and are not covered by these structured-reason replacements. The Agent observation describes only the operation state, supported remediation, and stopping condition; it does not explain the underlying guard or suggest that an inspection layer exists to bypass.
+
+This design does not add a brokered-delete tool or ask the Agent to learn a second deletion interface. It keeps normal `exec` behavior and injects a small recovery instruction only after a block.
+
 ### 5.4 Trash Bin Storage Structure
 
 ```text
 {app_data_dir}/
 +-- Agent_Trash_Bin/
-    +-- trash_manifest.json              # Delete-record index (file exclusive lock ensures concurrency safety)
-    +-- 20260407_224512_C_proj_old.log   # Intercepted file (timestamp_encoded-path naming)
-    +-- ...
+    +-- trash_manifest.lock              # Dedicated sidecar exclusive lock
+    +-- trash_manifest.json              # Delete-record index
+    +-- items/
+        +-- <UUIDv4>/
+            +-- candidate                # Temporary cross-volume copy under verification
+            +-- payload                  # Committed recoverable ordinary file/directory content
 ```
 
-**manifest.json** records complete metadata for each deletion: original path, Trash Bin path, deletion time, triggering command, and whether the target was a directory.
+Every new entry uses a full UUIDv4 `storage_id`. Candidate and payload paths are derived only from the trusted Trash root and `storage_id`, never from a manifest `trashPath` that could be tampered with. After canonicalization the root must remain below app-data and may not itself be a symlink, junction/reparse point, or non-directory. Payload-parent boundaries are revalidated before restore, permanent cleanup, and explicit expiration cleanup. Deletes intercepted by the current Trash Bin cannot target the Trash root, manifest, payloads, `protected_paths.json`, or an ancestor containing them; maintenance must go through user UI / dedicated Tauri commands. Unknown native programs, unrecognized in-process deletes, and other write/rename paths are not absolutely covered by this target guard.
+
+A cross-volume transaction creates only a short-lived random hidden claim under the source object's parent; it does not create a permanent Trash root on each volume:
+
+```text
+<source-parent>/
++-- .agentvis-trash-claim-<UUID> # Renamed original file or directory; exists only briefly
+```
+
+The delete transaction stores only the UUID `storage_id` and state; it never accepts an arbitrary external `claimPath`. The claim is strictly derived from the original parent, a reserved prefix, and that UUID. User restore separately records a restore UUID, owner token, and `Preparing` / `Committed` phase, while staging paths are still derived only from the trusted prefix and UUID. Reconciliation treats the exact claim path as this transaction's claim only when state is already `Claimed` / `PayloadVerified`, or when state is `PayloadReady` and the original path has disappeared. A same-name item encountered while `PayloadReady` still has its source is a collision and is neither adopted nor cleaned. `PayloadVerified` is accepted only after the published payload and complete claim matched and that fact was atomically persisted; it authorizes idempotent cleanup of a claim that may already be partial after a crash. Direct deletion of a reserved transaction path or its descendants, and deletion of an ancestor containing an active claim or restore staging wrapper, are blocked. Neither claim nor restore wrapper is a permanent user data directory. Crash handling conservatively preserves a valid copy among source, claim, central payload, and a verified restored destination.
+
+New `trash_manifest.json` entries use a timestamp plus full UUID for `id` and a full UUIDv4 for `storage_id`, together with original path, deletion time, triggering command, batch, object type, and state. Reads are capped at 32 MiB and validate JSON, nonempty unique IDs, canonical and separately unique storage/restore/owner UUIDs, timestamps, and valid state combinations. A missing, zero-byte, or whitespace-only manifest is empty; a nonempty damaged or duplicate manifest fails closed. Concurrent mutation uses a sidecar lock with a two-second contention limit per acquisition. Writes use a same-directory temporary file, flush/sync, and atomic replacement so locking an old manifest inode cannot be bypassed by rename.
+
+Same-volume soft deletion can move directly from `Pending` through a no-replace rename to `Ready`. Cross-volume soft deletion uses `Pending -> PayloadReady -> Claimed -> PayloadVerified -> Ready`. `PayloadReady` means the app-data candidate completed a no-follow copy and per-item content verification while the source remains in place; the final payload has not been published. `Claimed` means the source object was atomically renamed on its own volume into the short-lived hidden claim. After claim and candidate match, the candidate is atomically published as payload inside app data. Claim and final payload are then compared byte-for-byte again; while they still match, `PayloadVerified` is persisted before claim cleanup starts. `PayloadVerified` proves that the central payload was complete and independently recoverable at that boundary, so recursive claim cleanup can resume after a crash even when the remaining claim is only a subset. Payload existence alone is not sufficient proof before this state: a name collision, external replacement, or post-publication change keeps the claim as recovery evidence. No failure path falls back to the original delete command, and reconciliation never cleans source or claim before content verification has been durably recorded. Normal listing, user restore, and expiration cleanup process only `Ready`; other states remain crash-recovery evidence.
+
+To keep state and manifest evidence consistent, the current implementation may still hold the global sidecar manifest lock for a long time while copying and verifying a cross-volume directory. Large trees or slow volumes can serialize other delete, list, restore, and cleanup operations and cause waiting calls to hit lock timeouts. This is an explicit performance debt. A future design should use per-entry journals/leases and short manifest commits rather than weakening the persisted `PayloadReady` / `Claimed` / `PayloadVerified` boundaries.
 
 ### 5.5 User Recovery and Manual Cleanup
 
@@ -522,10 +597,12 @@ The **Agent Trash** area under "Settings -> File Protection" reads the manifest 
 
 - **Select Trash entries**: users select one or more entries and then run "Restore Selected" or "Clean Selected".
 - **Batch selection**: when one delete command creates multiple entries, the row-level "Batch" button only adds the same batch to the selection. It does not directly restore or clean.
-- **Restore Selected**: moves Trash Bin copies back to their original paths and removes successfully restored records from the manifest. If the original path already exists, the record stays and the UI reports a conflict; if the Trash copy is already missing, the stale manifest record is pruned.
-- **Clean Selected**: permanently deletes the Trash Bin copy and removes the manifest record. Failed deletes remain in the manifest. Before cleanup, the backend verifies that `trashPath` is inside `Agent_Trash_Bin`, preventing user-side cleanup from deleting paths outside the Trash Bin.
+- **Restore Selected**: handles only `Ready` records. Before transfer, it persists a random restore UUID, an independent owner token, and `Preparing` in the entry's restore journal. If payload and original path share a volume, it uses a no-replace atomic rename. Across volumes, it atomically creates a reconstructable `.agentvis-trash-restore-<UUID>` staging wrapper under the target parent, writes an ownership marker matching the journal token, and copies the payload without following links inside that wrapper. After verification, the staged payload is committed to the original path with a no-replace rename, then the restored destination is compared with the central payload again. Only after they match is `Committed` persisted; owned staging and central-payload cleanup start afterward. Reconciliation may clean only a wrapper whose marker matches; a pre-existing same-name user path is never adopted or deleted. Cleanup can resume idempotently from `Committed` without requiring a partially removed central directory to keep matching the complete destination. If the process exits during copy, commit, or cleanup, later reconciliation removes owned uncommitted staging, retries central-payload cleanup, or retains both copies and the journal when they differ before commit. A restored destination with a not-yet-removed manifest therefore does not become a permanent ordinary `original_exists` conflict. If the original path exists, copying or verification fails, the first release does not support the link/reparse type, or the final rename fails, the central payload and manifest record remain; an existing target is never overwritten or merged. The same path also restores legacy payloads stored directly under the older app-data Trash root.
+- **Clean Selected**: handles only `Ready` records and permanently deletes the payload path derived from `storage_id` after revalidation. Failed deletes remain in the manifest. The first cross-volume implementation never creates link/reparse payloads. Restore of a historical link-like payload does not follow its target; if the object cannot be reconstructed safely, the record remains and a conflict is reported.
 
-These actions are user-facing and do not require the Agent to execute recovery commands, so internal Trash Bin paths remain hidden from the Agent.
+A long-running restore or cleanup is not cancelled when the user closes Settings. The frontend keeps the active operation in lifecycle-independent global state, renders a read-only “continues in the background” state after Settings is reopened, and invalidates the old list with an incrementing revision on either success or failure before automatically reloading it. The list IPC maps manifest-lock timeout to structured `busy`; the UI retries according to `retryAfterMs` without showing a load-failure toast. Trash path and protected paths load independently, so a temporarily busy list cannot clear them. The empty state is rendered only for a real zero-entry `ready` response that matches the latest operation revision; `idle`, `loading`, `busy`, `error`, and active-operation states never masquerade as an empty Trash.
+
+`Pending` / `PayloadReady` / `Claimed` / `PayloadVerified` and other non-`Ready` delete states are hidden from normal listing and cannot be restored, manually cleaned, or expired by users. A `Ready` entry with an active restore journal also cannot be manually or automatically cleaned; only conservative fault reconciliation converges it. These actions are user-facing and do not require the Agent to execute recovery commands, so internal Trash Bin paths remain hidden from the Agent. Permanent cleanup in Settings uses the app's controlled confirmation dialog: clicking Clean Selected only freezes the requested IDs and opens the confirmation UI, and only the confirmation callback invokes the backend. Cancelling, dismissing the dialog, or closing Settings does not start cleanup.
 
 ### 5.6 User-Initiated Deletion and the Windows Recycle Bin
 
@@ -540,21 +617,34 @@ Upon user confirmation, the frontend invokes the standalone `file_move_to_system
 
 On the Windows side, entries are moved to the system Recycle Bin using `IFileOperation` with the `FOFX_RECYCLEONDELETE` flag. Shell COM operations are executed on a dedicated STA (Single-Threaded Apartment) thread. Failures due to network shares, special file systems, file locks, or other scenarios unsupported by the Recycle Bin will result in an immediate error return, leaving the original file intact. The implementation **does not include a fallback to permanent deletion**.
 
-### 5.7 Automatic Expiration Cleanup
+### 5.7 Expiration Cleanup (Not Automatically Scheduled Today)
 
-On application startup, the manifest is scanned automatically. Entries **older than 30 days** are physically deleted and removed from the manifest; the manifest is written back after cleanup. Files accidentally deleted in the short term can be recovered or manually cleaned through the File Protection UI.
+The backend exposes `startup_trash_cleanup` / `cleanup_expired_items` maintenance entrypoints. Only `Ready` records with valid timestamps and revalidated payload paths that are **at least 30 days old** are physically deleted. A record is removed only after successful deletion or confirmation that its payload is absent; path anomalies, inspection failures, and deletion failures retain both record and evidence. The Tauri command is registered but is not currently called from Rust setup or renderer startup, so application launch does not automatically perform 30-day physical cleanup. Entries remain until manual cleanup or a future explicit scheduler is wired.
+
+### 5.8 Current Security Boundaries and Known Limitations
+
+- **Volume is not an authorization boundary**: the system volume, another local volume, and project-link status do not by themselves determine whether an Agent delete can be intercepted. Protected paths, reserved internal paths, the active sandbox/allowed roots, and reconstructed delete semantics are the authorization boundary. An absolute path outside a linked project therefore receives the same Trash Bin behavior as a linked workspace when current permissions allow access. Volume topology selects same-volume rename or cross-volume copy/verify/claim transport. Network shares, read-only media, offline volumes, or filesystems without the required atomic operations may still return `[recoverable_delete_unavailable]`; that is a concrete storage-capability failure, not a default ban on non-app-data volumes. Legacy `[recoverable_delete_cross_volume]` is retained only for observation compatibility.
+- **Cross-volume recovery preserves ordinary content, not a complete filesystem image**: the first release verifies ordinary-file primary data streams, directory hierarchy, and names, which covers routine source files, scripts, screenshots, and temporary artifacts. It does not promise complete preservation of ACL/owner data, NTFS alternate data streams, hard-link topology, sparse/compression attributes, extended attributes, or every timestamp. Symbolic links, junctions, and other reparse points are never followed; the first cross-volume delete and restore implementation preserves evidence and blocks instead of copying link-target content as ordinary data.
+- **The global manifest lock remains a performance debt**: copying and verifying a large cross-volume file or tree may hold the global sidecar lock long enough to serialize or time out other delete, list, restore, and cleanup operations. Future work should narrow this to per-entry journals/leases and short atomic manifest commits. The current implementation must not skip persisted `PayloadReady` / `Claimed` / `PayloadVerified` boundaries merely to improve throughput.
+- **Static recognition is not a complete semantic proof**: direct commands and known script APIs cover common Agent deletion behavior, but native executables, dynamic composition/reflection, runtime-downloaded code, and unknown interpreters may still delete inside their process in Local Audit Mode. Restricted Token / AppContainer must not be described as a generic "deny DELETE" mechanism; their actual ACLs and allowed roots may still permit deletion.
+- **Package scripts are not recursively expanded**: direct, chained, `call` / `start` / conditional, common package-manager exec/dlx/corepack, `cmd /c`, and dynamic PowerShell wrappers that expose `rimraf` fail closed. `npm run clean`, other package lifecycle scripts, and cleanup inside build tools are not expanded through `package.json` or a runtime call graph. Their `rimraf` / `fs` side effects fall under the interpreter/native-process boundary above.
+- **Same-user TOCTOU surfaces remain**: another same-privilege process may replace a script between scanning and interpreter open, replace a path or ancestor between canonicalization and rename, or continue writing through an already-open handle between cross-volume candidate verification, claim creation, claim revalidation, and claim removal. Whole-batch preflight, immediate pre-destructive-step revalidation, no-replace rename, post-claim content verification, no-follow link handling, and state reconciliation reduce but do not eliminate these windows. The implementation does not yet use handle-relative traversal, stable file identity, or a handle-bound transaction over the same object; it is not absolute isolation against a malicious same-user process.
+- **Non-Windows restore power-loss durability remains limited**: restore uses no-replace rename, a restore journal, and best-effort parent-directory sync. Ordinary process crashes can be reconciled from `Preparing` / `Committed`, but sync errors are not yet promoted to transaction failure. An extreme power loss can still reorder rename, directory entries, and manifest durability. Cross-platform expansion should make sync results part of commit and add fault-injection tests. Windows uses write-through move semantics for this path.
+- **The manifest is not a cryptographic ledger against same-user tampering**: size, structure, unique nonempty IDs, canonical and separately unique UUID storage/restore IDs, states, and derived payload/staging boundaries are validated, and writes are locked and atomic, but there is no signature/MAC. `original_path` is currently required only to be nonempty and cannot prove that it is the original deletion location. In Local Audit Mode, Agent exec or another same-user process with direct app-data write access may use an unrecognized delete/write/rename path to alter metadata and potentially redirect a later user restore's no-clobber destination. Restore refuses to overwrite an existing target, and payload-boundary validation constrains other effects.
+
+The actual goal is therefore: common direct deletes are recoverable; recognized delete intent whose semantics cannot be reconstructed is stopped before spawn; and statically recognizable script deletion must be rewritten as a direct command. It is not a claim that every unknown command can be recognized or that arbitrary same-user code can never delete data.
 
 ---
 
 ## 6. TS/Rust Dual-Layer Design Notes
 
-| Dimension | TS layer (`ExecSafetyPolicy`) | Rust layer (`command_validator`) |
-|---------|-----|------|
-| **Positioning** | First line of defense, fast feedback | Final line of defense, non-bypassable |
-| **Matching method** | Regex `\b` word boundaries, precise matching | `contains()` substring matching; prefer false positives over missed detections |
-| **Block timing** | At the SA tool-call layer, before Tauri IPC starts | At the Tauri command layer, before the command reaches the OS |
-| **Blocklist coverage** | Mostly consistent with the Rust layer | Adds icacls combination blocking and script-content scanning |
-| **Allow capability** | Has an allowlist and can skip Checkpoint | No allowlist; only blocks and does not allow |
+| Dimension              | TS layer (`ExecSafetyPolicy`)                      | Rust layer (`command_validator`)                                                    |
+| ---------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Positioning**        | First line of defense, fast feedback               | Host-side entry enforcement; matched policies cannot be bypassed through TS         |
+| **Matching method**    | Regex `\b` word boundaries, precise matching       | Conservative substring, token/subcommand, normalized-path, and static-script checks |
+| **Block timing**       | At the SA tool-call layer, before Tauri IPC starts | At the Tauri command layer, before the command reaches the OS                       |
+| **Blocklist coverage** | Mostly consistent with the Rust layer              | Adds icacls combination blocking and script-content scanning                        |
+| **Allow capability**   | Has an allowlist and can skip Checkpoint           | No allowlist; only blocks and does not allow                                        |
 
 ---
 
@@ -588,7 +678,6 @@ User request
   |
   +--> validate_command_safety_with_workdir() -- Err --> Rust hard block
   +--> validate_script_content()              -- Err --> script-content scan block
-  +--> validate_path_write_safety()           -- Err --> path write protection block
   |
   v
 [ShellSandboxPolicy]
@@ -599,14 +688,20 @@ User request
   |
   v
 [try_intercept_delete()]            <- Trash Bin soft-delete interception
-  +--> parse success (del/rmdir/Remove-Item...)
-  |     -> move to Agent_Trash_Bin
-  |     -> return opaque success message (Agent does not know Trash Bin path) -- no OS del call
-  +--> delete/cleanup intent exists but parsing fails -> fail closed
+  +--> supported parse + final-target checks (volume is not authorization)
+  |     +--> same volume: Pending -> no-replace rename -> Ready
+  |     +--> cross volume: central candidate/payload + verify + sibling hidden claim
+  |                         -> Pending -> PayloadReady -> Claimed -> PayloadVerified -> Ready
+  |     -> return opaque success (Agent does not know Trash Bin path) -- no OS delete call
+  +--> -WhatIf / missing target / zero-match glob -> consume safely -- no OS delete call
+  +--> recognized delete intent with incomplete semantics, or a safe-transfer failure
+        -> fail closed -- no OS delete call
   |
   v
-OS executes command
+OS executes only commands not consumed or blocked by the finite recognition set
 ```
+
+`validate_path_write_safety()` protects native file write/import commands and is not part of the `shell_execute` call chain. Final shell-delete target protection is performed by target-level revalidation inside `try_intercept_delete()`. Unknown or dynamically generated in-process deletion that does not match the finite recognizers remains subject to permission, sandbox, and filesystem ACL boundaries rather than Trash Bin interception.
 
 ---
 
@@ -615,7 +710,7 @@ OS executes command
 ### Precise Matching vs Loose Matching
 
 - **TS layer** uses `\b` word-boundary regex, ensuring `format` does not falsely hit Python `str.format()` and `wmic` does not falsely hit read-only queries.
-- **Rust layer** uses `contains()` substring matching to provide extra fallback coverage, preferring a small number of false positives over missing dangerous commands.
+- **Rust layer** combines conservative substring fallback with token/subcommand parsing, path normalization, and static script scanning. A matched rule fails closed, but an unknown native or dynamically generated operation is not thereby proven safe.
 - **Separate handling for the `format` command**: it is separated from the blocklist and detected through `is_format_drive_command()` for the `format X:` drive-letter pattern, avoiding large numbers of false positives for programming-language format functions.
 
 ### Combination Blocking vs Blanket Blocking
@@ -625,8 +720,8 @@ OS executes command
 
 ### Hot Cache Reload
 
-Custom protected paths are globally cached through `RwLock`. After the first IO, cache hits are used. When the UI updates protected directories, `reload_custom_protected_paths()` refreshes immediately, balancing performance and realtime behavior.
+Custom protected paths use a global `RwLock` cache keyed by the app-data root. After the first IO, cache hits are used. The UI calls `reload_custom_protected_paths()` for immediate refresh. Malformed, oversized, missing-after-load, or otherwise unreadable disk configuration does not replace the last valid cache; only a first load or a new process with no file initializes an empty configuration.
 
 ### Trash Bin Fail-Closed Strategy
 
-For complex formats that look like delete/cleanup operations but cannot be safely resolved to target paths, such as nested multi-level pipelines, unresolved variables, script-level `.Delete()` calls, `git clean`, or `robocopy /purge`, Trash Bin fails closed instead of falling back to OS execution. The returned message asks the Agent to use a supported explicit delete command, making a retry more likely to be intercepted by soft delete. Commands with no delete intent continue through the normal execution path.
+For complex formats that look like delete/cleanup operations but cannot be safely resolved to target paths, such as nested multi-level pipelines, unresolved variables, script-level `.Delete()` calls, `git clean`, or `robocopy /purge`, Trash Bin fails closed instead of falling back to OS execution. The returned message asks the Agent to retry once with a supported direct literal-path delete command, making interception by soft delete more likely. Commands outside the finite recognition set continue through the remaining normal validation and sandbox path; this does not prove that they contain no runtime delete behavior.

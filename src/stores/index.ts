@@ -11,3 +11,13 @@ export { useMemoryStore } from './memoryStore';
 export { useFileStore } from './fileStore';
 export { useStatusStore } from './statusStore';
 export { useFSMVisualizationStore } from './fsmVisualizationStore';
+export {
+  runTrashOperation,
+  TrashOperationInProgressError,
+  useTrashOperationStore,
+} from './trashOperationStore';
+export type {
+  ActiveTrashOperation,
+  TrashOperationKind,
+  TrashOperationRequest,
+} from './trashOperationStore';

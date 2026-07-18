@@ -367,6 +367,29 @@
   border-radius: var(--radius-surface);
 }
 
+.operationHint {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 13px);
+  line-height: 1.45;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-primary);
+  border-radius: var(--radius-surface);
+}
+
+.operationHint .spinner {
+  flex-shrink: 0;
+}
+
+.loadErrorHint {
+  color: var(--color-status-error);
+  background: color-mix(in srgb, var(--color-status-error) 10%, transparent);
+  border-color: color-mix(in srgb, var(--color-status-error) 42%, transparent);
+}
+
 .spinner {
   width: 13px;
   height: 13px;

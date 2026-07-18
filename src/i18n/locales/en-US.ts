@@ -1283,6 +1283,20 @@ export const enUS = {
         'Sandbox block: this command will not be executed in `{mode}` mode. {reason} For development dependencies, use project-local/sandbox-scoped temporary installs. If host-global CLIs, host login state, or long-lived credentials are truly required, ask for LocalAudit mode or explicit credentials.',
       sandboxRuntimeHint:
         '[SANDBOX_RUNTIME_CONTEXT] This command ran in the `{mode}` sandbox. {reason} Do not conclude the user host lacks this CLI, config, token, or login state. If the development task only needs dependencies, prefer project-local/sandbox-scoped temporary installs. Tell the user LocalAudit mode is required only when host-global CLIs, host login state, long-lived credentials, or desktop environment access are truly needed.',
+      recoverableDeleteRequiredHint:
+        '[DELETE_RETRY_REQUIRED] Deletion did not complete. Retry once with one direct literal-path command: del /f /q "...", rmdir /s /q "...", or powershell -NoProfile -Command "Remove-Item -LiteralPath \'...\' -Force". If it still fails, stop retrying and report it to the user.',
+      recoverableDeleteUnavailableHint:
+        '[DELETE_UNAVAILABLE] Deletion did not complete. Leave the target in place. Do not use another command, script, or tool to delete it; report that the operation was not completed.',
+      scriptScanUnavailableHint:
+        '[EXECUTION_INPUT_UNAVAILABLE] The script cannot be executed in its current form. Ensure it already exists and is readable, or split or reduce it, then retry once. If it still fails, stop and report it.',
+      scriptScanUnreadableHint:
+        '[EXECUTION_INPUT_UNREADABLE] The script or its working directory cannot be read. Ensure the entry file already exists and is readable, then retry once. If it still fails, stop and report it.',
+      scriptScanTooLargeHint:
+        '[EXECUTION_INPUT_TOO_LARGE] The script exceeds the execution input limit (8 MiB, or it kept growing while being read). Split or reduce it and retry. If it still fails, stop and report it.',
+      scriptScanAmbiguousLauncherHint:
+        '[EXECUTION_ENTRY_AMBIGUOUS] The local entrypoint that this command or script will launch cannot be determined reliably. Retry with an explicit local file using a supported extension and pass its directory through exec workdir. If it still fails, stop and report it.',
+      scriptScanDepthExceededHint:
+        '[EXECUTION_CHAIN_TOO_DEEP] The script call chain exceeds eight levels. Flatten or split the call chain and retry. If it still fails, stop and report it.',
       externalSkillSandboxHint:
         '[EXTERNAL_SKILL_SANDBOX_HINT] This command appears to run installed external skill "{skillName}". If it is blocked in ControlledNetwork, refer to external/packages/skill-creator/SKILL.md. First adapt network metadata: public HTTP(S) Guide -> agentvisNetwork: brokerProxyPreferred; non-HTTP -> agentvisNetworkEntrypoints + legacyNonHttp + network_targets; Script HTTP(S) -> brokerOnly. If metadata is already correct, inspect the sandbox reason and patch the script minimally: rename Python helpers like fetch(...), remove proxy-disabling settings such as trust_env=False or empty proxy maps, and do not spawn curl.exe from Python or disable TLS. Retry the original command.',
       sandboxHintReasons: {
@@ -1991,9 +2005,16 @@ export const enUS = {
       trashBinMissingPath: 'Path not available',
       trashBinOpenTitle: 'Open in File Explorer',
       trashBinHint:
-        'When an Agent deletes files, they are safely moved here. Recoverable entries stay in the manifest until restored or cleaned after 30 days.',
+        'Files deleted during routine Agent tasks are safely moved here and are not cleaned automatically. Temporary screenshots, scripts, and other files may keep using storage, so review and clean entries you no longer need.',
       refreshTrashTitle: 'Refresh deleted files',
       loadingTrash: 'Loading recent deletions...',
+      trashRestoreInProgress:
+        'Restoring selected files. You can close Settings; the restore will continue in the background.',
+      trashCleanInProgress:
+        'Cleaning selected files. You can close Settings; the cleanup will continue in the background.',
+      trashBusy:
+        'Agent Trash is finishing another file operation. This list will refresh automatically.',
+      trashLoadFailed: 'Agent Trash could not be loaded. Select refresh to try again.',
       trashEmpty: 'No recoverable Agent deletions yet',
       selectTrashEntries: 'Select Trash entries ({count})',
       selectEntryAria: 'Select deleted item {path}',
@@ -2003,8 +2024,10 @@ export const enUS = {
       selectBatchTitle: 'Select {count} item(s) from this deletion batch',
       statusTrashMissing: 'Missing',
       statusOriginalExists: 'Path exists',
+      confirmCleanTitle: 'Permanently Clean Trash Items',
       confirmCleanEntries:
-        'Permanently clean {count} selected Trash item(s) and remove their manifest records? This cannot be undone.',
+        'Permanently clean {count} selected Trash item(s) and remove their records. This cannot be undone.',
+      confirmCleanAction: 'Clean Permanently',
       protectedPaths: 'Protected Paths',
       protectedPathsEmpty:
         'No custom protected paths. The Agent is currently limited by system directory protection only.',
@@ -2084,7 +2107,7 @@ export const enUS = {
       trashBinMissingPath: 'Path not available',
       trashBinOpenTitle: 'Open in File Explorer',
       trashBinHint:
-        'When an Agent deletes files, they are safely moved here and automatically cleaned up after 30 days.',
+        'Files deleted during routine Agent tasks are safely moved here and are not cleaned automatically. Temporary screenshots, scripts, and other files may keep using storage, so review and clean entries you no longer need.',
       protectedPaths: 'Protected Paths',
       protectedPathsEmpty:
         'No custom protected paths. The Agent is currently limited by system directory protection only.',

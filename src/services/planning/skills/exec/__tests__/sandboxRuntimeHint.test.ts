@@ -3,7 +3,118 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { generateSandboxPreflightCommandBlock, generateSandboxRuntimeCommandHint } from '../tool';
+import {
+  extractCommandGuardReason,
+  formatExecGuardErrorForObservation,
+  generateCommandGuardRecoveryHint,
+  generateSandboxPreflightCommandBlock,
+  generateSandboxRuntimeCommandHint,
+} from '../tool';
+
+describe('command guard reasons', () => {
+  it('extracts structured reasons from sandbox and safety blocks', () => {
+    expect(
+      extractCommandGuardReason('Sandbox block [proxy_bypass_signal_blocked]: denied')
+    ).toEqual({ source: 'sandbox', reasonCode: 'proxy_bypass_signal_blocked' });
+    expect(
+      extractCommandGuardReason(
+        'Safety block [recoverable_delete_required]: could not move D:\\Agent_Trash_Bin\\item'
+      )
+    ).toEqual({ source: 'safety', reasonCode: 'recoverable_delete_required' });
+    expect(
+      extractCommandGuardReason(
+        'Operation forbidden: SAFETY block [SCRIPT_SCAN_UNAVAILABLE]: unreadable path'
+      )
+    ).toEqual({ source: 'safety', reasonCode: 'script_scan_unavailable' });
+    expect(
+      extractCommandGuardReason(
+        'command stderr mentioned Safety block [recoverable_delete_required], but was not a guard'
+      )
+    ).toBeUndefined();
+  });
+
+  it('returns a neutral delete retry hint without exposing the recovery mechanism', () => {
+    const hint = generateCommandGuardRecoveryHint(
+      'Safety block [recoverable_delete_required]: D:\\Agent_Trash_Bin\\items\\secret'
+    );
+
+    expect(hint).toContain('[DELETE_RETRY_REQUIRED]');
+    expect(hint).toContain('-NoProfile');
+    expect(hint).toContain('Remove-Item -LiteralPath');
+    expect(hint).toContain('del');
+    expect(hint).toContain('rmdir');
+    expect(hint).toContain('/f /q');
+    expect(hint).toContain('/s /q');
+    expect(hint).not.toContain('Agent_Trash_Bin');
+    expect(hint).not.toMatch(/recoverable|soft delet|trash bin|scan|软删除|回收站|扫描/i);
+  });
+
+  it('does not add delete recovery guidance for unrelated guard reasons', () => {
+    expect(
+      generateCommandGuardRecoveryHint('Sandbox block [proxy_bypass_signal_blocked]: denied')
+    ).toBeNull();
+  });
+
+  it('formats a neutral delete-unavailable observation without leaking internal details', () => {
+    const message = formatExecGuardErrorForObservation(
+      'Operation forbidden: Safety block [recoverable_delete_unavailable]: ' +
+        'D:\\Agent_Trash_Bin\\items\\secret\\payload'
+    );
+
+    expect(message).toContain('[DELETE_UNAVAILABLE]');
+    expect(message).toMatch(/another command, script, or tool|其他命令、脚本或工具/);
+    expect(message).not.toContain('Agent_Trash_Bin');
+    expect(message).not.toContain('secret');
+    expect(message).not.toMatch(
+      /recoverable|soft delet|trash bin|cross-volume|scan|软删除|回收站|跨卷|扫描/i
+    );
+  });
+
+  it('keeps the legacy cross-volume reason mapped to the same terminal observation', () => {
+    const message = formatExecGuardErrorForObservation(
+      'Operation forbidden: Safety block [recoverable_delete_cross_volume]: legacy backend'
+    );
+
+    expect(message).toContain('[DELETE_UNAVAILABLE]');
+    expect(message).toMatch(/another command, script, or tool|其他命令、脚本或工具/);
+    expect(message).not.toMatch(/cross-volume|跨卷/i);
+  });
+
+  it('formats legacy script guard failures without exposing the inspection mechanism', () => {
+    const message = formatExecGuardErrorForObservation(
+      'Operation forbidden: Safety block [script_scan_unavailable]: ' +
+        "script file 'D:\\private\\cleanup.py' could not be read"
+    );
+
+    expect(message).toContain('[EXECUTION_INPUT_UNAVAILABLE]');
+    expect(message).not.toContain('D:\\private');
+    expect(message).not.toContain('cleanup.py');
+    expect(message).not.toMatch(/script.scan|scann|扫描/i);
+  });
+
+  it.each([
+    ['script_scan_unreadable', '[EXECUTION_INPUT_UNREADABLE]', /already exists|已(?:经)?存在/],
+    ['script_scan_too_large', '[EXECUTION_INPUT_TOO_LARGE]', /8 MiB/i],
+    [
+      'script_scan_ambiguous_launcher',
+      '[EXECUTION_ENTRY_AMBIGUOUS]',
+      /command or script will launch|命令或脚本将启动/i,
+    ],
+    ['script_scan_depth_exceeded', '[EXECUTION_CHAIN_TOO_DEEP]', /eight|8 层/i],
+  ])('formats the specific %s observation without leaking paths', (reason, label, guidance) => {
+    const message = formatExecGuardErrorForObservation(
+      'Operation forbidden: Safety block [' +
+        reason +
+        "]: script file 'D:\\private\\cleanup.py' failed"
+    );
+
+    expect(message).toContain(label);
+    expect(message).toMatch(guidance);
+    expect(message).not.toContain('D:\\private');
+    expect(message).not.toContain('cleanup.py');
+    expect(message).not.toMatch(/script.scan|scann|扫描/i);
+  });
+});
 
 describe('generateSandboxRuntimeCommandHint', () => {
   it('does not inject hints for LocalAudit mode', () => {
@@ -111,6 +222,17 @@ describe('generateSandboxRuntimeCommandHint', () => {
       '',
       'src/app.ts(1,1): error TS1005: ; expected.',
       'ControlledNetwork'
+    );
+
+    expect(hint).toBeNull();
+  });
+
+  it('does not append sandbox runtime guidance to safety guard observations', () => {
+    const hint = generateSandboxRuntimeCommandHint(
+      'del .env',
+      '',
+      'Safety block [recoverable_delete_required]: could not move .env safely',
+      'OfflineIsolated'
     );
 
     expect(hint).toBeNull();

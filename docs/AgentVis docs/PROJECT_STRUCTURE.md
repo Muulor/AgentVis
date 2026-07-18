@@ -367,6 +367,8 @@ settings/
 ├── SkillAuditModal.module.css    # 审查弹窗样式
 ├── FileProtectionSettings.tsx       # 文件保护设置
 ├── FileProtectionSettings.module.css  # 文件保护设置样式
+├── trashCleanConfirmation.ts        # Agent Trash 永久清理确认状态与确认后执行边界
+├── trashListState.ts             # Agent Trash 列表 ready/busy 响应归一化
 ├── SandboxAuditSettings.tsx      # 沙箱审计事件诊断
 ├── SandboxAuditSettings.module.css   # 沙箱审计事件诊断样式
 ├── UpdateSettings.tsx            # 应用版本检测设置区
@@ -462,6 +464,8 @@ stores/
 ├── settingsStore.ts              # 应用设置状态管理
 ├── imChannelStore.ts             # IM 通道状态管理（Bot 配置/连接状态/自动连接/凭据状态）
 ├── statusStore.ts                # 应用状态（加载/错误等）
+├── trashOperationStore.ts        # Agent Trash 恢复/清理长任务全局生命周期与并发保护
+├── trashOperationStore.test.ts   # Agent Trash 操作 pending、收敛与并发回归
 ├── updateStore.ts
 ├── networkUploadAuthorizationStore.ts
 └── uiStore.ts                    # UI 状态（面板显示/折叠等）
@@ -1137,7 +1141,8 @@ commands/
 ├── text_preview.rs               # 大型文本有界读取与 Markdown 复杂度分析命令
 ├── workspace_import.rs           # 工作区导入 session、staging、分块写入与整批提交/回滚
 ├── preview_staging.rs            # Project Preview root-relative 有界 no-follow 源读取与 owned workspace 资产复制
-├── trash_bin.rs                  # 回收站管理命令
+├── trash_bin.rs                  # 回收站策略、manifest 状态机与管理命令
+├── trash_transfer.rs             # TrashBin 同/跨卷可恢复传输、临时 claim、校验与恢复事务
 ├── command_validator.rs          # 命令安全校验器
 ├── memory.rs                     # 记忆系统命令
 ├── memory_trigger.rs             # 记忆触发命令

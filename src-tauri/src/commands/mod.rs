@@ -35,6 +35,7 @@ pub mod snapshot;
 pub mod system_tray;
 pub mod text_preview;
 pub mod trash_bin;
+mod trash_transfer;
 pub mod web_search;
 pub mod workspace_import;
 

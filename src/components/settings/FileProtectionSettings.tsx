@@ -4,7 +4,7 @@
  * 承载 Agent 回收站的最近删除查看与恢复，以及路径保护名单管理。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
@@ -22,11 +22,18 @@ import {
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 import { Tooltip } from '@components/ui/Tooltip';
-import { SelectionCheck } from '@components/ui';
+import { ConfirmDialog, SelectionCheck } from '@components/ui';
 import { getLogger } from '@services/logger';
+import { TrashOperationInProgressError, useTrashOperationStore } from '@stores/trashOperationStore';
 import { cx } from '@utils/classNames';
 import { useI18n } from '@/i18n';
 import styles from './FileProtectionSettings.module.css';
+import {
+  createPendingTrashClean,
+  executeConfirmedTrashClean,
+  type PendingTrashClean,
+} from './trashCleanConfirmation';
+import { normalizeTrashBinListResponse, type TrashBinListResponse } from './trashListState';
 
 const logger = getLogger('FileProtectionSettings');
 
@@ -63,6 +70,12 @@ interface TrashDeleteResult {
   failed: TrashRestoreIssue[];
 }
 
+type TrashListStatus = 'idle' | 'loading' | 'ready' | 'busy' | 'error';
+
+const DEFAULT_TRASH_LIST_RETRY_MS = 750;
+const MIN_TRASH_LIST_RETRY_MS = 250;
+const MAX_TRASH_LIST_RETRY_MS = 5_000;
+
 function getFileName(path: string) {
   const normalized = path.replace(/\\/g, '/');
   return normalized.split('/').filter(Boolean).pop() ?? path;
@@ -79,10 +92,26 @@ export function FileProtectionSettings() {
   const [protectedPaths, setProtectedPaths] = useState<string[]>([]);
   const [trashEntries, setTrashEntries] = useState<TrashEntryInfo[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProtectionLoading, setIsProtectionLoading] = useState(
+    () => typeof window !== 'undefined' && '__TAURI__' in window
+  );
+  const [trashListStatus, setTrashListStatus] = useState<TrashListStatus>('idle');
+  const [trashListRetryAfterMs, setTrashListRetryAfterMs] = useState(DEFAULT_TRASH_LIST_RETRY_MS);
+  const [loadedTrashRevision, setLoadedTrashRevision] = useState<number | null>(null);
   const [isSavingPaths, setIsSavingPaths] = useState(false);
-  const [restoringKey, setRestoringKey] = useState<string | null>(null);
-  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [pendingTrashClean, setPendingTrashClean] = useState<PendingTrashClean | null>(null);
+  const activeTrashOperation = useTrashOperationStore((state) => state.activeOperation);
+  const settledTrashRevision = useTrashOperationStore((state) => state.settledRevision);
+  const runTrashOperation = useTrashOperationStore((state) => state.runOperation);
+  const isMountedRef = useRef(false);
+  const protectionRequestRef = useRef(0);
+  const trashListRequestRef = useRef(0);
+
+  const restoringKey = activeTrashOperation?.kind === 'restore' ? activeTrashOperation.key : null;
+  const deletingKey = activeTrashOperation?.kind === 'clean' ? activeTrashOperation.key : null;
+  const isTrashListFresh = loadedTrashRevision === settledTrashRevision;
+  const trashControlsDisabled =
+    activeTrashOperation !== null || trashListStatus !== 'ready' || !isTrashListFresh;
 
   const batchCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -119,35 +148,111 @@ export function FileProtectionSettings() {
     [language]
   );
 
-  const loadData = useCallback(async () => {
+  const loadProtectionData = useCallback(async () => {
     const hasTauri = typeof window !== 'undefined' && '__TAURI__' in window;
     if (!hasTauri) return;
 
-    setIsLoading(true);
+    const requestId = ++protectionRequestRef.current;
+    setIsProtectionLoading(true);
     try {
-      const [trashPath, paths, entries] = await Promise.all([
+      const [trashPath, paths] = await Promise.all([
         invoke<string>('get_trash_bin_path'),
         invoke<string[]>('get_protected_paths'),
-        invoke<TrashEntryInfo[]>('trash_bin_list_entries'),
       ]);
+      if (!isMountedRef.current || requestId !== protectionRequestRef.current) return;
       setTrashBinPath(trashPath);
       setProtectedPaths(paths);
+    } catch (error) {
+      if (!isMountedRef.current || requestId !== protectionRequestRef.current) return;
+      logger.error('[FileProtectionSettings] 加载文件保护设置失败:', error);
+      toast({ type: 'error', title: t('settings.fileProtection.toastLoadFailed') });
+    } finally {
+      if (isMountedRef.current && requestId === protectionRequestRef.current) {
+        setIsProtectionLoading(false);
+      }
+    }
+  }, [t, toast]);
+
+  const loadTrashEntries = useCallback(async () => {
+    const hasTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+    if (!hasTauri) return;
+
+    const operationState = useTrashOperationStore.getState();
+    if (operationState.activeOperation) return;
+    const expectedRevision = operationState.settledRevision;
+
+    const requestId = ++trashListRequestRef.current;
+    setTrashListStatus((current) => (current === 'busy' ? 'busy' : 'loading'));
+    try {
+      const response = await invoke<TrashBinListResponse<TrashEntryInfo> | TrashEntryInfo[]>(
+        'trash_bin_list_entries'
+      );
+      if (!isMountedRef.current || requestId !== trashListRequestRef.current) return;
+      const currentOperationState = useTrashOperationStore.getState();
+      if (
+        currentOperationState.activeOperation ||
+        currentOperationState.settledRevision !== expectedRevision
+      ) {
+        return;
+      }
+
+      const normalized = normalizeTrashBinListResponse(response);
+      if (normalized.status === 'busy') {
+        const requestedDelay = normalized.retryAfterMs ?? DEFAULT_TRASH_LIST_RETRY_MS;
+        setTrashListRetryAfterMs(
+          Math.min(MAX_TRASH_LIST_RETRY_MS, Math.max(MIN_TRASH_LIST_RETRY_MS, requestedDelay))
+        );
+        setTrashListStatus('busy');
+        return;
+      }
+
+      const entries = normalized.entries ?? [];
       setTrashEntries(entries);
       setSelectedIds((current) => {
         const existingIds = new Set(entries.map((entry) => entry.id));
         return new Set([...current].filter((id) => existingIds.has(id)));
       });
+      setLoadedTrashRevision(expectedRevision);
+      setTrashListStatus('ready');
     } catch (error) {
-      logger.error('[FileProtectionSettings] 加载文件保护设置失败:', error);
-      toast({ type: 'error', title: t('settings.fileProtection.toastLoadFailed') });
-    } finally {
-      setIsLoading(false);
+      if (!isMountedRef.current || requestId !== trashListRequestRef.current) return;
+      logger.error('[FileProtectionSettings] 加载 Agent Trash 条目失败:', error);
+      setTrashListStatus('error');
     }
-  }, [t, toast]);
+  }, []);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    isMountedRef.current = true;
+    void loadProtectionData();
+    return () => {
+      isMountedRef.current = false;
+      protectionRequestRef.current += 1;
+      trashListRequestRef.current += 1;
+    };
+  }, [loadProtectionData]);
+
+  useEffect(() => {
+    if (activeTrashOperation) {
+      trashListRequestRef.current += 1;
+      return;
+    }
+    void loadTrashEntries();
+  }, [activeTrashOperation, loadTrashEntries, settledTrashRevision]);
+
+  useEffect(() => {
+    if (trashListStatus !== 'busy' || activeTrashOperation) return;
+    const retryTimer = window.setTimeout(() => {
+      void loadTrashEntries();
+    }, trashListRetryAfterMs);
+    return () => window.clearTimeout(retryTimer);
+  }, [activeTrashOperation, loadTrashEntries, trashListRetryAfterMs, trashListStatus]);
+
+  const handleRefresh = useCallback(() => {
+    void loadProtectionData();
+    if (!activeTrashOperation) {
+      void loadTrashEntries();
+    }
+  }, [activeTrashOperation, loadProtectionData, loadTrashEntries]);
 
   const handleOpenTrashBin = useCallback(async () => {
     if (!trashBinPath) return;
@@ -236,24 +341,26 @@ export function FileProtectionSettings() {
         toast({ type: 'warning', title: t('settings.fileProtection.toastSelectEntries') });
         return;
       }
+      if (useTrashOperationStore.getState().activeOperation) return;
 
-      setRestoringKey(restoreKey);
       try {
-        const result = await invoke<TrashRestoreResult>('trash_bin_restore_entries', { ids });
+        const result = await runTrashOperation({ kind: 'restore', key: restoreKey }, () =>
+          invoke<TrashRestoreResult>('trash_bin_restore_entries', { ids })
+        );
         showRestoreToast(result);
-        setSelectedIds(new Set());
-        await loadData();
+        if (isMountedRef.current) {
+          setSelectedIds(new Set());
+        }
       } catch (error) {
+        if (error instanceof TrashOperationInProgressError) return;
         logger.error('[FileProtectionSettings] 恢复回收站条目失败:', error);
         toast({
           type: 'error',
           title: t('settings.fileProtection.toastRestoreFailed', { error: String(error) }),
         });
-      } finally {
-        setRestoringKey(null);
       }
     },
-    [loadData, showRestoreToast, t, toast]
+    [runTrashOperation, showRestoreToast, t, toast]
   );
 
   const handleRestoreSelected = useCallback(() => {
@@ -269,34 +376,51 @@ export function FileProtectionSettings() {
         toast({ type: 'warning', title: t('settings.fileProtection.toastSelectEntriesToClean') });
         return;
       }
+      if (useTrashOperationStore.getState().activeOperation) return;
 
-      const confirmed = window.confirm(
-        t('settings.fileProtection.confirmCleanEntries', { count: ids.length })
-      );
-      if (!confirmed) return;
-
-      setDeletingKey(deleteKey);
       try {
-        const result = await invoke<TrashDeleteResult>('trash_bin_delete_entries', { ids });
+        const result = await runTrashOperation({ kind: 'clean', key: deleteKey }, () =>
+          invoke<TrashDeleteResult>('trash_bin_delete_entries', { ids })
+        );
         showDeleteToast(result);
-        setSelectedIds(new Set());
-        await loadData();
+        if (isMountedRef.current) {
+          setSelectedIds(new Set());
+        }
       } catch (error) {
+        if (error instanceof TrashOperationInProgressError) return;
         logger.error('[FileProtectionSettings] 清理回收站条目失败:', error);
         toast({
           type: 'error',
           title: t('settings.fileProtection.toastCleanFailed', { error: String(error) }),
         });
-      } finally {
-        setDeletingKey(null);
       }
     },
-    [loadData, showDeleteToast, t, toast]
+    [runTrashOperation, showDeleteToast, t, toast]
   );
 
   const handleCleanSelected = useCallback(() => {
-    void cleanEntries([...selectedIds], 'selected');
-  }, [cleanEntries, selectedIds]);
+    const request = createPendingTrashClean(selectedIds, 'selected');
+    if (!request) {
+      toast({ type: 'warning', title: t('settings.fileProtection.toastSelectEntriesToClean') });
+      return;
+    }
+    if (useTrashOperationStore.getState().activeOperation) return;
+    setPendingTrashClean(request);
+  }, [selectedIds, t, toast]);
+
+  const handleConfirmTrashClean = useCallback(async () => {
+    const request = pendingTrashClean;
+    if (!request) return;
+    await executeConfirmedTrashClean(request, cleanEntries);
+    if (isMountedRef.current) {
+      setPendingTrashClean(null);
+    }
+  }, [cleanEntries, pendingTrashClean]);
+
+  const handleCancelTrashClean = useCallback(() => {
+    if (useTrashOperationStore.getState().activeOperation) return;
+    setPendingTrashClean(null);
+  }, []);
 
   const handleToggleEntry = useCallback((entry: TrashEntryInfo) => {
     setSelectedIds((current) => {
@@ -407,6 +531,27 @@ export function FileProtectionSettings() {
     return null;
   };
 
+  const trashStatusMessage = activeTrashOperation
+    ? t(
+        activeTrashOperation.kind === 'restore'
+          ? 'settings.fileProtection.trashRestoreInProgress'
+          : 'settings.fileProtection.trashCleanInProgress'
+      )
+    : trashListStatus === 'busy'
+      ? t('settings.fileProtection.trashBusy')
+      : trashListStatus === 'error'
+        ? t('settings.fileProtection.trashLoadFailed')
+        : trashListStatus === 'idle' || trashListStatus === 'loading' || !isTrashListFresh
+          ? t('settings.fileProtection.loadingTrash')
+          : null;
+  const trashStatusIsError = activeTrashOperation === null && trashListStatus === 'error';
+  const isTrashRefreshPending =
+    activeTrashOperation !== null ||
+    trashListStatus === 'idle' ||
+    trashListStatus === 'loading' ||
+    trashListStatus === 'busy' ||
+    (trashListStatus !== 'error' && !isTrashListFresh);
+
   return (
     <div className={styles.container}>
       <section className={styles.section}>
@@ -421,18 +566,27 @@ export function FileProtectionSettings() {
           <Tooltip content={t('settings.fileProtection.refreshTrashTitle')}>
             <button
               className={styles.iconButton}
-              onClick={() => void loadData()}
-              disabled={isLoading}
+              onClick={handleRefresh}
+              disabled={isTrashRefreshPending}
               aria-label={t('settings.fileProtection.refreshTrashTitle')}
             >
-              <RefreshCw size={15} strokeWidth={1.7} className={cx(isLoading && styles.spinIcon)} />
+              <RefreshCw
+                size={15}
+                strokeWidth={1.7}
+                className={cx(isTrashRefreshPending && styles.spinIcon)}
+              />
             </button>
           </Tooltip>
         </div>
 
         <div className={styles.pathDisplay}>
           <span className={styles.pathText}>
-            {trashBinPath || t('settings.fileProtection.trashBinMissingPath')}
+            {trashBinPath ||
+              t(
+                isProtectionLoading
+                  ? 'common.loading'
+                  : 'settings.fileProtection.trashBinMissingPath'
+              )}
           </span>
           <Tooltip content={t('settings.fileProtection.trashBinOpenTitle')}>
             <button
@@ -448,18 +602,21 @@ export function FileProtectionSettings() {
         </div>
 
         <div className={styles.trashToolbar}>
-          <label className={styles.selectAllControl} data-disabled={trashEntries.length === 0}>
+          <label
+            className={styles.selectAllControl}
+            data-disabled={trashEntries.length === 0 || trashControlsDisabled}
+          >
             <input
               className={styles.selectionInput}
               type="checkbox"
               checked={allEntriesSelected}
-              disabled={trashEntries.length === 0}
+              disabled={trashEntries.length === 0 || trashControlsDisabled}
               onChange={handleToggleAllEntries}
             />
             <SelectionCheck
               checked={allEntriesSelected}
               indeterminate={selectedCount > 0 && !allEntriesSelected}
-              disabled={trashEntries.length === 0}
+              disabled={trashEntries.length === 0 || trashControlsDisabled}
               className={styles.trashSelectionIndicator}
             />
             <span>
@@ -470,7 +627,7 @@ export function FileProtectionSettings() {
             <button
               className={styles.secondaryButton}
               onClick={handleCleanSelected}
-              disabled={selectedCount === 0 || restoringKey !== null || deletingKey !== null}
+              disabled={selectedCount === 0 || trashControlsDisabled}
             >
               {deletingKey === 'selected' ? (
                 <span className={styles.spinner} />
@@ -482,9 +639,7 @@ export function FileProtectionSettings() {
             <button
               className={styles.secondaryButton}
               onClick={handleRestoreSelected}
-              disabled={
-                selectedRestorableCount === 0 || restoringKey !== null || deletingKey !== null
-              }
+              disabled={selectedRestorableCount === 0 || trashControlsDisabled}
             >
               {restoringKey === 'selected' ? (
                 <span className={styles.spinner} />
@@ -496,22 +651,34 @@ export function FileProtectionSettings() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className={styles.loadingHint}>{t('settings.fileProtection.loadingTrash')}</div>
-        ) : trashEntries.length === 0 ? (
-          <div className={styles.emptyHint}>{t('settings.fileProtection.trashEmpty')}</div>
-        ) : (
+        {trashStatusMessage && (
+          <div
+            className={cx(styles.operationHint, trashStatusIsError && styles.loadErrorHint)}
+            role={trashStatusIsError ? 'alert' : 'status'}
+            aria-live={trashStatusIsError ? 'assertive' : 'polite'}
+          >
+            {!trashStatusIsError && <span className={styles.spinner} />}
+            <span>{trashStatusMessage}</span>
+          </div>
+        )}
+
+        {trashEntries.length > 0 ? (
           <div className={styles.trashList}>
             {trashEntries.map((entry) => {
               const status = getEntryStatus(entry);
               const batchCount = batchCounts.get(entry.batchId) ?? 1;
               return (
-                <div key={entry.id} className={styles.trashRow}>
+                <div
+                  key={entry.id}
+                  className={styles.trashRow}
+                  data-disabled={trashControlsDisabled}
+                >
                   <label className={styles.entryCheckbox}>
                     <input
                       className={styles.selectionInput}
                       type="checkbox"
                       checked={selectedIds.has(entry.id)}
+                      disabled={trashControlsDisabled}
                       onChange={() => handleToggleEntry(entry)}
                       aria-label={t('settings.fileProtection.selectEntryAria', {
                         path: entry.originalPath,
@@ -519,6 +686,7 @@ export function FileProtectionSettings() {
                     />
                     <SelectionCheck
                       checked={selectedIds.has(entry.id)}
+                      disabled={trashControlsDisabled}
                       className={styles.trashSelectionIndicator}
                     />
                   </label>
@@ -556,7 +724,7 @@ export function FileProtectionSettings() {
                         <button
                           className={styles.secondaryButton}
                           onClick={() => handleSelectBatch(entry.batchId)}
-                          disabled={restoringKey !== null || deletingKey !== null}
+                          disabled={trashControlsDisabled}
                           aria-label={t('settings.fileProtection.selectBatchTitle', {
                             count: batchCount,
                           })}
@@ -571,7 +739,9 @@ export function FileProtectionSettings() {
               );
             })}
           </div>
-        )}
+        ) : trashListStatus === 'ready' && isTrashListFresh ? (
+          <div className={styles.emptyHint}>{t('settings.fileProtection.trashEmpty')}</div>
+        ) : null}
       </section>
 
       <section className={styles.section}>
@@ -593,7 +763,7 @@ export function FileProtectionSettings() {
           </button>
         </div>
 
-        {isLoading ? (
+        {isProtectionLoading ? (
           <div className={styles.loadingHint}>{t('common.loading')}</div>
         ) : (
           <div className={styles.pathList}>
@@ -623,6 +793,20 @@ export function FileProtectionSettings() {
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingTrashClean !== null}
+        onClose={handleCancelTrashClean}
+        onConfirm={() => void handleConfirmTrashClean()}
+        title={t('settings.fileProtection.confirmCleanTitle')}
+        description={t('settings.fileProtection.confirmCleanEntries', {
+          count: pendingTrashClean?.ids.length ?? 0,
+        })}
+        confirmText={t('settings.fileProtection.confirmCleanAction')}
+        variant="danger"
+        isLoading={pendingTrashClean !== null && deletingKey === pendingTrashClean.deleteKey}
+        disableDismiss={pendingTrashClean !== null && deletingKey === pendingTrashClean.deleteKey}
+      />
     </div>
   );
 }
