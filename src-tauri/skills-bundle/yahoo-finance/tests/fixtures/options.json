@@ -1,0 +1,21 @@
+{
+  "optionChain": {
+    "result": [
+      {
+        "expirationDates": [1800000000],
+        "quote": {"regularMarketPrice": 200.5},
+        "options": [
+          {
+            "calls": [
+              {"contractSymbol": "AAPL-C", "strike": 200, "lastPrice": 5.5, "impliedVolatility": 0.25}
+            ],
+            "puts": [
+              {"contractSymbol": "AAPL-P", "strike": 200, "lastPrice": 4.5, "impliedVolatility": 0.26}
+            ]
+          }
+        ]
+      }
+    ],
+    "error": null
+  }
+}

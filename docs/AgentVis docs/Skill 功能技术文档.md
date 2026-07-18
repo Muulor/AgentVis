@@ -274,6 +274,8 @@ argsSchema:
 
 Script Skill 的稳定执行入口是 `external_skill_execute({ skillName, args })`。工具层按精确名称查找 Script Skill Contract，校验 `argsSchema` 后调用 `ExternalExecutor`，并返回 `skillName`、`exitCode`、`durationMs`、`stdout`、`stderr`、`timedOut`。MB 只看到轻量 catalog，SA 在命中 Skill 名称后注入 compact contract card；Guide Skill 仍按 guide 语义走普通 `exec`，不自动进入 Script Skill brokerOnly 链路。
 
+面向会变化的公开 API 或外部服务，Script Skill 不应只输出自然语言错误。建议在 stdout 中提供稳定的内部 observation 合约，至少区分完整成功、部分成功、可重试失败和需用户/维护者处理的失败，并保留 `status`、`errorKind`、`reasonCode`、`retryable`、可选 `retryAfter`、请求值与实测值及 `nextStep`。上游返回缺字段时不得用 `0` 替代，也不得静默吞掉可选端点错误；应返回可用数据和 warning。JSON 输出必须在 Skill 自身的行/条目边界内限量并标记 `truncated`，不能依赖 `ExternalExecutor` 的字节截断，否则追加的截断标记会使 JSON 无法解析。网络诊断仍不得包含完整 URL query、Cookie/Set-Cookie、Authorization、crumb、broker token 或其他凭据。
+
 当前阶段不做域名级 allowlist；静态扫描只能发现联网能力或联网命令，不能可靠证明真实目标域名。域名粒度权限应等 broker / proxy 或真实网络事件可观测后再产品化。
 
 在三档沙箱中，用户可见的受控联网模式（内部 `ControlledNetwork`）当前默认使用本机文件空间，并给普通 `exec` / Guide Skill 注入 broker-proxy-preferred 会话：`HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 指向 per-run 本机 HTTP(S) proxy，`NO_PROXY` / `no_proxy` 被清空，且可选注入 `agentvis-broker-fetch` helper 环境；direct network 仍处于 audit 过渡期。legacy AppContainer direct 后端可通过 `AGENTVIS_CONTROLLED_NETWORK_BACKEND=legacy` 回退，该路径会清空代理环境并设置 `NO_PROXY=*`，避免 Python / Node HTTP 客户端读到 `127.0.0.1` 系统代理后因 AppContainer loopback 限制而超时。原生 `web_search`、后端 `network_broker_http_request`、普通 HTTP(S) proxy 和 Script `agentvis-broker-fetch` 已接入主进程 broker；`brokerOnly` 不做透明 monkeypatch，脚本必须显式调用 helper。

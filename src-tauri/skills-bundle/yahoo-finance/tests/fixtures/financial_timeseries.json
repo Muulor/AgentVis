@@ -1,0 +1,35 @@
+{
+  "timeseries": {
+    "result": [
+      {
+        "meta": {"type": ["annualTotalRevenue"]},
+        "annualTotalRevenue": [
+          {
+            "asOfDate": "2025-09-30",
+            "periodType": "12M",
+            "currencyCode": "USD",
+            "reportedValue": {"raw": 400000000000, "fmt": "400B"}
+          },
+          {
+            "asOfDate": "2024-09-30",
+            "periodType": "12M",
+            "currencyCode": "USD",
+            "reportedValue": {"raw": 390000000000, "fmt": "390B"}
+          }
+        ]
+      },
+      {
+        "meta": {"type": ["annualNetIncome"]},
+        "annualNetIncome": [
+          {
+            "asOfDate": "2025-09-30",
+            "periodType": "12M",
+            "currencyCode": "USD",
+            "reportedValue": {"raw": 100000000000, "fmt": "100B"}
+          }
+        ]
+      }
+    ],
+    "error": null
+  }
+}

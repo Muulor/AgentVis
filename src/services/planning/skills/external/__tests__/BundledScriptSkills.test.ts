@@ -22,6 +22,50 @@ function createBundledLoader(): ExternalSkillRegistryLoader {
 }
 
 describe('bundled Script Skills', () => {
+  it('应加载 yahoo-finance 的扩展 action 与 observation contract', async () => {
+    const result = await createBundledLoader().scanAll();
+    const yahooFinance = result.skills.find((skill) => skill.name === 'yahoo-finance');
+
+    expect(yahooFinance?.contract).toBeDefined();
+    expect(yahooFinance?.contract?.runtime).toBe('python');
+    expect(yahooFinance?.contract?.entry).toBe('scripts/yf_entry.py');
+    expect(yahooFinance?.contract?.permissions?.network).toBe(true);
+
+    const action = yahooFinance?.contract?.argsSchema.find((arg) => arg.name === 'action');
+    const outputFormat = yahooFinance?.contract?.argsSchema.find(
+      (arg) => arg.name === 'outputFormat'
+    );
+    expect(action?.allowedValues).toEqual(
+      expect.arrayContaining(['actions', 'financials', 'news', 'history', 'options'])
+    );
+    expect(outputFormat?.allowedValues).toEqual(['text', 'json']);
+    expect(outputFormat?.default).toBe('text');
+
+    expect(
+      validateArgs(
+        {
+          action: 'financials',
+          symbol: 'AAPL',
+          statement: 'cash-flow',
+          frequency: 'quarterly',
+          periods: 5,
+          outputFormat: 'json',
+        },
+        yahooFinance!.contract!
+      )
+    ).toEqual({ valid: true });
+    expect(
+      validateArgs(
+        {
+          action: 'history',
+          symbol: 'AAPL',
+          interval: '4h',
+        },
+        yahooFinance!.contract!
+      ).valid
+    ).toBe(false);
+  });
+
   it('应加载带凭据策略的 bundled brokerOnly Script Skill contract', async () => {
     const result = await createBundledLoader().scanAll();
 
@@ -268,6 +312,11 @@ describe('bundled Script Skills', () => {
       resolve(BUNDLED_SKILLS_DIR, 'agnes-image/scripts/agnes_image.py'),
       'utf-8'
     );
+    const yahooEntry = readFileSync(
+      resolve(BUNDLED_SKILLS_DIR, 'yahoo-finance/scripts/yf_entry.py'),
+      'utf-8'
+    ).toLowerCase();
+    const yahooImpl = readFileSync(resolve(BUNDLED_SKILLS_DIR, 'yahoo-finance/yf.py'), 'utf-8');
 
     expect(githubEntry).not.toMatch(/import\s+httpx|urllib\.request|requests\./);
     expect(githubImpl).toContain('AGENTVIS_BROKER_FETCH');
@@ -294,5 +343,10 @@ describe('bundled Script Skills', () => {
     expect(agnesImageImpl).toContain('AGENTVIS_BROKER_TOKEN');
     expect(agnesImageImpl).toContain('credential_ref="agnes"');
     expect(agnesImageImpl).toContain('https://apihub.agnes-ai.com/v1');
+    expect(yahooEntry).not.toMatch(/import\s+httpx|urllib\.request|requests\./);
+    expect(yahooEntry).not.toContain('https://');
+    expect(yahooImpl).toContain('AGENTVIS_BROKER_FETCH');
+    expect(yahooImpl).toContain('AGENTVIS_BROKER_PIPE');
+    expect(yahooImpl).toContain('AGENTVIS_BROKER_TOKEN');
   });
 });

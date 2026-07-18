@@ -1,0 +1,28 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "financialData": {
+          "forwardEps": {"raw": 7.5}
+        },
+        "earnings": {
+          "financialsChart": {"yearly": []}
+        },
+        "calendarEvents": {
+          "earnings": {
+            "earningsDate": [{"raw": 1800000000}],
+            "earningsAverage": {"raw": 1.8},
+            "revenueAverage": {"raw": 125000000000}
+          }
+        },
+        "earningsHistory": {
+          "history": [{"quarter": {"raw": 1790000000}, "epsActual": {"raw": 1.7}}]
+        },
+        "earningsTrend": {
+          "trend": [{"period": "0q", "earningsEstimate": {"avg": {"raw": 1.8}}}]
+        }
+      }
+    ],
+    "error": null
+  }
+}

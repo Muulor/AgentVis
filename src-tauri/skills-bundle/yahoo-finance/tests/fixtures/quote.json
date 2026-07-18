@@ -1,0 +1,18 @@
+{
+  "quoteResponse": {
+    "result": [
+      {
+        "symbol": "AAPL",
+        "longName": "Example Corp",
+        "quoteType": "EQUITY",
+        "currency": "USD",
+        "regularMarketPrice": 200.5,
+        "regularMarketPreviousClose": 198.0,
+        "regularMarketChange": 2.5,
+        "regularMarketChangePercent": 1.2626,
+        "epsTrailingTwelveMonths": 6.25
+      }
+    ],
+    "error": null
+  }
+}

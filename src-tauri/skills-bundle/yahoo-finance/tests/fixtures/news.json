@@ -1,0 +1,22 @@
+{
+  "data": {
+    "tickerStream": {
+      "stream": [
+        {
+          "id": "article-1",
+          "content": {
+            "title": "Example earnings update",
+            "summary": "Synthetic fixture article.",
+            "pubDate": "2026-07-18T10:00:00Z",
+            "provider": {"displayName": "Example Wire"},
+            "canonicalUrl": {"url": "https://example.invalid/article-1"}
+          }
+        },
+        {
+          "id": "ad-1",
+          "content": {"title": "Advertisement", "ad": true}
+        }
+      ]
+    }
+  }
+}

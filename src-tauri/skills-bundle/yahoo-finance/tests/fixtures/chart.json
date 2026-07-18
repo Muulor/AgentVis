@@ -1,0 +1,40 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "AAPL",
+          "currency": "USD",
+          "instrumentType": "EQUITY",
+          "exchangeTimezoneName": "America/New_York",
+          "validRanges": ["1d", "1mo", "max"]
+        },
+        "timestamp": [1700000000, 1700086400, 1700172800],
+        "indicators": {
+          "quote": [
+            {
+              "open": [10.0, 11.0],
+              "high": [12.0, 13.0, 14.0],
+              "low": [9.0, 10.0, 11.0],
+              "close": [11.5, 12.5, 13.5],
+              "volume": [100, 200, 300]
+            }
+          ],
+          "adjclose": [{"adjclose": [11.0, 12.0, 13.0]}]
+        },
+        "events": {
+          "dividends": {
+            "1700086400": {"date": 1700086400, "amount": 0.25, "currency": "USD"}
+          },
+          "splits": {
+            "1700172800": {"date": 1700172800, "numerator": 4.0, "denominator": 1.0, "splitRatio": "4:1"}
+          },
+          "capitalGains": {
+            "1700000000": {"date": 1700000000, "amount": 0.1}
+          }
+        }
+      }
+    ],
+    "error": null
+  }
+}
